@@ -13,7 +13,10 @@ See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.
 1. [Go compiler and tools](https://golang.org/)
 
 ### Build instructions:
+<<<<<<< 3500035c376f38cf4e5bb2865c506b2fed15169c
 1. go get github.com/bureau14/qdb-api-go
+=======
+>>>>>>> Revert "Initial push"
 
 ### Test instructions:
 1. export QDB_SERVER_PATH=/path/to/qdbd
