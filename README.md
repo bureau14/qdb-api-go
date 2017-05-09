@@ -13,8 +13,6 @@ See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.
 1. [Go compiler and tools](https://golang.org/)
 
 ### Build instructions:
-1. Copy package folder in $GOLANG/src/qdb/blob
-2. `cd $GOLANG/src/qdb/blob && go install && cd -`
 
 TODO
 
