@@ -7,5 +7,7 @@ package qdb
 */
 import "C"
 
-// func (e ErrorType) String() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
+// ErrorType obfuscating qdb_error_t
+type ErrorType C.qdb_error_t
+
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
