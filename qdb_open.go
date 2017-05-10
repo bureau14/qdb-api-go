@@ -9,6 +9,11 @@ package qdb
 import "C"
 
 // Open : open a tcp handle
-func Open(handle *HandleType) ErrorType {
-	return ErrorType(C.qdb_open((*C.qdb_handle_t)(handle), C.qdb_p_tcp))
+func Open() (HandleType, error) {
+	var handle HandleType
+	e := C.qdb_open((*C.qdb_handle_t)(&handle), C.qdb_p_tcp)
+	if e != 0 {
+		return handle, ErrorType(e)
+	}
+	return handle, nil
 }

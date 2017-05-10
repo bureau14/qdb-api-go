@@ -9,6 +9,10 @@ package qdb
 import "C"
 
 // Close : open a tcp handle
-func Close(handle HandleType) ErrorType {
-	return ErrorType(C.qdb_close(C.qdb_handle_t(handle)))
+func Close(handle HandleType) error {
+	e := C.qdb_close(C.qdb_handle_t(handle))
+	if e != 0 {
+		return ErrorType(e)
+	}
+	return nil
 }

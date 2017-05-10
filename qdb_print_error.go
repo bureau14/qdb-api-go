@@ -6,11 +6,6 @@ package qdb
 	#include <qdb/error.h>
 */
 import "C"
-import "fmt"
 
-// PrintError : translates an error into an english error message
-func PrintError(e ErrorType) {
-	errorMessage := C.qdb_error(C.qdb_error_t(e))
-	errorString := C.GoString(errorMessage)
-	fmt.Printf("%s\n", errorString)
-}
+// func (e ErrorType) String() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
+func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }

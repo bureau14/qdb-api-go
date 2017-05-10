@@ -9,6 +9,10 @@ package qdb
 import "C"
 
 // Connect : connect a previously opened handle
-func Connect(handle HandleType, clusterURI string) ErrorType {
-	return ErrorType(C.qdb_connect(C.qdb_handle_t(handle), C.CString(clusterURI)))
+func Connect(handle HandleType, clusterURI string) error {
+	e := C.qdb_connect(C.qdb_handle_t(handle), C.CString(clusterURI))
+	if e != 0 {
+		return ErrorType(e)
+	}
+	return nil
 }
