@@ -30,11 +30,12 @@ func (h HandleType) Connect(clusterURI string) error {
 	return nil
 }
 
-// Open : open a tcp handle
-func (h *HandleType) Open() error {
+// NewHandle : Create a new handle, return error if needed
+func NewHandle() (HandleType, error) {
+	var h HandleType
 	e := C.qdb_open((*C.qdb_handle_t)(&h.t), C.qdb_p_tcp)
 	if e != 0 {
-		return ErrorType(e)
+		return h, ErrorType(e)
 	}
-	return nil
+	return h, nil
 }
