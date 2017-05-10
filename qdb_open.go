@@ -8,7 +8,7 @@ package qdb
 */
 import "C"
 
-// open : open a tcp handle
-func open(handle C.qdb_handle_t) C.qdb_error_t {
-	return C.qdb_open(&handle, C.qdb_p_tcp)
+// Open : open a tcp handle
+func Open(handle *HandleType) ErrorType {
+	return ErrorType(C.qdb_open((*C.qdb_handle_t)(handle), C.qdb_p_tcp))
 }

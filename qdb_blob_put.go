@@ -9,13 +9,17 @@ package qdb
 	#include <string.h>
 */
 import "C"
+import "unsafe"
 
-// blobPut
-func blobPut(handle C.qdb_handle_t, alias *C.char, content *C.void, contentLength C.qdb_size_t, expiry C.qdb_time_t) C.qdb_error_t {
-	return C.qdb_blob_put(handle, alias, content, contentLength, expiry)
+// BlobPut : original blob put
+func BlobPut(handle HandleType, alias string, content *C.void, contentLength SizeType, expiry TimeType) ErrorType {
+	e := C.qdb_blob_put(C.qdb_handle_t(handle), C.CString(alias), content, C.qdb_size_t(contentLength), C.qdb_time_t(expiry))
+	return ErrorType(e)
 }
 
-// blobPutSimple
-func blobPutSimple(handle C.qdb_handle_t, alias *C.char, content *C.char) C.qdb_error_t {
-	return C.qdb_blob_put(handle, alias, content, C.qdb_size_t(C.strlen(content)), C.qdb_never_expires)
+// BlobPutSimple : simple blob put
+func BlobPutSimple(handle HandleType, alias string, content string) ErrorType {
+	ptr := unsafe.Pointer(C.CString(content))
+	e := C.qdb_blob_put(C.qdb_handle_t(handle), C.CString(alias), ptr, C.qdb_size_t(len(content)), C.qdb_never_expires)
+	return ErrorType(e)
 }
