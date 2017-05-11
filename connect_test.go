@@ -1,6 +1,8 @@
 package qdb
 
-import "testing"
+import (
+	"testing"
+)
 
 // TestConnect testing various things about connection
 func TestConnect(t *testing.T) {
