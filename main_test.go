@@ -11,18 +11,49 @@ import (
 	"time"
 )
 
-func startQdbServer(qdbPath string) {
+func createLocalQdbExe(qdbPath string) string {
+	var localQdbName string
+	localQdbName += generateAlias(10)
+	localQdbName += "_qdbd"
+	runQdbServer := exec.Command("cp", qdbPath, localQdbName)
+	runQdbServer.Start()
+	runQdbServer.Wait()
+	return localQdbName
+}
+
+func removeLocalDatabase(qdbPath string) {
+	removeExe := exec.Command("rm", "-Rf", qdbPath)
+	removeExe.Start()
+	removeExe.Wait()
+	removeDB := exec.Command("rm", "-Rf", "db/")
+	removeDB.Start()
+	removeDB.Wait()
+}
+
+func stopQdbServer(qdbPath string) {
+	stopQdb := exec.Command("killall", qdbPath)
+	stopQdb.Start()
+	stopQdb.Wait()
+}
+
+func startQdbServer(qdbPath string) string {
 	random := rand.Intn(1000)
 	port := 30000 + random
-	fmt.Printf("Opening qdbd on port %d\n", port)
-	var reg bytes.Buffer
-	reg.WriteString(qdbPath)
-	reg.WriteString(" -a 127.0.0.1:")
-	reg.WriteString(strconv.Itoa(port))
-	runQdbServer := exec.Command(qdbPath)
+	portStr := strconv.Itoa(port)
+	exe := "./"
+	exe += qdbPath
+	fmt.Printf("Opening %s on port %s\n", qdbPath, portStr)
+	address := "127.0.0.1:"
+	address += portStr
+
+	runQdbServer := exec.Command(exe, "-a", address)
+	var outbuf, errbuf bytes.Buffer
+	runQdbServer.Stdout = &outbuf
+	runQdbServer.Stderr = &errbuf
 	runQdbServer.Start()
 
 	time.Sleep(5 * time.Second)
+	return portStr
 }
 
 func TestMain(m *testing.M) {
@@ -34,9 +65,19 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 	fmt.Printf("Using qdb server: %s\n", qdbPath)
-	startQdbServer(qdbPath)
+	qdbPath = createLocalQdbExe(qdbPath)
+	fmt.Printf("Local qdb server name: %s\n", qdbPath)
+	port := startQdbServer(qdbPath)
+
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	os.Args = []string{qdbPath, port}
 
 	retCode := m.Run()
+
+	stopQdbServer(qdbPath)
+	removeLocalDatabase(qdbPath)
 
 	os.Exit(retCode)
 }

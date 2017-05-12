@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"os"
 	"testing"
 )
 
@@ -16,7 +17,9 @@ func TestConnect(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error on: Connect without a proper address - got nil")
 	}
-	err = handle.Connect("qdb://127.0.0.1:2836")
+	qdbConnection := string("qdb://127.0.0.1:")
+	qdbConnection += os.Args[1]
+	err = handle.Connect(qdbConnection)
 	if err != nil {
 		t.Error("Expected no error, got ", err)
 	}
