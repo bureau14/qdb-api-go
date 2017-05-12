@@ -3,32 +3,26 @@ package qdb
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 )
 
 func startQdbServer(qdbPath string) {
+	random := rand.Intn(1000)
+	port := 30000 + random
+	fmt.Printf("Opening qdbd on port %d\n", port)
+	var reg bytes.Buffer
+	reg.WriteString(qdbPath)
+	reg.WriteString(" -a 127.0.0.1:")
+	reg.WriteString(strconv.Itoa(port))
 	runQdbServer := exec.Command(qdbPath)
 	runQdbServer.Start()
 
 	time.Sleep(5 * time.Second)
-}
-
-func checkQdbServerStarted() bool {
-	var getQdbServerPidsCmd bytes.Buffer
-	getQdbServerPidsCmd.WriteString("pgrep -f qdbd")
-	getQdbServerPids := exec.Command(getQdbServerPidsCmd.String())
-	var outbuf, errbuf bytes.Buffer
-	getQdbServerPids.Stdout = &outbuf
-	getQdbServerPids.Stderr = &errbuf
-	getQdbServerPids.Start()
-	getQdbServerPids.Wait()
-	if outbuf.String() == "" {
-		return false
-	}
-	return true
 }
 
 func TestMain(m *testing.M) {
@@ -40,10 +34,7 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 	fmt.Printf("Using qdb server: %s\n", qdbPath)
-	if checkQdbServerStarted() == false {
-		fmt.Printf("Qdb server was not running, starting now.\n")
-		startQdbServer(qdbPath)
-	}
+	startQdbServer(qdbPath)
 
 	retCode := m.Run()
 
