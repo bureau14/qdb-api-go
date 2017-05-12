@@ -29,7 +29,7 @@ func TestBlob(t *testing.T) {
 		t.Error("Expected no error - got: ", err)
 	}
 
-	// Test Get and Remove
+	// Test Get
 	var contentObtained string
 	contentObtained, err = handle.BlobGet(alias)
 	if err != nil {
@@ -49,6 +49,6 @@ func TestBlob(t *testing.T) {
 		t.Error("Expected error on BlobGet after deleting data - got nil")
 	}
 	if contentObtained != "" {
-		t.Error("Expected contentObtained to be nil got: ", contentObtained)
+		t.Error("Expected contentObtained to be \"\" got: ", contentObtained)
 	}
 }
