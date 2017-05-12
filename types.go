@@ -8,8 +8,8 @@ package qdb
 */
 import "C"
 
-// SizeType obfuscating qdb_size_t
+// SizeType typedef qdb_size_t
 type SizeType C.qdb_size_t
 
-// TimeType obfuscating qdb_time_t
+// TimeType typedef qdb_time_t
 type TimeType C.qdb_time_t
