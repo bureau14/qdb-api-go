@@ -11,7 +11,7 @@ package qdb
 import "C"
 import "unsafe"
 
-// BlobPut : original blob put
+// BlobPut : blob put value for alias
 func (handle HandleType) BlobPut(alias string, content string, expiry TimeType) error {
 	e := C.qdb_blob_put(handle.t, C.CString(alias), unsafe.Pointer(C.CString(content)), C.qdb_size_t(len(content)), C.qdb_time_t(expiry))
 	if e != 0 {
@@ -20,17 +20,16 @@ func (handle HandleType) BlobPut(alias string, content string, expiry TimeType) 
 	return nil
 }
 
-// BlobPutSimple : simpler blob put
-func (handle HandleType) BlobPutSimple(alias string, content string) error {
-	ptr := unsafe.Pointer(C.CString(content))
-	e := C.qdb_blob_put(handle.t, C.CString(alias), ptr, C.qdb_size_t(len(content)), NeverExpires)
+// BlobUpdate : blob update value of alias
+func (handle HandleType) BlobUpdate(alias string, newContent string, expiry TimeType) error {
+	e := C.qdb_blob_update(handle.t, C.CString(alias), unsafe.Pointer(C.CString(newContent)), C.qdb_size_t(len(newContent)), C.qdb_time_t(expiry))
 	if e != 0 {
 		return ErrorType(e)
 	}
 	return nil
 }
 
-// BlobGet : blob get
+// BlobGet : blob get value associated with alias
 func (handle HandleType) BlobGet(alias string) (string, error) {
 	var content unsafe.Pointer
 	var contentLength C.qdb_size_t
@@ -42,6 +41,17 @@ func (handle HandleType) BlobGet(alias string) (string, error) {
 	handle.Release(content)
 	return output, nil
 }
+
+// BlobRemove : blob remove value of alias
+func (handle HandleType) BlobRemove(alias string) error {
+	e := C.qdb_remove(handle.t, C.CString(alias))
+	if e != 0 {
+		return ErrorType(e)
+	}
+	return nil
+}
+
+// :: Less Usefull ::
 
 // BlobGetAndRemove : blob get and remove
 func (handle HandleType) BlobGetAndRemove(alias string) (string, error) {
