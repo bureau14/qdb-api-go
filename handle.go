@@ -52,3 +52,8 @@ func (h HandleType) Blob(alias string) BlobEntry {
 func (h HandleType) Integer(alias string) IntegerEntry {
 	return IntegerEntry{entry{h, alias}}
 }
+
+// Timeserie : create an time entry object
+func (h HandleType) Timeserie(alias string, columns []TsColumnInfo) TimeseriesEntry {
+	return TimeseriesEntry{entry{h, alias}, columns}
+}
