@@ -56,6 +56,14 @@ func startQdbServer(qdbPath string) string {
 	return portStr
 }
 
+func setupHandle() (HandleType, error) {
+	handle, err := NewHandle()
+	qdbConnection := string("qdb://127.0.0.1:")
+	qdbConnection += os.Args[1]
+	err = handle.Connect(qdbConnection)
+	return handle, err
+}
+
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 
