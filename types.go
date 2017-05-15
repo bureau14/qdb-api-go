@@ -13,4 +13,5 @@ type SizeType C.qdb_size_t
 // TimeType typedef qdb_time_t
 type TimeType C.qdb_time_t
 
+// TimespecType typedef qdb_time_t
 type TimespecType C.qdb_timespec_t
