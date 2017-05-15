@@ -10,8 +10,19 @@ import "unsafe"
 import "math/rand"
 
 // Release : release previously allocated qdb resource
-func (handle HandleType) Release(buffer unsafe.Pointer) {
-	C.qdb_release(handle.t, buffer)
+func (h HandleType) Release(buffer unsafe.Pointer) {
+	C.qdb_release(h.handle, buffer)
+}
+
+func convertToCharStarStar(toConvert [][]byte) **C.char {
+	ptrSize := unsafe.Sizeof(*C.char)
+	size := len(toConvert)
+	data := C.malloc(C.size_t(size) * C.size_t(ptrSize))
+	for i := 0; i < size; i++ {
+		element := (**C.char)(unsafe.Pointer(uintptr(data) + uintptr(i)*ptrSize))
+		*element = (*C.char)(unsafe.Pointer(&toConvert[i][0]))
+	}
+	return data
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
