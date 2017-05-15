@@ -66,16 +66,15 @@ func TestMain(m *testing.M) {
 	}
 	fmt.Printf("Using qdb server: %s\n", qdbPath)
 	qdbPath = createLocalQdbExe(qdbPath)
-	fmt.Printf("Local qdb server name: %s\n", qdbPath)
 	port := startQdbServer(qdbPath)
 
 	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
 
 	os.Args = []string{qdbPath, port}
 
 	retCode := m.Run()
 
+	os.Args = oldArgs
 	stopQdbServer(qdbPath)
 	removeLocalDatabase(qdbPath)
 
