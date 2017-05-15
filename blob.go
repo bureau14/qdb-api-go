@@ -11,57 +11,79 @@ package qdb
 import "C"
 import "unsafe"
 
-// BlobPut : blob put value for alias
-func (handle HandleType) BlobPut(alias string, content string, expiry TimeType) error {
-	e := C.qdb_blob_put(handle.t, C.CString(alias), unsafe.Pointer(C.CString(content)), C.qdb_size_t(len(content)), C.qdb_time_t(expiry))
+// Blob : blob data type
+type Blob struct {
+	entry
+	content []byte
+}
+
+// Content : Return content value
+func (blob Blob) Content() []byte {
+	return blob.content
+}
+
+// NewBlob : Create a new blob type
+func NewBlob(handle HandleType, expiry Expiry, alias string, content []byte) Blob {
+	return Blob{entry{handle, expiry, alias}, content}
+}
+
+// Put : blob put value for alias
+func (blob Blob) Put() error {
+	alias := C.CString(blob.alias)
+	content := unsafe.Pointer(&blob.content[0])
+	contentSize := C.qdb_size_t(len(blob.content))
+	e := C.qdb_blob_put(blob.handle, alias, content, contentSize, C.qdb_time_t(blob.Expiry))
 	if e != 0 {
 		return ErrorType(e)
 	}
 	return nil
 }
 
-// BlobUpdate : blob update value of alias
-func (handle HandleType) BlobUpdate(alias string, newContent string, expiry TimeType) error {
-	e := C.qdb_blob_update(handle.t, C.CString(alias), unsafe.Pointer(C.CString(newContent)), C.qdb_size_t(len(newContent)), C.qdb_time_t(expiry))
+// Update : blob update value of alias
+func (blob *Blob) Update(newContent []byte, newExpiry Expiry) error {
+	alias := C.CString(blob.alias)
+	content := unsafe.Pointer(&blob.content[0])
+	contentSize := C.qdb_size_t(len(newContent))
+	e := C.qdb_blob_update(blob.handle, alias, content, contentSize, C.qdb_time_t(blob.Expiry))
 	if e != 0 {
 		return ErrorType(e)
 	}
+	blob.content = newContent
+	blob.Expiry = newExpiry
 	return nil
 }
 
-// BlobGet : blob get value associated with alias
-func (handle HandleType) BlobGet(alias string) (string, error) {
+// Get : blob get value associated with alias
+func (blob Blob) Get() ([]byte, error) {
 	var content unsafe.Pointer
 	var contentLength C.qdb_size_t
-	e := C.qdb_blob_get(handle.t, C.CString(alias), &content, &contentLength)
+	e := C.qdb_blob_get(blob.handle, C.CString(blob.alias), &content, &contentLength)
 	if e != 0 {
-		return "", ErrorType(e)
+		return nil, ErrorType(e)
 	}
-	output := C.GoStringN((*C.char)(unsafe.Pointer(content)), C.int(contentLength))
-	handle.Release(content)
+	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	blob.Release(content)
 	return output, nil
 }
 
-// BlobRemove : blob remove value of alias
-func (handle HandleType) BlobRemove(alias string) error {
-	e := C.qdb_remove(handle.t, C.CString(alias))
+// Remove : blob remove value of alias
+func (blob Blob) Remove() error {
+	e := C.qdb_remove(blob.handle, C.CString(blob.alias))
 	if e != 0 {
 		return ErrorType(e)
 	}
 	return nil
 }
 
-// :: Less Usefull ::
-
-// BlobGetAndRemove : blob get and remove
-func (handle HandleType) BlobGetAndRemove(alias string) (string, error) {
+// GetAndRemove : blob get and remove
+func (blob Blob) GetAndRemove() (string, error) {
 	var content unsafe.Pointer
 	var contentLength C.qdb_size_t
-	e := C.qdb_blob_get_and_remove(handle.t, C.CString(alias), &content, &contentLength)
+	e := C.qdb_blob_get_and_remove(blob.handle, C.CString(blob.alias), &content, &contentLength)
 	if e != 0 {
 		return "", ErrorType(e)
 	}
 	output := C.GoStringN((*C.char)(unsafe.Pointer(content)), C.int(contentLength))
-	handle.Release(content)
+	blob.Release(content)
 	return output, nil
 }

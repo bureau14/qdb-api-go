@@ -1,54 +1,67 @@
 package qdb
 
 import (
+	"bytes"
+	"os"
 	"testing"
 )
 
+func setup() (HandleType, error) {
+	handle, err := NewHandle()
+	qdbConnection := string("qdb://127.0.0.1:")
+	qdbConnection += os.Args[1]
+	err = handle.Connect(qdbConnection)
+	return handle, err
+}
+
 // TestConnect testing various things about connection
 func TestBlob(t *testing.T) {
-	handle, err := NewHandle()
-	err = handle.Connect("qdb://127.0.0.1:2836")
+	handle, err := setup()
+	if err != nil {
+		t.Error("Setup failed: ", err)
+	}
 
 	alias := generateAlias(16)
+	content := []byte("content")
+	blob := NewBlob(handle, NeverExpires, alias, content)
 
-	content := string("content")
 	// Test BlobPut
-	err = handle.BlobPut(alias, content, NeverExpires)
+	err = blob.Put()
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	err = handle.BlobPut(alias, content, NeverExpires)
+	err = blob.Put()
 	if err == nil {
 		t.Error("Expected error on BlobPut with already used alias - got nil")
 	}
 
 	// Test update
-	newContent := string("newContent")
-	err = handle.BlobUpdate(alias, newContent, NeverExpires)
+	newContent := []byte("newContent")
+	err = blob.Update(newContent, NeverExpires)
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
 
 	// Test Get
-	var contentObtained string
-	contentObtained, err = handle.BlobGet(alias)
+	var contentObtained []byte
+	contentObtained, err = blob.Get()
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	if contentObtained != newContent {
+	if bytes.Equal(contentObtained, newContent) == true {
 		t.Error("Expected contentObtained should be ", newContent, " got: ", contentObtained)
 	}
 
 	// Test Remove
-	err = handle.BlobRemove(alias)
+	err = blob.Remove()
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	contentObtained, err = handle.BlobGet(alias)
+	contentObtained, err = blob.Get()
 	if err == nil {
 		t.Error("Expected error on BlobGet after deleting data - got nil")
 	}
-	if contentObtained != "" {
-		t.Error("Expected contentObtained to be \"\" got: ", contentObtained)
+	if contentObtained != nil {
+		t.Error("Expected contentObtained to be nil got: ", contentObtained)
 	}
 }

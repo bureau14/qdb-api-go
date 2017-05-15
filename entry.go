@@ -15,6 +15,7 @@ type entry struct {
 	alias string
 }
 
+// Alias : Return alias value
 func (e entry) Alias() string {
 	return string(e.alias)
 }
