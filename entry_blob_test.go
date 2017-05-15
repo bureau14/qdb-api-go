@@ -2,35 +2,26 @@ package qdb
 
 import (
 	"bytes"
-	"os"
 	"testing"
 )
 
-func setup() (HandleType, error) {
-	handle, err := NewHandle()
-	qdbConnection := string("qdb://127.0.0.1:")
-	qdbConnection += os.Args[1]
-	err = handle.Connect(qdbConnection)
-	return handle, err
-}
-
 // TestConnect testing various things about connection
-func TestBlob(t *testing.T) {
-	handle, err := setup()
+func TestBlobEntry(t *testing.T) {
+	handle, err := setupHandle()
 	if err != nil {
 		t.Error("Setup failed: ", err)
 	}
 
 	alias := generateAlias(16)
 	content := []byte("content")
-	blob := NewBlob(handle, NeverExpires, alias, content)
+	blob := handle.Blob(alias)
 
 	// Test BlobPut
-	err = blob.Put()
+	err = blob.Put(content, NeverExpires)
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	err = blob.Put()
+	err = blob.Put(content, NeverExpires)
 	if err == nil {
 		t.Error("Expected error on BlobPut with already used alias - got nil")
 	}
@@ -48,7 +39,7 @@ func TestBlob(t *testing.T) {
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	if bytes.Equal(contentObtained, newContent) == true {
+	if bytes.Equal(contentObtained, newContent) == false {
 		t.Error("Expected contentObtained should be ", newContent, " got: ", contentObtained)
 	}
 

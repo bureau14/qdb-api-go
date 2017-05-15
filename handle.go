@@ -10,6 +10,7 @@ import "C"
 // HandleType obfuscating qdb_handle_t
 type HandleType struct {
 	handle C.qdb_handle_t
+	uri    string
 }
 
 // Close : open a tcp handle
@@ -38,4 +39,16 @@ func NewHandle() (HandleType, error) {
 		return h, ErrorType(e)
 	}
 	return h, nil
+}
+
+// Entries creators
+
+// Blob : create a blob entry object
+func (h HandleType) Blob(alias string) BlobEntry {
+	return BlobEntry{entry{h, alias}}
+}
+
+// Integer : create an integer entry object
+func (h HandleType) Integer(alias string) IntegerEntry {
+	return IntegerEntry{entry{h, alias}}
 }

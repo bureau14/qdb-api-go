@@ -11,13 +11,21 @@ import "unsafe"
 
 type entry struct {
 	HandleType
-	Expiry
 	alias string
 }
 
 // Alias : Return alias value
 func (e entry) Alias() string {
 	return string(e.alias)
+}
+
+// Remove : entry remove value of alias
+func (e entry) Remove() error {
+	err := C.qdb_remove(e.handle, C.CString(e.alias))
+	if err != 0 {
+		return ErrorType(err)
+	}
+	return nil
 }
 
 func (e entry) HasTag(tag []string) error {
