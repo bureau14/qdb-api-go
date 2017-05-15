@@ -13,5 +13,5 @@ type Expiry TimeType
 // NeverExpires : constant value for unexpirable data
 const NeverExpires = C.qdb_never_expires
 
-// PreserverExpiration : constant value for preservation of expiration value
-const PreserverExpiration = C.qdb_preserve_expiration
+// PreserveExpiration : constant value for preservation of expiration value
+const PreserveExpiration = C.qdb_preserve_expiration
