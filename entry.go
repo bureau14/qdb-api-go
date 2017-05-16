@@ -16,7 +16,7 @@ type entry struct {
 
 // Alias : Return alias value
 func (e entry) Alias() string {
-	return string(e.alias)
+	return e.alias
 }
 
 // Remove : entry remove value of alias
