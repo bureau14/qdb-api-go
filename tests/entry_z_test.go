@@ -1,8 +1,11 @@
-package qdb
+package qdbtests
 
 // Name of file is to make it appear close to entry.go
 
-import "testing"
+import (
+	"testing"
+	. "qdb"
+)
 
 // Testing entry via integer entry type
 func TestEntry(t *testing.T) {

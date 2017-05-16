@@ -1,8 +1,9 @@
-package qdb
+package qdbtests
 
 import (
 	"os"
 	"testing"
+	. "qdb"
 )
 
 func connectWithoutCreatingHandle(t *testing.T, handle *HandleType, err error) {

@@ -1,4 +1,4 @@
-package qdb
+package qdbtests
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	. "qdb"
 	"strconv"
 	"testing"
 	"time"

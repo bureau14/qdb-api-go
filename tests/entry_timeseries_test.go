@@ -1,7 +1,10 @@
-package qdb
+package qdbtests
 
-import "testing"
-import "bytes"
+import (
+	"bytes"
+	. "qdb"
+	"testing"
+)
 
 func TestTimeseries(t *testing.T) {
 	handle, err := setupHandle()
@@ -39,11 +42,11 @@ func TestTimeseries(t *testing.T) {
 	if len(tsDoublePoints) != 2 {
 		t.Error("Expected len(tsDoublePoints) == 2 got", len(tsDoublePoints))
 	}
-	if tsDoublePoints[0].timestamp != doublePoint1.timestamp {
-		t.Error("Expected timestamp ", doublePoint1.timestamp, " got ", tsDoublePoints[0].timestamp)
+	if tsDoublePoints[0].Timestamp != doublePoint1.Timestamp {
+		t.Error("Expected timestamp ", doublePoint1.Timestamp, " got ", tsDoublePoints[0].Timestamp)
 	}
-	if tsDoublePoints[0].content != contentDouble {
-		t.Error("Expected content ", contentDouble, " got ", tsDoublePoints[0].content)
+	if tsDoublePoints[0].Content != contentDouble {
+		t.Error("Expected content ", contentDouble, " got ", tsDoublePoints[0].Content)
 	}
 
 	// Testing blob point
@@ -59,10 +62,10 @@ func TestTimeseries(t *testing.T) {
 	if len(tsBlobPoints) != 2 {
 		t.Error("Expected len(tsBlobPoints) == 2 got", len(tsBlobPoints))
 	}
-	if tsBlobPoints[0].timestamp != blobPoint1.timestamp {
-		t.Error("Expected timestamp ", blobPoint1.timestamp, " got ", tsBlobPoints[0].timestamp)
+	if tsBlobPoints[0].Timestamp != blobPoint1.Timestamp {
+		t.Error("Expected timestamp ", blobPoint1.Timestamp, " got ", tsBlobPoints[0].Timestamp)
 	}
-	if bytes.Equal(tsBlobPoints[0].content, contentBlob) == false {
-		t.Error("Expected content ", contentBlob, " got ", tsBlobPoints[0].content)
+	if bytes.Equal(tsBlobPoints[0].Content, contentBlob) == false {
+		t.Error("Expected content ", contentBlob, " got ", tsBlobPoints[0].Content)
 	}
 }

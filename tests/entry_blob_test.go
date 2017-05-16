@@ -1,57 +1,59 @@
-package qdb
+package qdbtests
 
 import (
+	"bytes"
+	. "qdb"
 	"testing"
 )
 
 // TestConnect testing various things about connection
-func TestIntegerEntry(t *testing.T) {
+func TestBlobEntry(t *testing.T) {
 	handle, err := setupHandle()
 	if err != nil {
 		t.Error("Setup failed: ", err)
 	}
 
 	alias := generateAlias(16)
-	content := int64(13)
-	integer := handle.Integer(alias)
+	content := []byte("content")
+	blob := handle.Blob(alias)
 
-	// Test IntegerPut
-	err = integer.Put(content, NeverExpires)
+	// Test BlobPut
+	err = blob.Put(content, NeverExpires)
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	err = integer.Put(content, NeverExpires)
+	err = blob.Put(content, NeverExpires)
 	if err == nil {
-		t.Error("Expected error on IntegerPut with already used alias - got nil")
+		t.Error("Expected error on BlobPut with already used alias - got nil")
 	}
 
 	// Test update
-	newContent := int64(87)
-	err = integer.Update(newContent, NeverExpires)
+	newContent := []byte("newContent")
+	err = blob.Update(newContent, NeverExpires)
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
 
 	// Test Get
-	var contentObtained int64
-	contentObtained, err = integer.Get()
+	var contentObtained []byte
+	contentObtained, err = blob.Get()
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	if contentObtained != newContent {
+	if bytes.Equal(contentObtained, newContent) == false {
 		t.Error("Expected contentObtained should be ", newContent, " got: ", contentObtained)
 	}
 
 	// Test Remove
-	err = integer.Remove()
+	err = blob.Remove()
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	contentObtained, err = integer.Get()
+	contentObtained, err = blob.Get()
 	if err == nil {
 		t.Error("Expected error on BlobGet after deleting data - got nil")
 	}
-	if contentObtained != 0 {
-		t.Error("Expected contentObtained to be nil got: ", contentObtained)
+	if bytes.Equal(contentObtained, []byte{}) == false {
+		t.Error("Expected contentObtained to be [] got: ", contentObtained)
 	}
 }
