@@ -6,8 +6,11 @@ package qdb
 	#include <qdb/client.h>
 */
 import "C"
-import "unsafe"
-import "math/rand"
+import (
+	"math/rand"
+	"time"
+	"unsafe"
+)
 
 // Release : release previously allocated qdb resource
 func (h HandleType) Release(buffer unsafe.Pointer) {
@@ -33,8 +36,10 @@ const (
 )
 
 func generateAlias(n int) string {
+	nanos := int64(time.Now().UnixNano())
 	b := make([]byte, n)
 	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
+	rand.Seed(nanos)
 	for i, cache, remain := n-1, rand.Int63(), letterIdxMax; i >= 0; {
 		if remain == 0 {
 			cache, remain = rand.Int63(), letterIdxMax
