@@ -57,3 +57,27 @@ func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint)
 	}
 	return nil
 }
+
+// TsBlobPoint : timestamped data
+type TsBlobPoint C.qdb_ts_blob_point
+
+// NewTsBlobPoint : Create new timeseries double point
+func NewTsBlobPoint(timestamp TimespecType, value []byte) TsBlobPoint {
+	contentPtr := unsafe.Pointer(&value[0])
+	contentSize := C.qdb_size_t(len(value))
+
+	return TsBlobPoint{C.qdb_timespec_t(timestamp), contentPtr, contentSize}
+}
+
+// InsertBlob : insert points in a time series
+func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) error {
+	alias := C.CString(entry.alias)
+	columnName := C.CString(column)
+	count := C.qdb_size_t(len(points))
+	content := (*C.qdb_ts_blob_point)(unsafe.Pointer(&points[0]))
+	e := C.qdb_ts_blob_insert(entry.handle, alias, columnName, content, count)
+	if e != 0 {
+		return ErrorType(e)
+	}
+	return nil
+}
