@@ -42,11 +42,8 @@ func (entry TimeseriesEntry) Create() error {
 	alias := C.CString(entry.alias)
 	columns := (*C.qdb_ts_column_info_t)(&entry.columns[0])
 	columnsCount := C.qdb_size_t(len(entry.columns))
-	e := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
-	if e != 0 {
-		return ErrorType(e)
-	}
-	return nil
+	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
+	return makeErrorOrNil(err)
 }
 
 // TsDoublePoint : timestamped data
@@ -73,11 +70,8 @@ func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint)
 	for i := C.qdb_size_t(0); i < contentCount; i++ {
 		content[i] = points[i].toQdbDoublePoint()
 	}
-	e := C.qdb_ts_double_insert(entry.handle, alias, columnName, &content[0], contentCount)
-	if e != 0 {
-		return ErrorType(e)
-	}
-	return nil
+	err := C.qdb_ts_double_insert(entry.handle, alias, columnName, &content[0], contentCount)
+	return makeErrorOrNil(err)
 }
 
 // TsBlobPoint : timestamped data
@@ -108,11 +102,8 @@ func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) err
 	for i := C.qdb_size_t(0); i < contentCount; i++ {
 		content[i] = points[i].toQdbBlobPoint()
 	}
-	e := C.qdb_ts_blob_insert(entry.handle, alias, columnName, &content[0], contentCount)
-	if e != 0 {
-		return ErrorType(e)
-	}
-	return nil
+	err := C.qdb_ts_blob_insert(entry.handle, alias, columnName, &content[0], contentCount)
+	return makeErrorOrNil(err)
 }
 
 // TsRange : timeseries range with begin and end timestamp
@@ -130,19 +121,17 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([
 	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
 	qdbRangesCount := C.qdb_size_t(len(ranges))
 	var qdbPoints *C.qdb_ts_double_point
+	defer entry.Release(unsafe.Pointer(qdbPoints))
 	var qdbPointsCount C.qdb_size_t
-	e := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
-	if e != 0 {
-		return nil, ErrorType(e)
-	}
+	err := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
+
 	length := int(qdbPointsCount)
-	tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
 	output := make([]TsDoublePoint, length)
+	tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
 	for i, s := range tmpslice {
 		output[i] = TsDoublePoint{TimespecType(s.timestamp), float64(s.value)}
 	}
-	entry.Release(unsafe.Pointer(qdbPoints))
-	return output, nil
+	return output, makeErrorOrNil(err)
 }
 
 // GetBlobRanges : get ranges of blob data points
@@ -152,17 +141,15 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]T
 	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
 	qdbRangesCount := C.qdb_size_t(len(ranges))
 	var qdbPoints *C.qdb_ts_blob_point
+	defer entry.Release(unsafe.Pointer(qdbPoints))
 	var qdbPointsCount C.qdb_size_t
-	e := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
-	if e != 0 {
-		return nil, ErrorType(e)
-	}
+	err := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
+
 	length := int(qdbPointsCount)
-	tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
 	output := make([]TsBlobPoint, length)
+	tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
 	for i, s := range tmpslice {
 		output[i] = TsBlobPoint{TimespecType(s.timestamp), C.GoBytes(s.content, C.int(s.content_length))}
 	}
-	entry.Release(unsafe.Pointer(qdbPoints))
-	return output, nil
+	return output, makeErrorOrNil(err)
 }

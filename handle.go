@@ -15,30 +15,21 @@ type HandleType struct {
 
 // Close : open a tcp handle
 func (h HandleType) Close() error {
-	e := C.qdb_close(h.handle)
-	if e != 0 {
-		return ErrorType(e)
-	}
-	return nil
+	err := C.qdb_close(h.handle)
+	return makeErrorOrNil(err)
 }
 
 // Connect : connect a previously opened handle
 func (h HandleType) Connect(clusterURI string) error {
-	e := C.qdb_connect(h.handle, C.CString(clusterURI))
-	if e != 0 {
-		return ErrorType(e)
-	}
-	return nil
+	err := C.qdb_connect(h.handle, C.CString(clusterURI))
+	return makeErrorOrNil(err)
 }
 
 // NewHandle : Create a new handle, return error if needed
 func NewHandle() (HandleType, error) {
 	var h HandleType
-	e := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_p_tcp)
-	if e != 0 {
-		return h, ErrorType(e)
-	}
-	return h, nil
+	err := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_p_tcp)
+	return h, makeErrorOrNil(err)
 }
 
 // Entries creators

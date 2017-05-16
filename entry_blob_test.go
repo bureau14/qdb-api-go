@@ -52,7 +52,7 @@ func TestBlobEntry(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error on BlobGet after deleting data - got nil")
 	}
-	if contentObtained != nil {
-		t.Error("Expected contentObtained to be nil got: ", contentObtained)
+	if bytes.Equal(contentObtained, []byte{}) == false {
+		t.Error("Expected contentObtained to be [] got: ", contentObtained)
 	}
 }
