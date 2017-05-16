@@ -7,7 +7,6 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
-import "unsafe"
 
 type entry struct {
 	HandleType
@@ -28,8 +27,8 @@ func (e entry) Remove() error {
 	return nil
 }
 
-func (e entry) HasTag(tag []string) error {
-	err := C.qdb_has_tag(e.handle, C.CString(e.alias), (*C.char)(unsafe.Pointer(&tag[0])))
+func (e entry) HasTag(tag string) error {
+	err := C.qdb_has_tag(e.handle, C.CString(e.alias), C.CString(tag))
 	if err != 0 {
 		return ErrorType(err)
 	}
