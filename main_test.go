@@ -12,9 +12,7 @@ import (
 )
 
 func createLocalQdbExe(qdbPath string) string {
-	var localQdbName string
-	localQdbName += generateAlias(10)
-	localQdbName += "_qdbd"
+	localQdbName := string("test_qdbd")
 	runQdbServer := exec.Command("cp", qdbPath, localQdbName)
 	runQdbServer.Start()
 	runQdbServer.Wait()
