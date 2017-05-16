@@ -48,12 +48,12 @@ func (entry TimeseriesEntry) Create() error {
 
 // TsDoublePoint : timestamped data
 type TsDoublePoint struct {
-	timestamp TimespecType
-	content   float64
+	Timestamp TimespecType
+	Content   float64
 }
 
 func (ts TsDoublePoint) toQdbDoublePoint() C.qdb_ts_double_point {
-	return C.qdb_ts_double_point{C.qdb_timespec_t(ts.timestamp), C.double(ts.content)}
+	return C.qdb_ts_double_point{ts.Timestamp.toQdbTimespec(), C.double(ts.Content)}
 }
 
 // NewTsDoublePoint : Create new timeseries double point
@@ -76,16 +76,16 @@ func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint)
 
 // TsBlobPoint : timestamped data
 type TsBlobPoint struct {
-	timestamp TimespecType
-	content   []byte
+	Timestamp TimespecType
+	Content   []byte
 }
 
 // TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
 // solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
 func (ts TsBlobPoint) toQdbBlobPoint() C.qdb_ts_blob_point {
-	dataSize := C.qdb_size_t(len(ts.content))
-	data := unsafe.Pointer(C.CString(string(ts.content)))
-	return C.qdb_ts_blob_point{C.qdb_timespec_t(ts.timestamp), data, dataSize}
+	dataSize := C.qdb_size_t(len(ts.Content))
+	data := unsafe.Pointer(C.CString(string(ts.Content)))
+	return C.qdb_ts_blob_point{ts.Timestamp.toQdbTimespec(), data, dataSize}
 }
 
 // NewTsBlobPoint : Create new timeseries double point
@@ -111,7 +111,7 @@ type TsRange C.qdb_ts_range_t
 
 // NewTsRange : Create new timeseries range
 func NewTsRange(begin, end TimespecType) TsRange {
-	return TsRange{C.qdb_timespec_t(begin), C.qdb_timespec_t(end)}
+	return TsRange{begin.toQdbTimespec(), end.toQdbTimespec()}
 }
 
 // GetDoubleRanges : get ranges of double data points
@@ -129,7 +129,7 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([
 	output := make([]TsDoublePoint, length)
 	tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
 	for i, s := range tmpslice {
-		output[i] = TsDoublePoint{TimespecType(s.timestamp), float64(s.value)}
+		output[i] = TsDoublePoint{s.timestamp.toTimeSpec(), float64(s.value)}
 	}
 	return output, makeErrorOrNil(err)
 }
@@ -149,7 +149,7 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]T
 	output := make([]TsBlobPoint, length)
 	tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
 	for i, s := range tmpslice {
-		output[i] = TsBlobPoint{TimespecType(s.timestamp), C.GoBytes(s.content, C.int(s.content_length))}
+		output[i] = TsBlobPoint{s.timestamp.toTimeSpec(), C.GoBytes(s.content, C.int(s.content_length))}
 	}
 	return output, makeErrorOrNil(err)
 }
