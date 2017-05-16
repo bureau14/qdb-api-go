@@ -37,21 +37,43 @@ type TimeseriesEntry struct {
 	columns []TsColumnInfo
 }
 
+// Create : create a new timeseries
+func (entry TimeseriesEntry) Create() error {
+	alias := C.CString(entry.alias)
+	columns := (*C.qdb_ts_column_info_t)(&entry.columns[0])
+	columnsCount := C.qdb_size_t(len(entry.columns))
+	e := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
+	if e != 0 {
+		return ErrorType(e)
+	}
+	return nil
+}
+
 // TsDoublePoint : timestamped data
-type TsDoublePoint C.qdb_ts_double_point
+type TsDoublePoint struct {
+	timestamp TimespecType
+	content   float64
+}
+
+func (ts TsDoublePoint) toQdbDoublePoint() C.qdb_ts_double_point {
+	return C.qdb_ts_double_point{C.qdb_timespec_t(ts.timestamp), C.double(ts.content)}
+}
 
 // NewTsDoublePoint : Create new timeseries double point
 func NewTsDoublePoint(timestamp TimespecType, value float64) TsDoublePoint {
-	return TsDoublePoint{C.qdb_timespec_t(timestamp), C.double(value)}
+	return TsDoublePoint{timestamp, value}
 }
 
 // InsertDouble : insert points in a time series
 func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	count := C.qdb_size_t(len(points))
-	content := (*C.qdb_ts_double_point)(unsafe.Pointer(&points[0]))
-	e := C.qdb_ts_double_insert(entry.handle, alias, columnName, content, count)
+	contentCount := C.qdb_size_t(len(points))
+	content := make([]C.qdb_ts_double_point, contentCount)
+	for i := C.qdb_size_t(0); i < contentCount; i++ {
+		content[i] = points[i].toQdbDoublePoint()
+	}
+	e := C.qdb_ts_double_insert(entry.handle, alias, columnName, &content[0], contentCount)
 	if e != 0 {
 		return ErrorType(e)
 	}
@@ -59,25 +81,88 @@ func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint)
 }
 
 // TsBlobPoint : timestamped data
-type TsBlobPoint C.qdb_ts_blob_point
+type TsBlobPoint struct {
+	timestamp TimespecType
+	content   []byte
+}
+
+// TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
+// solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
+func (ts TsBlobPoint) toQdbBlobPoint() C.qdb_ts_blob_point {
+	dataSize := C.qdb_size_t(len(ts.content))
+	data := unsafe.Pointer(C.CString(string(ts.content)))
+	return C.qdb_ts_blob_point{C.qdb_timespec_t(ts.timestamp), data, dataSize}
+}
 
 // NewTsBlobPoint : Create new timeseries double point
 func NewTsBlobPoint(timestamp TimespecType, value []byte) TsBlobPoint {
-	contentPtr := unsafe.Pointer(&value[0])
-	contentSize := C.qdb_size_t(len(value))
-
-	return TsBlobPoint{C.qdb_timespec_t(timestamp), contentPtr, contentSize}
+	return TsBlobPoint{timestamp, value}
 }
 
 // InsertBlob : insert points in a time series
 func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	count := C.qdb_size_t(len(points))
-	content := (*C.qdb_ts_blob_point)(unsafe.Pointer(&points[0]))
-	e := C.qdb_ts_blob_insert(entry.handle, alias, columnName, content, count)
+	contentCount := C.qdb_size_t(len(points))
+	content := make([]C.qdb_ts_blob_point, contentCount)
+	for i := C.qdb_size_t(0); i < contentCount; i++ {
+		content[i] = points[i].toQdbBlobPoint()
+	}
+	e := C.qdb_ts_blob_insert(entry.handle, alias, columnName, &content[0], contentCount)
 	if e != 0 {
 		return ErrorType(e)
 	}
 	return nil
+}
+
+// TsRange : timeseries range with begin and end timestamp
+type TsRange C.qdb_ts_range_t
+
+// NewTsRange : Create new timeseries range
+func NewTsRange(begin, end TimespecType) TsRange {
+	return TsRange{C.qdb_timespec_t(begin), C.qdb_timespec_t(end)}
+}
+
+// GetDoubleRanges : get ranges of double data points
+func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([]TsDoublePoint, error) {
+	alias := C.CString(entry.alias)
+	columnName := C.CString(column)
+	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
+	qdbRangesCount := C.qdb_size_t(len(ranges))
+	var qdbPoints *C.qdb_ts_double_point
+	var qdbPointsCount C.qdb_size_t
+	e := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
+	if e != 0 {
+		return nil, ErrorType(e)
+	}
+	length := int(qdbPointsCount)
+	tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
+	output := make([]TsDoublePoint, length)
+	for i, s := range tmpslice {
+		output[i] = TsDoublePoint{TimespecType(s.timestamp), float64(s.value)}
+	}
+	entry.Release(unsafe.Pointer(qdbPoints))
+	return output, nil
+}
+
+// GetBlobRanges : get ranges of blob data points
+func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]TsBlobPoint, error) {
+	alias := C.CString(entry.alias)
+	columnName := C.CString(column)
+	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
+	qdbRangesCount := C.qdb_size_t(len(ranges))
+	var qdbPoints *C.qdb_ts_blob_point
+	var qdbPointsCount C.qdb_size_t
+	e := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
+	if e != 0 {
+		return nil, ErrorType(e)
+	}
+	length := int(qdbPointsCount)
+	tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
+	output := make([]TsBlobPoint, length)
+	for i, s := range tmpslice {
+		output[i] = TsBlobPoint{TimespecType(s.timestamp), C.GoBytes(s.content, C.int(s.content_length))}
+	}
+	entry.Release(unsafe.Pointer(qdbPoints))
+	return output, nil
 }
