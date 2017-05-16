@@ -7,6 +7,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+import "unsafe"
 
 type entry struct {
 	HandleType
@@ -69,4 +70,40 @@ func (e entry) DetachTags(tags []string) error {
 		return ErrorType(err)
 	}
 	return nil
+}
+
+func (e entry) GetTagged(tag string) ([]string, error) {
+	var aliases **C.char
+	var aliasCount C.size_t
+	err := C.qdb_get_tagged(e.handle, C.CString(tag), &aliases, &aliasCount)
+	if err != 0 {
+		return nil, ErrorType(err)
+	}
+	length := int(aliasCount)
+	tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
+	output := make([]string, length)
+	for i, s := range tmpslice {
+		output[i] = C.GoString(s)
+		e.Release(unsafe.Pointer(s))
+	}
+	e.Release(unsafe.Pointer(aliases))
+	return output, nil
+}
+
+func (e entry) GetTags() ([]string, error) {
+	var tags **C.char
+	var tagCount C.size_t
+	err := C.qdb_get_tags(e.handle, C.CString(e.alias), &tags, &tagCount)
+	if err != 0 {
+		return nil, ErrorType(err)
+	}
+	length := int(tagCount)
+	tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(tags))[:length:length]
+	output := make([]string, length)
+	for i, s := range tmpslice {
+		output[i] = C.GoString(s)
+		e.Release(unsafe.Pointer(s))
+	}
+	e.Release(unsafe.Pointer(tags))
+	return output, nil
 }
