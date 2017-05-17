@@ -121,17 +121,22 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([
 	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
 	qdbRangesCount := C.qdb_size_t(len(ranges))
 	var qdbPoints *C.qdb_ts_double_point
-	defer entry.Release(unsafe.Pointer(qdbPoints))
 	var qdbPointsCount C.qdb_size_t
 	err := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
 
-	length := int(qdbPointsCount)
-	output := make([]TsDoublePoint, length)
-	tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
-	for i, s := range tmpslice {
-		output[i] = TsDoublePoint{s.timestamp.toTimeSpec(), float64(s.value)}
+	if err == 0 {
+		defer entry.Release(unsafe.Pointer(qdbPoints))
+		length := int(qdbPointsCount)
+		output := make([]TsDoublePoint, length)
+		if length > 0 {
+			tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
+			for i, s := range tmpslice {
+				output[i] = TsDoublePoint{s.timestamp.toTimeSpec(), float64(s.value)}
+			}
+		}
+		return output, nil
 	}
-	return output, makeErrorOrNil(err)
+	return nil, ErrorType(err)
 }
 
 // GetBlobRanges : get ranges of blob data points
@@ -141,15 +146,20 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]T
 	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
 	qdbRangesCount := C.qdb_size_t(len(ranges))
 	var qdbPoints *C.qdb_ts_blob_point
-	defer entry.Release(unsafe.Pointer(qdbPoints))
 	var qdbPointsCount C.qdb_size_t
 	err := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
 
-	length := int(qdbPointsCount)
-	output := make([]TsBlobPoint, length)
-	tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
-	for i, s := range tmpslice {
-		output[i] = TsBlobPoint{s.timestamp.toTimeSpec(), C.GoBytes(s.content, C.int(s.content_length))}
+	if err == 0 {
+		defer entry.Release(unsafe.Pointer(qdbPoints))
+		length := int(qdbPointsCount)
+		output := make([]TsBlobPoint, length)
+		if length > 0 {
+			tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
+			for i, s := range tmpslice {
+				output[i] = TsBlobPoint{s.timestamp.toTimeSpec(), C.GoBytes(s.content, C.int(s.content_length))}
+			}
+		}
+		return output, nil
 	}
-	return output, makeErrorOrNil(err)
+	return nil, ErrorType(err)
 }

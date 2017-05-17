@@ -71,6 +71,14 @@ func TestEntry(t *testing.T) {
 	if err == nil {
 		t.Error("Expected an error - got nil")
 	}
+	// Test GetTags on nil
+	tags, err = integer.GetTags()
+	if err != nil {
+		t.Error("Expected no error - got: ", err)
+	}
+	if tags == nil || len(tags) != 0 {
+		t.Error("Expected tags to be an empty array")
+	}
 	// Test Remove
 	err = integer.Remove()
 	if err != nil {

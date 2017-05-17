@@ -57,33 +57,37 @@ func (e entry) DetachTags(tags []string) error {
 func (e entry) GetTagged(tag string) ([]string, error) {
 	var aliasCount C.size_t
 	var aliases **C.char
-	defer e.Release(unsafe.Pointer(aliases))
-
 	err := C.qdb_get_tagged(e.handle, C.CString(tag), &aliases, &aliasCount)
 
-	length := int(aliasCount)
-	output := make([]string, length)
-	tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
-	for i, s := range tmpslice {
-		output[i] = C.GoString(s)
-		defer e.Release(unsafe.Pointer(s))
+	if err == 0 {
+		defer e.Release(unsafe.Pointer(aliases))
+		length := int(aliasCount)
+		output := make([]string, length)
+		tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
+		for i, s := range tmpslice {
+			output[i] = C.GoString(s)
+		}
+		return output, nil
 	}
-
-	return output, makeErrorOrNil(err)
+	return nil, ErrorType(err)
 }
 
 func (e entry) GetTags() ([]string, error) {
 	var tagCount C.size_t
 	var tags **C.char
-	defer e.Release(unsafe.Pointer(tags))
 	err := C.qdb_get_tags(e.handle, C.CString(e.alias), &tags, &tagCount)
 
-	length := int(tagCount)
-	output := make([]string, length)
-	tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(tags))[:length:length]
-	for i, s := range tmpslice {
-		output[i] = C.GoString(s)
-		defer e.Release(unsafe.Pointer(s))
+	if err == 0 {
+		defer e.Release(unsafe.Pointer(tags))
+		length := int(tagCount)
+		output := make([]string, length)
+		if length > 0 {
+			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(tags))[:length:length]
+			for i, s := range tmpslice {
+				output[i] = C.GoString(s)
+			}
+		}
+		return output, nil
 	}
-	return output, makeErrorOrNil(err)
+	return nil, ErrorType(err)
 }
