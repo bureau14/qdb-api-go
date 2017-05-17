@@ -2,8 +2,9 @@ package qdbtests
 
 import (
 	"bytes"
-	. "qdb"
 	"testing"
+
+	. "github.com/bureau14/qdb-api-go"
 )
 
 // TestConnect testing various things about connection

@@ -4,7 +4,8 @@ package qdbtests
 
 import (
 	"testing"
-	. "qdb"
+
+	. "github.com/bureau14/qdb-api-go"
 )
 
 // Testing entry via integer entry type

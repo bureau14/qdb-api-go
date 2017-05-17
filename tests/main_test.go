@@ -6,10 +6,11 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	. "qdb"
 	"strconv"
 	"testing"
 	"time"
+
+	. "github.com/bureau14/qdb-api-go"
 )
 
 func createLocalQdbExe(qdbPath string) string {

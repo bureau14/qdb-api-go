@@ -3,7 +3,8 @@ package qdbtests
 import (
 	"os"
 	"testing"
-	. "qdb"
+
+	. "github.com/bureau14/qdb-api-go"
 )
 
 func connectWithoutCreatingHandle(t *testing.T, handle *HandleType, err error) {
