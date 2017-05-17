@@ -20,12 +20,10 @@ See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.
 2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/tests
 3. go test
 
-### Examples build instructions:
+### Examples instructions:
 1. export QDB_SERVER_PATH=/path/to/qdbd
 2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/examples
 3. go test
-
-TODO
 
 ### Troubleshooting
 
