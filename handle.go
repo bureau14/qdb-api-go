@@ -2,7 +2,7 @@ package qdb
 
 /*
 	// import libqdb
-	#cgo LDFLAGS: -lqdb_api
+	#cgo LDFLAGS: -L. -lqdb_api
 	#include <qdb/client.h>
 */
 import "C"
@@ -44,7 +44,7 @@ func (h HandleType) Integer(alias string) IntegerEntry {
 	return IntegerEntry{entry{h, alias}}
 }
 
-// Timeserie : create an time entry object
+// Timeseries : create an time entry object
 func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesEntry {
 	return TimeseriesEntry{entry{h, alias}, columns}
 }
