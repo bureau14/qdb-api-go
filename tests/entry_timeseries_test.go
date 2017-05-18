@@ -20,7 +20,7 @@ func TestTimeseries(t *testing.T) {
 	blobPoint2 := NewTsBlobPoint(TimespecType{20, 0}, contentBlob)
 	doublePoint1 := NewTsDoublePoint(TimespecType{10, 0}, contentDouble)
 	doublePoint2 := NewTsDoublePoint(TimespecType{20, 0}, contentDouble)
-	timeseries := handle.Timeserie(alias, []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble)})
+	timeseries := handle.Timeseries(alias, []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble)})
 
 	err = timeseries.Create()
 	if err != nil {
