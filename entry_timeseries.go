@@ -17,8 +17,6 @@ type TsColumnInfo C.qdb_ts_column_info_t
 type TsColumnType C.qdb_ts_column_type_t
 
 const (
-	// TsColumnUnitialized : column is unititialized
-	TsColumnUnitialized = -1
 	// TsColumnDouble : column is a double point
 	TsColumnDouble = 0
 	// TsColumnBlob : column is a blob point
