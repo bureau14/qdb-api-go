@@ -17,7 +17,7 @@ func (h HandleType) Release(buffer unsafe.Pointer) {
 	C.qdb_release(h.handle, buffer)
 }
 
-func convertToCharStarStar(toConvert []string) **C.char {
+func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	ptrSize := unsafe.Sizeof(C.CString(toConvert[0]))
 	size := len(toConvert)
 	data := C.malloc(C.size_t(size) * C.size_t(ptrSize))
@@ -25,7 +25,7 @@ func convertToCharStarStar(toConvert []string) **C.char {
 		element := (**C.char)(unsafe.Pointer(uintptr(data) + uintptr(i)*ptrSize))
 		*element = (*C.char)(C.CString(toConvert[i]))
 	}
-	return (**C.char)(data)
+	return data
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
