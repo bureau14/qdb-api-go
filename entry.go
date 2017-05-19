@@ -38,7 +38,7 @@ func (e entry) AttachTag(tag string) error {
 func (e entry) AttachTags(tags []string) error {
 	data := convertToCharStarStar(tags)
 	defer C.free(data)
-	err := C.qdb_attach_tags(e.handle, C.CString(e.alias), data, C.size_t(len(tags)))
+	err := C.qdb_attach_tags(e.handle, C.CString(e.alias), (**C.char)(data), C.size_t(len(tags)))
 	return makeErrorOrNil(err)
 }
 
@@ -50,7 +50,7 @@ func (e entry) DetachTag(tag string) error {
 func (e entry) DetachTags(tags []string) error {
 	data := convertToCharStarStar(tags)
 	defer C.free(data)
-	err := C.qdb_detach_tags(e.handle, C.CString(e.alias), data, C.size_t(len(tags)))
+	err := C.qdb_detach_tags(e.handle, C.CString(e.alias), (**C.char)(data), C.size_t(len(tags)))
 	return makeErrorOrNil(err)
 }
 
