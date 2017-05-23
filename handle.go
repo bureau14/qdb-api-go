@@ -44,7 +44,7 @@ func (h HandleType) Integer(alias string) IntegerEntry {
 	return IntegerEntry{entry{h, alias}}
 }
 
-// Timeserie : create an time entry object
+// Timeseries : create a timeseries entry object
 func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesEntry {
 	return TimeseriesEntry{entry{h, alias}, columns}
 }
