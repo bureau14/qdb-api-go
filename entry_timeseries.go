@@ -38,8 +38,14 @@ type TimeseriesEntry struct {
 // Create : create a new timeseries
 func (entry TimeseriesEntry) Create() error {
 	alias := C.CString(entry.alias)
-	columns := (*C.qdb_ts_column_info_t)(&entry.columns[0])
 	columnsCount := C.qdb_size_t(len(entry.columns))
+	var columns unsafe.Pointer
+	if columnsCount != 0 {
+		columns = unsafe.Pointer((*C.qdb_ts_column_info_t)(&entry.columns[0]))
+	} else {
+
+		columns = unsafe.Pointer(nil)
+	}
 	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
 	return makeErrorOrNil(err)
 }
@@ -64,11 +70,17 @@ func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint)
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	contentCount := C.qdb_size_t(len(points))
-	content := make([]C.qdb_ts_double_point, contentCount)
-	for i := C.qdb_size_t(0); i < contentCount; i++ {
-		content[i] = points[i].toQdbDoublePoint()
+	var contentPtr *C.qdb_ts_double_point
+	if contentCount != 0 {
+		content := make([]C.qdb_ts_double_point, contentCount)
+		for i := C.qdb_size_t(0); i < contentCount; i++ {
+			content[i] = points[i].toQdbDoublePoint()
+		}
+		contentPtr = &content[0]
+	} else {
+		contentPtr = nil
 	}
-	err := C.qdb_ts_double_insert(entry.handle, alias, columnName, &content[0], contentCount)
+	err := C.qdb_ts_double_insert(entry.handle, alias, columnName, contentPtr, contentCount)
 	return makeErrorOrNil(err)
 }
 
@@ -96,11 +108,17 @@ func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) err
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	contentCount := C.qdb_size_t(len(points))
-	content := make([]C.qdb_ts_blob_point, contentCount)
-	for i := C.qdb_size_t(0); i < contentCount; i++ {
-		content[i] = points[i].toQdbBlobPoint()
+	var contentPtr *C.qdb_ts_blob_point
+	if contentCount != 0 {
+		content := make([]C.qdb_ts_blob_point, contentCount)
+		for i := C.qdb_size_t(0); i < contentCount; i++ {
+			content[i] = points[i].toQdbBlobPoint()
+		}
+		contentPtr = &content[0]
+	} else {
+		contentPtr = nil
 	}
-	err := C.qdb_ts_blob_insert(entry.handle, alias, columnName, &content[0], contentCount)
+	err := C.qdb_ts_blob_insert(entry.handle, alias, columnName, contentPtr, contentCount)
 	return makeErrorOrNil(err)
 }
 
@@ -116,8 +134,13 @@ func NewTsRange(begin, end TimespecType) TsRange {
 func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([]TsDoublePoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
 	qdbRangesCount := C.qdb_size_t(len(ranges))
+	var qdbRanges *C.qdb_ts_range_t
+	if qdbRangesCount != 0 {
+		qdbRanges = (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
+	} else {
+		qdbRanges = nil
+	}
 	var qdbPoints *C.qdb_ts_double_point
 	var qdbPointsCount C.qdb_size_t
 	err := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
@@ -141,8 +164,13 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([
 func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]TsBlobPoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	qdbRanges := (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
 	qdbRangesCount := C.qdb_size_t(len(ranges))
+	var qdbRanges *C.qdb_ts_range_t
+	if qdbRangesCount != 0 {
+		qdbRanges = (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
+	} else {
+		qdbRanges = nil
+	}
 	var qdbPoints *C.qdb_ts_blob_point
 	var qdbPointsCount C.qdb_size_t
 	err := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
@@ -160,4 +188,78 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]T
 		return output, nil
 	}
 	return nil, ErrorType(err)
+}
+
+// TsAggregationType typedef of C.qdb_ts_aggregation_type
+type TsAggregationType C.qdb_ts_aggregation_type_t
+
+// Each type gets its value between the begin and end timestamps of aggregation
+const (
+	AggFirst              = 0
+	AggLast               = 1
+	AggMin                = 2
+	AggMax                = 3
+	AggArithmeticMean     = 4
+	AggHarmonicMean       = 5
+	AggGeometricMean      = 6
+	AggQuadraticMean      = 7
+	AggCount              = 8
+	AggSum                = 9
+	AggSumOfSquares       = 10
+	AggSpread             = 11
+	AggSampleVariance     = 12
+	AggSampleStddev       = 13
+	AggPopulationVariance = 14
+	AggPopulationStddev   = 15
+	AggAbsMin             = 16
+	AggAbsMax             = 17
+	AggProduct            = 18
+	AggSkewness           = 19
+	AggKurtosis           = 20
+)
+
+// TsDoubleAggregation : Aggregation of double type
+type TsDoubleAggregation struct {
+	t TsAggregationType
+	r TsRange
+	s SizeType
+	p TsDoublePoint
+}
+
+// GetDoubleAggregate : get double aggregations results
+func (entry TimeseriesEntry) GetDoubleAggregate(column string, aggs *[]TsDoubleAggregation) error {
+	alias := C.CString(entry.alias)
+	columnName := C.CString(column)
+	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
+	var qdbAggregations *C.qdb_ts_double_aggregation_t
+	if qdbAggregationsCount != 0 {
+		qdbAggregations = (*C.qdb_ts_double_aggregation_t)(unsafe.Pointer(&((*aggs)[0])))
+	} else {
+		qdbAggregations = nil
+	}
+	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
+	return makeErrorOrNil(err)
+}
+
+// TsBlobAggregation : Aggregation of double type
+type TsBlobAggregation struct {
+	t TsAggregationType
+	r TsRange
+	s SizeType
+	p TsBlobPoint
+}
+
+// GetBlobAggregate : get double aggregations results
+func (entry TimeseriesEntry) GetBlobAggregate(column string, aggs *[]TsBlobAggregation) error {
+	alias := C.CString(entry.alias)
+	columnName := C.CString(column)
+	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
+	var qdbAggregations *C.qdb_ts_blob_aggregation_t
+	if qdbAggregationsCount != 0 {
+		qdbAggregations = (*C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(&((*aggs)[0])))
+	} else {
+		qdbAggregations = nil
+	}
+	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
+	return makeErrorOrNil(err)
 }
