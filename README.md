@@ -16,14 +16,23 @@ See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.
 1. go get github.com/bureau14/qdb-api-go
 
 ### Test instructions:
-1. export QDB_SERVER_PATH=/path/to/qdbd
-2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/tests
-3. go test
+1. export QDB_HOST=[qdbd host]
+2. export QDB_PORT=[qdbd port]
+3. cd $GOPATH/src/github.com/bureau14/qdb-api-go
+4. go test
 
 ### Examples instructions:
-1. export QDB_SERVER_PATH=/path/to/qdbd
-2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/examples
-3. go test
+1. export QDB_HOST=[qdbd host]
+2. export QDB_PORT=[qdbd port]
+3. cd $GOPATH/src/github.com/bureau14/qdb-api-go/examples
+4. go test
+
+### Coverage instructions:
+1. export QDB_HOST=[qdbd host]
+2. export QDB_PORT=[qdbd port]
+3. cd $GOPATH/src/github.com/bureau14/qdb-api-go
+4. go test -coverprofile=coverage.out
+5. go tool cover -html=coverage.out [ if you want to see coverage detail in a browser ]
 
 ### Troubleshooting
 
