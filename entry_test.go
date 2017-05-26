@@ -61,6 +61,14 @@ func blobTest(t *testing.T, handle HandleType) {
 		t.Error("Updated content should be ", []byte{}, " got ", contentObtained)
 	}
 
+	contentObtained, err = blobEmptyContent.GetAndUpdate([]byte{}, NeverExpires)
+	if err != nil {
+		t.Error("Should be able to 'get and update' on empty content without error got: ", err)
+	}
+	if bytes.Equal(contentObtained, []byte{}) == false {
+		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
+	}
+
 	alias := generateAlias(16)
 	blob := handle.Blob(alias)
 
@@ -121,6 +129,15 @@ func blobTest(t *testing.T, handle HandleType) {
 	if err != nil {
 		t.Error("Should be able to reuse removed alias without error got: ", err)
 	}
+
+	contentObtained, err = blob.GetAndUpdate(content, NeverExpires)
+	if err != nil {
+		t.Error("Should be able to 'get and update' without error got: ", err)
+	}
+	if bytes.Equal(contentObtained, content) == false {
+		t.Error("Data retrieved should be ", content, " got: ", contentObtained)
+	}
+
 	contentObtained, err = blob.GetAndRemove()
 	if err != nil {
 		t.Error("Should be able to 'get and remove' without error got: ", err)

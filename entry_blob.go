@@ -65,3 +65,20 @@ func (entry *BlobEntry) Update(newContent []byte, newExpiry Expiry) error {
 	err := C.qdb_blob_update(entry.handle, alias, contentPtr, contentSize, C.qdb_time_t(newExpiry))
 	return makeErrorOrNil(err)
 }
+
+// GetAndUpdate : Atomically gets and updates (in this order) the entry on the quasardb server.
+func (entry *BlobEntry) GetAndUpdate(newContent []byte, newExpiry Expiry) ([]byte, error) {
+	contentSize := C.qdb_size_t(len(newContent))
+	var contentPtr unsafe.Pointer
+	if contentSize != 0 {
+		contentPtr = unsafe.Pointer(&newContent[0])
+	} else {
+		contentPtr = unsafe.Pointer(nil)
+	}
+	var content unsafe.Pointer
+	defer entry.Release(content)
+	var contentLength C.qdb_size_t
+	err := C.qdb_blob_get_and_update(entry.handle, C.CString(entry.alias), contentPtr, contentSize, C.qdb_time_t(newExpiry), &content, &contentLength)
+	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	return output, makeErrorOrNil(err)
+}
