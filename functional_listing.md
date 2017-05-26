@@ -1,8 +1,8 @@
-[ general ]
+### [ general ]
     [v] qdb_version
     [v] qdb_build
     [v] qdb_open
-    [ ] qdb_open_tcp
+    [x] qdb_open_tcp (doesn't return a pointer, no null return in case of failure)
     [v] qdb_option_set_timeout
     [v] qdb_option_set_max_cardinality
     [v] qdb_option_set_compression
@@ -13,41 +13,41 @@
     [v] qdb_remove
     [v] qdb_expires_at
     [v] qdb_expires_from_now
-    [x] qdb_get_expiry_time (deprecated, use get_metadata instead)
+    [x] qdb_get_expiry_time (deprecated, use qdb_get_metadata instead)
     [v] qdb_get_location
-    [x] qdb_get_type (deprecated, use get_metadata instead)
+    [x] qdb_get_type (deprecated, use qdb_get_metadata instead)
     [v] qdb_get_metadata
     [ ] qdb_purge_all
     [ ] qdb_trim_all
     [v] qdb_error (used to define Error() 'overload')
     [ ] qdb_tag_iterator_copy
-[ completion: 5/22 ]
+[ completion: 18/22 ]
 
-[ queries ]
+### [ queries ]
     [ ] qdb_query
 
-[ blobs ]
+### [ blobs ]
     [ ] qdb_blob_get_noalloc
     [v] qdb_blob_get
-    [ ] qdb_reserved_blob_get
+    [x] qdb_reserved_blob_get (internal usage only, should not be exported in api)
     [v] qdb_blob_get_and_remove
     [v] qdb_blob_put
     [v] qdb_blob_update
-    [ ] qdb_reserved_blob_merge
-    [ ] qdb_blob_get_and_update
-    [ ] qdb_blob_compare_and_swap
-    [ ] qdb_blob_remove_if
-    [ ] qdb_blob_scan
-    [ ] qdb_blob_scan_regex
-[ completion: 4/12 ]
+    [x] qdb_reserved_blob_merge (internal usage only, should not be exported in api)
+    [v] qdb_blob_get_and_update
+    [v] qdb_blob_compare_and_swap
+    [v] qdb_blob_remove_if
+    [-] qdb_blob_scan (experimental function, should I implement?)
+    [-] qdb_blob_scan_regex (experimental function, should I implement?)
+[ completion: 9/12 ]
 
-[ batches ]
+### [ batches ]
     [ ] qdb_init_operations
     [ ] qdb_run_batch
     [ ] qdb_run_transaction
 [ completion: 0/3 ]
 
-[ deques ]
+### [ deques ]
     [ ] qdb_deque_size
     [ ] qdb_deque_get_at
     [ ] qdb_deque_set_at
@@ -59,25 +59,25 @@
     [ ] qdb_deque_back
 [ completion: 0/9 ]
 
-[ integers ]
+### [ integers ]
     [v] qdb_int_put
     [v] qdb_int_update
     [v] qdb_int_get
     [v] qdb_int_add
 [ completion: 4/4 ]
 
-[ hash sets ]
+### [ hash sets ]
     [ ] qdb_hset_insert
     [ ] qdb_hset_erase
     [ ] qdb_hset_contains
-[ completion: 0/4 ]
+[ completion: 0/3 ]
 
-[ prefix ] (deprecated)
+### [ prefix ]
     [ ] qdb_prefix_get
     [ ] qdb_prefix_count
-[ completion: 0/4 ]
+[ completion: 0/2 ]
 
-[ streams ]
+### [ streams ]
     [ ] qdb_stream_open
     [ ] qdb_stream_close
     [ ] qdb_stream_read
@@ -88,7 +88,7 @@
     [ ] qdb_stream_truncate
 [ completion: 0/8 ]
 
-[ tags ]
+### [ tags ]
     [v] qdb_attach_tag
     [v] qdb_attach_tags
     [v] qdb_has_tag
@@ -101,7 +101,7 @@
     [ ] qdb_tag_iterator_close
 [ completion: 7/10 ]
 
-[ timeseries ]
+### [ timeseries ]
     [v] qdb_ts_double_insert
     [v] qdb_ts_double_get_ranges
     [v] qdb_ts_double_aggregate
