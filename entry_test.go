@@ -44,7 +44,11 @@ func blobTest(t *testing.T, handle HandleType) {
 	content := []byte("content")
 	err := blobEmptyAlias.Put(content, NeverExpires)
 	if err == nil {
-		t.Error("Should not be able to put with empty alias got: nil")
+		t.Error("Should not be able to put with empty alias")
+	}
+	err = blobEmptyAlias.RemoveIf(content)
+	if err == nil {
+		t.Error("Should not be able to remove with empty alias")
 	}
 
 	aliasEmptyContent := generateAlias(16)
@@ -178,8 +182,22 @@ func blobTest(t *testing.T, handle HandleType) {
 	if err == nil {
 		t.Error("Should not be able to get without error got: nil")
 	}
-	if bytes.Equal(contentObtained, []byte{}) == false {
-		t.Error("Expected contentObtained to be empty got: ", contentObtained)
+
+	err = blob.Put(content, NeverExpires)
+	if err != nil {
+		t.Error("Should be able to reuse removed alias without error got: ", err)
+	}
+	err = blob.RemoveIf([]byte{})
+	if err == nil {
+		t.Error("Should not be able to remove with empty content.")
+	}
+	err = blob.RemoveIf(content)
+	if err != nil {
+		t.Error("Should be able to remove with content: ", content, " got: ", err)
+	}
+	contentObtained, err = blob.Get()
+	if err == nil {
+		t.Error("Should not be able to get without error.")
 	}
 }
 

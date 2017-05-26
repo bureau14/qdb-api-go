@@ -107,3 +107,19 @@ func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, exp
 	output := C.GoBytes(originalValue, C.int(originalLength))
 	return output, makeErrorOrNil(err)
 }
+
+// RemoveIf : Atomically removes the entry on the server if the content matches.
+// The entry must already exist.
+// Removal will occur if and only if the content of the entry matches bit for bit the content of the comparand buffer.
+func (entry BlobEntry) RemoveIf(comparand []byte) error {
+	alias := C.CString(entry.alias)
+	comparandLength := C.qdb_size_t(len(comparand))
+	var comparandC unsafe.Pointer
+	if comparandLength != 0 {
+		comparandC = unsafe.Pointer(&comparand[0])
+	} else {
+		comparandC = nil
+	}
+	err := C.qdb_blob_remove_if(entry.handle, alias, comparandC, comparandLength)
+	return makeErrorOrNil(err)
+}
