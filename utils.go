@@ -13,11 +13,6 @@ import (
 	"unsafe"
 )
 
-// Release : release previously allocated qdb resource
-func (h HandleType) Release(buffer unsafe.Pointer) {
-	C.qdb_release(h.handle, buffer)
-}
-
 func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	ptrSize := unsafe.Sizeof(C.CString(toConvert[0]))
 	size := len(toConvert)
