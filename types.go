@@ -10,7 +10,8 @@ import "C"
 // SizeType typedef qdb_size_t
 type SizeType C.qdb_size_t
 
-// TimeType typedef qdb_time_t
+// TimeType : A cross-platform type that represents a time value.
+// MUST be 64-bit large. The API will probably not link otherwise.
 type TimeType C.qdb_time_t
 
 // TimespecType typedef C.qdb_timespec_t
