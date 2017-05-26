@@ -75,10 +75,35 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, newExpiry Expiry) ([]byt
 	} else {
 		contentPtr = unsafe.Pointer(nil)
 	}
+	var contentLength C.qdb_size_t
 	var content unsafe.Pointer
 	defer entry.Release(content)
-	var contentLength C.qdb_size_t
 	err := C.qdb_blob_get_and_update(entry.handle, C.CString(entry.alias), contentPtr, contentSize, C.qdb_time_t(newExpiry), &content, &contentLength)
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	return output, makeErrorOrNil(err)
+}
+
+// CompareAndSwap : Atomically compares the entry with comparand and updates it to new_value if, and only if, they match.
+func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, expiryTime TimeType) ([]byte, error) {
+	alias := C.CString(entry.alias)
+	valueLength := C.qdb_size_t(len(newValue))
+	var value unsafe.Pointer
+	if valueLength != 0 {
+		value = unsafe.Pointer(&newValue[0])
+	} else {
+		value = nil
+	}
+	comparandLength := C.qdb_size_t(len(newComparand))
+	var comparand unsafe.Pointer
+	if comparandLength != 0 {
+		comparand = unsafe.Pointer(&newComparand[0])
+	} else {
+		comparand = nil
+	}
+	var originalLength C.qdb_size_t
+	var originalValue unsafe.Pointer
+	defer entry.Release(unsafe.Pointer(originalValue))
+	err := C.qdb_blob_compare_and_swap(entry.handle, alias, value, valueLength, comparand, comparandLength, C.qdb_time_t(expiryTime), &originalValue, &originalLength)
+	output := C.GoBytes(originalValue, C.int(originalLength))
 	return output, makeErrorOrNil(err)
 }

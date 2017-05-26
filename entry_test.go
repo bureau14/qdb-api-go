@@ -68,6 +68,21 @@ func blobTest(t *testing.T, handle HandleType) {
 	if bytes.Equal(contentObtained, []byte{}) == false {
 		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
 	}
+	contentObtained, err = blobEmptyContent.CompareAndSwap(content, []byte{}, NeverExpires)
+	if err != nil {
+		t.Error("Should be able to 'compare and swap' on empty content without error got: ", err)
+	}
+	if bytes.Equal(contentObtained, []byte{}) == false {
+		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
+	}
+	contentObtained, err = blobEmptyContent.Get()
+	if bytes.Equal(contentObtained, content) == false {
+		t.Error("Data retrieved should be ", content, " got: ", contentObtained)
+	}
+	err = blobEmptyContent.Remove()
+	if err != nil {
+		t.Error("Should be able to remove without error got: ", err)
+	}
 
 	alias := generateAlias(16)
 	blob := handle.Blob(alias)
@@ -130,12 +145,26 @@ func blobTest(t *testing.T, handle HandleType) {
 		t.Error("Should be able to reuse removed alias without error got: ", err)
 	}
 
-	contentObtained, err = blob.GetAndUpdate(content, NeverExpires)
+	contentObtained, err = blob.GetAndUpdate(newContent, NeverExpires)
 	if err != nil {
 		t.Error("Should be able to 'get and update' without error got: ", err)
 	}
 	if bytes.Equal(contentObtained, content) == false {
 		t.Error("Data retrieved should be ", content, " got: ", contentObtained)
+	}
+
+	badContent := []byte("badContent")
+	contentObtained, err = blob.CompareAndSwap([]byte{}, badContent, NeverExpires)
+	if err == nil {
+		t.Error("Should not be able to 'compare and swap' with bad comparand.")
+	}
+
+	contentObtained, err = blob.CompareAndSwap(content, newContent, NeverExpires)
+	if err != nil {
+		t.Error("Should be able to 'compare and swap' without error got: ", err)
+	}
+	if bytes.Equal(contentObtained, []byte{}) == false {
+		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
 	}
 
 	contentObtained, err = blob.GetAndRemove()
