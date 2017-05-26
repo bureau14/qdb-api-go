@@ -1,25 +1,25 @@
 [ general ]
-    [ ] qdb_version
-    [ ] qdb_build
+    [v] qdb_version
+    [v] qdb_build
     [v] qdb_open
     [ ] qdb_open_tcp
-    [ ] qdb_option_set_timeout
-    [ ] qdb_option_set_max_cardinality
-    [ ] qdb_option_set_compression
+    [v] qdb_option_set_timeout
+    [v] qdb_option_set_max_cardinality
+    [v] qdb_option_set_compression
     [v] qdb_connect
     [v] qdb_close
     [ ] qdb_copy_alloc_buffer
     [v] qdb_release
     [v] qdb_remove
-    [ ] qdb_expires_at
-    [ ] qdb_expires_from_now
-    [ ] qdb_get_expiry_time
-    [ ] qdb_get_location
-    [ ] qdb_get_type
-    [ ] qdb_get_metadata
+    [v] qdb_expires_at
+    [v] qdb_expires_from_now
+    [x] qdb_get_expiry_time (deprecated, use get_metadata instead)
+    [v] qdb_get_location
+    [x] qdb_get_type (deprecated, use get_metadata instead)
+    [v] qdb_get_metadata
     [ ] qdb_purge_all
     [ ] qdb_trim_all
-    [ ] qdb_error
+    [v] qdb_error (used to define Error() 'overload')
     [ ] qdb_tag_iterator_copy
 [ completion: 5/22 ]
 

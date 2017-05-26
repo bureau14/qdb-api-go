@@ -2,7 +2,9 @@ package qdb
 
 import (
 	"bytes"
+	"strconv"
 	"testing"
+	"time"
 )
 
 // test every entry related files
@@ -26,6 +28,15 @@ func TestEntry(t *testing.T) {
 
 	// Test alias
 	aliasTest(t, handle)
+
+	// Test expiry
+	expiryTest(t, handle)
+
+	// Test location
+	locationTest(t, handle)
+
+	// Test metadata
+	metadataTest(t, handle)
 }
 
 func blobTest(t *testing.T, handle HandleType) {
@@ -445,5 +456,81 @@ func aliasTest(t *testing.T, handle HandleType) {
 
 	if integer.Alias() != alias {
 		t.Error("Alias should be ", alias, " got ", integer.Alias())
+	}
+}
+
+func expiryTest(t *testing.T, handle HandleType) {
+	alias := generateAlias(16)
+	integer := handle.Integer(alias)
+
+	expiry := TimeType(-1)
+	err := integer.ExpiresFromNow(expiry)
+	if err == nil {
+		t.Error("Should not be able to set expiry time without alias")
+	}
+
+	integer.Put(3, NeverExpires)
+
+	expiry = TimeType(13)
+	err = integer.ExpiresAt(expiry)
+	if err == nil {
+		t.Error("Should not be able to set expiry time in the past")
+	}
+	expiry = TimeType((time.Now().UnixNano()))
+	err = integer.ExpiresAt(expiry)
+	if err != nil {
+		t.Error("Should be able to set expiry time in the future: ", err)
+	}
+
+	expiry = TimeType(2)
+	err = integer.ExpiresFromNow(expiry)
+	if err != nil {
+		t.Error("Should be able to set expiry time in the future: ", err)
+	}
+
+	expiry = TimeType(-1)
+	err = integer.ExpiresFromNow(expiry)
+	if err != nil {
+		t.Error("Should be able to set expiry time in the past to delete: ", err)
+	}
+
+	expiry = TimeType(2)
+	err = integer.ExpiresFromNow(expiry)
+	if err == nil {
+		t.Error("Should be found no data since it expired with precedent test")
+	}
+}
+
+func locationTest(t *testing.T, handle HandleType) {
+	alias := generateAlias(16)
+	integer := handle.Integer(alias)
+
+	integer.Put(3, NeverExpires)
+	location, err := integer.GetLocation()
+	if err != nil {
+		t.Error("Should be able to get locationof content: ", err)
+	}
+	port, _ := strconv.Atoi(getenv("QDB_PORT", "2836"))
+	if location.Port != int16(port) {
+		t.Error("location port should be ", port, " got ", location.Port)
+	}
+}
+
+func metadataTest(t *testing.T, handle HandleType) {
+	alias := generateAlias(16)
+	integer := handle.Integer(alias)
+
+	metadata, err := integer.GetMetadata()
+	if err == nil {
+		t.Error("Should not be able to get metadata without alias")
+	}
+
+	integer.Put(3, NeverExpires)
+	metadata, err = integer.GetMetadata()
+	if err != nil {
+		t.Error("Should be able to get metadata: ", err)
+	}
+	if metadata.Type != EntryInteger {
+		t.Error("Entry type should be ", EntryInteger, " got ", metadata.Type)
 	}
 }
