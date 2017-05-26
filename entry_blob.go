@@ -16,7 +16,29 @@ type BlobEntry struct {
 	entry
 }
 
-// Put : blob put value for alias
+// Get : Retrieves an entry’s content from the quasardb server.
+func (entry BlobEntry) Get() ([]byte, error) {
+	var content unsafe.Pointer
+	defer entry.Release(content)
+	var contentLength C.qdb_size_t
+	err := C.qdb_blob_get(entry.handle, C.CString(entry.alias), &content, &contentLength)
+
+	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	return output, makeErrorOrNil(err)
+}
+
+// GetAndRemove : Atomically gets an entry from the quasardb server and removes it.
+func (entry BlobEntry) GetAndRemove() ([]byte, error) {
+	var content unsafe.Pointer
+	defer entry.Release(content)
+	var contentLength C.qdb_size_t
+	err := C.qdb_blob_get_and_remove(entry.handle, C.CString(entry.alias), &content, &contentLength)
+
+	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	return output, makeErrorOrNil(err)
+}
+
+// Put : Creates a new entry and sets its content to the provided blob.
 func (entry BlobEntry) Put(content []byte, expiry Expiry) error {
 	alias := C.CString(entry.alias)
 	contentSize := C.qdb_size_t(len(content))
@@ -30,7 +52,7 @@ func (entry BlobEntry) Put(content []byte, expiry Expiry) error {
 	return makeErrorOrNil(err)
 }
 
-// Update : blob update value of alias
+// Update : Creates or updates an entry and sets its content to the provided blob.
 func (entry *BlobEntry) Update(newContent []byte, newExpiry Expiry) error {
 	alias := C.CString(entry.alias)
 	contentSize := C.qdb_size_t(len(newContent))
@@ -42,26 +64,4 @@ func (entry *BlobEntry) Update(newContent []byte, newExpiry Expiry) error {
 	}
 	err := C.qdb_blob_update(entry.handle, alias, contentPtr, contentSize, C.qdb_time_t(newExpiry))
 	return makeErrorOrNil(err)
-}
-
-// Get : blob get value associated with alias
-func (entry BlobEntry) Get() ([]byte, error) {
-	var content unsafe.Pointer
-	defer entry.Release(content)
-	var contentLength C.qdb_size_t
-	err := C.qdb_blob_get(entry.handle, C.CString(entry.alias), &content, &contentLength)
-
-	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
-	return output, makeErrorOrNil(err)
-}
-
-// GetAndRemove : blob get and remove
-func (entry BlobEntry) GetAndRemove() ([]byte, error) {
-	var content unsafe.Pointer
-	defer entry.Release(content)
-	var contentLength C.qdb_size_t
-	err := C.qdb_blob_get_and_remove(entry.handle, C.CString(entry.alias), &content, &contentLength)
-
-	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
-	return output, makeErrorOrNil(err)
 }
