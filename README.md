@@ -7,6 +7,8 @@ Go API for [quasardb](https://www.quasardb.net/).
 
 See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.html).
 
+[![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/bureau14/qdb-api-go)
+
 ### Requirements
 
 1. [quasardb daemon](https://download.quasardb.net/quasardb/)
