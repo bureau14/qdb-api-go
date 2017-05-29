@@ -13,14 +13,15 @@ import "unsafe"
 // TsColumnInfo : column information in timeseries
 type TsColumnInfo C.qdb_ts_column_info_t
 
-// TsColumnType : column type in timeseries
+// TsColumnType : Timeseries column types
 type TsColumnType C.qdb_ts_column_type_t
 
+// Values
+//	TsColumnDouble : column is a double point
+//	TsColumnBlob : column is a blob point
 const (
-	// TsColumnDouble : column is a double point
-	TsColumnDouble = 0
-	// TsColumnBlob : column is a blob point
-	TsColumnBlob = 1
+	TsColumnDouble TsColumnType = 0
+	TsColumnBlob   TsColumnType = 1
 )
 
 // NewTsColumnInfo : create a column info structure
@@ -65,7 +66,9 @@ func NewTsDoublePoint(timestamp TimespecType, value float64) TsDoublePoint {
 	return TsDoublePoint{timestamp, value}
 }
 
-// InsertDouble : insert points in a time series
+// InsertDouble : Inserts double points in a time series.
+//	Time series are distributed across the cluster and support efficient insertion anywhere within the time series as well as efficient lookup based on time.
+//	If the time series does not exist, it will be created.
 func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
@@ -103,7 +106,9 @@ func NewTsBlobPoint(timestamp TimespecType, value []byte) TsBlobPoint {
 	return TsBlobPoint{timestamp, value}
 }
 
-// InsertBlob : insert points in a time series
+// InsertBlob : Inserts blob points in a time series.
+//	Time series are distributed across the cluster and support efficient insertion anywhere within the time series as well as efficient lookup based on time.
+//	If the time series does not exist, it will be created.
 func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
@@ -130,7 +135,8 @@ func NewTsRange(begin, end TimespecType) TsRange {
 	return TsRange{begin.toQdbTimespec(), end.toQdbTimespec()}
 }
 
-// GetDoubleRanges : get ranges of double data points
+// GetDoubleRanges : Retrieves blobs in the specified range of the time series column.
+//	It is an error to call this function on a non existing time-series.
 func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([]TsDoublePoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
@@ -160,7 +166,8 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([
 	return nil, ErrorType(err)
 }
 
-// GetBlobRanges : get ranges of blob data points
+// GetBlobRanges : Retrieves blobs in the specified range of the time series column.
+//	It is an error to call this function on a non existing time-series.
 func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]TsBlobPoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
@@ -195,27 +202,27 @@ type TsAggregationType C.qdb_ts_aggregation_type_t
 
 // Each type gets its value between the begin and end timestamps of aggregation
 const (
-	AggFirst              = 0
-	AggLast               = 1
-	AggMin                = 2
-	AggMax                = 3
-	AggArithmeticMean     = 4
-	AggHarmonicMean       = 5
-	AggGeometricMean      = 6
-	AggQuadraticMean      = 7
-	AggCount              = 8
-	AggSum                = 9
-	AggSumOfSquares       = 10
-	AggSpread             = 11
-	AggSampleVariance     = 12
-	AggSampleStddev       = 13
-	AggPopulationVariance = 14
-	AggPopulationStddev   = 15
-	AggAbsMin             = 16
-	AggAbsMax             = 17
-	AggProduct            = 18
-	AggSkewness           = 19
-	AggKurtosis           = 20
+	AggFirst              TsAggregationType = C.qdb_agg_first
+	AggLast               TsAggregationType = C.qdb_agg_last
+	AggMin                TsAggregationType = C.qdb_agg_min
+	AggMax                TsAggregationType = C.qdb_agg_max
+	AggArithmeticMean     TsAggregationType = C.qdb_agg_arithmetic_mean
+	AggHarmonicMean       TsAggregationType = C.qdb_agg_harmonic_mean
+	AggGeometricMean      TsAggregationType = C.qdb_agg_geometric_mean
+	AggQuadraticMean      TsAggregationType = C.qdb_agg_quadratic_mean
+	AggCount              TsAggregationType = C.qdb_agg_count
+	AggSum                TsAggregationType = C.qdb_agg_sum
+	AggSumOfSquares       TsAggregationType = C.qdb_agg_sum_of_squares
+	AggSpread             TsAggregationType = C.qdb_agg_spread
+	AggSampleVariance     TsAggregationType = C.qdb_agg_sample_variance
+	AggSampleStddev       TsAggregationType = C.qdb_agg_sample_stddev
+	AggPopulationVariance TsAggregationType = C.qdb_agg_population_variance
+	AggPopulationStddev   TsAggregationType = C.qdb_agg_population_stddev
+	AggAbsMin             TsAggregationType = C.qdb_agg_abs_min
+	AggAbsMax             TsAggregationType = C.qdb_agg_abs_max
+	AggProduct            TsAggregationType = C.qdb_agg_product
+	AggSkewness           TsAggregationType = C.qdb_agg_skewness
+	AggKurtosis           TsAggregationType = C.qdb_agg_kurtosis
 )
 
 // TsDoubleAggregation : Aggregation of double type
@@ -226,7 +233,8 @@ type TsDoubleAggregation struct {
 	p TsDoublePoint
 }
 
-// GetDoubleAggregate : get double aggregations results
+// GetDoubleAggregate : Aggregate a sub-part of the time series.
+//	It is an error to call this function on a non existing time-series.
 func (entry TimeseriesEntry) GetDoubleAggregate(column string, aggs *[]TsDoubleAggregation) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
@@ -249,7 +257,8 @@ type TsBlobAggregation struct {
 	p TsBlobPoint
 }
 
-// GetBlobAggregate : get double aggregations results
+// GetBlobAggregate : Aggregate a sub-part of the time series.
+//	It is an error to call this function on a non existing time-series.
 func (entry TimeseriesEntry) GetBlobAggregate(column string, aggs *[]TsBlobAggregation) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)

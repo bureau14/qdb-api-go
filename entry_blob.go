@@ -16,7 +16,8 @@ type BlobEntry struct {
 	entry
 }
 
-// Get : Retrieves an entry’s content from the quasardb server.
+// Get : Retrieve an entry's content
+//	If the entry does not exist, the function will fail and return 'alias not found' error.
 func (entry BlobEntry) Get() ([]byte, error) {
 	var content unsafe.Pointer
 	defer entry.Release(content)
@@ -28,6 +29,7 @@ func (entry BlobEntry) Get() ([]byte, error) {
 }
 
 // GetAndRemove : Atomically gets an entry from the quasardb server and removes it.
+//	If the entry does not exist, the function will fail and return 'alias not found' error.
 func (entry BlobEntry) GetAndRemove() ([]byte, error) {
 	var content unsafe.Pointer
 	defer entry.Release(content)
@@ -39,6 +41,8 @@ func (entry BlobEntry) GetAndRemove() ([]byte, error) {
 }
 
 // Put : Creates a new entry and sets its content to the provided blob.
+//	If the entry already exists the function will fail and will return 'alias already exists' error.
+//	You can specify an expiry or use NeverExpires if you don’t want the entry to expire.
 func (entry BlobEntry) Put(content []byte, expiry Expiry) error {
 	alias := C.CString(entry.alias)
 	contentSize := C.qdb_size_t(len(content))
@@ -53,6 +57,8 @@ func (entry BlobEntry) Put(content []byte, expiry Expiry) error {
 }
 
 // Update : Creates or updates an entry and sets its content to the provided blob.
+//	If the entry already exists, the function will modify the entry.
+//	You can specify an expiry or use NeverExpires if you don’t want the entry to expire.
 func (entry *BlobEntry) Update(newContent []byte, newExpiry Expiry) error {
 	alias := C.CString(entry.alias)
 	contentSize := C.qdb_size_t(len(newContent))
@@ -67,6 +73,7 @@ func (entry *BlobEntry) Update(newContent []byte, newExpiry Expiry) error {
 }
 
 // GetAndUpdate : Atomically gets and updates (in this order) the entry on the quasardb server.
+//	The entry must already exist.
 func (entry *BlobEntry) GetAndUpdate(newContent []byte, newExpiry Expiry) ([]byte, error) {
 	contentSize := C.qdb_size_t(len(newContent))
 	var contentPtr unsafe.Pointer
@@ -84,7 +91,10 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, newExpiry Expiry) ([]byt
 }
 
 // CompareAndSwap : Atomically compares the entry with comparand and updates it to new_value if, and only if, they match.
-func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, expiryTime TimeType) ([]byte, error) {
+//	The function returns the original value of the entry in case of a mismatch. When it matches, no content is returned.
+//	The entry must already exist.
+//	Update will occur if and only if the content of the entry matches bit for bit the content of the comparand buffer.
+func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, expiryTime Expiry) ([]byte, error) {
 	alias := C.CString(entry.alias)
 	valueLength := C.qdb_size_t(len(newValue))
 	var value unsafe.Pointer
@@ -109,8 +119,8 @@ func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, exp
 }
 
 // RemoveIf : Atomically removes the entry on the server if the content matches.
-// The entry must already exist.
-// Removal will occur if and only if the content of the entry matches bit for bit the content of the comparand buffer.
+//	The entry must already exist.
+//	Removal will occur if and only if the content of the entry matches bit for bit the content of the comparand buffer.
 func (entry BlobEntry) RemoveIf(comparand []byte) error {
 	alias := C.CString(entry.alias)
 	comparandLength := C.qdb_size_t(len(comparand))

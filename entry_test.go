@@ -527,7 +527,7 @@ func expiryTest(t *testing.T, handle HandleType) {
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
 
-	expiry := TimeType(-1)
+	expiry := Expiry(-1)
 	err := integer.ExpiresFromNow(expiry)
 	if err == nil {
 		t.Error("Should not be able to set expiry time without alias")
@@ -535,30 +535,30 @@ func expiryTest(t *testing.T, handle HandleType) {
 
 	integer.Put(3, NeverExpires)
 
-	expiry = TimeType(13)
+	expiry = Expiry(13)
 	err = integer.ExpiresAt(expiry)
 	if err == nil {
 		t.Error("Should not be able to set expiry time in the past")
 	}
-	expiry = TimeType((time.Now().UnixNano()))
+	expiry = Expiry((time.Now().UnixNano()))
 	err = integer.ExpiresAt(expiry)
 	if err != nil {
 		t.Error("Should be able to set expiry time in the future: ", err)
 	}
 
-	expiry = TimeType(2)
+	expiry = Expiry(2)
 	err = integer.ExpiresFromNow(expiry)
 	if err != nil {
 		t.Error("Should be able to set expiry time in the future: ", err)
 	}
 
-	expiry = TimeType(-1)
+	expiry = Expiry(-1)
 	err = integer.ExpiresFromNow(expiry)
 	if err != nil {
 		t.Error("Should be able to set expiry time in the past to delete: ", err)
 	}
 
-	expiry = TimeType(2)
+	expiry = Expiry(2)
 	err = integer.ExpiresFromNow(expiry)
 	if err == nil {
 		t.Error("Should be found no data since it expired with precedent test")
