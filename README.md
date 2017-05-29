@@ -1,13 +1,11 @@
 Quasardb Go API
 =================
+[![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/bureau14/qdb-api-go)
 
 **Warning:** Early stage development version. Use at your own risk.
 
 Go API for [quasardb](https://www.quasardb.net/).
 
-See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.html).
-
-[![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/bureau14/qdb-api-go)
 
 ### Requirements
 
