@@ -20,8 +20,8 @@ type TsColumnType C.qdb_ts_column_type_t
 //	TsColumnDouble : column is a double point
 //	TsColumnBlob : column is a blob point
 const (
-	TsColumnDouble TsColumnType = 0
-	TsColumnBlob   TsColumnType = 1
+	TsColumnDouble TsColumnType = C.qdb_ts_column_double
+	TsColumnBlob   TsColumnType = C.qdb_ts_column_blob
 )
 
 // NewTsColumnInfo : create a column info structure
