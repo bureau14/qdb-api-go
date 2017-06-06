@@ -1,0 +1,4 @@
+.vscode*
+db/
+/qdb
+*.out

@@ -13,14 +13,17 @@ See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.
 1. [Go compiler and tools](https://golang.org/)
 
 ### Build instructions:
-1. git clone -b develop --single-branch git@github.com:vianneyPL/qdb-api-go.git $GOLANG/src/qdb
-2. cd $GOLANG/src/qdb && go install && cd -
+1. go get github.com/bureau14/qdb-api-go
 
-### Examples build instructions:
-1. git clone -b examples --single-branch git@github.com:vianneyPL/qdb-api-go.git [directory]
-2. cd [directory] && go build example[nb].go && ./example[nb]
+### Test instructions:
+1. export QDB_SERVER_PATH=/path/to/qdbd
+2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/tests
+3. go test
 
-TODO
+### Examples instructions:
+1. export QDB_SERVER_PATH=/path/to/qdbd
+2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/examples
+3. go test
 
 ### Troubleshooting
 
