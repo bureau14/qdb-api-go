@@ -1,11 +1,20 @@
 package qdbtests
 
 import (
-	"os"
+	"fmt"
 	"testing"
 
 	. "github.com/bureau14/qdb-api-go"
 )
+
+// TestHandle testing various things about connection
+func TestHandle(t *testing.T) {
+	var handle HandleType
+	var err error
+	connectWithoutCreatingHandle(t, &handle, err)
+	connectWithoutAddress(t, &handle, err)
+	connectProperly(t, &handle, err)
+}
 
 func connectWithoutCreatingHandle(t *testing.T, handle *HandleType, err error) {
 	err = handle.Connect("")
@@ -23,19 +32,9 @@ func connectWithoutAddress(t *testing.T, handle *HandleType, err error) {
 }
 
 func connectProperly(t *testing.T, handle *HandleType, err error) {
-	qdbConnection := string("qdb://127.0.0.1:")
-	qdbConnection += os.Args[1]
+	qdbConnection := fmt.Sprintf("qdb://%s:%s", getenv("QDB_HOST", "127.0.0.1"), getenv("QDB_PORT", "2836"))
 	err = handle.Connect(qdbConnection)
 	if err != nil {
 		t.Error("Expected no error, got ", err)
 	}
-}
-
-// TestHandle testing various things about connection
-func TestHandle(t *testing.T) {
-	var handle HandleType
-	var err error
-	connectWithoutCreatingHandle(t, &handle, err)
-	connectWithoutAddress(t, &handle, err)
-	connectProperly(t, &handle, err)
 }
