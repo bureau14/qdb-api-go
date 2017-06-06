@@ -1,3 +1,4 @@
+// Package qdb provides an api to a quasardb server
 package qdb
 
 /*
