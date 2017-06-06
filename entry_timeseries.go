@@ -47,7 +47,7 @@ func (entry TimeseriesEntry) Create() error {
 
 		columns = unsafe.Pointer(nil)
 	}
-	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
+	err := C.qdb_ts_create(entry.handle, alias, (*C.struct_qdb_ts_column_info)(columns), columnsCount)
 	return makeErrorOrNil(err)
 }
 
