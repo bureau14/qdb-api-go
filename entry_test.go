@@ -327,14 +327,14 @@ func timeseriesTest(t *testing.T, handle HandleType) {
 	if err == nil {
 		t.Error("You should not be able to get empty aggregations.")
 	}
-	doubleAgg := TsDoubleAggregation{t: AggFirst, r: tsRange}
+	doubleAgg := TsDoubleAggregation{T: AggFirst, R: tsRange}
 	doubleAggs := []TsDoubleAggregation{doubleAgg}
 	err = timeseries.GetDoubleAggregate("serie_column_double", &doubleAggs)
 	if err != nil {
 		t.Error("You should be able to get result for this range.")
 	}
-	if doublePoint1.Content != doubleAggs[0].p.Content {
-		t.Error("You should have obtained ", doublePoint1.Content, " but got ", doubleAggs[0].p.Content)
+	if doublePoint1.Content != doubleAggs[0].P.Content {
+		t.Error("You should have obtained ", doublePoint1.Content, " but got ", doubleAggs[0].P.Content)
 	}
 
 	// Testing blob point
@@ -379,14 +379,14 @@ func timeseriesTest(t *testing.T, handle HandleType) {
 	if err == nil {
 		t.Error("You should not be able to get empty aggregations.")
 	}
-	blobAgg := TsBlobAggregation{t: AggFirst, r: tsRange}
+	blobAgg := TsBlobAggregation{T: AggFirst, R: tsRange}
 	blobAggs := []TsBlobAggregation{blobAgg}
 	err = timeseries.GetBlobAggregate("serie_column_blob", &blobAggs)
 	if err != nil {
 		t.Error("You should be able to get result for this range.")
 	}
-	if bytes.Equal(blobPoint1.Content, blobAggs[0].p.Content) == false {
-		t.Error("You should have obtained ", blobPoint1.Content, " but got ", blobAggs[0].p.Content)
+	if bytes.Equal(blobPoint1.Content, blobAggs[0].P.Content) == false {
+		t.Error("You should have obtained ", blobPoint1.Content, " but got ", blobAggs[0].P.Content)
 	}
 }
 

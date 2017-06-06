@@ -227,10 +227,10 @@ const (
 
 // TsDoubleAggregation : Aggregation of double type
 type TsDoubleAggregation struct {
-	t TsAggregationType
-	r TsRange
-	s SizeType
-	p TsDoublePoint
+	T TsAggregationType
+	R TsRange
+	S SizeType
+	P TsDoublePoint
 }
 
 // GetDoubleAggregate : Aggregate a sub-part of the time series.
@@ -251,10 +251,10 @@ func (entry TimeseriesEntry) GetDoubleAggregate(column string, aggs *[]TsDoubleA
 
 // TsBlobAggregation : Aggregation of double type
 type TsBlobAggregation struct {
-	t TsAggregationType
-	r TsRange
-	s SizeType
-	p TsBlobPoint
+	T TsAggregationType
+	R TsRange
+	S SizeType
+	P TsBlobPoint
 }
 
 // GetBlobAggregate : Aggregate a sub-part of the time series.
