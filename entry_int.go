@@ -1,7 +1,6 @@
 package qdb
 
 /*
-	// import libqdb
 	#cgo LDFLAGS: -lqdb_api
 	#include <qdb/integer.h>
 	#include <qdb/error.h>
