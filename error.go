@@ -1,7 +1,6 @@
 package qdb
 
 /*
-	#cgo LDFLAGS: -L. -lqdb_api
 	#include <qdb/error.h>
 */
 import "C"

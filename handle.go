@@ -2,7 +2,6 @@
 package qdb
 
 /*
-	#cgo LDFLAGS: -L. -lqdb_api
 	#include <qdb/client.h>
 */
 import "C"
