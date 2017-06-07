@@ -1,7 +1,6 @@
 package qdb
 
 /*
-	#cgo LDFLAGS: -L. -lqdb_api
 	#include <qdb/ts.h>
 	#include <qdb/error.h>
 	#include <qdb/client.h>
