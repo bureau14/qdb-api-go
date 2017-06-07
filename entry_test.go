@@ -42,7 +42,7 @@ func TestEntry(t *testing.T) {
 func blobTest(t *testing.T, handle HandleType) {
 	blobEmptyAlias := handle.Blob("")
 	content := []byte("content")
-	err := blobEmptyAlias.Put(content, NeverExpires)
+	err := blobEmptyAlias.Put(content, NeverExpires())
 	if err == nil {
 		t.Error("Should not be able to put with empty alias")
 	}
@@ -53,7 +53,7 @@ func blobTest(t *testing.T, handle HandleType) {
 
 	aliasEmptyContent := generateAlias(16)
 	blobEmptyContent := handle.Blob(aliasEmptyContent)
-	err = blobEmptyContent.Put([]byte{}, NeverExpires)
+	err = blobEmptyContent.Put([]byte{}, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to put empty content without error got: ", err)
 	}
@@ -65,14 +65,14 @@ func blobTest(t *testing.T, handle HandleType) {
 		t.Error("Updated content should be ", []byte{}, " got ", contentObtained)
 	}
 
-	contentObtained, err = blobEmptyContent.GetAndUpdate([]byte{}, NeverExpires)
+	contentObtained, err = blobEmptyContent.GetAndUpdate([]byte{}, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to 'get and update' on empty content without error got: ", err)
 	}
 	if bytes.Equal(contentObtained, []byte{}) == false {
 		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
 	}
-	contentObtained, err = blobEmptyContent.CompareAndSwap(content, []byte{}, NeverExpires)
+	contentObtained, err = blobEmptyContent.CompareAndSwap(content, []byte{}, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to 'compare and swap' on empty content without error got: ", err)
 	}
@@ -91,11 +91,11 @@ func blobTest(t *testing.T, handle HandleType) {
 	alias := generateAlias(16)
 	blob := handle.Blob(alias)
 
-	err = blob.Put(content, NeverExpires)
+	err = blob.Put(content, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to put without error got: ", err)
 	}
-	err = blob.Put(content, NeverExpires)
+	err = blob.Put(content, NeverExpires())
 	if err == nil {
 		t.Error("You should not be able to put an alias a second time.")
 	}
@@ -108,7 +108,7 @@ func blobTest(t *testing.T, handle HandleType) {
 	}
 
 	newContent := []byte{}
-	err = blob.Update(newContent, NeverExpires)
+	err = blob.Update(newContent, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to update with an empty content without error got: ", err)
 	}
@@ -120,7 +120,7 @@ func blobTest(t *testing.T, handle HandleType) {
 		t.Error("Updated content should be ", newContent, " got ", contentObtained)
 	}
 	newContent = []byte("newContent")
-	err = blob.Update(newContent, NeverExpires)
+	err = blob.Update(newContent, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to update without error got: ", err)
 	}
@@ -144,12 +144,12 @@ func blobTest(t *testing.T, handle HandleType) {
 		t.Error("Expected contentObtained to be empty got: ", contentObtained)
 	}
 
-	err = blob.Put(content, NeverExpires)
+	err = blob.Put(content, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to reuse removed alias without error got: ", err)
 	}
 
-	contentObtained, err = blob.GetAndUpdate(newContent, NeverExpires)
+	contentObtained, err = blob.GetAndUpdate(newContent, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to 'get and update' without error got: ", err)
 	}
@@ -158,12 +158,12 @@ func blobTest(t *testing.T, handle HandleType) {
 	}
 
 	badContent := []byte("badContent")
-	contentObtained, err = blob.CompareAndSwap([]byte{}, badContent, NeverExpires)
+	contentObtained, err = blob.CompareAndSwap([]byte{}, badContent, NeverExpires())
 	if err == nil {
 		t.Error("Should not be able to 'compare and swap' with bad comparand.")
 	}
 
-	contentObtained, err = blob.CompareAndSwap(content, newContent, NeverExpires)
+	contentObtained, err = blob.CompareAndSwap(content, newContent, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to 'compare and swap' without error got: ", err)
 	}
@@ -183,7 +183,7 @@ func blobTest(t *testing.T, handle HandleType) {
 		t.Error("Should not be able to get without error got: nil")
 	}
 
-	err = blob.Put(content, NeverExpires)
+	err = blob.Put(content, NeverExpires())
 	if err != nil {
 		t.Error("Should be able to reuse removed alias without error got: ", err)
 	}
@@ -207,11 +207,11 @@ func integerTest(t *testing.T, handle HandleType) {
 	integer := handle.Integer(alias)
 
 	// Test IntegerPut
-	err := integer.Put(content, NeverExpires)
+	err := integer.Put(content, NeverExpires())
 	if err != nil {
 		t.Error("You should be able to put without error - got: ", err)
 	}
-	err = integer.Put(content, NeverExpires)
+	err = integer.Put(content, NeverExpires())
 	if err == nil {
 		t.Error("You should not be able to put an alias a second time.")
 	}
@@ -224,7 +224,7 @@ func integerTest(t *testing.T, handle HandleType) {
 	}
 
 	newContent := int64(87)
-	err = integer.Update(newContent, NeverExpires)
+	err = integer.Update(newContent, NeverExpires())
 	if err != nil {
 		t.Error("You should be able to update without error - got: ", err)
 	}
@@ -395,7 +395,7 @@ func tagsTest(t *testing.T, handle HandleType) {
 	alias := generateAlias(16)
 	content := int64(13)
 	integer := handle.Integer(alias)
-	integer.Put(content, NeverExpires)
+	integer.Put(content, NeverExpires())
 
 	// Test Attach tag
 	err := integer.AttachTag("")
@@ -527,41 +527,29 @@ func expiryTest(t *testing.T, handle HandleType) {
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
 
-	expiry := Expiry(-1)
+	expiry := time.Unix(int64(time.Now().Second())-1, 0)
 	err := integer.ExpiresFromNow(expiry)
 	if err == nil {
 		t.Error("Should not be able to set expiry time without alias")
 	}
 
-	integer.Put(3, NeverExpires)
+	integer.Put(3, NeverExpires())
 
-	expiry = Expiry(13)
+	expiry = time.Unix(13, 0)
 	err = integer.ExpiresAt(expiry)
 	if err == nil {
 		t.Error("Should not be able to set expiry time in the past")
 	}
-	expiry = Expiry((time.Now().UnixNano()))
+	expiry = time.Now()
 	err = integer.ExpiresAt(expiry)
 	if err != nil {
 		t.Error("Should be able to set expiry time in the future: ", err)
 	}
 
-	expiry = Expiry(2)
+	expiry = time.Unix(2, 0)
 	err = integer.ExpiresFromNow(expiry)
 	if err != nil {
 		t.Error("Should be able to set expiry time in the future: ", err)
-	}
-
-	expiry = Expiry(-1)
-	err = integer.ExpiresFromNow(expiry)
-	if err != nil {
-		t.Error("Should be able to set expiry time in the past to delete: ", err)
-	}
-
-	expiry = Expiry(2)
-	err = integer.ExpiresFromNow(expiry)
-	if err == nil {
-		t.Error("Should be found no data since it expired with precedent test")
 	}
 }
 
@@ -569,7 +557,7 @@ func locationTest(t *testing.T, handle HandleType) {
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
 
-	integer.Put(3, NeverExpires)
+	integer.Put(3, NeverExpires())
 	location, err := integer.GetLocation()
 	if err != nil {
 		t.Error("Should be able to get locationof content: ", err)
@@ -589,7 +577,7 @@ func metadataTest(t *testing.T, handle HandleType) {
 		t.Error("Should not be able to get metadata without alias")
 	}
 
-	integer.Put(3, NeverExpires)
+	integer.Put(3, NeverExpires())
 	metadata, err = integer.GetMetadata()
 	if err != nil {
 		t.Error("Should be able to get metadata: ", err)

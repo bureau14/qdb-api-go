@@ -33,7 +33,7 @@ func ExampleBlobEntry_Put() {
 	defer handle.Close()
 
 	blob := handle.Blob("blob")
-	blob.Put([]byte("content"), NeverExpires)
+	blob.Put([]byte("content"), NeverExpires())
 
 	content, err := blob.Get()
 	fmt.Printf("Content: %s\n", content)

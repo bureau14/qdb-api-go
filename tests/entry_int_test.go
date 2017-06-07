@@ -18,18 +18,18 @@ func TestIntegerEntry(t *testing.T) {
 	integer := handle.Integer(alias)
 
 	// Test IntegerPut
-	err = integer.Put(content, NeverExpires)
+	err = integer.Put(content, NeverExpires())
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	err = integer.Put(content, NeverExpires)
+	err = integer.Put(content, NeverExpires())
 	if err == nil {
 		t.Error("Expected error on IntegerPut with already used alias - got nil")
 	}
 
 	// Test update
 	newContent := int64(87)
-	err = integer.Update(newContent, NeverExpires)
+	err = integer.Update(newContent, NeverExpires())
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}

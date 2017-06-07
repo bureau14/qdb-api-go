@@ -5,7 +5,10 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
-import "unsafe"
+import (
+	"time"
+	"unsafe"
+)
 
 type Entry struct {
 	HandleType
@@ -30,16 +33,15 @@ func (e Entry) Remove() error {
 
 // ::: EXPIRY RELATED FUNCTIONS :::
 
-// Expiry : expiration value
-type Expiry TimeType
+// NeverExpires : return a time value corresponding to quasardb never expires value
+func NeverExpires() time.Time {
+	return time.Unix(0, C.qdb_never_expires)
+}
 
-// Expiry values:
-//	NeverExpires : constant value for unexpirable data
-//	PreserveExpiration : constant value for preservation of expiration value
-const (
-	NeverExpires       Expiry = C.qdb_never_expires
-	PreserveExpiration Expiry = C.qdb_preserve_expiration
-)
+// PreserveExpiration : return a time value corresponding to quasardb preserve expiration value
+func PreserveExpiration() time.Time {
+	return time.Unix(0, C.qdb_preserve_expiration)
+}
 
 // ExpiresAt : Sets the absolute expiration time of an entry.
 //	Blobs and integers can have an expiration time and will be automatically removed by the cluster when they expire.
@@ -49,8 +51,8 @@ const (
 //
 //	To remove the expiration time of an entry, specify the value NeverExpires as ExpiryTime parameter.
 //	Values in the past are refused, but the cluster will have a certain tolerance to account for clock skews.
-func (e Entry) ExpiresAt(expiry Expiry) error {
-	err := C.qdb_expires_at(e.handle, C.CString(e.alias), C.qdb_time_t(expiry))
+func (e Entry) ExpiresAt(expiry time.Time) error {
+	err := C.qdb_expires_at(e.handle, C.CString(e.alias), C.qdb_time_t(expiry.UnixNano()))
 	return makeErrorOrNil(err)
 }
 
@@ -59,8 +61,8 @@ func (e Entry) ExpiresAt(expiry Expiry) error {
 //
 //	The expiration is relative to the current time of the machine.
 //	To remove the expiration time of an entry or to use an absolute expiration time use ExpiresAt.
-func (e Entry) ExpiresFromNow(expiryDelta Expiry) error {
-	err := C.qdb_expires_from_now(e.handle, C.CString(e.alias), C.qdb_time_t(expiryDelta))
+func (e Entry) ExpiresFromNow(expiryDelta time.Time) error {
+	err := C.qdb_expires_from_now(e.handle, C.CString(e.alias), C.qdb_time_t(expiryDelta.UnixNano()))
 	return makeErrorOrNil(err)
 }
 
@@ -147,7 +149,7 @@ func (e Entry) AttachTags(tags []string) error {
 	return makeErrorOrNil(err)
 }
 
-// hasTag : Tests if an entry has the request tag.
+// HasTag : Tests if an entry has the request tag.
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 func (e Entry) HasTag(tag string) error {
