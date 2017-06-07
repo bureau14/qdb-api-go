@@ -37,9 +37,17 @@
     [v] qdb_blob_get_and_update
     [v] qdb_blob_compare_and_swap
     [v] qdb_blob_remove_if
-    [-] qdb_blob_scan (experimental function, should I implement?)
-    [-] qdb_blob_scan_regex (experimental function, should I implement?)
+    [ ] qdb_blob_scan (experimental function, should I implement?)
+    [ ] qdb_blob_scan_regex (experimental function, should I implement?)
 [ completion: 9/12 ]
+
+### [ cluster and nodes ]
+    [ ] qdb_node_status
+    [ ] qdb_node_config
+    [ ] qdb_node_topology
+    [ ] qdb_node_stop
+[ completion: 0/4 ]
+
 
 ### [ batches ]
     [ ] qdb_init_operations
@@ -66,6 +74,20 @@
     [v] qdb_int_add
 [ completion: 4/4 ]
 
+### [ iterators ]
+    [ ] qdb_iterator_begin
+    [ ] qdb_iterator_rbegin
+    [ ] qdb_iterator_next
+    [ ] qdb_iterator_previous
+    [ ] qdb_iterator_close
+    [ ] qdb_iterator_copy
+[ completion: 0/6 ]
+
+### [ log ]
+    [ ] qdb_log_add_callback
+    [ ] qdb_log_remove_callback
+[ completion: 0/2 ]
+
 ### [ hash sets ]
     [ ] qdb_hset_insert
     [ ] qdb_hset_erase
@@ -77,6 +99,10 @@
     [ ] qdb_prefix_count
 [ completion: 0/2 ]
 
+### [ query ]
+    [ ] qdb_query
+[ completion: 0/1 ]
+
 ### [ streams ]
     [ ] qdb_stream_open
     [ ] qdb_stream_close
@@ -87,6 +113,11 @@
     [ ] qdb_stream_setpos
     [ ] qdb_stream_truncate
 [ completion: 0/8 ]
+
+### [ suffix ]
+    [ ] qdb_suffix_get
+    [ ] qdb_suffix_count
+[ completion: 0/2 ]
 
 ### [ tags ]
     [v] qdb_attach_tag
