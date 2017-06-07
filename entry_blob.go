@@ -11,7 +11,7 @@ import "unsafe"
 
 // BlobEntry : blob data type
 type BlobEntry struct {
-	entry
+	Entry
 }
 
 // Get : Retrieve an entry's content

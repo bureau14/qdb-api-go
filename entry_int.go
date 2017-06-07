@@ -9,7 +9,7 @@ import "C"
 
 // IntegerEntry : int data type
 type IntegerEntry struct {
-	entry
+	Entry
 }
 
 // Put : Creates a new signed 64-bit integer.

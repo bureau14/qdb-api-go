@@ -30,7 +30,7 @@ func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
 
 // TimeseriesEntry : timeseries double entry data type
 type TimeseriesEntry struct {
-	entry
+	Entry
 	columns []TsColumnInfo
 }
 

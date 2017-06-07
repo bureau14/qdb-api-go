@@ -11,7 +11,7 @@ func ExampleHandleType() {
 	// Output: API build: 2.1.0master
 }
 
-func ExampleBlobEntry_Alias() {
+func ExampleEntry_Alias() {
 	handle, err := setupHandle()
 	if err != nil {
 		panic(err)

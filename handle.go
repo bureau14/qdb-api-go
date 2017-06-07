@@ -3,6 +3,7 @@ package qdb
 
 /*
 	#include <qdb/client.h>
+	#include <qdb/node.h>
 */
 import "C"
 import "unsafe"
@@ -121,15 +122,15 @@ func NewHandle() (HandleType, error) {
 
 // Blob : Create a blob entry object
 func (h HandleType) Blob(alias string) BlobEntry {
-	return BlobEntry{entry{h, alias}}
+	return BlobEntry{Entry{h, alias}}
 }
 
 // Integer : Create an integer entry object
 func (h HandleType) Integer(alias string) IntegerEntry {
-	return IntegerEntry{entry{h, alias}}
+	return IntegerEntry{Entry{h, alias}}
 }
 
 // Timeseries : Create a timeseries entry object
 func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesEntry {
-	return TimeseriesEntry{entry{h, alias}, columns}
+	return TimeseriesEntry{Entry{h, alias}, columns}
 }
