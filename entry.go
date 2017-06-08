@@ -10,6 +10,8 @@ import (
 	"unsafe"
 )
 
+// Entry : cannot be constructed
+// base type for composition
 type Entry struct {
 	HandleType
 	alias string
@@ -115,15 +117,15 @@ type Metadata struct {
 	Ref              RefID
 	Type             EntryType
 	Size             uint64
-	ModificationTime TimespecType
-	ExpiryTime       TimespecType
+	ModificationTime time.Time
+	ExpiryTime       time.Time
 }
 
 // GetMetadata : Gets the meta-information about an entry, if it exists.
 func (e Entry) GetMetadata() (Metadata, error) {
 	var m C.qdb_entry_metadata_t
 	err := C.qdb_get_metadata(e.handle, C.CString(e.alias), &m)
-	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), m.modification_time.toTimeSpec(), m.expiry_time.toTimeSpec()}, makeErrorOrNil(err)
+	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), m.modification_time.toStructG(), m.expiry_time.toStructG()}, makeErrorOrNil(err)
 }
 
 // ::: TAGS RELATED FUNCTIONS :::

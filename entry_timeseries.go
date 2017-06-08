@@ -6,7 +6,10 @@ package qdb
 	#include <qdb/client.h>
 */
 import "C"
-import "unsafe"
+import (
+	"time"
+	"unsafe"
+)
 
 // TsColumnInfo : column information in timeseries
 type TsColumnInfo C.qdb_ts_column_info_t
@@ -51,16 +54,20 @@ func (entry TimeseriesEntry) Create() error {
 
 // TsDoublePoint : timestamped data
 type TsDoublePoint struct {
-	Timestamp TimespecType
+	Timestamp time.Time
 	Content   float64
 }
 
-func (ts TsDoublePoint) toQdbDoublePoint() C.qdb_ts_double_point {
-	return C.qdb_ts_double_point{ts.Timestamp.toQdbTimespec(), C.double(ts.Content)}
+func (dp TsDoublePoint) toStructC() C.qdb_ts_double_point {
+	return C.qdb_ts_double_point{toQdbTimespec(dp.Timestamp), C.double(dp.Content)}
+}
+
+func (cval C.qdb_ts_double_point) toStructG() TsDoublePoint {
+	return TsDoublePoint{cval.timestamp.toStructG(), float64(cval.value)}
 }
 
 // NewTsDoublePoint : Create new timeseries double point
-func NewTsDoublePoint(timestamp TimespecType, value float64) TsDoublePoint {
+func NewTsDoublePoint(timestamp time.Time, value float64) TsDoublePoint {
 	return TsDoublePoint{timestamp, value}
 }
 
@@ -75,7 +82,7 @@ func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint)
 	if contentCount != 0 {
 		content := make([]C.qdb_ts_double_point, contentCount)
 		for i := C.qdb_size_t(0); i < contentCount; i++ {
-			content[i] = points[i].toQdbDoublePoint()
+			content[i] = points[i].toStructC()
 		}
 		contentPtr = &content[0]
 	} else {
@@ -87,20 +94,24 @@ func (entry TimeseriesEntry) InsertDouble(column string, points []TsDoublePoint)
 
 // TsBlobPoint : timestamped data
 type TsBlobPoint struct {
-	Timestamp TimespecType
+	Timestamp time.Time
 	Content   []byte
 }
 
 // TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
 // solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
-func (ts TsBlobPoint) toQdbBlobPoint() C.qdb_ts_blob_point {
+func (ts TsBlobPoint) toStructC() C.qdb_ts_blob_point {
 	dataSize := C.qdb_size_t(len(ts.Content))
 	data := unsafe.Pointer(C.CString(string(ts.Content)))
-	return C.qdb_ts_blob_point{ts.Timestamp.toQdbTimespec(), data, dataSize}
+	return C.qdb_ts_blob_point{toQdbTimespec(ts.Timestamp), data, dataSize}
+}
+
+func (cval C.qdb_ts_blob_point) toStructG() TsBlobPoint {
+	return TsBlobPoint{cval.timestamp.toStructG(), C.GoBytes(cval.content, C.int(cval.content_length))}
 }
 
 // NewTsBlobPoint : Create new timeseries double point
-func NewTsBlobPoint(timestamp TimespecType, value []byte) TsBlobPoint {
+func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
 	return TsBlobPoint{timestamp, value}
 }
 
@@ -115,7 +126,7 @@ func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) err
 	if contentCount != 0 {
 		content := make([]C.qdb_ts_blob_point, contentCount)
 		for i := C.qdb_size_t(0); i < contentCount; i++ {
-			content[i] = points[i].toQdbBlobPoint()
+			content[i] = points[i].toStructC()
 		}
 		contentPtr = &content[0]
 	} else {
@@ -126,24 +137,42 @@ func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) err
 }
 
 // TsRange : timeseries range with begin and end timestamp
-type TsRange C.qdb_ts_range_t
-
-// NewTsRange : Create new timeseries range
-func NewTsRange(begin, end TimespecType) TsRange {
-	return TsRange{begin.toQdbTimespec(), end.toQdbTimespec()}
+type TsRange struct {
+	Begin time.Time
+	End   time.Time
 }
 
-// GetDoubleRanges : Retrieves blobs in the specified range of the time series column.
+func (r TsRange) toStructC() C.qdb_ts_range_t {
+	return C.qdb_ts_range_t{toQdbTimespec(r.Begin), toQdbTimespec(r.End)}
+}
+
+func (cval C.qdb_ts_range_t) toStructG() TsRange {
+	return TsRange{cval.begin.toStructG(), cval.end.toStructG()}
+}
+
+// TsRanges : multiple timeseries range with begin and end timestamp
+type TsRanges []TsRange
+
+func (r TsRanges) toStructC() []C.qdb_ts_range_t {
+	var cRanges []C.qdb_ts_range_t
+	for index := range r {
+		cRanges = append(cRanges, r[index].toStructC())
+	}
+	return cRanges
+}
+
+// GetDoubleRanges : Retrieves blobs in the specitypefied range of the time series column.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([]TsDoublePoint, error) {
+func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges TsRanges) ([]TsDoublePoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbRangesCount := C.qdb_size_t(len(ranges))
+	qdbRangesC := ranges.toStructC()
 	var qdbRanges *C.qdb_ts_range_t
-	if qdbRangesCount != 0 {
-		qdbRanges = (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
-	} else {
+	if len(qdbRangesC) == 0 {
 		qdbRanges = nil
+	} else {
+		qdbRanges = &qdbRangesC[0]
 	}
 	var qdbPoints *C.qdb_ts_double_point
 	var qdbPointsCount C.qdb_size_t
@@ -156,7 +185,7 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([
 		if length > 0 {
 			tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
 			for i, s := range tmpslice {
-				output[i] = TsDoublePoint{s.timestamp.toTimeSpec(), float64(s.value)}
+				output[i] = s.toStructG()
 			}
 		}
 		return output, nil
@@ -166,15 +195,16 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges []TsRange) ([
 
 // GetBlobRanges : Retrieves blobs in the specified range of the time series column.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]TsBlobPoint, error) {
+func (entry TimeseriesEntry) GetBlobRanges(column string, ranges TsRanges) ([]TsBlobPoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbRangesCount := C.qdb_size_t(len(ranges))
+	qdbRangesC := ranges.toStructC()
 	var qdbRanges *C.qdb_ts_range_t
-	if qdbRangesCount != 0 {
-		qdbRanges = (*C.qdb_ts_range_t)(unsafe.Pointer(&ranges[0]))
-	} else {
+	if len(qdbRangesC) == 0 {
 		qdbRanges = nil
+	} else {
+		qdbRanges = &qdbRangesC[0]
 	}
 	var qdbPoints *C.qdb_ts_blob_point
 	var qdbPointsCount C.qdb_size_t
@@ -187,7 +217,7 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges []TsRange) ([]T
 		if length > 0 {
 			tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
 			for i, s := range tmpslice {
-				output[i] = TsBlobPoint{s.timestamp.toTimeSpec(), C.GoBytes(s.content, C.int(s.content_length))}
+				output[i] = s.toStructG()
 			}
 		}
 		return output, nil
@@ -231,19 +261,72 @@ type TsDoubleAggregation struct {
 	P TsDoublePoint
 }
 
-// GetDoubleAggregate : Aggregate a sub-part of the time series.
+func (agg TsDoubleAggregation) toStructC() C.qdb_ts_double_aggregation_t {
+	var cAgg C.qdb_ts_double_aggregation_t
+	cAgg._type = C.qdb_ts_aggregation_type_t(agg.T)
+	cAgg._range = agg.R.toStructC()
+	cAgg.count = C.qdb_size_t(agg.S)
+	cAgg.result = agg.P.toStructC()
+	return cAgg
+}
+
+func (cval C.qdb_ts_double_aggregation_t) toStructG() TsDoubleAggregation {
+	var gAgg TsDoubleAggregation
+	gAgg.T = TsAggregationType(cval._type)
+	gAgg.R = cval._range.toStructG()
+	gAgg.S = SizeType(cval.count)
+	gAgg.P = cval.result.toStructG()
+	return gAgg
+}
+
+// TsDoubleAggregations : Multiple aggregation of double type
+type TsDoubleAggregations []TsDoubleAggregation
+
+func (aggs TsDoubleAggregations) toStructC() []C.qdb_ts_double_aggregation_t {
+	var cAggs []C.qdb_ts_double_aggregation_t
+	for index := range aggs {
+		cAggs = append(cAggs, aggs[index].toStructC())
+	}
+	return cAggs
+}
+
+// DoubleAggregate : Aggregate a sub-part of a timeseries.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) GetDoubleAggregate(column string, aggs *[]TsDoubleAggregation) error {
+func (entry TimeseriesEntry) DoubleAggregate(column string, t TsAggregationType, r TsRange) (TsDoublePoint, error) {
+	alias := C.CString(entry.alias)
+	columnName := C.CString(column)
+	var qdbAggregation C.qdb_ts_double_aggregation_t
+	qdbAggregation._type = C.qdb_ts_aggregation_type_t(t)
+	qdbAggregation._range = r.toStructC()
+	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, &qdbAggregation, 1)
+	timestamp := qdbAggregation.result.timestamp
+	result := TsDoublePoint{time.Unix(int64(timestamp.tv_sec), int64(timestamp.tv_nsec)), float64(qdbAggregation.result.value)}
+	return result, makeErrorOrNil(err)
+}
+
+// DoubleAggregates : Aggregate a sub-part of a timeseries.
+//	It is an error to call this function on a non existing time-series.
+func (entry TimeseriesEntry) DoubleAggregates(column string, aggs *TsDoubleAggregations) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
+	qdbAggsC := aggs.toStructC()
 	var qdbAggregations *C.qdb_ts_double_aggregation_t
 	if qdbAggregationsCount != 0 {
-		qdbAggregations = (*C.qdb_ts_double_aggregation_t)(unsafe.Pointer(&((*aggs)[0])))
+		qdbAggregations = &qdbAggsC[0]
 	} else {
 		qdbAggregations = nil
 	}
 	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
+	if err == 0 {
+		length := int(qdbAggregationsCount)
+		if length > 0 {
+			tmpslice := (*[1 << 30]C.qdb_ts_double_aggregation_t)(unsafe.Pointer(qdbAggregations))[:length:length]
+			for i, s := range tmpslice {
+				(*aggs)[i] = s.toStructG()
+			}
+		}
+	}
 	return makeErrorOrNil(err)
 }
 
@@ -255,18 +338,71 @@ type TsBlobAggregation struct {
 	P TsBlobPoint
 }
 
-// GetBlobAggregate : Aggregate a sub-part of the time series.
+func (agg TsBlobAggregation) toStructC() C.qdb_ts_blob_aggregation_t {
+	var cAgg C.qdb_ts_blob_aggregation_t
+	cAgg._type = C.qdb_ts_aggregation_type_t(agg.T)
+	cAgg._range = agg.R.toStructC()
+	cAgg.count = C.qdb_size_t(agg.S)
+	cAgg.result = agg.P.toStructC()
+	return cAgg
+}
+
+func (cval C.qdb_ts_blob_aggregation_t) toStructG() TsBlobAggregation {
+	var gAgg TsBlobAggregation
+	gAgg.T = TsAggregationType(cval._type)
+	gAgg.R = cval._range.toStructG()
+	gAgg.S = SizeType(cval.count)
+	gAgg.P = cval.result.toStructG()
+	return gAgg
+}
+
+// TsBlobAggregations : Multiple aggregation of double type
+type TsBlobAggregations []TsBlobAggregation
+
+func (aggs TsBlobAggregations) toStructC() []C.qdb_ts_blob_aggregation_t {
+	var cAggs []C.qdb_ts_blob_aggregation_t
+	for index := range aggs {
+		cAggs = append(cAggs, aggs[index].toStructC())
+	}
+	return cAggs
+}
+
+// BlobAggregate : Aggregate a sub-part of a timeseries.
+func (entry TimeseriesEntry) BlobAggregate(column string, t TsAggregationType, r TsRange) (TsBlobPoint, error) {
+	alias := C.CString(entry.alias)
+	columnName := C.CString(column)
+	var qdbAggregation C.qdb_ts_blob_aggregation_t
+	qdbAggregation._type = C.qdb_ts_aggregation_type_t(t)
+	qdbAggregation._range = r.toStructC()
+	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, &qdbAggregation, 1)
+	blob := qdbAggregation.result
+	timestamp := blob.timestamp
+	result := TsBlobPoint{time.Unix(int64(timestamp.tv_sec), int64(timestamp.tv_nsec)), C.GoBytes(blob.content, C.int(blob.content_length))}
+	return result, makeErrorOrNil(err)
+}
+
+// BlobAggregates : Aggregate a sub-part of the time series.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) GetBlobAggregate(column string, aggs *[]TsBlobAggregation) error {
+func (entry TimeseriesEntry) BlobAggregates(column string, aggs *TsBlobAggregations) error {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
+	qdbAggsC := aggs.toStructC()
 	var qdbAggregations *C.qdb_ts_blob_aggregation_t
 	if qdbAggregationsCount != 0 {
-		qdbAggregations = (*C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(&((*aggs)[0])))
+		qdbAggregations = &qdbAggsC[0]
 	} else {
 		qdbAggregations = nil
 	}
 	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
+	if err == 0 {
+		length := int(qdbAggregationsCount)
+		if length > 0 {
+			tmpslice := (*[1 << 30]C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(qdbAggregations))[:length:length]
+			for i, s := range tmpslice {
+				(*aggs)[i] = s.toStructG()
+			}
+		}
+	}
 	return makeErrorOrNil(err)
 }
