@@ -12,7 +12,30 @@ import (
 )
 
 // TsColumnInfo : column information in timeseries
-type TsColumnInfo C.qdb_ts_column_info_t
+type TsColumnInfo struct {
+	Name string
+	Type TsColumnType
+}
+
+func (tsCI TsColumnInfo) toStructC() C.qdb_ts_column_info_t {
+	// The [4]byte is some sort of padding necessary for Go : struct(char *, int, 4 byte of padding)
+	return C.qdb_ts_column_info_t{C.CString(tsCI.Name), C.qdb_ts_column_type_t(tsCI.Type), [4]byte{}}
+}
+
+func (cval C.qdb_ts_column_info_t) toStructG() TsColumnInfo {
+	return TsColumnInfo{C.GoString(cval.name), TsColumnType(cval._type)}
+}
+
+// TsColumnInfos : multiple column information in timeseries
+type TsColumnInfos []TsColumnInfo
+
+func (r TsColumnInfos) toStructC() []C.qdb_ts_column_info_t {
+	var cColumnsInfos []C.qdb_ts_column_info_t
+	for index := range r {
+		cColumnsInfos = append(cColumnsInfos, r[index].toStructC())
+	}
+	return cColumnsInfos
+}
 
 // TsColumnType : Timeseries column types
 type TsColumnType C.qdb_ts_column_type_t
@@ -27,28 +50,36 @@ const (
 
 // NewTsColumnInfo : create a column info structure
 func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
-	// The [4]byte is some sort of padding necessary for Go : struct(char *, int, 4 byte of padding)
-	return TsColumnInfo{C.CString(columnName), C.qdb_ts_column_type_t(columnType), [4]byte{}}
+	return TsColumnInfo{columnName, columnType}
 }
 
 // TimeseriesEntry : timeseries double entry data type
 type TimeseriesEntry struct {
 	Entry
-	columns []TsColumnInfo
+	columns TsColumnInfos
 }
 
 // Create : create a new timeseries
 func (entry TimeseriesEntry) Create() error {
 	alias := C.CString(entry.alias)
 	columnsCount := C.qdb_size_t(len(entry.columns))
-	var columns unsafe.Pointer
+	columnsArray := entry.columns.toStructC()
+	var columns *C.qdb_ts_column_info_t
 	if columnsCount != 0 {
-		columns = unsafe.Pointer((*C.qdb_ts_column_info_t)(&entry.columns[0]))
+		columns = &columnsArray[0]
 	} else {
-
-		columns = unsafe.Pointer(nil)
+		columns = nil
 	}
-	err := C.qdb_ts_create(entry.handle, alias, (*C.struct_qdb_ts_column_info)(columns), columnsCount)
+	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
+	if err == 0 {
+		length := int(columnsCount)
+		if length > 0 {
+			tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+			for i, s := range tmpslice {
+				entry.columns[i] = s.toStructG()
+			}
+		}
+	}
 	return makeErrorOrNil(err)
 }
 
