@@ -1,607 +1,609 @@
 package qdb
 
 import (
-	"bytes"
 	"strconv"
 	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
+
+var handle = MustSetupHandle()
 
 // test every entry related files
 func TestEntry(t *testing.T) {
-	handle, err := setupHandle()
-	if err != nil {
-		panic(err)
-	}
 	defer handle.Close()
 	// Test blobs
-	blobTest(t, handle)
-
-	// Test integers
-	integerTest(t, handle)
-
-	// Test timeseries
-	timeseriesTest(t, handle)
-
-	// Test tags
-	tagsTest(t, handle)
-
-	// Test alias
-	aliasTest(t, handle)
-
-	// Test expiry
-	expiryTest(t, handle)
-
-	// Test location
-	locationTest(t, handle)
-
-	// Test metadata
-	metadataTest(t, handle)
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Test Suite")
 }
 
-func blobTest(t *testing.T, handle HandleType) {
-	blobEmptyAlias := handle.Blob("")
-	content := []byte("content")
-	err := blobEmptyAlias.Put(content, NeverExpires())
-	if err == nil {
-		t.Error("Should not be able to put with empty alias")
-	}
-	err = blobEmptyAlias.RemoveIf(content)
-	if err == nil {
-		t.Error("Should not be able to remove with empty alias")
-	}
+var _ = Describe("Tests", func() {
+	var (
+		currentHandle HandleType
+		alias         string
+		err           error
+	)
+	BeforeSuite(func() {
+		currentHandle = MustSetupHandle()
+	})
 
-	aliasEmptyContent := generateAlias(16)
-	blobEmptyContent := handle.Blob(aliasEmptyContent)
-	err = blobEmptyContent.Put([]byte{}, PreserveExpiration())
-	if err != nil {
-		t.Error("Should be able to put empty content without error got: ", err)
-	}
-	contentObtained, err := blobEmptyContent.Get()
-	if err != nil {
-		t.Error("Should be able to get without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, []byte{}) == false {
-		t.Error("Updated content should be ", []byte{}, " got ", contentObtained)
-	}
+	BeforeEach(func() {
+		alias = generateAlias(16)
+	})
 
-	contentObtained, err = blobEmptyContent.GetAndUpdate([]byte{}, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to 'get and update' on empty content without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, []byte{}) == false {
-		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
-	}
-	contentObtained, err = blobEmptyContent.CompareAndSwap(content, []byte{}, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to 'compare and swap' on empty content without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, []byte{}) == false {
-		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
-	}
-	contentObtained, err = blobEmptyContent.Get()
-	if bytes.Equal(contentObtained, content) == false {
-		t.Error("Data retrieved should be ", content, " got: ", contentObtained)
-	}
-	err = blobEmptyContent.Remove()
-	if err != nil {
-		t.Error("Should be able to remove without error got: ", err)
-	}
+	// :: Entry tests ::
+	Context("Entry", func() {
+		var (
+			integer IntegerEntry
+		)
+		JustBeforeEach(func() {
+			integer = currentHandle.Integer(alias)
+			integer.Put(13, NeverExpires())
+		})
+		AfterEach(func() {
+			integer.Remove()
+		})
+		// Alias tests
+		Context("Alias", func() {
+			It("should have alias", func() {
+				Expect(alias).To(Equal(integer.Alias()))
+			})
+			Context("Empty alias", func() {
+				BeforeEach(func() {
+					alias = ""
+				})
+				It("should not put", func() {
+					err := integer.Put(17, NeverExpires())
+					Expect(err).To(HaveOccurred())
+				})
+			})
+		})
 
-	alias := generateAlias(16)
-	blob := handle.Blob(alias)
+		// Tags test
+		Context("Tags", func() {
+			var (
+				tag  string
+				tags []string
+			)
+			BeforeEach(func() {
+				for i := 0; i < 5; i++ {
+					tags = append(tags, generateAlias(16))
+				}
+				tag = tags[0]
+			})
+			It("'attach tag' should work", func() {
+				err = integer.AttachTag(tag)
+				Expect(err).ToNot(HaveOccurred())
+			})
+			It("'attach tags' should work", func() {
+				err = integer.AttachTags(tags)
+				Expect(err).ToNot(HaveOccurred())
+			})
+			Context("Attach tags before", func() {
+				JustBeforeEach(func() {
+					integer.AttachTags(tags)
+				})
+				AfterEach(func() {
+					integer.DetachTags(tags)
+				})
+				It("'detach tag' should work", func() {
+					err = integer.DetachTag(tag)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("'has tag' should work", func() {
+					err = integer.HasTag(tag)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("'detach tags' should work", func() {
+					err = integer.DetachTags(tags)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("'get tagged' should work", func() {
+					aliasesObtained, err := integer.GetTagged(tag)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(1).To(Equal(len(aliasesObtained)))
+					Expect(alias).To(Equal(aliasesObtained[0]))
+				})
+				It("'get tags' should work", func() {
+					tagsObtained, err := integer.GetTags()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(tags)).To(Equal(len(tagsObtained)))
+					Expect(tags).To(ConsistOf(tagsObtained))
+				})
+			})
+			Context("Empty tag(s)", func() {
+				BeforeEach(func() {
+					tag = ""
+					tags = []string{}
+				})
+				It("'attach tag' should not work", func() {
+					err = integer.AttachTag(tag)
+					Expect(err).To(HaveOccurred())
+				})
+				It("'attach tags' should not work", func() {
+					err = integer.AttachTags(tags)
+					Expect(err).To(HaveOccurred())
+				})
+				It("'has tag' should not work", func() {
+					err = integer.HasTag(tag)
+					Expect(err).To(HaveOccurred())
+				})
+				It("'detach tag' should not work", func() {
+					err = integer.DetachTag(tag)
+					Expect(err).To(HaveOccurred())
+				})
+				It("'detach tags' should not work", func() {
+					err = integer.DetachTags(tags)
+					Expect(err).To(HaveOccurred())
+				})
+				It("'get tagged' should not work", func() {
+					aliasesObtained, err := integer.GetTagged(tag)
+					Expect(err).To(HaveOccurred())
+					Expect(0).To(Equal(len(aliasesObtained)))
+				})
+			})
+		})
 
-	err = blob.Put(content, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to put without error got: ", err)
-	}
-	err = blob.Put(content, NeverExpires())
-	if err == nil {
-		t.Error("You should not be able to put an alias a second time.")
-	}
-	contentObtained, err = blob.Get()
-	if err != nil {
-		t.Error("Should be able to get without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, content) == false {
-		t.Error("Data put should be ", content, " got: ", contentObtained)
-	}
+		// Expiry tests
+		Context("Expiry", func() {
+			var (
+				expiry   time.Time
+				duration time.Duration
+			)
+			JustBeforeEach(func() {
+				now := time.Now()
+				expiry = now.Add(duration)
+			})
+			Context("Distant future", func() {
+				BeforeEach(func() {
+					distantTime := time.Date(2040, 0, 0, 0, 0, 0, 0, time.UTC)
+					duration = time.Until(distantTime)
+				})
+				It("should set expire at", func() {
+					err = integer.ExpiresAt(expiry)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should set expire from now", func() {
+					err = integer.ExpiresFromNow(duration)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+			Context("Short future", func() {
+				BeforeEach(func() {
+					duration, _ = time.ParseDuration("1h")
+				})
+				It("should set expire at", func() {
+					err = integer.ExpiresAt(expiry)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should set expire from now", func() {
+					err = integer.ExpiresFromNow(duration)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+			Context("Ultra short future", func() {
+				BeforeEach(func() {
+					duration, _ = time.ParseDuration("1µs")
+				})
+				It("should set expire at", func() {
+					err = integer.ExpiresAt(expiry)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should set expire from now", func() {
+					err = integer.ExpiresFromNow(duration)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+			Context("Short past", func() {
+				BeforeEach(func() {
+					duration, _ = time.ParseDuration("-1h")
+				})
+				It("should not set expire at", func() {
+					err = integer.ExpiresAt(expiry)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should not set expire from now", func() {
+					err = integer.ExpiresFromNow(duration)
+					Expect(err).To(HaveOccurred())
+				})
+			})
+			Context("Ultra short past", func() {
+				BeforeEach(func() {
+					duration, _ = time.ParseDuration("-5m30s")
+				})
+				It("should not set expire at", func() {
+					err = integer.ExpiresAt(expiry)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should not set expire from now", func() {
+					err = integer.ExpiresFromNow(duration)
+					Expect(err).To(HaveOccurred())
+				})
+			})
+		})
 
-	newContent := []byte{}
-	err = blob.Update(newContent, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to update with an empty content without error got: ", err)
-	}
-	contentObtained, err = blob.Get()
-	if err != nil {
-		t.Error("Should be able to get an empty content without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, newContent) == false {
-		t.Error("Updated content should be ", newContent, " got ", contentObtained)
-	}
-	newContent = []byte("newContent")
-	err = blob.Update(newContent, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to update without error got: ", err)
-	}
-	contentObtained, err = blob.Get()
-	if err != nil {
-		t.Error("Should be able to get without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, newContent) == false {
-		t.Error("Updated content should be ", newContent, " got ", contentObtained)
-	}
+		// Location tests
+		Context("Location", func() {
+			var (
+				port    int
+				address string
+			)
+			BeforeEach(func() {
+				port, err = strconv.Atoi(getenv("QDB_PORT", "2836"))
+				address = getenv("QDB_HOST", "127.0.0.1")
+			})
+			It("should locate", func() {
+				location, err := integer.GetLocation()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(int16(port)).To(Equal(location.Port))
+				Expect(address).To(Equal(location.Address))
+			})
+		})
 
-	err = blob.Remove()
-	if err != nil {
-		t.Error("Should be able to remove without error got: ", err)
-	}
-	contentObtained, err = blob.Get()
-	if err == nil {
-		t.Error("Should not be able to get without error got: nil")
-	}
-	if bytes.Equal(contentObtained, []byte{}) == false {
-		t.Error("Expected contentObtained to be empty got: ", contentObtained)
-	}
+		// Metadata tests
+		Context("Location", func() {
+			It("should locate", func() {
+				metadata, err := integer.GetMetadata()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(EntryInteger).To(Equal(metadata.Type))
+			})
+		})
+	})
 
-	err = blob.Put(content, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to reuse removed alias without error got: ", err)
-	}
+	// :: Blob tests ::
+	Context("Blob", func() {
+		var (
+			blob       BlobEntry
+			content    []byte
+			newContent []byte
+			badContent []byte
+		)
+		BeforeEach(func() {
+			content = []byte("content")
+			newContent = []byte("newContent")
+			badContent = []byte("badContent")
+		})
+		JustBeforeEach(func() {
+			blob = currentHandle.Blob(alias)
+		})
+		AfterEach(func() {
+			blob.Remove()
+		})
+		Context("Empty content", func() {
+			BeforeEach(func() {
+				content = []byte{}
+			})
+			It("should put", func() {
+				err := blob.Put(content, NeverExpires())
+				Expect(err).ToNot(HaveOccurred())
+				contentObtained, err := blob.Get()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(content).To(Equal(contentObtained))
+			})
+			It("should update", func() {
+				err := blob.Update(content, NeverExpires())
+				Expect(err).ToNot(HaveOccurred())
+				contentObtained, err := blob.Get()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(content).To(Equal(contentObtained))
+			})
+			Context("Put before test", func() {
+				JustBeforeEach(func() {
+					blob.Put(content, NeverExpires())
+				})
+				It("should get", func() {
+					contentObtained, err := blob.Get()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+				})
+				It("should 'get and update'", func() {
+					contentObtained, err := blob.GetAndUpdate(newContent, PreserveExpiration())
+					Expect(err).ToNot(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+					contentObtained, err = blob.Get()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(newContent).To(Equal(contentObtained))
+				})
+				It("should 'get and remove'", func() {
+					contentObtained, err := blob.GetAndRemove()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+					contentObtained, err = blob.Get()
+					Expect(err).To(HaveOccurred())
+					Expect([]byte{}).To(Equal(contentObtained))
+				})
+				It("should 'remove if'", func() {
+					comparand := content
+					err := blob.RemoveIf(comparand)
+					Expect(err).ToNot(HaveOccurred())
+					contentObtained, err := blob.Get()
+					Expect(err).To(HaveOccurred())
+					Expect([]byte{}).To(Equal(contentObtained))
+				})
+				It("should not 'remove if' with bad content", func() {
+					comparand := badContent
+					err := blob.RemoveIf(comparand)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should 'compare and swap' with good content", func() {
+					comparand := content
+					contentObtained, err := blob.CompareAndSwap(newContent, comparand, PreserveExpiration())
+					Expect(err).ToNot(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+					contentObtained, err = blob.Get()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(newContent).To(Equal(contentObtained))
+				})
+				It("should not 'compare and swap' with bad content", func() {
+					comparand := badContent
+					contentObtained, err := blob.CompareAndSwap(newContent, comparand, PreserveExpiration())
+					Expect(err).To(HaveOccurred())
+					Expect([]byte{}).To(Equal(contentObtained))
+				})
+			})
+		})
+		Context("Normal content", func() {
+			BeforeEach(func() {
+				newContent = []byte{}
+			})
+			It("should put", func() {
+				err := blob.Put(content, NeverExpires())
+				Expect(err).ToNot(HaveOccurred())
+				contentObtained, err := blob.Get()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(content).To(Equal(contentObtained))
+			})
+			It("should update", func() {
+				err := blob.Update(content, NeverExpires())
+				Expect(err).ToNot(HaveOccurred())
+				contentObtained, err := blob.Get()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(content).To(Equal(contentObtained))
+			})
+			Context("Put before test", func() {
+				JustBeforeEach(func() {
+					blob.Put(content, NeverExpires())
+				})
+				It("should get", func() {
+					contentObtained, err := blob.Get()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+				})
+				It("should 'get and update'", func() {
+					contentObtained, err := blob.GetAndUpdate(newContent, PreserveExpiration())
+					Expect(err).ToNot(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+					contentObtained, err = blob.Get()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(newContent).To(Equal(contentObtained))
+				})
+				It("should 'get and remove'", func() {
+					contentObtained, err := blob.GetAndRemove()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+					contentObtained, err = blob.Get()
+					Expect(err).To(HaveOccurred())
+					Expect([]byte{}).To(Equal(contentObtained))
+				})
+				It("should 'remove if'", func() {
+					comparand := content
+					err := blob.RemoveIf(comparand)
+					Expect(err).ToNot(HaveOccurred())
+					contentObtained, err := blob.Get()
+					Expect(err).To(HaveOccurred())
+					Expect([]byte{}).To(Equal(contentObtained))
+				})
+				It("should not 'remove if' with bad content", func() {
+					comparand := []byte("badContent")
+					err := blob.RemoveIf(comparand)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should 'compare and swap' with good content", func() {
+					comparand := content
+					contentObtained, err := blob.CompareAndSwap(newContent, comparand, PreserveExpiration())
+					Expect(err).ToNot(HaveOccurred())
+					Expect([]byte{}).To(Equal(contentObtained))
+					contentObtained, err = blob.Get()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(newContent).To(Equal(contentObtained))
+				})
+				It("should not 'compare and swap' with bad content", func() {
+					comparand := []byte("badContent")
+					contentObtained, err := blob.CompareAndSwap(newContent, comparand, PreserveExpiration())
+					Expect(err).To(HaveOccurred())
+					Expect(content).To(Equal(contentObtained))
+				})
+			})
+		})
+	})
 
-	contentObtained, err = blob.GetAndUpdate(newContent, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to 'get and update' without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, content) == false {
-		t.Error("Data retrieved should be ", content, " got: ", contentObtained)
-	}
+	// :: Integer tests ::
+	Context("Integer", func() {
+		var (
+			integer    IntegerEntry
+			content    int64
+			newContent int64
+		)
+		BeforeEach(func() {
+			content = 13
+			newContent = 87
+			integer = currentHandle.Integer(alias)
+		})
+		AfterEach(func() {
+			integer.Remove()
+		})
+		It("should put", func() {
+			err := integer.Put(content, NeverExpires())
+			Expect(err).ToNot(HaveOccurred())
+		})
+		It("should not put again", func() {
+			err := integer.Put(content, NeverExpires())
+			Expect(err).ToNot(HaveOccurred())
+			err = integer.Put(content, NeverExpires())
+			Expect(err).To(HaveOccurred())
+		})
+		Context("Put before tests", func() {
+			JustBeforeEach(func() {
+				integer.Put(content, NeverExpires())
+			})
+			It("should update", func() {
+				err := integer.Update(newContent, NeverExpires())
+				Expect(err).ToNot(HaveOccurred())
+				contentObtained, err := integer.Get()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(newContent).To(Equal(contentObtained))
+			})
+			It("should get", func() {
+				contentObtained, err := integer.Get()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(content).To(Equal(contentObtained))
+			})
+			It("should add", func() {
+				toAdd := int64(5)
+				expected := toAdd + content
+				contentObtained, err := integer.Add(toAdd)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(expected).To(Equal(contentObtained))
+			})
+			It("should remove", func() {
+				err := integer.Remove()
+				Expect(err).ToNot(HaveOccurred())
+				contentObtained, err := integer.Get()
+				Expect(err).To(HaveOccurred())
+				Expect(int64(0)).To(Equal(contentObtained))
+			})
+		})
+	})
 
-	badContent := []byte("badContent")
-	contentObtained, err = blob.CompareAndSwap([]byte{}, badContent, NeverExpires())
-	if err == nil {
-		t.Error("Should not be able to 'compare and swap' with bad comparand.")
-	}
+	// :: Timeseries tests ::
+	// TODO(vianney): Debug timestamps, seems like they don't get to see the database
+	Context("Timeseries", func() {
+		var (
+			timeseries  TimeseriesEntry
+			columnsInfo []TsColumnInfo
+		)
+		BeforeEach(func() {
+			columnsInfo = []TsColumnInfo{}
+			columnsInfo = append(columnsInfo, NewTsColumnInfo("blob_column", TsColumnBlob), NewTsColumnInfo("double_column", TsColumnDouble))
+		})
+		JustBeforeEach(func() {
+			timeseries = currentHandle.Timeseries(alias, columnsInfo)
+		})
+		AfterEach(func() {
+			timeseries.Remove()
+		})
+		Context("Empty columns info", func() {
+			BeforeEach(func() {
+				columnsInfo = []TsColumnInfo{}
+			})
+			It("should not create", func() {
+				err = timeseries.Create()
+				Expect(err).To(HaveOccurred())
+			})
+		})
+		Context("Created", func() {
+			var (
+				doubleContents []float64
+				blobContents   [][]byte
+				doublePoints   []TsDoublePoint
+				blobPoints     []TsBlobPoint
+			)
+			BeforeEach(func() {
+				doubleContents = []float64{}
+				doubleContents = append(doubleContents, 3.2, 7.8)
+				doublePoints = []TsDoublePoint{}
+				for index, doubleContent := range doubleContents {
+					doublePoints = append(doublePoints, NewTsDoublePoint(time.Unix(int64((index+1)*10), 0), doubleContent))
+				}
+				doublePoints = append(doublePoints, NewTsDoublePoint(time.Unix(int64(60), 0), 4.3))
+				doublePoints = append(doublePoints, NewTsDoublePoint(time.Unix(int64(80), 0), 4.7))
 
-	contentObtained, err = blob.CompareAndSwap(content, newContent, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to 'compare and swap' without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, []byte{}) == false {
-		t.Error("Data retrieved should be ", []byte{}, " got: ", contentObtained)
-	}
+				blobContents = [][]byte{}
+				blobContents = append(blobContents, []byte("content 1"), []byte("content 2"))
+				blobPoints = []TsBlobPoint{}
+				for index, blobContent := range blobContents {
+					blobPoints = append(blobPoints, NewTsBlobPoint(time.Unix(int64((index+1)*10), 0), blobContent))
+				}
+				blobPoints = append(blobPoints, NewTsBlobPoint(time.Unix(int64(60), 0), []byte("content 3")))
+				blobPoints = append(blobPoints, NewTsBlobPoint(time.Unix(int64(80), 0), []byte("content 4")))
+			})
+			JustBeforeEach(func() {
+				err = timeseries.Create()
+				Expect(err).ToNot(HaveOccurred())
+			})
+			Context("Insert", func() {
+				It("should work to insert blob points", func() {
+					err = timeseries.InsertBlob(timeseries.columns[0].Name, blobPoints)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should work to insert double points", func() {
+					err = timeseries.InsertDouble(timeseries.columns[1].Name, doublePoints)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				Context("Empty Points Array", func() {
+					BeforeEach(func() {
+						doublePoints = []TsDoublePoint{}
+						blobPoints = []TsBlobPoint{}
+					})
+					It("should not work to insert double points", func() {
+						err = timeseries.InsertDouble(timeseries.columns[1].Name, doublePoints)
+						Expect(err).To(HaveOccurred())
+					})
+					It("should not work to insert blob points", func() {
+						err = timeseries.InsertBlob(timeseries.columns[0].Name, blobPoints)
+						Expect(err).To(HaveOccurred())
+					})
+				})
+			})
+			Context("Ranges", func() {
+				var (
+					ranges TsRanges
+				)
+				JustBeforeEach(func() {
+					timeseries.InsertDouble(timeseries.columns[1].Name, doublePoints)
+					timeseries.InsertBlob(timeseries.columns[0].Name, blobPoints)
+					r1 := TsRange{time.Unix(0, 0), time.Unix(90, 0)}
+					ranges = []TsRange{r1}
+				})
+				It("should get double ranges", func() {
+					tsDoublePoints, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name, ranges)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(doublePoints).To(Equal(tsDoublePoints))
+				})
+				It("should get blob ranges", func() {
+					tsBlobPoints, err := timeseries.GetBlobRanges(timeseries.columns[0].Name, ranges)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(blobPoints).To(Equal(tsBlobPoints))
+				})
+				Context("Empty", func() {
+					JustBeforeEach(func() {
+						ranges = []TsRange{}
+					})
+					It("should not get double ranges", func() {
+						tsDoublePoints, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name, ranges)
+						Expect(err).To(HaveOccurred())
+						Expect([]TsDoublePoint{}).To(ConsistOf(tsDoublePoints))
+					})
+					It("should not get blob ranges", func() {
+						tsBlobPoints, err := timeseries.GetBlobRanges(timeseries.columns[0].Name, ranges)
+						Expect(err).To(HaveOccurred())
+						Expect([]TsBlobPoint{}).To(ConsistOf(tsBlobPoints))
+					})
+				})
+			})
+			Context("Aggregate", func() {
+				var (
+				// doubleAggs TsDoubleAggregations
+				// blobAggs   TsBlobAggregations
+				)
+				JustBeforeEach(func() {
+					timeseries.InsertDouble(timeseries.columns[1].Name, doublePoints)
+					timeseries.InsertBlob(timeseries.columns[0].Name, blobPoints)
+				})
+			})
 
-	contentObtained, err = blob.GetAndRemove()
-	if err != nil {
-		t.Error("Should be able to 'get and remove' without error got: ", err)
-	}
-	if bytes.Equal(contentObtained, content) == false {
-		t.Error("Data retrieved should be ", content, " got: ", contentObtained)
-	}
-	contentObtained, err = blob.Get()
-	if err == nil {
-		t.Error("Should not be able to get without error got: nil")
-	}
-
-	err = blob.Put(content, NeverExpires())
-	if err != nil {
-		t.Error("Should be able to reuse removed alias without error got: ", err)
-	}
-	err = blob.RemoveIf([]byte{})
-	if err == nil {
-		t.Error("Should not be able to remove with empty content.")
-	}
-	err = blob.RemoveIf(content)
-	if err != nil {
-		t.Error("Should be able to remove with content: ", content, " got: ", err)
-	}
-	contentObtained, err = blob.Get()
-	if err == nil {
-		t.Error("Should not be able to get without error.")
-	}
-}
-
-func integerTest(t *testing.T, handle HandleType) {
-	alias := generateAlias(16)
-	content := int64(13)
-	integer := handle.Integer(alias)
-
-	// Test IntegerPut
-	err := integer.Put(content, NeverExpires())
-	if err != nil {
-		t.Error("You should be able to put without error - got: ", err)
-	}
-	err = integer.Put(content, NeverExpires())
-	if err == nil {
-		t.Error("You should not be able to put an alias a second time.")
-	}
-	contentObtained, err := integer.Get()
-	if err != nil {
-		t.Error("You should be able to get without error - got: ", err)
-	}
-	if contentObtained != content {
-		t.Error("Data retrieved should be ", content, " got: ", contentObtained)
-	}
-
-	newContent := int64(87)
-	err = integer.Update(newContent, NeverExpires())
-	if err != nil {
-		t.Error("You should be able to update without error - got: ", err)
-	}
-	contentObtained, err = integer.Get()
-	if err != nil {
-		t.Error("Expected no error - got: ", err)
-	}
-	if contentObtained != newContent {
-		t.Error("Data retrieved should be ", newContent, " got: ", contentObtained)
-	}
-
-	toAdd := int64(5)
-	expected := toAdd + newContent
-	result, err := integer.Add(toAdd)
-	if err != nil {
-		t.Error("Expected no error - got: ", err)
-	}
-	if expected != result {
-		t.Error("Result should be ", expected, " got: ", result)
-	}
-
-	err = integer.Remove()
-	if err != nil {
-		t.Error("You should be able to remove without error - got: ", err)
-	}
-	contentObtained, err = integer.Get()
-	if err == nil {
-		t.Error("You should not be able to get without error got: nil")
-	}
-	if contentObtained != 0 {
-		t.Error("Content retrieved should be set to zero, got: ", contentObtained)
-	}
-}
-
-func timeseriesTest(t *testing.T, handle HandleType) {
-	timeseriesEmptyAlias := handle.Timeseries("", []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob)})
-	err := timeseriesEmptyAlias.Create()
-	if err == nil {
-		t.Error("You should not be able to create with empty alias.")
-	}
-	timeseriesEmptyColumns := handle.Timeseries("", []TsColumnInfo{})
-	err = timeseriesEmptyColumns.Create()
-	if err == nil {
-		t.Error("You should not be able to create with no columns.")
-	}
-
-	alias := generateAlias(16)
-	timeseries := handle.Timeseries(alias, []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble)})
-
-	err = timeseries.Create()
-	if err != nil {
-		t.Error("You should be able to create with no error - got: ", err)
-	}
-	err = timeseries.Create()
-	if err == nil {
-		t.Error("You should not be able to create the same timeseries a second time.")
-	}
-
-	// declare range now for later use
-	tsRange := TsRange{time.Unix(0, 0), time.Unix(40, 0)}
-	tsRanges := TsRanges{tsRange}
-
-	// Testing double point
-	contentDouble := float64(3.4)
-	contentDouble2 := float64(4.4)
-	doublePoint1 := NewTsDoublePoint(time.Unix(10, 0), contentDouble)
-	doublePoint2 := NewTsDoublePoint(time.Unix(20, 0), contentDouble2)
-
-	err = timeseries.InsertDouble("serie_column_double", []TsDoublePoint{doublePoint1, doublePoint2})
-	if err != nil {
-		t.Error("Expected no error - got: ", err)
-	}
-	err = timeseries.InsertDouble("serie_column_double", []TsDoublePoint{})
-	if err == nil {
-		t.Error("You should not be able to insert no content.")
-	}
-
-	// Testing double ranges
-	tsDoublePoints, err := timeseries.GetDoubleRanges("serie_column_double", TsRanges{})
-	if err == nil {
-		t.Error("You should not be able to get empty ranges.")
-	}
-	tsDoublePoints, err = timeseries.GetDoubleRanges("serie_column_double", tsRanges)
-	if err != nil {
-		t.Error("You should be able to get result for this range.")
-	}
-	if len(tsDoublePoints) != 2 {
-		t.Error("Expected len(tsDoublePoints) == 2 got", len(tsDoublePoints))
-	}
-	if tsDoublePoints[0].Timestamp != doublePoint1.Timestamp {
-		t.Error("Expected timestamp ", doublePoint1.Timestamp, " got ", tsDoublePoints[0].Timestamp)
-	}
-	if tsDoublePoints[0].Content != contentDouble {
-		t.Error("Expected content ", contentDouble, " got ", tsDoublePoints[0].Content)
-	}
-
-	// Testing double aggregations
-	emptyDoubleAggs := TsDoubleAggregations{}
-	err = timeseries.DoubleAggregates("serie_column_double", &emptyDoubleAggs)
-	if err == nil {
-		t.Error("You should not be able to get empty aggregations.")
-	}
-	doubleAggResult, err := timeseries.DoubleAggregate("serie_column_double", AggFirst, tsRange)
-	if err != nil {
-		t.Error("You should be able to get result for this range.")
-	}
-	if doublePoint1.Content != doubleAggResult.Content {
-		t.Error("You should have obtained ", doublePoint1.Content, " but got ", doubleAggResult.Content)
-	}
-	doubleAgg := TsDoubleAggregation{T: AggFirst, R: tsRange}
-	doubleAggs := TsDoubleAggregations{doubleAgg}
-	err = timeseries.DoubleAggregates("serie_column_double", &doubleAggs)
-	if err != nil {
-		t.Error("You should be able to get result for this range.")
-	}
-	if doublePoint1.Content != doubleAggs[0].P.Content {
-		t.Error("You should have obtained ", doublePoint1.Content, " but got ", doubleAggs[0].P.Content)
-	}
-
-	// Testing blob point
-	contentBlob := []byte("data")
-	blobPoint1 := NewTsBlobPoint(time.Unix(20, 0), contentBlob)
-	blobPoint2 := NewTsBlobPoint(time.Unix(30, 0), []byte{})
-
-	err = timeseries.InsertBlob("serie_column_blob", []TsBlobPoint{blobPoint1, blobPoint2})
-	if err != nil {
-		t.Error(err.Error())
-	}
-	err = timeseries.InsertBlob("serie_column_blob", []TsBlobPoint{})
-	if err == nil {
-		t.Error("You should not be able to insert no content.")
-	}
-
-	// Testing blob ranges
-	tsBlobPoints, err := timeseries.GetBlobRanges("serie_column_blob", []TsRange{})
-	if err == nil {
-		t.Error("You should not be able to get empty ranges.")
-	}
-	tsBlobPoints, err = timeseries.GetBlobRanges("serie_column_blob", tsRanges)
-	if err != nil {
-		t.Error("Expected no error - got: ", err)
-	}
-	if len(tsBlobPoints) != 2 {
-		t.Error("Expected len(tsBlobPoints) == 2 got", len(tsBlobPoints))
-	}
-	if tsBlobPoints[0].Timestamp != blobPoint1.Timestamp {
-		t.Error("Expected timestamp ", blobPoint1.Timestamp, " got ", tsBlobPoints[0].Timestamp)
-	}
-	if bytes.Equal(tsBlobPoints[0].Content, contentBlob) == false {
-		t.Error("Expected content ", contentBlob, " got ", tsBlobPoints[0].Content)
-	}
-	if bytes.Equal(tsBlobPoints[1].Content, []byte{}) == false {
-		t.Error("Expected content ", []byte{}, " got ", tsBlobPoints[1].Content)
-	}
-
-	// Testing blob aggregations
-	emptyBlobAggs := TsBlobAggregations{}
-	err = timeseries.BlobAggregates("serie_column_blob", &emptyBlobAggs)
-	if err == nil {
-		t.Error("You should not be able to get empty aggregations.")
-	}
-	blobAggResult, err := timeseries.BlobAggregate("serie_column_blob", AggFirst, tsRange)
-	if err != nil {
-		t.Error("You should be able to get result for this range.")
-	}
-	if bytes.Equal(blobPoint1.Content, blobAggResult.Content) == false {
-		t.Error("You should have obtained ", blobPoint1.Content, " but got ", blobAggResult.Content)
-	}
-
-	blobAgg1 := TsBlobAggregation{T: AggFirst, R: tsRange}
-	blobAgg2 := TsBlobAggregation{T: AggLast, R: tsRange}
-	blobAggs := TsBlobAggregations{blobAgg1, blobAgg2}
-	err = timeseries.BlobAggregates("serie_column_blob", &blobAggs)
-	if err != nil {
-		t.Error("You should be able to get result for this range.")
-	}
-	if bytes.Equal(blobPoint1.Content, blobAggs[0].P.Content) == false {
-		t.Error("You should have obtained ", blobPoint1.Content, " but got ", blobAggs[0].P.Content)
-	}
-	if bytes.Equal(blobPoint2.Content, blobAggs[1].P.Content) == false {
-		t.Error("You should have obtained ", blobPoint2.Content, " but got ", blobAggs[1].P.Content)
-	}
-}
-
-func tagsTest(t *testing.T, handle HandleType) {
-	// Create dumb integer to test tags
-	alias := generateAlias(16)
-	content := int64(13)
-	integer := handle.Integer(alias)
-	integer.Put(content, NeverExpires())
-
-	// Test Attach tag
-	err := integer.AttachTag("")
-	if err == nil {
-		t.Error("You should not be able to attach empty tag.")
-	}
-	tag := generateAlias(5)
-	err = integer.AttachTag(tag)
-	if err != nil {
-		t.Error("You should be able to attach normal tag.")
-	}
-
-	// Test Has tag
-	err = integer.HasTag(tag)
-	if err != nil {
-		t.Error("You should be able to check normal tag.")
-	}
-	err = integer.HasTag("")
-	if err == nil {
-		t.Error("You should not be able to check empty tag.")
-	}
-
-	// Test Get tagged
-	aliases, err := integer.GetTagged(tag)
-	if err != nil {
-		t.Error("You should be able to get values tagged.")
-	}
-	if len(aliases) != 1 {
-		t.Error("Expected len(aliases) to be one got: ", len(aliases))
-	}
-	if aliases[0] != alias {
-		t.Error("Alias should be ", alias, " got ", aliases[0])
-	}
-	aliases, err = integer.GetTagged("")
-	if err == nil {
-		t.Error("You should not be able to retrieve empty tag.")
-	}
-
-	// Test Get tags
-	var tags []string
-	tags, err = integer.GetTags()
-	if err != nil {
-		t.Error("You should be able to get tags.")
-	}
-	if len(tags) != 1 {
-		t.Error("Expected len(tags) to be one got: ", len(tags))
-	}
-	if tags[0] != tag {
-		t.Error("Tag is ", tags[0], " should be ", tag)
-	}
-
-	// Test Detach tag
-	err = integer.DetachTag(tag)
-	if err != nil {
-		t.Error("You should be able to detach tag.")
-	}
-	err = integer.HasTag(tag)
-	if err == nil {
-		t.Error("Expected an error - got nil")
-	}
-	// Test GetTags on nil
-	tags, err = integer.GetTags()
-	if err != nil {
-		t.Error("You should be able to get tags even if there are none.")
-	}
-	if tags == nil || len(tags) != 0 {
-		t.Error("Expected tags to be an empty array")
-	}
-
-	// Attach multiple tags
-	err = integer.AttachTags([]string{})
-	if err == nil {
-		t.Error("You should not be able to attach empty tags.")
-	}
-	tag0 := "tag0"
-	tag1 := "tag1"
-	err = integer.AttachTags([]string{tag0, tag1})
-	tags, err = integer.GetTags()
-	if err != nil {
-		t.Error("You should be able to get multiple tags.")
-	}
-	if len(tags) != 2 {
-		t.Error("Expected len(tags) to be 2 got: ", len(tags))
-	}
-	if tags[0] != tag0 || tags[1] != tag1 {
-		t.Error("Tags should be ", tag0, " - ", tag1, " got: ", tags[0], " - ", tags[1])
-	}
-
-	// Detach multiple tags
-	err = integer.DetachTags([]string{})
-	if err == nil {
-		t.Error("You should not be able to detach empty tags.")
-	}
-	err = integer.DetachTags([]string{tag0, tag1})
-	tags, err = integer.GetTags()
-	if err != nil {
-		t.Error("You should be able to get tag even if there are none.")
-	}
-	if tags == nil || len(tags) != 0 {
-		t.Error("Expected tags to be an empty array")
-	}
-
-	// Test Remove
-	err = integer.Remove()
-	if err != nil {
-		t.Error("You should be able to remove an alias.")
-	}
-	_, err = integer.Get()
-	if err == nil {
-		t.Error("You should not be able to get an empty alias.")
-	}
-
-	tags, err = integer.GetTags()
-	if err == nil {
-		t.Error("You should not be able to get tags on an empty alias.")
-	}
-}
-
-func aliasTest(t *testing.T, handle HandleType) {
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-
-	if integer.Alias() != alias {
-		t.Error("Alias should be ", alias, " got ", integer.Alias())
-	}
-}
-
-func expiryTest(t *testing.T, handle HandleType) {
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-
-	expiry := time.Unix(int64(time.Now().Second())-1, 0)
-	err := integer.ExpiresFromNow(expiry)
-	if err == nil {
-		t.Error("Should not be able to set expiry time without alias")
-	}
-
-	integer.Put(3, NeverExpires())
-
-	expiry = time.Unix(13, 0)
-	err = integer.ExpiresAt(expiry)
-	if err == nil {
-		t.Error("Should not be able to set expiry time in the past")
-	}
-	expiry = time.Now()
-	err = integer.ExpiresAt(expiry)
-	if err != nil {
-		t.Error("Should be able to set expiry time in the future: ", err)
-	}
-
-	expiry = time.Unix(2, 0)
-	err = integer.ExpiresFromNow(expiry)
-	if err != nil {
-		t.Error("Should be able to set expiry time in the future: ", err)
-	}
-}
-
-func locationTest(t *testing.T, handle HandleType) {
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-
-	integer.Put(3, NeverExpires())
-	location, err := integer.GetLocation()
-	if err != nil {
-		t.Error("Should be able to get locationof content: ", err)
-	}
-	port, _ := strconv.Atoi(getenv("QDB_PORT", "2836"))
-	if location.Port != int16(port) {
-		t.Error("location port should be ", port, " got ", location.Port)
-	}
-}
-
-func metadataTest(t *testing.T, handle HandleType) {
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-
-	metadata, err := integer.GetMetadata()
-	if err == nil {
-		t.Error("Should not be able to get metadata without alias")
-	}
-
-	integer.Put(3, NeverExpires())
-	metadata, err = integer.GetMetadata()
-	if err != nil {
-		t.Error("Should be able to get metadata: ", err)
-	}
-	if metadata.Type != EntryInteger {
-		t.Error("Entry type should be ", EntryInteger, " got ", metadata.Type)
-	}
-}
+		})
+	})
+})
