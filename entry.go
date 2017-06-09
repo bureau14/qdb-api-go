@@ -54,7 +54,7 @@ func PreserveExpiration() time.Time {
 //	To remove the expiration time of an entry, specify the value NeverExpires as ExpiryTime parameter.
 //	Values in the past are refused, but the cluster will have a certain tolerance to account for clock skews.
 func (e Entry) ExpiresAt(expiry time.Time) error {
-	err := C.qdb_expires_at(e.handle, C.CString(e.alias), C.qdb_time_t(expiry.UnixNano()))
+	err := C.qdb_expires_at(e.handle, C.CString(e.alias), C.qdb_time_t(expiry.UnixNano()/1000000))
 	return makeErrorOrNil(err)
 }
 
@@ -63,8 +63,8 @@ func (e Entry) ExpiresAt(expiry time.Time) error {
 //
 //	The expiration is relative to the current time of the machine.
 //	To remove the expiration time of an entry or to use an absolute expiration time use ExpiresAt.
-func (e Entry) ExpiresFromNow(expiryDelta time.Time) error {
-	err := C.qdb_expires_from_now(e.handle, C.CString(e.alias), C.qdb_time_t(expiryDelta.UnixNano()))
+func (e Entry) ExpiresFromNow(expiry time.Duration) error {
+	err := C.qdb_expires_from_now(e.handle, C.CString(e.alias), C.qdb_time_t(expiry/time.Millisecond))
 	return makeErrorOrNil(err)
 }
 
