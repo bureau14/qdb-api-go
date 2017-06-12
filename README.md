@@ -1,11 +1,11 @@
 Quasardb Go API
 =================
+[![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/bureau14/qdb-api-go)
 
 **Warning:** Early stage development version. Use at your own risk.
 
 Go API for [quasardb](https://www.quasardb.net/).
 
-See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.html).
 
 ### Requirements
 
@@ -16,14 +16,24 @@ See documentation at [doc.quasardb.net](https://doc.quasardb.net/2.0.0/api/java.
 1. go get github.com/bureau14/qdb-api-go
 
 ### Test instructions:
-1. export QDB_SERVER_PATH=/path/to/qdbd
-2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/tests
-3. go test
+1. export QDB_HOST=[qdbd host] # default: 127.0.0.1
+2. export QDB_PORT=[qdbd port] # default: 2836
+3. cd $GOPATH/src/github.com/bureau14/qdb-api-go
+4. go test
 
 ### Examples instructions:
-1. export QDB_SERVER_PATH=/path/to/qdbd
-2. cd $GOPATH/src/github.com/bureau14/qdb-api-go/examples
-3. go test
+1. export QDB_HOST=[qdbd host] # default: 127.0.0.1
+2. export QDB_PORT=[qdbd port] # default: 2836
+3. cd $GOPATH/src/github.com/bureau14/qdb-api-go/examples
+4. go test
+
+### Coverage instructions:
+1. export QDB_HOST=[qdbd host] # default: 127.0.0.1
+2. export QDB_PORT=[qdbd port] # default: 2836
+3. cd $GOPATH/src/github.com/bureau14/qdb-api-go
+4. go test -coverprofile=coverage.out
+5. go tool cover -html=coverage.out # if you want to see coverage detail in a browser
+
 
 ### Troubleshooting
 

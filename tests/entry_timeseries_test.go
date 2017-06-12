@@ -3,6 +3,7 @@ package qdbtests
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	. "github.com/bureau14/qdb-api-go"
 )
@@ -16,10 +17,10 @@ func TestTimeseries(t *testing.T) {
 	alias := generateAlias(16)
 	contentBlob := []byte("data")
 	contentDouble := float64(3.4)
-	blobPoint1 := NewTsBlobPoint(TimespecType{10, 0}, contentBlob)
-	blobPoint2 := NewTsBlobPoint(TimespecType{20, 0}, contentBlob)
-	doublePoint1 := NewTsDoublePoint(TimespecType{10, 0}, contentDouble)
-	doublePoint2 := NewTsDoublePoint(TimespecType{20, 0}, contentDouble)
+	blobPoint1 := NewTsBlobPoint(time.Unix(10, 0), contentBlob)
+	blobPoint2 := NewTsBlobPoint(time.Unix(20, 0), contentBlob)
+	doublePoint1 := NewTsDoublePoint(time.Unix(10, 0), contentDouble)
+	doublePoint2 := NewTsDoublePoint(time.Unix(20, 0), contentDouble)
 	timeseries := handle.Timeseries(alias, []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble)})
 
 	err = timeseries.Create()
@@ -27,7 +28,7 @@ func TestTimeseries(t *testing.T) {
 		t.Error("Expected no error - got: ", err)
 	}
 
-	tsRange := NewTsRange(TimespecType{0, 0}, TimespecType{40, 0})
+	tsRange := TsRange{time.Unix(0, 0), time.Unix(40, 0)}
 	tsRanges := []TsRange{tsRange}
 
 	// Testing double point

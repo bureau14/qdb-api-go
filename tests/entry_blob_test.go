@@ -19,18 +19,18 @@ func TestBlobEntry(t *testing.T) {
 	blob := handle.Blob(alias)
 
 	// Test BlobPut
-	err = blob.Put(content, NeverExpires)
+	err = blob.Put(content, NeverExpires())
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}
-	err = blob.Put(content, NeverExpires)
+	err = blob.Put(content, NeverExpires())
 	if err == nil {
 		t.Error("Expected error on BlobPut with already used alias - got nil")
 	}
 
 	// Test update
 	newContent := []byte("newContent")
-	err = blob.Update(newContent, NeverExpires)
+	err = blob.Update(newContent, NeverExpires())
 	if err != nil {
 		t.Error("Expected no error - got: ", err)
 	}

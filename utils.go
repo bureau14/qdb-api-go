@@ -1,7 +1,6 @@
 package qdb
 
 /*
-	#cgo LDFLAGS: -L. -lqdb_api
 	#include <qdb/client.h>
 */
 import "C"
@@ -10,11 +9,6 @@ import (
 	"time"
 	"unsafe"
 )
-
-// Release : release previously allocated qdb resource
-func (h HandleType) Release(buffer unsafe.Pointer) {
-	C.qdb_release(h.handle, buffer)
-}
 
 func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	ptrSize := unsafe.Sizeof(C.CString(toConvert[0]))

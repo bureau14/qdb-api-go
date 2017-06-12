@@ -19,7 +19,7 @@ func TestEntry(t *testing.T) {
 	content := int64(13)
 	integer := handle.Integer(alias)
 
-	integer.Put(content, NeverExpires)
+	integer.Put(content, NeverExpires())
 
 	err = integer.AttachTag("")
 	if err == nil {
