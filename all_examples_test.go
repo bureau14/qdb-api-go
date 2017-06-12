@@ -12,7 +12,7 @@ func ExampleHandleType() {
 }
 
 func ExampleEntry_Alias() {
-	handle := MustSetupHandle(0)
+	handle := MustSetupHandle()
 	defer handle.Close()
 
 	alias := "EntryAlias"
@@ -23,7 +23,7 @@ func ExampleEntry_Alias() {
 }
 
 func ExampleBlobEntry_Put() {
-	handle := MustSetupHandle(0)
+	handle := MustSetupHandle()
 	defer handle.Close()
 
 	blob := handle.Blob("blob")

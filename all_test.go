@@ -12,6 +12,27 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+var (
+	qdbPath string
+	qdbPort = 30083
+)
+
+func TestMain(m *testing.M) {
+	qdbPath = os.Getenv("QDB_SERVER_PATH")
+	if qdbPath == "" {
+		fmt.Printf("No path found for qdb server\n")
+		os.Exit(-1)
+	}
+	fmt.Printf("Copying qdb server: %s\n", qdbPath)
+	qdbPath = createLocalQdbExe(qdbPath)
+	qdbPort = startQdbServer(qdbPath)
+
+	m.Run()
+
+	stopQdbServer(qdbPath)
+	removeLocalQdb(qdbPath)
+}
+
 func TestAll(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Test Suite")
@@ -19,23 +40,12 @@ func TestAll(t *testing.T) {
 
 var _ = Describe("Tests", func() {
 	var (
-		handle  HandleType
-		alias   string
-		err     error
-		qdbPath string
-		qdbPort int
+		handle HandleType
+		alias  string
+		err    error
 	)
 	BeforeSuite(func() {
-		qdbPath = os.Getenv("QDB_SERVER_PATH")
-		if qdbPath == "" {
-			fmt.Printf("No path found for qdb server\n")
-			os.Exit(-1)
-		}
-		fmt.Printf("Copying qdb server: %s\n", qdbPath)
-		qdbPath = createLocalQdbExe(qdbPath)
-		qdbPort = startQdbServer(qdbPath)
-
-		handle = MustSetupHandle(qdbPort)
+		handle = MustSetupHandle()
 
 		// stupid thing to boast about having 100% test coverage
 		fmt.Errorf("error: %s", ErrorType(2))
@@ -43,8 +53,6 @@ var _ = Describe("Tests", func() {
 
 	AfterSuite(func() {
 		handle.Close()
-		stopQdbServer(qdbPath)
-		removeLocalQdb(qdbPath)
 	})
 
 	BeforeEach(func() {
@@ -757,8 +765,6 @@ var _ = Describe("Tests", func() {
 	})
 })
 
-var qdbPort = 30083
-
 func createLocalQdbExe(qdbPath string) string {
 	localQdbName := string("test_qdbd")
 	runQdbServer := exec.Command("cp", qdbPath, localQdbName)
@@ -777,7 +783,7 @@ func removeLocalQdb(qdbPath string) {
 }
 
 func stopQdbServer(qdbPath string) {
-	stopQdb := exec.Command("killall", qdbPath)
+	stopQdb := exec.Command("killall", fmt.Sprintf("./%s", qdbPath))
 	stopQdb.Start()
 	stopQdb.Wait()
 }
@@ -800,11 +806,8 @@ func startQdbServer(qdbPath string) int {
 	return port
 }
 
-func MustSetupHandle(port int) HandleType {
+func MustSetupHandle() HandleType {
 	handle, err := NewHandle()
-	if qdbPort == -1 {
-		qdbPort = port
-	}
 	qdbConnection := fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
 	err = handle.Connect(qdbConnection)
 	if err != nil {
