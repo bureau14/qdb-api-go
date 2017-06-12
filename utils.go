@@ -6,7 +6,6 @@ package qdb
 import "C"
 import (
 	"math/rand"
-	"os"
 	"time"
 	"unsafe"
 )
@@ -47,12 +46,4 @@ func generateAlias(n int) string {
 	}
 
 	return string(b)
-}
-
-func getenv(key string, fallback string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
-	}
-	return value
 }
