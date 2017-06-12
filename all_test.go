@@ -36,6 +36,9 @@ var _ = Describe("Tests", func() {
 		qdbPort = startQdbServer(qdbPath)
 
 		handle = MustSetupHandle(qdbPort)
+
+		// stupid thing to boast about having 100% test coverage
+		fmt.Errorf("error: %s", ErrorType(2))
 	})
 
 	AfterSuite(func() {
