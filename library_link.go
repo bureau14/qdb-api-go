@@ -1,4 +1,4 @@
 package qdb
 
-// #cgo LDFLAGS: -L. -lqdb_api
+// #cgo LDFLAGS: -L. -L./bin -L./lib -lqdb_api
 import "C"
