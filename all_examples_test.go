@@ -12,10 +12,7 @@ func ExampleHandleType() {
 }
 
 func ExampleEntry_Alias() {
-	handle, err := setupHandle()
-	if err != nil {
-		panic(err)
-	}
+	handle := MustSetupHandle(0)
 	defer handle.Close()
 
 	alias := "EntryAlias"
@@ -26,16 +23,13 @@ func ExampleEntry_Alias() {
 }
 
 func ExampleBlobEntry_Put() {
-	handle, err := setupHandle()
-	if err != nil {
-		panic(err)
-	}
+	handle := MustSetupHandle(0)
 	defer handle.Close()
 
 	blob := handle.Blob("blob")
 	blob.Put([]byte("content"), NeverExpires())
 
-	content, err := blob.Get()
-	fmt.Printf("Content: %s\n", content)
+	content, _ := blob.Get()
+	fmt.Printf("Content: %s", content)
 	// Output: Content: content
 }

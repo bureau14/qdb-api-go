@@ -1,7 +1,10 @@
 package qdb
 
 import (
-	"strconv"
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -9,28 +12,117 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var handle = MustSetupHandle()
-
-// test every entry related files
-func TestEntry(t *testing.T) {
-	defer handle.Close()
-	// Test blobs
+func TestAll(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Test Suite")
 }
 
 var _ = Describe("Tests", func() {
 	var (
-		currentHandle HandleType
-		alias         string
-		err           error
+		handle  HandleType
+		alias   string
+		err     error
+		qdbPath string
+		qdbPort int
 	)
 	BeforeSuite(func() {
-		currentHandle = MustSetupHandle()
+		qdbPath = os.Getenv("QDB_SERVER_PATH")
+		if qdbPath == "" {
+			fmt.Printf("No path found for qdb server\n")
+			os.Exit(-1)
+		}
+		fmt.Printf("Copying qdb server: %s\n", qdbPath)
+		qdbPath = createLocalQdbExe(qdbPath)
+		qdbPort = startQdbServer(qdbPath)
+
+		handle = MustSetupHandle(qdbPort)
+	})
+
+	AfterSuite(func() {
+		handle.Close()
+		stopQdbServer(qdbPath)
+		removeLocalQdb(qdbPath)
 	})
 
 	BeforeEach(func() {
 		alias = generateAlias(16)
+	})
+
+	Context("Handle", func() {
+		var (
+			testHandle    HandleType
+			qdbConnection string
+		)
+		BeforeEach(func() {
+			qdbConnection = fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
+		})
+		It("should not connect without creating handle", func() {
+			err := testHandle.Connect(qdbConnection)
+			Expect(err).To(HaveOccurred())
+		})
+		It("should not be able to open with random protocol", func() {
+			err := testHandle.Open(2)
+			Expect(err).To(HaveOccurred())
+		})
+		It("should be able to open with TCP protocol", func() {
+			err := testHandle.Open(ProtocolTCP)
+			Expect(err).ToNot(HaveOccurred())
+			testHandle.Close()
+		})
+		Context("With Handle", func() {
+			BeforeEach(func() {
+				testHandle, err = NewHandle()
+			})
+			It("should not connect without address", func() {
+				err := testHandle.Connect("")
+				Expect(err).To(HaveOccurred())
+			})
+			It("should connect", func() {
+				err := testHandle.Connect(qdbConnection)
+				Expect(err).ToNot(HaveOccurred())
+				testHandle.Close()
+			})
+			Context("With Connection established", func() {
+				BeforeEach(func() {
+					testHandle.Connect(qdbConnection)
+				})
+				AfterEach(func() {
+					testHandle.Close()
+				})
+				It("should not return an empty version", func() {
+					apiVersion := handle.APIVersion()
+					Expect("").ToNot(Equal(apiVersion))
+				})
+				It("should not return an empty build", func() {
+					apiVersion := handle.APIBuild()
+					Expect("").ToNot(Equal(apiVersion))
+				})
+				It("should set timeout to 1s", func() {
+					err := handle.SetTimeout(1000)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should not be able set timeout to 0ms", func() {
+					err := handle.SetTimeout(0)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should be able to 'set max cardinality' with default value", func() {
+					err := handle.SetMaxCardinality(10007)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should not be able to 'set max cardinality' with value under 100", func() {
+					err := handle.SetMaxCardinality(99)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should be able to 'set compression' to fast", func() {
+					err := handle.SetCompression(CompFast)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should not be able to call 'set compression' with random value", func() {
+					err := handle.SetCompression(5)
+					Expect(err).To(HaveOccurred())
+				})
+			})
+		})
 	})
 
 	// :: Entry tests ::
@@ -39,7 +131,7 @@ var _ = Describe("Tests", func() {
 			integer IntegerEntry
 		)
 		JustBeforeEach(func() {
-			integer = currentHandle.Integer(alias)
+			integer = handle.Integer(alias)
 			integer.Put(13, NeverExpires())
 		})
 		AfterEach(func() {
@@ -158,6 +250,7 @@ var _ = Describe("Tests", func() {
 		})
 
 		// Expiry tests
+		// TODO(vianney): check expiry values (with getmetadata)
 		Context("Expiry", func() {
 			var (
 				expiry   time.Time
@@ -236,19 +329,18 @@ var _ = Describe("Tests", func() {
 		})
 
 		// Location tests
+		// May not work with more complex port or addresses
 		Context("Location", func() {
 			var (
-				port    int
 				address string
 			)
 			BeforeEach(func() {
-				port, err = strconv.Atoi(getenv("QDB_PORT", "2836"))
-				address = getenv("QDB_HOST", "127.0.0.1")
+				address = "127.0.0.1"
 			})
 			It("should locate", func() {
 				location, err := integer.GetLocation()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(int16(port)).To(Equal(location.Port))
+				Expect(int16(qdbPort)).To(Equal(location.Port))
 				Expect(address).To(Equal(location.Address))
 			})
 		})
@@ -277,7 +369,7 @@ var _ = Describe("Tests", func() {
 			badContent = []byte("badContent")
 		})
 		JustBeforeEach(func() {
-			blob = currentHandle.Blob(alias)
+			blob = handle.Blob(alias)
 		})
 		AfterEach(func() {
 			blob.Remove()
@@ -440,7 +532,7 @@ var _ = Describe("Tests", func() {
 		BeforeEach(func() {
 			content = 13
 			newContent = 87
-			integer = currentHandle.Integer(alias)
+			integer = handle.Integer(alias)
 		})
 		AfterEach(func() {
 			integer.Remove()
@@ -473,10 +565,10 @@ var _ = Describe("Tests", func() {
 			})
 			It("should add", func() {
 				toAdd := int64(5)
-				expected := toAdd + content
-				contentObtained, err := integer.Add(toAdd)
+				sum := toAdd + content
+				result, err := integer.Add(toAdd)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(expected).To(Equal(contentObtained))
+				Expect(sum).To(Equal(result))
 			})
 			It("should remove", func() {
 				err := integer.Remove()
@@ -500,7 +592,7 @@ var _ = Describe("Tests", func() {
 			columnsInfo = append(columnsInfo, NewTsColumnInfo("blob_column", TsColumnBlob), NewTsColumnInfo("double_column", TsColumnDouble))
 		})
 		JustBeforeEach(func() {
-			timeseries = currentHandle.Timeseries(alias, columnsInfo)
+			timeseries = handle.Timeseries(alias, columnsInfo)
 		})
 		AfterEach(func() {
 			timeseries.Remove()
@@ -661,3 +753,59 @@ var _ = Describe("Tests", func() {
 		})
 	})
 })
+
+var qdbPort = 30083
+
+func createLocalQdbExe(qdbPath string) string {
+	localQdbName := string("test_qdbd")
+	runQdbServer := exec.Command("cp", qdbPath, localQdbName)
+	runQdbServer.Start()
+	runQdbServer.Wait()
+	return localQdbName
+}
+
+func removeLocalQdb(qdbPath string) {
+	removeExe := exec.Command("rm", "-Rf", qdbPath)
+	removeExe.Start()
+	removeExe.Wait()
+	removeDB := exec.Command("rm", "-Rf", "db/")
+	removeDB.Start()
+	removeDB.Wait()
+}
+
+func stopQdbServer(qdbPath string) {
+	stopQdb := exec.Command("killall", qdbPath)
+	stopQdb.Start()
+	stopQdb.Wait()
+}
+
+func startQdbServer(qdbPath string) int {
+	// random := rand.Intn(1000)
+	port := qdbPort
+	exe := "./"
+	exe += qdbPath
+	fmt.Printf("Opening %s on port %d\n", qdbPath, port)
+	address := fmt.Sprintf("127.0.0.1:%d", port)
+
+	runQdbServer := exec.Command(exe, "-a", address)
+	var outbuf, errbuf bytes.Buffer
+	runQdbServer.Stdout = &outbuf
+	runQdbServer.Stderr = &errbuf
+	runQdbServer.Start()
+
+	time.Sleep(5 * time.Second)
+	return port
+}
+
+func MustSetupHandle(port int) HandleType {
+	handle, err := NewHandle()
+	if qdbPort == -1 {
+		qdbPort = port
+	}
+	qdbConnection := fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
+	err = handle.Connect(qdbConnection)
+	if err != nil {
+		panic(err)
+	}
+	return handle
+}
