@@ -81,6 +81,17 @@ var _ = Describe("Tests", func() {
 				err = integer.AttachTags(tags)
 				Expect(err).ToNot(HaveOccurred())
 			})
+			It("'get tags' should work with no tags added", func() {
+				tags, err := integer.GetTags()
+				Expect(err).ToNot(HaveOccurred())
+				Expect([]string{}).To(Equal(tags))
+			})
+			It("'get tags' should not work with removed alias", func() {
+				integer.Remove()
+				tags, err := integer.GetTags()
+				Expect(err).To(HaveOccurred())
+				Expect([]string(nil)).To(Equal(tags))
+			})
 			Context("Attach tags before", func() {
 				JustBeforeEach(func() {
 					integer.AttachTags(tags)
@@ -626,12 +637,14 @@ var _ = Describe("Tests", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(doublePoints[0]).To(Equal(doubleAggs[0].P))
 					Expect(doublePoints[3]).To(Equal(doubleAggs[1].P))
+					Expect(doublePoints[2]).ToNot(Equal(doubleAggs[1].P))
 				})
 				It("should get first and last elements in timeseries with 'blob aggregates'", func() {
 					err := timeseries.BlobAggregates(timeseries.columns[0].Name, &blobAggs)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(blobPoints[0]).To(Equal(blobAggs[0].P))
 					Expect(blobPoints[3]).To(Equal(blobAggs[1].P))
+					Expect(blobPoints[2]).ToNot(Equal(blobAggs[1].P))
 				})
 				It("should not work with empty double aggregations", func() {
 					doubleAggs = TsDoubleAggregations{}
