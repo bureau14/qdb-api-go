@@ -1,4 +1,8 @@
 .vscode*
 db/
-/qdb
 *.out
+
+/thirdparty/quasardb/bin/
+/thirdparty/quasardb/examples/
+/thirdparty/quasardb/include/
+/thirdparty/quasardb/lib/

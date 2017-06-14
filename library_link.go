@@ -1,4 +1,5 @@
 package qdb
 
-// #cgo LDFLAGS: -L. -L./bin -L./lib -lqdb_api
+// #cgo CFLAGS: -I./thirdparty/quasardb/include
+// #cgo LDFLAGS: -L./thirdparty/quasardb/bin -L./thirdparty/quasardb/lib -lqdb_api
 import "C"

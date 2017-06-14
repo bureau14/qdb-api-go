@@ -15,7 +15,7 @@ Go API for [quasardb](https://www.quasardb.net/).
 
 ### Build instructions:
 1. go get github.com/bureau14/qdb-api-go
-1. Extract the downloaded C API into $GOPATH/src/github.com/bureau14/qdb-api-go
+1. Extract the downloaded C API into $GOPATH/src/github.com/bureau14/qdb-api-go/thirdparty/qdb
 
 ### Test instructions:
 1. export QDB_SERVER_PATH=/path/to/qdbd # a path to a working qdbd executable
