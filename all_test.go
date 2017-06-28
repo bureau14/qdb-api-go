@@ -796,7 +796,7 @@ func startQdbServer(qdbPath string) int {
 	fmt.Printf("Opening %s on port %d\n", qdbPath, port)
 	address := fmt.Sprintf("127.0.0.1:%d", port)
 
-	runQdbServer := exec.Command(exe, "-a", address)
+	runQdbServer := exec.Command(exe, "--security=false", "-a", address)
 	var outbuf, errbuf bytes.Buffer
 	runQdbServer.Stdout = &outbuf
 	runQdbServer.Stderr = &errbuf
