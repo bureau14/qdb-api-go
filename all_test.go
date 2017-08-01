@@ -3,6 +3,7 @@ package qdb
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
@@ -42,12 +43,14 @@ func TestAll(t *testing.T) {
 
 var _ = Describe("Tests", func() {
 	var (
-		handle HandleType
-		alias  string
-		err    error
+		handle    HandleType
+		alias     string
+		err       error
+		isSecured bool
 	)
 	BeforeSuite(func() {
-		handle = MustSetupHandle()
+		handle = CreateExampleHandle()
+		isSecured = !(os.Getenv("QDB_SERVER_SECURITY_PATH") != "" && os.Getenv("QDB_USER_SECURITY_PATH") != "")
 
 		// stupid thing to boast about having 100% test coverage
 		fmt.Errorf("error: %s", ErrorType(2))
@@ -63,14 +66,14 @@ var _ = Describe("Tests", func() {
 
 	Context("Handle", func() {
 		var (
-			testHandle    HandleType
-			qdbConnection string
+			testHandle HandleType
+			clusterURI string
 		)
 		BeforeEach(func() {
-			qdbConnection = fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
+			clusterURI = fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
 		})
 		It("should not connect without creating handle", func() {
-			err := testHandle.Connect(qdbConnection)
+			err := testHandle.Connect(clusterURI)
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not be able to open with random protocol", func() {
@@ -81,6 +84,52 @@ var _ = Describe("Tests", func() {
 			err := testHandle.Open(ProtocolTCP)
 			Expect(err).ToNot(HaveOccurred())
 			testHandle.Close()
+		})
+		It("should setup an handle", func() {
+			if !isSecured {
+				Skip("Skipped since it only creates a handle for non secured database")
+			}
+			handle, err := SetupHandle(clusterURI)
+			Expect(err).ToNot(HaveOccurred())
+			handle.Close()
+		})
+		It("should not be able to setup an handle", func() {
+			if isSecured {
+				Skip("Skipped since it only fails if security mode is activated")
+			}
+			_, err := SetupHandle(clusterURI)
+			Expect(err).To(HaveOccurred())
+		})
+		It("must setup an handle", func() {
+			if !isSecured {
+				Skip("Skipped since it only creates a handle for non secured database")
+			}
+			handle := MustSetupHandle(clusterURI)
+			Expect(err).ToNot(HaveOccurred())
+			handle.Close()
+		})
+		It("should setup a secured handle", func() {
+			if isSecured {
+				Skip("Skipped since it only creates a handle for secured database")
+			}
+			handle, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+			Expect(err).ToNot(HaveOccurred())
+			handle.Close()
+		})
+		It("should not be able setup a secured handle", func() {
+			if !isSecured {
+				Skip("Skipped since it only fails if security mode is deactivated")
+			}
+			_, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+			Expect(err).To(HaveOccurred())
+		})
+		It("must setup a secured handle", func() {
+			if isSecured {
+				Skip("Skipped since it only creates a handle for secured database")
+			}
+			handle := MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+			Expect(err).ToNot(HaveOccurred())
+			handle.Close()
 		})
 		Context("With Handle", func() {
 			BeforeEach(func() {
@@ -96,6 +145,12 @@ var _ = Describe("Tests", func() {
 				err := testHandle.AddClusterPublicKey("asd")
 				Expect(err).To(HaveOccurred())
 			})
+			It("should add cluster public key with valid file", func() {
+				ioutil.WriteFile("test.key", []byte("PPm6ZeBCVlDTR9xtYasXd31s8rXnQpb+CNTMohOlQqBw="), 0777)
+				err := testHandle.AddClusterPublicKey("test.key")
+				Expect(err).ToNot(HaveOccurred())
+				os.Remove("test.key")
+			})
 			It("should not add credentials with invalid filename", func() {
 				err := testHandle.AddUserCredentials("asd")
 				Expect(err).To(HaveOccurred())
@@ -104,18 +159,24 @@ var _ = Describe("Tests", func() {
 				err := testHandle.AddUserCredentials("error.go")
 				Expect(err).To(HaveOccurred())
 			})
+			It("should add credentials with valid file", func() {
+				ioutil.WriteFile("test.key", []byte("{\"username\": \"vianney\",\"secret_key\": \"SeVUamemy6GWb8npfh9lum1zhdAu76W+l0PAW03G5yl4=\"}"), 0777)
+				err := testHandle.AddUserCredentials("test.key")
+				Expect(err).ToNot(HaveOccurred())
+				os.Remove("test.key")
+			})
 			It("should not connect without address", func() {
 				err := testHandle.Connect("")
 				Expect(err).To(HaveOccurred())
 			})
 			It("should connect", func() {
-				err := testHandle.Connect(qdbConnection)
+				err := testHandle.Connect(clusterURI)
 				Expect(err).ToNot(HaveOccurred())
 				testHandle.Close()
 			})
 			Context("With Connection established", func() {
 				BeforeEach(func() {
-					testHandle.Connect(qdbConnection)
+					testHandle.Connect(clusterURI)
 				})
 				AfterEach(func() {
 					testHandle.Close()
@@ -831,18 +892,13 @@ func startQdbServer(qdbPath, qdbServerSecurityAppPath, qdbUserSecurityAppPath st
 	return port
 }
 
-func MustSetupHandle() HandleType {
-	handle, err := NewHandle()
+func CreateExampleHandle() HandleType {
+	var handle HandleType
+	clusterURI := fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
 	if os.Getenv("QDB_SERVER_SECURITY_PATH") != "" && os.Getenv("QDB_USER_SECURITY_PATH") != "" {
-		err := handle.AddClusterPublicKey("cluster_public.key")
-		Expect(err).ToNot(HaveOccurred())
-		err = handle.AddUserCredentials("user_private.key")
-		Expect(err).ToNot(HaveOccurred())
-	}
-	qdbConnection := fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
-	err = handle.Connect(qdbConnection)
-	if err != nil {
-		panic(err)
+		handle = MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+	} else {
+		handle = MustSetupHandle(clusterURI)
 	}
 	return handle
 }

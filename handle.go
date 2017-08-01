@@ -83,7 +83,7 @@ func (h HandleType) AddUserCredentials(userCredentialFile string) error {
 	return makeErrorOrNil(qdbErr)
 }
 
-// AddClusterPublicKey : add the cluster public key from config file.
+// AddClusterPublicKey : add the cluster public key from a cluster config file.
 func (h HandleType) AddClusterPublicKey(clusterPublicKeyFile string) error {
 	fileConfig, err := ioutil.ReadFile(clusterPublicKeyFile)
 	if err != nil {
@@ -153,6 +153,80 @@ func NewHandle() (HandleType, error) {
 	var h HandleType
 	err := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_protocol_t(ProtocolTCP))
 	return h, makeErrorOrNil(err)
+}
+
+// SetupHandle : Setup an handle, return error if needed
+//	The handle is already opened with tcp protocol
+//	The handle is already connected with the clusterURI string
+func SetupHandle(clusterURI string) (HandleType, error) {
+	h, err := NewHandle()
+	if err != nil {
+		return h, err
+	}
+	err = h.Connect(clusterURI)
+	return h, err
+}
+
+// MustSetupHandle : Setup an handle, panic on error
+//	The handle is already opened with tcp protocol
+//	The handle is already connected with the clusterURI string
+func MustSetupHandle(clusterURI string) HandleType {
+	h, err := NewHandle()
+	if err != nil {
+		panic(err)
+	}
+	err = h.Connect(clusterURI)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
+// SetupSecuredHandle : Setup a secured handle, return error if needed
+//	The handle is already opened with tcp protocol
+//	The handle is already secured with the cluster public key and the user credential files provided
+//	(Note: the filenames are needed, not the content of the files)
+//	The handle is already connected with the clusterURI string
+func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string) (HandleType, error) {
+	h, err := NewHandle()
+	if err != nil {
+		return h, err
+	}
+	err = h.AddClusterPublicKey(clusterPublicKeyFile)
+	if err != nil {
+		return h, err
+	}
+	err = h.AddUserCredentials(userCredentialFile)
+	if err != nil {
+		return h, err
+	}
+	err = h.Connect(clusterURI)
+	return h, err
+}
+
+// MustSetupSecuredHandle : Setup a secured handle, panic on error
+//	The handle is already opened with tcp protocol
+//	The handle is already secured with the cluster public key and the user credential files provided
+//	(Note: the filenames are needed, not the content of the files)
+//	The handle is already connected with the clusterURI string
+func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string) HandleType {
+	h, err := NewHandle()
+	if err != nil {
+		panic(err)
+	}
+	err = h.AddClusterPublicKey(clusterPublicKeyFile)
+	if err != nil {
+		panic(err)
+	}
+	err = h.AddUserCredentials(userCredentialFile)
+	if err != nil {
+		panic(err)
+	}
+	err = h.Connect(clusterURI)
+	if err != nil {
+		panic(err)
+	}
+	return h
 }
 
 // Entries creators
