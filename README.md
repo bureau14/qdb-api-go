@@ -32,6 +32,10 @@ Go API for [quasardb](https://www.quasardb.net/).
 3. go test -coverprofile=coverage.out
 4. go tool cover -html=coverage.out # if you want to see coverage detail in a browser
 
+### Usage (OS X)
+1. mkdir $GOPATH/src/<PROJECT>
+2. Extract the downloaded C API into $GOPATH/src/<PROJECT>/thirdparty/quasardb
+3. Ensure Quasar C lib is in the **DYLD_LIBRARY_PATH** : `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$GOPATH/src/<PROJECT>/thirdparty/quasardb/lib`
 
 ### Troubleshooting
 
