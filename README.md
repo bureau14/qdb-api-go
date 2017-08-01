@@ -36,3 +36,65 @@ Go API for [quasardb](https://www.quasardb.net/).
 ### Troubleshooting
 
 If you encounter any problems, please create an issue in the bug tracker.
+
+### Getting started
+## Simple test
+Assuming a non secured database (see "Setup a secured connection" section for secured databases)
+```
+import qdb "github.com/bureau14/qdb-api-go"
+
+func main() {
+    handle, err := qdb.SetupHandle("qdb://127.0.0.1:2836")
+    if err != nil {
+        // do something with error
+    }
+
+    blob := handle.Blob("alias")
+
+    content := []byte("content")
+    err = blob.Put(content, qdb.NeverExpires())
+    if err != nil {
+        // do something with error
+    }
+
+    contentUpdate := []byte("updated content")
+    err = blob.Update(contentUpdate, qdb.NeverExpires())
+    if err != nil {
+        // do something with error
+    }
+
+    blob.Remove()
+}
+```
+
+The following tests samples are presuming you import as specified in the previous example.
+The error checking will be ommited for brevity.
+
+## Setup a non secure connection
+```
+    handle, err := qdb.SetupHandle("qdb://127.0.0.1:2836")
+
+    // alternatively:
+    handle := qdb.MustSetupHandle("qdb://127.0.0.1:2836")
+```
+
+## Setup a secured connection
+```
+    handle, err := qdb.SetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key")
+
+    // alternatively:
+    handle := qdb.MustSetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key")
+```
+
+## Setup a handle manually
+This could prove useful if you need to manage the flow of creation of your handle.
+```
+    handle, err := qdb.NewHandle()
+
+    // add security at this stage if needed
+    err = handle.AddClusterPublicKey("/path/to/cluster_public.key")
+    err = handle.AddUserCredentials("/path/to/user_private.key")
+
+    // connect
+    err = handle.Connect("qdb://127.0.0.1:2836)
+```
