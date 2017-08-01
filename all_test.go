@@ -19,18 +19,20 @@ var (
 
 func TestMain(m *testing.M) {
 	qdbPath = os.Getenv("QDB_SERVER_PATH")
+	qdbServerSecurityAppPath := os.Getenv("QDB_SERVER_SECURITY_PATH")
+	qdbUserSecurityAppPath := os.Getenv("QDB_USER_SECURITY_PATH")
 	if qdbPath == "" {
 		fmt.Printf("No path found for qdb server\n")
 		os.Exit(-1)
 	}
 	fmt.Printf("Copying qdb server: %s\n", qdbPath)
 	qdbPath = createLocalQdbExe(qdbPath)
-	qdbPort = startQdbServer(qdbPath)
+	qdbPort = startQdbServer(qdbPath, qdbServerSecurityAppPath, qdbUserSecurityAppPath)
 
 	m.Run()
 
 	stopQdbServer(qdbPath)
-	removeLocalQdb(qdbPath)
+	removeLocalQdb(qdbPath, qdbServerSecurityAppPath, qdbUserSecurityAppPath)
 }
 
 func TestAll(t *testing.T) {
@@ -83,6 +85,24 @@ var _ = Describe("Tests", func() {
 		Context("With Handle", func() {
 			BeforeEach(func() {
 				testHandle, err = NewHandle()
+				if os.Getenv("QDB_SERVER_SECURITY_PATH") != "" && os.Getenv("QDB_USER_SECURITY_PATH") != "" {
+					err := testHandle.AddClusterPublicKey("cluster_public.key")
+					Expect(err).ToNot(HaveOccurred())
+					err = testHandle.AddUserCredentials("user_private.key")
+					Expect(err).ToNot(HaveOccurred())
+				}
+			})
+			It("should not add cluster public key with invalid filename", func() {
+				err := testHandle.AddClusterPublicKey("asd")
+				Expect(err).To(HaveOccurred())
+			})
+			It("should not add credentials with invalid filename", func() {
+				err := testHandle.AddUserCredentials("asd")
+				Expect(err).To(HaveOccurred())
+			})
+			It("should not add credentials with invalid file", func() {
+				err := testHandle.AddUserCredentials("error.go")
+				Expect(err).To(HaveOccurred())
 			})
 			It("should not connect without address", func() {
 				err := testHandle.Connect("")
@@ -612,9 +632,9 @@ var _ = Describe("Tests", func() {
 			BeforeEach(func() {
 				columnsInfo = []TsColumnInfo{}
 			})
-			It("should not create", func() {
+			It("should create even with empty columns", func() {
 				err = timeseries.Create()
-				Expect(err).To(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 		Context("Created", func() {
@@ -767,36 +787,41 @@ var _ = Describe("Tests", func() {
 
 func createLocalQdbExe(qdbPath string) string {
 	localQdbName := string("test_qdbd")
-	runQdbServer := exec.Command("cp", qdbPath, localQdbName)
-	runQdbServer.Start()
-	runQdbServer.Wait()
+	exec.Command("cp", qdbPath, localQdbName).Output()
 	return localQdbName
 }
 
-func removeLocalQdb(qdbPath string) {
-	removeExe := exec.Command("rm", "-Rf", qdbPath)
-	removeExe.Start()
-	removeExe.Wait()
-	removeDB := exec.Command("rm", "-Rf", "db/")
-	removeDB.Start()
-	removeDB.Wait()
+func removeLocalQdb(qdbPath, qdbServerSecurityAppPath, qdbUserSecurityAppPath string) {
+	os.Remove(qdbPath)
+	os.RemoveAll("db/")
+	if qdbServerSecurityAppPath != "" && qdbUserSecurityAppPath != "" {
+		os.Remove("cluster_private.key")
+		os.Remove("cluster_public.key")
+		os.Remove("user_private.key")
+		os.Remove("users.cfg")
+	}
 }
 
 func stopQdbServer(qdbPath string) {
-	stopQdb := exec.Command("killall", fmt.Sprintf("./%s", qdbPath))
-	stopQdb.Start()
-	stopQdb.Wait()
+	exec.Command("killall", fmt.Sprint("./", qdbPath)).Output()
 }
 
-func startQdbServer(qdbPath string) int {
+func startQdbServer(qdbPath, qdbServerSecurityAppPath, qdbUserSecurityAppPath string) int {
 	// random := rand.Intn(1000)
 	port := qdbPort
 	exe := "./"
 	exe += qdbPath
 	fmt.Printf("Opening %s on port %d\n", qdbPath, port)
-	address := fmt.Sprintf("127.0.0.1:%d", port)
+	address := fmt.Sprint("127.0.0.1:", port)
 
-	runQdbServer := exec.Command(exe, "--security=false", "-a", address)
+	var runQdbServer *exec.Cmd
+	if qdbServerSecurityAppPath != "" && qdbUserSecurityAppPath != "" {
+		exec.Command(qdbServerSecurityAppPath, "-p", "cluster_public.key", "-s", "cluster_private.key").Output()
+		exec.Command(qdbUserSecurityAppPath, "-u", "test", "-p", "users.cfg", "-s", "user_private.key").Output()
+		runQdbServer = exec.Command(exe, "--cluster-private-file", "cluster_private.key", "--user-list", "users.cfg", "-a", address)
+	} else {
+		runQdbServer = exec.Command(exe, "--security=false", "-a", address)
+	}
 	var outbuf, errbuf bytes.Buffer
 	runQdbServer.Stdout = &outbuf
 	runQdbServer.Stderr = &errbuf
@@ -808,6 +833,12 @@ func startQdbServer(qdbPath string) int {
 
 func MustSetupHandle() HandleType {
 	handle, err := NewHandle()
+	if os.Getenv("QDB_SERVER_SECURITY_PATH") != "" && os.Getenv("QDB_USER_SECURITY_PATH") != "" {
+		err := handle.AddClusterPublicKey("cluster_public.key")
+		Expect(err).ToNot(HaveOccurred())
+		err = handle.AddUserCredentials("user_private.key")
+		Expect(err).ToNot(HaveOccurred())
+	}
 	qdbConnection := fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
 	err = handle.Connect(qdbConnection)
 	if err != nil {

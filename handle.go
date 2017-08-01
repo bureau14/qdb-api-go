@@ -6,7 +6,11 @@ package qdb
 	#include <qdb/node.h>
 */
 import "C"
-import "unsafe"
+import (
+	"encoding/json"
+	"io/ioutil"
+	"unsafe"
+)
 
 // HandleType : An opaque handle to internal API-allocated structures needed for maintaining connection to a cluster.
 type HandleType struct {
@@ -55,6 +59,39 @@ func (h HandleType) APIBuild() string {
 func (h HandleType) Open(protocol Protocol) error {
 	err := C.qdb_open(&h.handle, C.qdb_protocol_t(protocol))
 	return makeErrorOrNil(err)
+}
+
+type jSONCredentialConfig struct {
+	Username  string `json:"username"`
+	SecretKey string `json:"secret_key"`
+}
+
+// AddUserCredentials : add a username and key from a user config file.
+func (h HandleType) AddUserCredentials(userCredentialFile string) error {
+	fileConfig, err := ioutil.ReadFile(userCredentialFile)
+	if err != nil {
+		return err
+	}
+	var jsonConfig jSONCredentialConfig
+	err = json.Unmarshal(fileConfig, &jsonConfig)
+	if err != nil {
+		return err
+	}
+	username := C.CString(jsonConfig.Username)
+	secretKey := C.CString(jsonConfig.SecretKey)
+	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, secretKey)
+	return makeErrorOrNil(qdbErr)
+}
+
+// AddClusterPublicKey : add the cluster public key from config file.
+func (h HandleType) AddClusterPublicKey(clusterPublicKeyFile string) error {
+	fileConfig, err := ioutil.ReadFile(clusterPublicKeyFile)
+	if err != nil {
+		return err
+	}
+	clusterPublicKey := C.CString(string(fileConfig))
+	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
+	return makeErrorOrNil(qdbErr)
 }
 
 // SetTimeout : Sets the timeout of all network operations.
