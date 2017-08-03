@@ -89,7 +89,7 @@ var _ = Describe("Tests", func() {
 			if !isSecured {
 				Skip("Skipped since it only creates a handle for non secured database")
 			}
-			handle, err := SetupHandle(clusterURI)
+			handle, err := SetupHandle(clusterURI, time.Duration(120)*time.Second)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -97,14 +97,14 @@ var _ = Describe("Tests", func() {
 			if isSecured {
 				Skip("Skipped since it only fails if security mode is activated")
 			}
-			_, err := SetupHandle(clusterURI)
+			_, err := SetupHandle(clusterURI, time.Duration(120)*time.Second)
 			Expect(err).To(HaveOccurred())
 		})
 		It("must setup an handle", func() {
 			if !isSecured {
 				Skip("Skipped since it only creates a handle for non secured database")
 			}
-			handle := MustSetupHandle(clusterURI)
+			handle := MustSetupHandle(clusterURI, time.Duration(120)*time.Second)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -112,7 +112,7 @@ var _ = Describe("Tests", func() {
 			if isSecured {
 				Skip("Skipped since it only creates a handle for secured database")
 			}
-			handle, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+			handle, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -120,14 +120,14 @@ var _ = Describe("Tests", func() {
 			if !isSecured {
 				Skip("Skipped since it only fails if security mode is deactivated")
 			}
-			_, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+			_, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
 			Expect(err).To(HaveOccurred())
 		})
 		It("must setup a secured handle", func() {
 			if isSecured {
 				Skip("Skipped since it only creates a handle for secured database")
 			}
-			handle := MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+			handle := MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -190,11 +190,11 @@ var _ = Describe("Tests", func() {
 					Expect("").ToNot(Equal(apiVersion))
 				})
 				It("should set timeout to 1s", func() {
-					err := handle.SetTimeout(1000)
+					err := handle.SetTimeout(time.Duration(120) * time.Second)
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should not be able set timeout to 0ms", func() {
-					err := handle.SetTimeout(0)
+					err := handle.SetTimeout(time.Duration(0) * time.Millisecond)
 					Expect(err).To(HaveOccurred())
 				})
 				It("should be able to 'set max cardinality' with default value", func() {
@@ -896,9 +896,9 @@ func CreateExampleHandle() HandleType {
 	var handle HandleType
 	clusterURI := fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
 	if os.Getenv("QDB_SERVER_SECURITY_PATH") != "" && os.Getenv("QDB_USER_SECURITY_PATH") != "" {
-		handle = MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key")
+		handle = MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
 	} else {
-		handle = MustSetupHandle(clusterURI)
+		handle = MustSetupHandle(clusterURI, time.Duration(120)*time.Second)
 	}
 	return handle
 }

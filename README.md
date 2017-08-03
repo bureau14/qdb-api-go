@@ -42,12 +42,14 @@ If you encounter any problems, please create an issue in the bug tracker.
 Assuming a non secured database (see "Setup a secured connection" section for secured databases)
 ```
 import qdb "github.com/bureau14/qdb-api-go"
+import "time"
 
 func main() {
-    handle, err := qdb.SetupHandle("qdb://127.0.0.1:2836")
+    handle, err := qdb.SetupHandle("qdb://127.0.0.1:2836", time.Duration(120) * time.Second)
     if err != nil {
         // do something with error
     }
+    defer handle.Close()
 
     blob := handle.Blob("alias")
 
@@ -72,18 +74,18 @@ The error checking will be ommited for brevity.
 
 ## Setup a non secure connection
 ```
-    handle, err := qdb.SetupHandle("qdb://127.0.0.1:2836")
+    handle, err := qdb.SetupHandle("qdb://127.0.0.1:2836", time.Duration(120) * time.Second)
 
     // alternatively:
-    handle := qdb.MustSetupHandle("qdb://127.0.0.1:2836")
+    handle := qdb.MustSetupHandle("qdb://127.0.0.1:2836", time.Duration(120) * time.Second)
 ```
 
 ## Setup a secured connection
 ```
-    handle, err := qdb.SetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key")
+    handle, err := qdb.SetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key", time.Duration(120) * time.Second, qdb.EncryptAES)
 
     // alternatively:
-    handle := qdb.MustSetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key")
+    handle := qdb.MustSetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key", time.Duration(120) * time.Second, qdb.EncryptAES)
 ```
 
 ## Setup a handle manually
@@ -92,8 +94,10 @@ This could prove useful if you need to manage the flow of creation of your handl
     handle, err := qdb.NewHandle()
 
     // add security at this stage if needed
+    err = handle.SetEncryption(qdb.EncryptAES)
     err = handle.AddClusterPublicKey("/path/to/cluster_public.key")
     err = handle.AddUserCredentials("/path/to/user_private.key")
+    err = handle.SetTimeout(time.Duration(120) * time.Second)
 
     // connect
     err = handle.Connect("qdb://127.0.0.1:2836)

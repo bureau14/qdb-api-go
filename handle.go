@@ -9,6 +9,7 @@ import "C"
 import (
 	"encoding/json"
 	"io/ioutil"
+	"time"
 	"unsafe"
 )
 
@@ -61,6 +62,33 @@ func (h HandleType) Open(protocol Protocol) error {
 	return makeErrorOrNil(err)
 }
 
+// SetTimeout : Sets the timeout of all network operations.
+//	The lower the timeout, the higher the risk of having timeout errors.
+//	Keep in mind that the server-side timeout might be shorter.
+func (h HandleType) SetTimeout(timeout time.Duration) error {
+	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
+	return makeErrorOrNil(err)
+}
+
+// Encryption : encryption option
+type Encryption C.qdb_encryption_t
+
+// Encryption values:
+//	EncryptNone : No encryption.
+//	EncryptAES : Uses aes gcm 256 encryption.
+const (
+	EncryptNone Encryption = C.qdb_crypt_none
+	EncryptAES  Encryption = C.qdb_crypt_aes_gcm_256
+)
+
+// SetEncryption : Creates a handle.
+//	No connection will be established.
+//	Not needed if you created your handle with NewHandle.
+func (h HandleType) SetEncryption(encryption Encryption) error {
+	err := C.qdb_option_set_encryption(h.handle, C.qdb_encryption_t(encryption))
+	return makeErrorOrNil(err)
+}
+
 type jSONCredentialConfig struct {
 	Username  string `json:"username"`
 	SecretKey string `json:"secret_key"`
@@ -92,13 +120,6 @@ func (h HandleType) AddClusterPublicKey(clusterPublicKeyFile string) error {
 	clusterPublicKey := C.CString(string(fileConfig))
 	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
 	return makeErrorOrNil(qdbErr)
-}
-
-// SetTimeout : Sets the timeout of all network operations.
-//	The lower the timeout, the higher the risk of having timeout errors.
-func (h HandleType) SetTimeout(timeout int) error {
-	err := C.qdb_option_set_timeout(h.handle, C.int(timeout))
-	return makeErrorOrNil(err)
 }
 
 // SetMaxCardinality : Sets the maximum allowed cardinality of a quasardb query.
@@ -158,8 +179,16 @@ func NewHandle() (HandleType, error) {
 // SetupHandle : Setup an handle, return error if needed
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
-func SetupHandle(clusterURI string) (HandleType, error) {
+func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 	h, err := NewHandle()
+	if err != nil {
+		return h, err
+	}
+	err = h.SetTimeout(timeout)
+	if err != nil {
+		return h, err
+	}
+	err = h.SetEncryption(EncryptNone)
 	if err != nil {
 		return h, err
 	}
@@ -170,12 +199,10 @@ func SetupHandle(clusterURI string) (HandleType, error) {
 // MustSetupHandle : Setup an handle, panic on error
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
-func MustSetupHandle(clusterURI string) HandleType {
-	h, err := NewHandle()
-	if err != nil {
-		panic(err)
-	}
-	err = h.Connect(clusterURI)
+//
+//	Panic on error
+func MustSetupHandle(clusterURI string, timeout time.Duration) HandleType {
+	h, err := SetupHandle(clusterURI, timeout)
 	if err != nil {
 		panic(err)
 	}
@@ -187,7 +214,7 @@ func MustSetupHandle(clusterURI string) HandleType {
 //	The handle is already secured with the cluster public key and the user credential files provided
 //	(Note: the filenames are needed, not the content of the files)
 //	The handle is already connected with the clusterURI string
-func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string) (HandleType, error) {
+func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string, timeout time.Duration, encryption Encryption) (HandleType, error) {
 	h, err := NewHandle()
 	if err != nil {
 		return h, err
@@ -197,6 +224,14 @@ func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile str
 		return h, err
 	}
 	err = h.AddUserCredentials(userCredentialFile)
+	if err != nil {
+		return h, err
+	}
+	err = h.SetTimeout(timeout)
+	if err != nil {
+		return h, err
+	}
+	err = h.SetEncryption(encryption)
 	if err != nil {
 		return h, err
 	}
@@ -209,20 +244,8 @@ func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile str
 //	The handle is already secured with the cluster public key and the user credential files provided
 //	(Note: the filenames are needed, not the content of the files)
 //	The handle is already connected with the clusterURI string
-func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string) HandleType {
-	h, err := NewHandle()
-	if err != nil {
-		panic(err)
-	}
-	err = h.AddClusterPublicKey(clusterPublicKeyFile)
-	if err != nil {
-		panic(err)
-	}
-	err = h.AddUserCredentials(userCredentialFile)
-	if err != nil {
-		panic(err)
-	}
-	err = h.Connect(clusterURI)
+func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string, timeout time.Duration, encryption Encryption) HandleType {
+	h, err := SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile, timeout, encryption)
 	if err != nil {
 		panic(err)
 	}
