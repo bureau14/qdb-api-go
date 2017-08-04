@@ -82,10 +82,10 @@ The error checking will be ommited for brevity.
 
 ## Setup a secured connection
 ```
-    handle, err := qdb.SetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key", time.Duration(120) * time.Second, qdb.EncryptAES)
+    handle, err := qdb.SetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key", time.Duration(120) * time.Second, qdb.EncryptNone)
 
     // alternatively:
-    handle := qdb.MustSetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key", time.Duration(120) * time.Second, qdb.EncryptAES)
+    handle := qdb.MustSetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key", time.Duration(120) * time.Second, qdb.EncryptNone)
 ```
 
 ## Setup a handle manually
@@ -93,11 +93,15 @@ This could prove useful if you need to manage the flow of creation of your handl
 ```
     handle, err := qdb.NewHandle()
 
-    // add security at this stage if needed
+    // Set timeout
+    err = handle.SetTimeout(time.Duration(120) * time.Second)
+
+    // Set encryption if enabled server side
     err = handle.SetEncryption(qdb.EncryptAES)
+
+    // add security if enabled server side
     err = handle.AddClusterPublicKey("/path/to/cluster_public.key")
     err = handle.AddUserCredentials("/path/to/user_private.key")
-    err = handle.SetTimeout(time.Duration(120) * time.Second)
 
     // connect
     err = handle.Connect("qdb://127.0.0.1:2836)

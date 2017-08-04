@@ -112,7 +112,7 @@ var _ = Describe("Tests", func() {
 			if isSecured {
 				Skip("Skipped since it only creates a handle for secured database")
 			}
-			handle, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
+			handle, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -120,14 +120,14 @@ var _ = Describe("Tests", func() {
 			if !isSecured {
 				Skip("Skipped since it only fails if security mode is deactivated")
 			}
-			_, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
+			_, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
 		It("must setup a secured handle", func() {
 			if isSecured {
 				Skip("Skipped since it only creates a handle for secured database")
 			}
-			handle := MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
+			handle := MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -896,7 +896,7 @@ func CreateExampleHandle() HandleType {
 	var handle HandleType
 	clusterURI := fmt.Sprintf("qdb://127.0.0.1:%d", qdbPort)
 	if os.Getenv("QDB_SERVER_SECURITY_PATH") != "" && os.Getenv("QDB_USER_SECURITY_PATH") != "" {
-		handle = MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptAES)
+		handle = MustSetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 	} else {
 		handle = MustSetupHandle(clusterURI, time.Duration(120)*time.Second)
 	}
