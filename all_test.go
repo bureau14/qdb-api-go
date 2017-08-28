@@ -355,7 +355,7 @@ var _ = Describe("Tests", func() {
 			Context("Distant future", func() {
 				BeforeEach(func() {
 					distantTime := time.Date(2040, 0, 0, 0, 0, 0, 0, time.UTC)
-					duration = time.Until(distantTime)
+					duration = distantTime.Sub(time.Now())
 				})
 				It("should set expire at", func() {
 					err = integer.ExpiresAt(expiry)
