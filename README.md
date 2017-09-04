@@ -17,7 +17,7 @@ Go API for [quasardb](https://www.quasardb.net/).
 
 ### Build instructions:
 1. go get github.com/bureau14/qdb-api-go
-2. Extract the downloaded C API into $GOPATH/src/github.com/bureau14/qdb-api-go/thirdparty/qdb
+2. Extract the downloaded C API into $GOPATH/src/github.com/bureau14/qdb-api-go/thirdparty/quasardb
 
 ### Test instructions:
 1.  export QDB_SERVER_PATH=/path/to/qdbd # a path to a working qdbd executable
@@ -32,6 +32,10 @@ Go API for [quasardb](https://www.quasardb.net/).
 3. go test -coverprofile=coverage.out
 4. go tool cover -html=coverage.out # if you want to see coverage detail in a browser
 
+### Usage (OS X)
+1. mkdir $GOPATH/src/<PROJECT>
+2. Extract the downloaded C API into $GOPATH/src/<PROJECT>/thirdparty/quasardb
+3. Ensure quasardb C library is in the **DYLD_LIBRARY_PATH**: `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$GOPATH/src/<PROJECT>/thirdparty/quasardb/lib`
 
 ### Troubleshooting
 
