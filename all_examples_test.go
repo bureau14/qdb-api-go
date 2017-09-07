@@ -200,8 +200,20 @@ func ExampleQuery() {
 
 	obtainedAliases, _ = handle.Query().Tag("all").Type("int").Execute()
 	fmt.Println("Get only integer alias:", obtainedAliases)
+
+	obtainedAliases, _ = handle.Query().Tag("adsda").Execute()
+	fmt.Println("Get no aliases:", obtainedAliases)
+
+	_, err = handle.Query().NotTag("second").Execute()
+	fmt.Println("Error:", err)
+
+	_, err = handle.Query().Type("int").Execute()
+	fmt.Println("Error:", err)
 	// Output:
 	// Get all aliases: [alias_blob alias_integer]
 	// Get only first alias: [alias_blob]
 	// Get only integer alias: [alias_integer]
+	// Get no aliases: []
+	// Error: query should have at least one valid tag
+	// Error: query should have at least one valid tag
 }
