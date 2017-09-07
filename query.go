@@ -12,6 +12,11 @@ import (
 	"unsafe"
 )
 
+// Query : a building type to execute a query
+// Retrieves all entries’ aliases that match the specified query.
+// For the complete grammar, please refer to the documentation.
+// Queries are transactional.
+// The complexity of this function is dependent on the complexity of the query.
 type Query struct {
 	HandleType
 	tagsExcluded []string
@@ -19,16 +24,19 @@ type Query struct {
 	types        []string
 }
 
+// Tag : Adds a tag to include into the current query results
 func (q *Query) Tag(t string) *Query {
 	q.tags = append(q.tags, t)
 	return q
 }
 
+// NotTag : Adds a tag to exclude from the current query results
 func (q *Query) NotTag(t string) *Query {
 	q.tagsExcluded = append(q.tagsExcluded, t)
 	return q
 }
 
+// Type : Restrict the query results to a particular type
 func (q *Query) Type(t string) *Query {
 	q.types = append(q.types, t)
 	return q
@@ -57,6 +65,7 @@ func (q Query) buildQuery() (string, error) {
 	return query.String(), nil
 }
 
+// Execute : Execute the current query
 func (q Query) Execute() ([]string, error) {
 	query, err := q.buildQuery()
 	if err != nil {
@@ -65,6 +74,7 @@ func (q Query) Execute() ([]string, error) {
 	return q.ExecuteString(query)
 }
 
+// ExecuteString : Execute a string query immediately
 func (q Query) ExecuteString(query string) ([]string, error) {
 	var aliasCount C.size_t
 	var aliases **C.char
