@@ -166,3 +166,16 @@ func ExampleTimeseriesEntry() {
 	// Timestamp second blob value: 1970-01-01 01:00:20 +0100 CET
 	// Content second blob value: data
 }
+
+func ExampleNode() {
+	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
+
+	status, _ := handle.Node("qdb://127.0.0.1:30083").Status()
+	fmt.Println("Max sessions:", status.Network.Partitions.MaxSessions)
+	// Output:
+	// Max sessions: 20000
+}

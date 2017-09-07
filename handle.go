@@ -268,3 +268,8 @@ func (h HandleType) Integer(alias string) IntegerEntry {
 func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesEntry {
 	return TimeseriesEntry{Entry{h, alias}, columns}
 }
+
+// Node : Create a node object
+func (h HandleType) Node(uri string) *Node {
+	return &Node{h, uri}
+}
