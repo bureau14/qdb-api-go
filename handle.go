@@ -268,3 +268,8 @@ func (h HandleType) Integer(alias string) IntegerEntry {
 func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesEntry {
 	return TimeseriesEntry{Entry{h, alias}, columns}
 }
+
+// Query : Create a query object to execute
+func (h HandleType) Query() *Query {
+	return &Query{h, []string{}, []string{}, []string{}}
+}
