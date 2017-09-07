@@ -186,3 +186,149 @@ type NodeStatus struct {
 		OutBytes  int `json:"out_bytes"`
 	} `json:"overall"`
 }
+
+// Config :
+//	Returns the configuration of a node.
+//
+//	The configuration is a JSON object, as described in the documentation.
+func (n Node) Config() (NodeConfig, error) {
+	data, err := n.RawConfig()
+	if err != nil {
+		return NodeConfig{}, err
+	}
+	var output NodeConfig
+	err = ConvertConfig(data, &output)
+	return output, err
+}
+
+// RawConfig :
+//	Returns the configuration of a node.
+//
+//	The configuration is a JSON object as a byte array, as described in the documentation.
+func (n Node) RawConfig() ([]byte, error) {
+	var contentLength C.qdb_size_t
+	var content *C.char
+	err := C.qdb_node_config(n.handle, C.CString(n.uri), &content, &contentLength)
+	var output []byte
+	if err == 0 {
+		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
+		n.Release(unsafe.Pointer(content))
+	}
+	return output, makeErrorOrNil(err)
+}
+
+// NodeConfig : a json representation object containing the configuration of a node
+type NodeConfig struct {
+	Local struct {
+		Depot struct {
+			SyncEveryWrite         bool   `json:"sync_every_write"`
+			Root                   string `json:"root"`
+			HeliumURL              string `json:"helium_url"`
+			MaxBytes               int64  `json:"max_bytes"`
+			StorageWarningLevel    int    `json:"storage_warning_level"`
+			StorageWarningInterval int    `json:"storage_warning_interval"`
+			DisableWal             bool   `json:"disable_wal"`
+			DirectRead             bool   `json:"direct_read"`
+			DirectWrite            bool   `json:"direct_write"`
+			MaxTotalWalSize        int    `json:"max_total_wal_size"`
+			MetadataMemBudget      int    `json:"metadata_mem_budget"`
+			DataCache              int    `json:"data_cache"`
+			Threads                int    `json:"threads"`
+			HiThreads              int    `json:"hi_threads"`
+			MaxOpenFiles           int    `json:"max_open_files"`
+		} `json:"depot"`
+		User struct {
+			LicenseFile string `json:"license_file"`
+			LicenseKey  string `json:"license_key"`
+			Daemon      bool   `json:"daemon"`
+		} `json:"user"`
+		Limiter struct {
+			MaxResidentEntries int   `json:"max_resident_entries"`
+			MaxBytes           int64 `json:"max_bytes"`
+			MaxTrimQueueLength int   `json:"max_trim_queue_length"`
+		} `json:"limiter"`
+		Logger struct {
+			LogLevel      int    `json:"log_level"`
+			FlushInterval int    `json:"flush_interval"`
+			LogDirectory  string `json:"log_directory"`
+			LogToConsole  bool   `json:"log_to_console"`
+			LogToSyslog   bool   `json:"log_to_syslog"`
+		} `json:"logger"`
+		Network struct {
+			ServerSessions  int    `json:"server_sessions"`
+			PartitionsCount int    `json:"partitions_count"`
+			IdleTimeout     int    `json:"idle_timeout"`
+			ClientTimeout   int    `json:"client_timeout"`
+			ListenOn        string `json:"listen_on"`
+		} `json:"network"`
+		Chord struct {
+			NodeID                   string        `json:"node_id"`
+			NoStabilization          bool          `json:"no_stabilization"`
+			BootstrappingPeers       []interface{} `json:"bootstrapping_peers"`
+			MinStabilizationInterval int           `json:"min_stabilization_interval"`
+			MaxStabilizationInterval int           `json:"max_stabilization_interval"`
+		} `json:"chord"`
+	} `json:"local"`
+	Global struct {
+		Cluster struct {
+			Transient              bool `json:"transient"`
+			History                bool `json:"history"`
+			ReplicationFactor      int  `json:"replication_factor"`
+			MaxVersions            int  `json:"max_versions"`
+			MaxTransactionDuration int  `json:"max_transaction_duration"`
+		} `json:"cluster"`
+		Security struct {
+			EnableStop         bool   `json:"enable_stop"`
+			EnablePurgeAll     bool   `json:"enable_purge_all"`
+			Enabled            bool   `json:"enabled"`
+			EncryptTraffic     bool   `json:"encrypt_traffic"`
+			ClusterPrivateFile string `json:"cluster_private_file"`
+			UserList           string `json:"user_list"`
+		} `json:"security"`
+	} `json:"global"`
+}
+
+// Topology :
+//	Returns the topology of a node.
+//
+//	The topology is a JSON object containing the node address, and the addresses of its successor and predecessor.
+func (n Node) Topology() (NodeTopology, error) {
+	data, err := n.RawConfig()
+	if err != nil {
+		return NodeTopology{}, err
+	}
+	var output NodeTopology
+	err = ConvertConfig(data, &output)
+	return output, err
+}
+
+// RawConfig :
+//	Returns the topology of a node.
+//
+//	The topology is a JSON object as a byte array containing the node address, and the addresses of its successor and predecessor.
+func (n Node) RawTopology() ([]byte, error) {
+	var contentLength C.qdb_size_t
+	var content *C.char
+	err := C.qdb_node_topology(n.handle, C.CString(n.uri), &content, &contentLength)
+	var output []byte
+	if err == 0 {
+		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
+		n.Release(unsafe.Pointer(content))
+	}
+	return output, makeErrorOrNil(err)
+}
+
+type NodeTopology struct {
+	Predecessor struct {
+		Reference string `json:"reference"`
+		Endpoint  string `json:"endpoint"`
+	} `json:"predecessor"`
+	Center struct {
+		Reference string `json:"reference"`
+		Endpoint  string `json:"endpoint"`
+	} `json:"center"`
+	Successor struct {
+		Reference string `json:"reference"`
+		Endpoint  string `json:"endpoint"`
+	} `json:"successor"`
+}

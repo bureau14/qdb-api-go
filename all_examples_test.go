@@ -174,8 +174,20 @@ func ExampleNode() {
 	}
 	defer handle.Close()
 
-	status, _ := handle.Node("qdb://127.0.0.1:30083").Status()
-	fmt.Println("Max sessions:", status.Network.Partitions.MaxSessions)
+	node := handle.Node("qdb://127.0.0.1:30083")
+
+	status, _ := node.Status()
+	fmt.Println("Status - Max sessions:", status.Network.Partitions.MaxSessions)
+
+	config, _ := node.Config()
+	fmt.Println("Config - Root Depot:", config.Local.Depot.Root)
+	fmt.Println("Config - Listen On:", config.Local.Network.ListenOn)
+
+	topology, _ := node.Topology()
+	fmt.Println("Topology - Successor is same as predecessor:", topology.Successor.Endpoint == topology.Predecessor.Endpoint)
 	// Output:
-	// Max sessions: 20000
+	// Status - Max sessions: 20000
+	// Config - Root Depot: db
+	// Config - Listen On: 127.0.0.1:30083
+	// Topology - Successor is same as predecessor: true
 }
