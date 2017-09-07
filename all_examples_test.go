@@ -13,7 +13,10 @@ func ExampleHandleType() {
 }
 
 func ExampleEntry_Alias() {
-	handle := CreateExampleHandle()
+	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	if err != nil {
+		return
+	}
 	defer handle.Close()
 
 	blob1 := handle.Blob("BLOB_1")
@@ -49,7 +52,10 @@ func ExampleEntry_Alias() {
 }
 
 func ExampleBlobEntry() {
-	handle := CreateExampleHandle()
+	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	if err != nil {
+		return
+	}
 	defer handle.Close()
 
 	alias := "BlobAlias"
@@ -83,7 +89,10 @@ func ExampleBlobEntry() {
 }
 
 func ExampleIntegerEntry() {
-	handle := CreateExampleHandle()
+	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	if err != nil {
+		return
+	}
 	defer handle.Close()
 
 	alias := "IntAlias"
@@ -95,7 +104,6 @@ func ExampleIntegerEntry() {
 	obtainedContent, _ := integer.Get()
 	fmt.Println("Get content:", obtainedContent)
 
-	// Test update
 	newContent := int64(87)
 	integer.Update(newContent, NeverExpires())
 
@@ -105,7 +113,7 @@ func ExampleIntegerEntry() {
 	integer.Add(3)
 
 	obtainedContent, _ = integer.Get()
-	fmt.Println("Get added content:", 90)
+	fmt.Println("Get added content:", obtainedContent)
 
 	// Output:
 	// Get content: 3
@@ -114,7 +122,10 @@ func ExampleIntegerEntry() {
 }
 
 func ExampleTimeseriesEntry() {
-	handle := CreateExampleHandle()
+	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	if err != nil {
+		return
+	}
 	defer handle.Close()
 
 	alias := "TimeseriesAlias"

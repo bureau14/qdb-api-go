@@ -5,6 +5,8 @@ package qdb
 */
 import "C"
 import (
+	"encoding/json"
+	"io/ioutil"
 	"math/rand"
 	"time"
 	"unsafe"
@@ -46,4 +48,15 @@ func generateAlias(n int) string {
 	}
 
 	return string(b)
+}
+
+// ConvertConfig : Transform the config file into json for later use
+func ConvertConfig(fileConfig []byte, jsonValue interface{}) error {
+	return json.Unmarshal(fileConfig, &jsonValue)
+}
+
+// WriteConfig : Write a json object to a file
+func WriteConfig(path string, jsonObject interface{}) error {
+	data, _ := json.MarshalIndent(&jsonObject, "", "    ")
+	return ioutil.WriteFile(path, data, 0744)
 }
