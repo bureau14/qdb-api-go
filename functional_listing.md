@@ -100,7 +100,7 @@
 [ completion: 0/2 ]
 
 ### [ query ]
-    [ ] qdb_query
+    [v] qdb_query
 [ completion: 0/1 ]
 
 ### [ streams ]
