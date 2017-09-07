@@ -52,7 +52,7 @@ func (q Query) buildQuery() (string, error) {
 		query.WriteString(strconv.Quote(t))
 	}
 	if query.Len() == 0 {
-		return string(""), errors.New("Query should have at least one valid tag")
+		return string(""), errors.New("query should have at least one valid tag")
 	}
 	for _, t := range q.tagsExcluded {
 		query.WriteString(" and not tag=")

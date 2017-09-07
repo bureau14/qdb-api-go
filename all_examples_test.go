@@ -166,3 +166,42 @@ func ExampleTimeseriesEntry() {
 	// Timestamp second blob value: 1970-01-01 01:00:20 +0100 CET
 	// Content second blob value: data
 }
+
+func ExampleQuery() {
+	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
+
+	// Adds some information to retrieve with the queries
+	var aliases []string
+	aliases = append(aliases, generateAlias(16))
+	aliases = append(aliases, generateAlias(16))
+
+	blob := handle.Blob("alias_blob")
+	blob.Put([]byte("asd"), NeverExpires())
+	defer blob.Remove()
+	blob.AttachTag("all")
+	blob.AttachTag("first")
+
+	integer := handle.Integer("alias_integer")
+	integer.Put(32, NeverExpires())
+	defer integer.Remove()
+	integer.AttachTag("all")
+	integer.AttachTag("second")
+
+	var obtainedAliases []string
+	obtainedAliases, _ = handle.Query().Tag("all").Execute()
+	fmt.Println("Get all aliases:", obtainedAliases)
+
+	obtainedAliases, _ = handle.Query().Tag("all").NotTag("second").Execute()
+	fmt.Println("Get only first alias:", obtainedAliases)
+
+	obtainedAliases, _ = handle.Query().Tag("all").Type("int").Execute()
+	fmt.Println("Get only integer alias:", obtainedAliases)
+	// Output:
+	// Get all aliases: [alias_blob alias_integer]
+	// Get only first alias: [alias_blob]
+	// Get only integer alias: [alias_integer]
+}
