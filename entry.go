@@ -42,7 +42,7 @@ func NeverExpires() time.Time {
 
 // PreserveExpiration : return a time value corresponding to quasardb preserve expiration value
 func PreserveExpiration() time.Time {
-	return time.Unix(0, C.qdb_preserve_expiration)
+	return time.Unix(0, -1)
 }
 
 // ExpiresAt : Sets the absolute expiration time of an entry.
@@ -54,7 +54,7 @@ func PreserveExpiration() time.Time {
 //	To remove the expiration time of an entry, specify the value NeverExpires as ExpiryTime parameter.
 //	Values in the past are refused, but the cluster will have a certain tolerance to account for clock skews.
 func (e Entry) ExpiresAt(expiry time.Time) error {
-	err := C.qdb_expires_at(e.handle, C.CString(e.alias), C.qdb_time_t(expiry.UnixNano()/1000000))
+	err := C.qdb_expires_at(e.handle, C.CString(e.alias), toQdbTime(expiry))
 	return makeErrorOrNil(err)
 }
 
