@@ -86,6 +86,33 @@ func (entry TimeseriesEntry) Create() error {
 	return makeErrorOrNil(err)
 }
 
+// InsertColumns : insert columns in a existing timeseries
+func (entry *TimeseriesEntry) InsertColumns(cols ...TsColumnInfo) error {
+	colsToInsert := TsColumnInfos(cols)
+	alias := C.CString(entry.alias)
+	columnsCount := C.qdb_size_t(len(colsToInsert))
+	columnsArray := colsToInsert.toStructC()
+	var columns *C.qdb_ts_column_info_t
+	if columnsCount != 0 {
+		columns = &columnsArray[0]
+	} else {
+		columns = nil
+	}
+	err := C.qdb_ts_insert_columns(entry.handle, alias, columns, columnsCount)
+	if err == 0 {
+		length := int(columnsCount)
+		if length > 0 {
+			previousLength := len(entry.columns)
+			entry.columns = append(entry.columns, cols...)
+			tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+			for i, s := range tmpslice {
+				entry.columns[i+previousLength] = s.toStructG()
+			}
+		}
+	}
+	return makeErrorOrNil(err)
+}
+
 // TsDoublePoint : timestamped data
 type TsDoublePoint struct {
 	Timestamp time.Time

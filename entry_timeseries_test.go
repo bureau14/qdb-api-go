@@ -80,6 +80,18 @@ var _ = Describe("Tests", func() {
 				err := timeseries.Create()
 				Expect(err).ToNot(HaveOccurred())
 			})
+			Context("Insert Columns", func() {
+				It("should work to insert new columns", func() {
+					err := timeseries.InsertColumns(NewTsColumnInfo("blob_column_2", TsColumnBlob), NewTsColumnInfo("double_column_2", TsColumnDouble))
+					Expect(err).ToNot(HaveOccurred())
+					err = timeseries.InsertBlob("blob_column_2", blobPoints)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should not work to insert columns with already existing names", func() {
+					err := timeseries.InsertColumns(NewTsColumnInfo("blob_column", TsColumnBlob))
+					Expect(err).To(HaveOccurred())
+				})
+			})
 			Context("Insert", func() {
 				It("should work to insert blob points", func() {
 					err := timeseries.InsertBlob(timeseries.columns[0].Name, blobPoints)
