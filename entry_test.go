@@ -149,7 +149,6 @@ var _ = Describe("Tests", func() {
 		})
 
 		// Expiry tests
-		// TODO(vianney): check expiry values (with getmetadata)
 		Context("Expiry", func() {
 			var (
 				expiry   time.Time
