@@ -192,9 +192,11 @@ func (e Entry) GetTagged(tag string) ([]string, error) {
 		defer e.Release(unsafe.Pointer(aliases))
 		length := int(aliasCount)
 		output := make([]string, length)
-		tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
-		for i, s := range tmpslice {
-			output[i] = C.GoString(s)
+		if length > 0 {
+			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
+			for i, s := range tmpslice {
+				output[i] = C.GoString(s)
+			}
 		}
 		return output, nil
 	}

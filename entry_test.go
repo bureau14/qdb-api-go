@@ -145,6 +145,12 @@ var _ = Describe("Tests", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(0).To(Equal(len(aliasesObtained)))
 				})
+				It("'get tagged' should return empty output when provided wrong tag", func() {
+					aliasesObtained, err := integer.GetTagged("asd")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(0).To(Equal(len(aliasesObtained)))
+					Expect([]string{}).To(Equal(aliasesObtained))
+				})
 			})
 		})
 
