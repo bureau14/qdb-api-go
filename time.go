@@ -1,10 +1,14 @@
+// +build !go1.9
+
 package qdb
 
 /*
 	#include <qdb/client.h>
 */
 import "C"
-import "time"
+import (
+	"time"
+)
 
 // SizeType typedef qdb_size_t
 type SizeType C.qdb_size_t
