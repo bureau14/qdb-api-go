@@ -20,7 +20,7 @@ func toQdbTimespec(time time.Time) C.qdb_timespec_t {
 
 func toQdbTime(t time.Time) C.qdb_time_t {
 	if t.Equal(PreserveExpiration()) {
-		val := C.longlong(C.ulonglong(C.qdb_preserve_expiration))
+		val := C.ulonglong(C.qdb_preserve_expiration)
 		ptr := unsafe.Pointer(&val)
 		return *(*C.qdb_time_t)(ptr)
 	}
