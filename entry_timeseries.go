@@ -11,6 +11,9 @@ import (
 	"unsafe"
 )
 
+// SizeType typedef qdb_size_t
+type SizeType C.qdb_size_t
+
 // TsColumnInfo : column information in timeseries
 type TsColumnInfo struct {
 	Name string
