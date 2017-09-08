@@ -273,3 +273,8 @@ func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesE
 func (h HandleType) Node(uri string) *Node {
 	return &Node{h, uri}
 }
+
+// Query : Create a query object to execute
+func (h HandleType) Query() *Query {
+	return &Query{h, []string{}, []string{}, []string{}}
+}

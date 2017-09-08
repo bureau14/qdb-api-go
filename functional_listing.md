@@ -23,9 +23,6 @@
     [ ] qdb_tag_iterator_copy
 [ completion: 18/22 ]
 
-### [ queries ]
-    [ ] qdb_query
-
 ### [ blobs ]
     [ ] qdb_blob_get_noalloc
     [v] qdb_blob_get
@@ -100,8 +97,8 @@
 [ completion: 0/2 ]
 
 ### [ query ]
-    [ ] qdb_query
-[ completion: 0/1 ]
+    [v] qdb_query
+[ completion: 1/1 ]
 
 ### [ streams ]
     [ ] qdb_stream_open

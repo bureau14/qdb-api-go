@@ -53,14 +53,14 @@ func (entry BlobEntry) Put(content []byte, expiry time.Time) error {
 	} else {
 		contentPtr = unsafe.Pointer(nil)
 	}
-	err := C.qdb_blob_put(entry.handle, alias, contentPtr, contentSize, C.qdb_time_t(expiry.UnixNano()))
+	err := C.qdb_blob_put(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
 	return makeErrorOrNil(err)
 }
 
 // Update : Creates or updates an entry and sets its content to the provided blob.
 //	If the entry already exists, the function will modify the entry.
 //	You can specify an expiry or use NeverExpires if you don’t want the entry to expire.
-func (entry *BlobEntry) Update(newContent []byte, newExpiry time.Time) error {
+func (entry *BlobEntry) Update(newContent []byte, expiry time.Time) error {
 	alias := C.CString(entry.alias)
 	contentSize := C.qdb_size_t(len(newContent))
 	var contentPtr unsafe.Pointer
@@ -69,13 +69,13 @@ func (entry *BlobEntry) Update(newContent []byte, newExpiry time.Time) error {
 	} else {
 		contentPtr = unsafe.Pointer(nil)
 	}
-	err := C.qdb_blob_update(entry.handle, alias, contentPtr, contentSize, C.qdb_time_t(newExpiry.UnixNano()))
+	err := C.qdb_blob_update(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
 	return makeErrorOrNil(err)
 }
 
 // GetAndUpdate : Atomically gets and updates (in this order) the entry on the quasardb server.
 //	The entry must already exist.
-func (entry *BlobEntry) GetAndUpdate(newContent []byte, newExpiry time.Time) ([]byte, error) {
+func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byte, error) {
 	contentSize := C.qdb_size_t(len(newContent))
 	var contentPtr unsafe.Pointer
 	if contentSize != 0 {
@@ -86,7 +86,7 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, newExpiry time.Time) ([]
 	var contentLength C.qdb_size_t
 	var content unsafe.Pointer
 	defer entry.Release(content)
-	err := C.qdb_blob_get_and_update(entry.handle, C.CString(entry.alias), contentPtr, contentSize, C.qdb_time_t(newExpiry.UnixNano()), &content, &contentLength)
+	err := C.qdb_blob_get_and_update(entry.handle, C.CString(entry.alias), contentPtr, contentSize, toQdbTime(expiry), &content, &contentLength)
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 	return output, makeErrorOrNil(err)
 }
@@ -95,7 +95,7 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, newExpiry time.Time) ([]
 //	The function returns the original value of the entry in case of a mismatch. When it matches, no content is returned.
 //	The entry must already exist.
 //	Update will occur if and only if the content of the entry matches bit for bit the content of the comparand buffer.
-func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, expiryTime time.Time) ([]byte, error) {
+func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, expiry time.Time) ([]byte, error) {
 	alias := C.CString(entry.alias)
 	valueLength := C.qdb_size_t(len(newValue))
 	var value unsafe.Pointer
@@ -114,7 +114,7 @@ func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, exp
 	var originalLength C.qdb_size_t
 	var originalValue unsafe.Pointer
 	defer entry.Release(unsafe.Pointer(originalValue))
-	err := C.qdb_blob_compare_and_swap(entry.handle, alias, value, valueLength, comparand, comparandLength, C.qdb_time_t(expiryTime.UnixNano()), &originalValue, &originalLength)
+	err := C.qdb_blob_compare_and_swap(entry.handle, alias, value, valueLength, comparand, comparandLength, toQdbTime(expiry), &originalValue, &originalLength)
 	output := C.GoBytes(originalValue, C.int(originalLength))
 	return output, makeErrorOrNil(err)
 }
