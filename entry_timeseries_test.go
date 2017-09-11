@@ -9,19 +9,11 @@ import (
 
 var _ = Describe("Tests", func() {
 	var (
-		handle HandleType
-		alias  string
-		err    error
+		alias string
 	)
 
 	BeforeEach(func() {
-		handle, err = SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
-		Expect(err).ToNot(HaveOccurred())
 		alias = generateAlias(16)
-	})
-
-	AfterEach(func() {
-		handle.Close()
 	})
 
 	// :: Timeseries tests ::
