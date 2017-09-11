@@ -50,8 +50,8 @@ func generateAlias(n int) string {
 	return string(b)
 }
 
-// WriteJsonToFile : Write a json object to a file
-func WriteJsonToFile(path string, jsonObject interface{}) error {
+// writeJsonToFile : Write a json object to a file
+func writeJsonToFile(path string, jsonObject interface{}) error {
 	data, err := json.MarshalIndent(&jsonObject, "", "    ")
 	if err != nil {
 		return err

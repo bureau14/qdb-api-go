@@ -188,7 +188,7 @@ func (d db) prepareConfig(s Security) error {
 		nodeConfig.Global.Security.UserList = usersConfigFile
 	}
 	nodeConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
-	err = WriteJsonToFile(d.config, nodeConfig)
+	err = writeJsonToFile(d.config, nodeConfig)
 	if err != nil {
 		return err
 	}
