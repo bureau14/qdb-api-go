@@ -12,16 +12,10 @@ import (
 var _ = Describe("Tests", func() {
 	Context("Handle", func() {
 		var (
-			testHandle   HandleType
-			unsecuredURI string
-			securedURI   string
+			testHandle HandleType
 		)
-		BeforeEach(func() {
-			unsecuredURI = "qdb://127.0.0.1:30083"
-			securedURI = "qdb://127.0.0.1:30084"
-		})
 		It("should not connect without creating handle", func() {
-			err := testHandle.Connect(unsecuredURI)
+			err := testHandle.Connect(clusterURI)
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not be able to open with random protocol", func() {
@@ -34,7 +28,7 @@ var _ = Describe("Tests", func() {
 			testHandle.Close()
 		})
 		It("should setup an handle", func() {
-			handle, err := SetupHandle(unsecuredURI, time.Duration(120)*time.Second)
+			handle, err := SetupHandle(clusterURI, time.Duration(120)*time.Second)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -43,7 +37,7 @@ var _ = Describe("Tests", func() {
 			Expect(err).To(HaveOccurred())
 		})
 		It("must setup an handle", func() {
-			handle := MustSetupHandle(unsecuredURI, time.Duration(120)*time.Second)
+			handle := MustSetupHandle(clusterURI, time.Duration(120)*time.Second)
 			handle.Close()
 		})
 		It("should setup a secured handle", func() {
@@ -52,7 +46,7 @@ var _ = Describe("Tests", func() {
 			handle.Close()
 		})
 		It("should not be able setup a secured handle", func() {
-			_, err := SetupSecuredHandle(unsecuredURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
+			_, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
 		It("must setup a secured handle", func() {
@@ -97,13 +91,13 @@ var _ = Describe("Tests", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("should connect", func() {
-				err := testHandle.Connect(unsecuredURI)
+				err := testHandle.Connect(clusterURI)
 				Expect(err).ToNot(HaveOccurred())
 				testHandle.Close()
 			})
 			Context("With Connection established", func() {
 				BeforeEach(func() {
-					testHandle.Connect(unsecuredURI)
+					testHandle.Connect(clusterURI)
 				})
 				AfterEach(func() {
 					testHandle.Close()

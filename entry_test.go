@@ -9,19 +9,12 @@ import (
 
 var _ = Describe("Tests", func() {
 	var (
-		handle HandleType
-		alias  string
-		err    error
+		alias string
+		err   error
 	)
 
 	BeforeEach(func() {
-		handle, err = SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
-		Expect(err).ToNot(HaveOccurred())
 		alias = generateAlias(16)
-	})
-
-	AfterEach(func() {
-		handle.Close()
 	})
 
 	// :: Entry tests ::
@@ -59,9 +52,7 @@ var _ = Describe("Tests", func() {
 				tags []string
 			)
 			BeforeEach(func() {
-				for i := 0; i < 5; i++ {
-					tags = append(tags, generateAlias(16))
-				}
+				tags = []string{"asd", "dsa", "ede", "esd", "fds"}
 				tag = tags[0]
 			})
 			It("'attach tag' should work", func() {
@@ -85,10 +76,12 @@ var _ = Describe("Tests", func() {
 			})
 			Context("Attach tags before", func() {
 				JustBeforeEach(func() {
-					integer.AttachTags(tags)
+					err = integer.AttachTags(tags)
+					Expect(err).ToNot(HaveOccurred())
 				})
 				AfterEach(func() {
-					integer.DetachTags(tags)
+					err = integer.DetachTags(tags)
+					Expect(err).ToNot(HaveOccurred())
 				})
 				It("'detach tag' should work", func() {
 					err = integer.DetachTag(tag)

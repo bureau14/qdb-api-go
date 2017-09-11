@@ -6,23 +6,23 @@ import (
 )
 
 func ExampleHandleType() {
-	var handle HandleType
-	handle.Open(ProtocolTCP)
-	fmt.Printf("API build: %s\n", handle.APIVersion())
+	var h HandleType
+	h.Open(ProtocolTCP)
+	fmt.Printf("API build: %s\n", h.APIVersion())
 	// Output: API build: 2.1.0master
 }
 
 func ExampleEntry_Alias() {
-	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	h, err := SetupHandle(clusterURI, 120*time.Second)
 	if err != nil {
 		return
 	}
-	defer handle.Close()
+	defer h.Close()
 
-	blob1 := handle.Blob("BLOB_1")
+	blob1 := h.Blob("BLOB_1")
 	blob1.Put([]byte("blob 1 content"), NeverExpires())
 	defer blob1.Remove()
-	blob2 := handle.Blob("BLOB_2")
+	blob2 := h.Blob("BLOB_2")
 	blob2.Put([]byte("blob 2 content"), NeverExpires())
 	defer blob2.Remove()
 
@@ -52,14 +52,14 @@ func ExampleEntry_Alias() {
 }
 
 func ExampleBlobEntry() {
-	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	h, err := SetupHandle(clusterURI, 120*time.Second)
 	if err != nil {
 		return
 	}
-	defer handle.Close()
+	defer h.Close()
 
 	alias := "BlobAlias"
-	blob := handle.Blob(alias)
+	blob := h.Blob(alias)
 	defer blob.Remove()
 
 	content := []byte("content")
@@ -89,14 +89,14 @@ func ExampleBlobEntry() {
 }
 
 func ExampleIntegerEntry() {
-	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	h, err := SetupHandle(clusterURI, 120*time.Second)
 	if err != nil {
 		return
 	}
-	defer handle.Close()
+	defer h.Close()
 
 	alias := "IntAlias"
-	integer := handle.Integer(alias)
+	integer := h.Integer(alias)
 
 	integer.Put(int64(3), NeverExpires())
 	defer integer.Remove()
@@ -122,15 +122,15 @@ func ExampleIntegerEntry() {
 }
 
 func ExampleTimeseriesEntry() {
-	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	h, err := SetupHandle(clusterURI, 120*time.Second)
 	if err != nil {
 		return
 	}
-	defer handle.Close()
+	defer h.Close()
 
 	alias := "TimeseriesAlias"
 	columns := []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble)}
-	timeseries := handle.Timeseries(alias, columns)
+	timeseries := h.Timeseries(alias, columns)
 	defer timeseries.Remove()
 
 	timeseries.Create()
@@ -168,46 +168,46 @@ func ExampleTimeseriesEntry() {
 }
 
 func ExampleQuery() {
-	handle, err := SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
+	h, err := SetupHandle(clusterURI, 120*time.Second)
 	if err != nil {
 		return
 	}
-	defer handle.Close()
+	defer h.Close()
 
 	// Adds some information to retrieve with the queries
 	var aliases []string
 	aliases = append(aliases, generateAlias(16))
 	aliases = append(aliases, generateAlias(16))
 
-	blob := handle.Blob("alias_blob")
+	blob := h.Blob("alias_blob")
 	blob.Put([]byte("asd"), NeverExpires())
 	defer blob.Remove()
 	blob.AttachTag("all")
 	blob.AttachTag("first")
 
-	integer := handle.Integer("alias_integer")
+	integer := h.Integer("alias_integer")
 	integer.Put(32, NeverExpires())
 	defer integer.Remove()
 	integer.AttachTag("all")
 	integer.AttachTag("second")
 
 	var obtainedAliases []string
-	obtainedAliases, _ = handle.Query().Tag("all").Execute()
+	obtainedAliases, _ = h.Query().Tag("all").Execute()
 	fmt.Println("Get all aliases:", obtainedAliases)
 
-	obtainedAliases, _ = handle.Query().Tag("all").NotTag("second").Execute()
+	obtainedAliases, _ = h.Query().Tag("all").NotTag("second").Execute()
 	fmt.Println("Get only first alias:", obtainedAliases)
 
-	obtainedAliases, _ = handle.Query().Tag("all").Type("int").Execute()
+	obtainedAliases, _ = h.Query().Tag("all").Type("int").Execute()
 	fmt.Println("Get only integer alias:", obtainedAliases)
 
-	obtainedAliases, _ = handle.Query().Tag("adsda").Execute()
+	obtainedAliases, _ = h.Query().Tag("adsda").Execute()
 	fmt.Println("Get no aliases:", obtainedAliases)
 
-	_, err = handle.Query().NotTag("second").Execute()
+	_, err = h.Query().NotTag("second").Execute()
 	fmt.Println("Error:", err)
 
-	_, err = handle.Query().Type("int").Execute()
+	_, err = h.Query().Type("int").Execute()
 	fmt.Println("Error:", err)
 	// Output:
 	// Get all aliases: [alias_blob alias_integer]

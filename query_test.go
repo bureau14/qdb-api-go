@@ -1,43 +1,47 @@
 package qdb
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Tests", func() {
 	var (
-		handle  HandleType
 		aliases []string
 		blob1   BlobEntry
 		blob2   BlobEntry
 		integer IntegerEntry
-		err     error
 	)
 
 	BeforeEach(func() {
-		handle, err = SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
-		Expect(err).ToNot(HaveOccurred())
-		aliases = append(aliases, generateAlias(16))
-		aliases = append(aliases, generateAlias(16))
-		aliases = append(aliases, generateAlias(16))
+		var err error
+		aliases = append(aliases, "blob first")
+		aliases = append(aliases, "blob second")
+		aliases = append(aliases, "integer first")
 
 		blob1 = handle.Blob(aliases[0])
-		blob1.Put([]byte("asd"), NeverExpires())
-		blob1.AttachTag("all")
-		blob1.AttachTag("first")
+		err = blob1.Put([]byte("asd"), NeverExpires())
+		Expect(err).ToNot(HaveOccurred())
+		err = blob1.AttachTag("all")
+		Expect(err).ToNot(HaveOccurred())
+		err = blob1.AttachTag("first")
+		Expect(err).ToNot(HaveOccurred())
 
 		blob2 = handle.Blob(aliases[1])
-		blob2.Put([]byte("asd"), NeverExpires())
-		blob2.AttachTag("all")
-		blob2.AttachTag("second")
+		err = blob2.Put([]byte("asd"), NeverExpires())
+		Expect(err).ToNot(HaveOccurred())
+		err = blob2.AttachTag("all")
+		Expect(err).ToNot(HaveOccurred())
+		err = blob2.AttachTag("second")
+		Expect(err).ToNot(HaveOccurred())
 
 		integer = handle.Integer(aliases[2])
-		integer.Put(32, NeverExpires())
-		integer.AttachTag("all")
-		integer.AttachTag("third")
+		err = integer.Put(32, NeverExpires())
+		Expect(err).ToNot(HaveOccurred())
+		err = integer.AttachTag("all")
+		Expect(err).ToNot(HaveOccurred())
+		err = integer.AttachTag("third")
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -45,7 +49,6 @@ var _ = Describe("Tests", func() {
 		blob2.Remove()
 		integer.Remove()
 		aliases = []string{}
-		handle.Close()
 	})
 	// :: Entry tests ::
 	Context("Query", func() {
