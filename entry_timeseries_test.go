@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -44,29 +45,20 @@ var _ = Describe("Tests", func() {
 		})
 		Context("Created", func() {
 			var (
-				doubleContents []float64
-				blobContents   [][]byte
-				doublePoints   []TsDoublePoint
-				blobPoints     []TsBlobPoint
+				count        int = 8
+				timestamps   []time.Time
+				doublePoints []TsDoublePoint
+				blobPoints   []TsBlobPoint
 			)
 			BeforeEach(func() {
-				doubleContents = []float64{}
-				doubleContents = append(doubleContents, 3.2, 7.8)
-				doublePoints = []TsDoublePoint{}
-				for index, doubleContent := range doubleContents {
-					doublePoints = append(doublePoints, NewTsDoublePoint(time.Unix(int64((index+1)*10), 0), doubleContent))
+				timestamps = make([]time.Time, count)
+				blobPoints = make([]TsBlobPoint, count)
+				doublePoints = make([]TsDoublePoint, count)
+				for idx := 0; idx < count; idx++ {
+					timestamps[idx] = time.Unix(int64((idx+1)*10), 0)
+					blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
+					doublePoints[idx] = NewTsDoublePoint(timestamps[idx], float64(idx))
 				}
-				doublePoints = append(doublePoints, NewTsDoublePoint(time.Unix(int64(60), 0), 4.3))
-				doublePoints = append(doublePoints, NewTsDoublePoint(time.Unix(int64(80), 0), 4.7))
-
-				blobContents = [][]byte{}
-				blobContents = append(blobContents, []byte("content 1"), []byte("content 2"))
-				blobPoints = []TsBlobPoint{}
-				for index, blobContent := range blobContents {
-					blobPoints = append(blobPoints, NewTsBlobPoint(time.Unix(int64((index+1)*10), 0), blobContent))
-				}
-				blobPoints = append(blobPoints, NewTsBlobPoint(time.Unix(int64(60), 0), []byte("content 3")))
-				blobPoints = append(blobPoints, NewTsBlobPoint(time.Unix(int64(80), 0), []byte("content 4")))
 			})
 			JustBeforeEach(func() {
 				err := timeseries.Create()
@@ -99,12 +91,12 @@ var _ = Describe("Tests", func() {
 			// TODO(vianney): better tests on ranges (at least low, middle high timestamps, count number of results and such)
 			Context("Ranges", func() {
 				var (
-					ranges TsRanges
+					ranges []TsRange
 				)
 				JustBeforeEach(func() {
 					timeseries.InsertDouble(timeseries.columns[1].Name(), doublePoints...)
 					timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
-					r1 := TsRange{time.Unix(0, 0), time.Unix(90, 0)}
+					r1 := NewRange(time.Unix(0, 0), time.Unix(90, 0))
 					ranges = []TsRange{r1}
 				})
 				It("should get double ranges", func() {
@@ -164,14 +156,14 @@ var _ = Describe("Tests", func() {
 					err := timeseries.DoubleAggregateBatch(timeseries.columns[1].Name(), &doubleAggs)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(doublePoints[0]).To(Equal(doubleAggs[0].Result()))
-					Expect(doublePoints[3]).To(Equal(doubleAggs[1].Result()))
+					Expect(doublePoints[count-1]).To(Equal(doubleAggs[1].Result()))
 					Expect(doublePoints[2]).ToNot(Equal(doubleAggs[1].Result()))
 				})
 				It("should get first and last elements in timeseries with 'blob aggregates'", func() {
 					err := timeseries.BlobAggregateBatch(timeseries.columns[0].Name(), &blobAggs)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(blobPoints[0]).To(Equal(blobAggs[0].Result()))
-					Expect(blobPoints[3]).To(Equal(blobAggs[1].Result()))
+					Expect(blobPoints[count-1]).To(Equal(blobAggs[1].Result()))
 					Expect(blobPoints[2]).ToNot(Equal(blobAggs[1].Result()))
 				})
 				It("should not work with empty double aggregations", func() {
