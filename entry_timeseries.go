@@ -7,7 +7,6 @@ package qdb
 */
 import "C"
 import (
-	"time"
 	"unsafe"
 )
 
@@ -116,70 +115,48 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges ...TsRange) ([]
 	return nil, ErrorType(err)
 }
 
-// DoubleAggregate : Aggregate a sub-part of a timeseries.
+// DoubleAggregate : Aggregate a sub-part of a timeseries from the specified aggregations.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) DoubleAggregate(column string, t TsAggregationType, r TsRange) (TsDoublePoint, error) {
+func (entry TimeseriesEntry) DoubleAggregate(column string, aggs ...*TsDoubleAggregation) ([]TsDoubleAggregation, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	var qdbAggregation C.qdb_ts_double_aggregation_t
-	qdbAggregation._type = C.qdb_ts_aggregation_type_t(t)
-	qdbAggregation._range = r.toStructC()
-	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, &qdbAggregation, 1)
-	cResult := qdbAggregation.result
-	result := TsDoublePoint{cResult.timestamp.toStructG(), float64(cResult.value)}
-	return result, makeErrorOrNil(err)
-}
-
-// DoubleAggregateBatch : Aggregate a sub-part of a timeseries.
-//	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) DoubleAggregateBatch(column string, aggs *[]TsDoubleAggregation) error {
-	alias := C.CString(entry.alias)
-	columnName := C.CString(column)
-	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
-	qdbAggregations := doubleAggregationArrayToC((*aggs)...)
+	qdbAggregationsCount := C.qdb_size_t(len(aggs))
+	qdbAggregations := doubleAggregationArrayToC(aggs...)
+	aggregations := append([]*TsDoubleAggregation{}, aggs...)
+	aggsCopy := make([]TsDoubleAggregation, len(aggs))
 	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
 	if err == 0 {
 		length := int(qdbAggregationsCount)
 		if length > 0 {
 			tmpslice := (*[1 << 30]C.qdb_ts_double_aggregation_t)(unsafe.Pointer(qdbAggregations))[:length:length]
 			for i, s := range tmpslice {
-				(*aggs)[i] = s.toStructG()
+				*aggregations[i] = s.toStructG()
+				aggsCopy[i] = s.toStructG()
 			}
 		}
 	}
-	return makeErrorOrNil(err)
+	return aggsCopy, makeErrorOrNil(err)
 }
 
-// BlobAggregate : Aggregate a sub-part of a timeseries.
-func (entry TimeseriesEntry) BlobAggregate(column string, t TsAggregationType, r TsRange) (TsBlobPoint, error) {
-	alias := C.CString(entry.alias)
-	columnName := C.CString(column)
-	var qdbAggregation C.qdb_ts_blob_aggregation_t
-	qdbAggregation._type = C.qdb_ts_aggregation_type_t(t)
-	qdbAggregation._range = r.toStructC()
-	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, &qdbAggregation, 1)
-	blob := qdbAggregation.result
-	timestamp := blob.timestamp
-	result := TsBlobPoint{time.Unix(int64(timestamp.tv_sec), int64(timestamp.tv_nsec)), C.GoBytes(blob.content, C.int(blob.content_length))}
-	return result, makeErrorOrNil(err)
-}
-
-// BlobAggregateBatch : Aggregate a sub-part of the time series.
+// BlobAggregate : Aggregate a sub-part of the time series.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) BlobAggregateBatch(column string, aggs *[]TsBlobAggregation) error {
+func (entry TimeseriesEntry) BlobAggregate(column string, aggs ...*TsBlobAggregation) ([]TsBlobAggregation, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
-	qdbAggregations := blobAggregationArrayToC((*aggs)...)
+	qdbAggregationsCount := C.qdb_size_t(len(aggs))
+	qdbAggregations := blobAggregationArrayToC(aggs...)
+	aggregations := append([]*TsBlobAggregation{}, aggs...)
+	aggsCopy := make([]TsBlobAggregation, len(aggs))
 	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
 	if err == 0 {
 		length := int(qdbAggregationsCount)
 		if length > 0 {
 			tmpslice := (*[1 << 30]C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(qdbAggregations))[:length:length]
 			for i, s := range tmpslice {
-				(*aggs)[i] = s.toStructG()
+				*aggregations[i] = s.toStructG()
+				aggsCopy[i] = s.toStructG()
 			}
 		}
 	}
-	return makeErrorOrNil(err)
+	return aggsCopy, makeErrorOrNil(err)
 }

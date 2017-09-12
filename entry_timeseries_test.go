@@ -68,6 +68,7 @@ var _ = Describe("Tests", func() {
 			JustBeforeEach(func() {
 				err := timeseries.Create()
 				Expect(err).ToNot(HaveOccurred())
+				Expect(columnsInfo[0].Type()).To(Equal(timeseries.ColumnInfos()[0].Type()))
 				Expect(columnsInfo).To(ConsistOf(timeseries.ColumnInfos()))
 			})
 			Context("Insert Data Points", func() {
@@ -155,11 +156,11 @@ var _ = Describe("Tests", func() {
 					r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
 				})
 				Context("Double", func() {
-					var doubleAggs []TsDoubleAggregation
+					var doubleAggs []*TsDoubleAggregation
 					JustBeforeEach(func() {
 						doubleAggFirst := NewDoubleAggregation(AggFirst, r)
 						doubleAggLast := NewDoubleAggregation(AggLast, r)
-						doubleAggs = []TsDoubleAggregation{doubleAggFirst, doubleAggLast}
+						doubleAggs = []*TsDoubleAggregation{doubleAggFirst, doubleAggLast}
 					})
 					It("should create a double aggregation", func() {
 						agg := NewDoubleAggregation(AggMin, r)
@@ -167,20 +168,19 @@ var _ = Describe("Tests", func() {
 						Expect(r).To(Equal(agg.Range()))
 					})
 					It("should not work with empty double aggregations", func() {
-						doubleAggs = []TsDoubleAggregation{}
-						err := timeseries.DoubleAggregateBatch(timeseries.columns[1].Name(), &doubleAggs)
+						_, err := timeseries.DoubleAggregate(timeseries.columns[1].Name())
 						Expect(err).To(HaveOccurred())
 					})
 					It("should get first double with 'double aggregation'", func() {
 						first := doublePoints[start]
-						result, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), AggFirst, r)
+						aggs, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), NewDoubleAggregation(AggFirst, r))
 						Expect(err).ToNot(HaveOccurred())
-						Expect(first).To(Equal(result))
+						Expect(first).To(Equal(aggs[0].Result()))
 					})
 					It("should get first and last elements in timeseries with 'double aggregates'", func() {
 						first := doublePoints[start]
 						last := doublePoints[end]
-						err := timeseries.DoubleAggregateBatch(timeseries.columns[1].Name(), &doubleAggs)
+						_, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), doubleAggs...)
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(1).To(BeNumerically("==", doubleAggs[0].Count()))
@@ -195,11 +195,11 @@ var _ = Describe("Tests", func() {
 					})
 				})
 				Context("Blob", func() {
-					var blobAggs []TsBlobAggregation
+					var blobAggs []*TsBlobAggregation
 					JustBeforeEach(func() {
 						blobAggFirst := NewBlobAggregation(AggFirst, r)
 						blobAggLast := NewBlobAggregation(AggLast, r)
-						blobAggs = []TsBlobAggregation{blobAggFirst, blobAggLast}
+						blobAggs = []*TsBlobAggregation{blobAggFirst, blobAggLast}
 					})
 					It("should create a blob aggregation", func() {
 						agg := NewBlobAggregation(AggMin, r)
@@ -207,20 +207,19 @@ var _ = Describe("Tests", func() {
 						Expect(r).To(Equal(agg.Range()))
 					})
 					It("should not work with empty blob aggregations", func() {
-						blobAggs = []TsBlobAggregation{}
-						err := timeseries.BlobAggregateBatch(timeseries.columns[0].Name(), &blobAggs)
+						_, err := timeseries.BlobAggregate(timeseries.columns[0].Name())
 						Expect(err).To(HaveOccurred())
 					})
 					It("should get first blob with 'blob aggregation'", func() {
 						first := blobPoints[start]
-						result, err := timeseries.BlobAggregate(timeseries.columns[0].Name(), AggFirst, r)
+						aggs, err := timeseries.BlobAggregate(timeseries.columns[0].Name(), NewBlobAggregation(AggFirst, r))
 						Expect(err).ToNot(HaveOccurred())
-						Expect(first).To(Equal(result))
+						Expect(first).To(Equal(aggs[0].Result()))
 					})
 					It("should get first and last elements in timeseries with 'blob aggregates'", func() {
 						first := blobPoints[start]
 						last := blobPoints[end]
-						err := timeseries.BlobAggregateBatch(timeseries.columns[0].Name(), &blobAggs)
+						_, err := timeseries.BlobAggregate(timeseries.columns[0].Name(), blobAggs...)
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(1).To(BeNumerically("==", blobAggs[0].Count()))

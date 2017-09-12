@@ -274,8 +274,8 @@ func (t TsDoubleAggregation) Result() TsDoublePoint {
 }
 
 // NewDoubleAggregation : Create new timeseries double aggregation
-func NewDoubleAggregation(t TsAggregationType, r TsRange) TsDoubleAggregation {
-	return TsDoubleAggregation{t, r, 0, TsDoublePoint{}}
+func NewDoubleAggregation(t TsAggregationType, r TsRange) *TsDoubleAggregation {
+	return &TsDoubleAggregation{t, r, 0, TsDoublePoint{}}
 }
 
 // :: internals
@@ -297,7 +297,7 @@ func (t C.qdb_ts_double_aggregation_t) toStructG() TsDoubleAggregation {
 	return gAgg
 }
 
-func doubleAggregationArrayToC(ags ...TsDoubleAggregation) *C.qdb_ts_double_aggregation_t {
+func doubleAggregationArrayToC(ags ...*TsDoubleAggregation) *C.qdb_ts_double_aggregation_t {
 	if len(ags) == 0 {
 		return nil
 	}
@@ -341,8 +341,8 @@ func (t TsBlobAggregation) Result() TsBlobPoint {
 }
 
 // NewBlobAggregation : Create new timeseries blob aggregation
-func NewBlobAggregation(t TsAggregationType, r TsRange) TsBlobAggregation {
-	return TsBlobAggregation{t, r, 0, TsBlobPoint{}}
+func NewBlobAggregation(t TsAggregationType, r TsRange) *TsBlobAggregation {
+	return &TsBlobAggregation{t, r, 0, TsBlobPoint{}}
 }
 
 // :: internals
@@ -364,7 +364,7 @@ func (t C.qdb_ts_blob_aggregation_t) toStructG() TsBlobAggregation {
 	return gAgg
 }
 
-func blobAggregationArrayToC(ags ...TsBlobAggregation) *C.qdb_ts_blob_aggregation_t {
+func blobAggregationArrayToC(ags ...*TsBlobAggregation) *C.qdb_ts_blob_aggregation_t {
 	if len(ags) == 0 {
 		return nil
 	}
