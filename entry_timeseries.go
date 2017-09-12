@@ -62,6 +62,11 @@ type TimeseriesEntry struct {
 	columns TsColumnInfos
 }
 
+// ColumnInfos : return the current columns information
+func (entry TimeseriesEntry) ColumnInfos() TsColumnInfos {
+	return entry.columns
+}
+
 // Create : create a new timeseries
 func (entry TimeseriesEntry) Create() error {
 	alias := C.CString(entry.alias)
