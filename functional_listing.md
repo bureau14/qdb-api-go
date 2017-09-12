@@ -39,11 +39,11 @@
 [ completion: 9/12 ]
 
 ### [ cluster and nodes ]
-    [ ] qdb_node_status
-    [ ] qdb_node_config
-    [ ] qdb_node_topology
+    [v] qdb_node_status
+    [v] qdb_node_config
+    [v] qdb_node_topology
     [ ] qdb_node_stop
-[ completion: 0/4 ]
+[ completion: 3/4 ]
 
 
 ### [ batches ]

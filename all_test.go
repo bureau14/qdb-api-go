@@ -2,6 +2,7 @@ package qdb
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,6 +21,7 @@ const (
 	userPrivateKeyFile    string = "user_private.key"
 	usersConfigFile       string = "users.cfg"
 	qdbPort               int    = 30083
+	nodeURI               string = "qdb://127.0.0.1:30083"
 	clusterURI            string = "qdb://127.0.0.1:30083"
 	securedURI            string = "qdb://127.0.0.1:30084"
 )
@@ -166,27 +168,27 @@ func (d db) prepareConfig(s Security) error {
 		return err
 	}
 
-	var qdbConfig jsonQdbConfig
-	err = ConvertConfig(data, &qdbConfig)
+	var nodeConfig NodeConfig
+	err = json.Unmarshal(data, &nodeConfig)
 	if err != nil {
 		return err
 	}
 
-	qdbConfig.Local.Depot.Root = d.data
-	qdbConfig.Global.Security.Enabled = false
-	qdbConfig.Global.Security.EncryptTraffic = false
+	nodeConfig.Local.Depot.Root = d.data
+	nodeConfig.Global.Security.Enabled = false
+	nodeConfig.Global.Security.EncryptTraffic = false
 	if s == SecurityEnabled {
-		qdbConfig.Global.Security.Enabled = true
+		nodeConfig.Global.Security.Enabled = true
 		if s == SecurityEncrypted {
-			qdbConfig.Global.Security.EncryptTraffic = true
+			nodeConfig.Global.Security.EncryptTraffic = true
 		}
 	}
-	if qdbConfig.Global.Security.Enabled {
-		qdbConfig.Global.Security.ClusterPrivateFile = clusterPrivateKeyFile
-		qdbConfig.Global.Security.UserList = usersConfigFile
+	if nodeConfig.Global.Security.Enabled {
+		nodeConfig.Global.Security.ClusterPrivateFile = clusterPrivateKeyFile
+		nodeConfig.Global.Security.UserList = usersConfigFile
 	}
-	qdbConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
-	err = WriteConfig(d.config, qdbConfig)
+	nodeConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
+	err = writeJsonToFile(d.config, nodeConfig)
 	if err != nil {
 		return err
 	}
