@@ -41,11 +41,16 @@ var _ = Describe("Tests", func() {
 			It("should create even with empty columns", func() {
 				err := timeseries.Create()
 				Expect(err).ToNot(HaveOccurred())
+				Expect(columnsInfo).To(ConsistOf(timeseries.ColumnInfos()))
 			})
 		})
 		Context("Created", func() {
+			const (
+				count int64 = 8
+				start int64 = 0
+				end   int64 = count - 1
+			)
 			var (
-				count        int = 8
 				timestamps   []time.Time
 				doublePoints []TsDoublePoint
 				blobPoints   []TsBlobPoint
@@ -54,8 +59,8 @@ var _ = Describe("Tests", func() {
 				timestamps = make([]time.Time, count)
 				blobPoints = make([]TsBlobPoint, count)
 				doublePoints = make([]TsDoublePoint, count)
-				for idx := 0; idx < count; idx++ {
-					timestamps[idx] = time.Unix(int64((idx+1)*10), 0)
+				for idx := int64(0); idx < count; idx++ {
+					timestamps[idx] = time.Unix((idx+1)*10, 0)
 					blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
 					doublePoints[idx] = NewTsDoublePoint(timestamps[idx], float64(idx))
 				}
@@ -63,8 +68,9 @@ var _ = Describe("Tests", func() {
 			JustBeforeEach(func() {
 				err := timeseries.Create()
 				Expect(err).ToNot(HaveOccurred())
+				Expect(columnsInfo).To(ConsistOf(timeseries.ColumnInfos()))
 			})
-			Context("Insert", func() {
+			Context("Insert Data Points", func() {
 				It("should work to insert blob points", func() {
 					err := timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
 					Expect(err).ToNot(HaveOccurred())
@@ -90,94 +96,145 @@ var _ = Describe("Tests", func() {
 			})
 			// TODO(vianney): better tests on ranges (at least low, middle high timestamps, count number of results and such)
 			Context("Ranges", func() {
-				var (
-					ranges []TsRange
-				)
 				JustBeforeEach(func() {
 					timeseries.InsertDouble(timeseries.columns[1].Name(), doublePoints...)
 					timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
-					r1 := NewRange(time.Unix(0, 0), time.Unix(90, 0))
-					ranges = []TsRange{r1}
 				})
-				It("should get double ranges", func() {
-					tsDoublePoints, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name(), ranges...)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(doublePoints).To(Equal(tsDoublePoints))
+				It("should create a range", func() {
+					r := NewRange(timestamps[start], timestamps[end])
+					Expect(timestamps[start]).To(Equal(r.Begin()))
+					Expect(timestamps[end]).To(Equal(r.End()))
 				})
-				It("should get blob ranges", func() {
-					tsBlobPoints, err := timeseries.GetBlobRanges(timeseries.columns[0].Name(), ranges...)
+				It("should get all double points", func() {
+					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					results, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name(), r)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(blobPoints).To(Equal(tsBlobPoints))
+					Expect(doublePoints).To(ConsistOf(results))
+				})
+				It("should get the first and last points", func() {
+					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
+					points := []TsDoublePoint{doublePoints[start], doublePoints[end]}
+					results, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name(), r1, r2)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(points).To(ConsistOf(results))
+				})
+				It("should get all blob points", func() {
+					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					results, err := timeseries.GetBlobRanges(timeseries.columns[0].Name(), r)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(blobPoints).To(ConsistOf(results))
+				})
+				It("should get the first and last points", func() {
+					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
+					results := []TsBlobPoint{blobPoints[start], blobPoints[end]}
+					tsBlobPoints, err := timeseries.GetBlobRanges(timeseries.columns[0].Name(), r1, r2)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(results).To(ConsistOf(tsBlobPoints))
 				})
 				Context("Empty", func() {
-					JustBeforeEach(func() {
-						ranges = []TsRange{}
-					})
 					It("should not get double ranges", func() {
-						tsDoublePoints, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name(), ranges...)
+						results, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name())
 						Expect(err).To(HaveOccurred())
-						Expect([]TsDoublePoint{}).To(ConsistOf(tsDoublePoints))
+						Expect([]TsDoublePoint{}).To(ConsistOf(results))
 					})
 					It("should not get blob ranges", func() {
-						tsBlobPoints, err := timeseries.GetBlobRanges(timeseries.columns[0].Name(), ranges...)
+						results, err := timeseries.GetBlobRanges(timeseries.columns[0].Name())
 						Expect(err).To(HaveOccurred())
-						Expect([]TsBlobPoint{}).To(ConsistOf(tsBlobPoints))
+						Expect([]TsBlobPoint{}).To(ConsistOf(results))
 					})
 				})
 			})
 			Context("Aggregate", func() {
-				var (
-					doubleAggs []TsDoubleAggregation
-					blobAggs   []TsBlobAggregation
-					r          TsRange
-				)
+				var r TsRange
 				JustBeforeEach(func() {
 					timeseries.InsertDouble(timeseries.columns[1].Name(), doublePoints...)
 					timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
-					r = NewRange(time.Unix(0, 0), time.Unix(90, 0))
-					doubleAggFirst := NewDoubleAggregation(AggFirst, r)
-					doubleAggLast := NewDoubleAggregation(AggLast, r)
-					doubleAggs = []TsDoubleAggregation{doubleAggFirst, doubleAggLast}
-					blobAggFirst := NewBlobAggregation(AggFirst, r)
-					blobAggLast := NewBlobAggregation(AggLast, r)
-					blobAggs = []TsBlobAggregation{blobAggFirst, blobAggLast}
+
+					r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
 				})
-				It("should get first double with 'double aggregation'", func() {
-					doublePoint, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), AggFirst, r)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(doublePoints[0]).To(Equal(doublePoint))
+				Context("Double", func() {
+					var doubleAggs []TsDoubleAggregation
+					JustBeforeEach(func() {
+						doubleAggFirst := NewDoubleAggregation(AggFirst, r)
+						doubleAggLast := NewDoubleAggregation(AggLast, r)
+						doubleAggs = []TsDoubleAggregation{doubleAggFirst, doubleAggLast}
+					})
+					It("should create a double aggregation", func() {
+						agg := NewDoubleAggregation(AggMin, r)
+						Expect(AggMin).To(Equal(agg.Type()))
+						Expect(r).To(Equal(agg.Range()))
+					})
+					It("should not work with empty double aggregations", func() {
+						doubleAggs = []TsDoubleAggregation{}
+						err := timeseries.DoubleAggregateBatch(timeseries.columns[1].Name(), &doubleAggs)
+						Expect(err).To(HaveOccurred())
+					})
+					It("should get first double with 'double aggregation'", func() {
+						first := doublePoints[start]
+						result, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), AggFirst, r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(first).To(Equal(result))
+					})
+					It("should get first and last elements in timeseries with 'double aggregates'", func() {
+						first := doublePoints[start]
+						last := doublePoints[end]
+						err := timeseries.DoubleAggregateBatch(timeseries.columns[1].Name(), &doubleAggs)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(1).To(BeNumerically("==", doubleAggs[0].Count()))
+						Expect(first).To(Equal(doubleAggs[0].Result()))
+
+						Expect(1).To(BeNumerically("==", doubleAggs[1].Count()))
+						Expect(last).To(Equal(doubleAggs[1].Result()))
+
+						if start != end {
+							Expect(first).ToNot(Equal(doubleAggs[1].Result()))
+						}
+					})
 				})
-				It("should get first blob with 'blob aggregation'", func() {
-					blobPoint, err := timeseries.BlobAggregate(timeseries.columns[0].Name(), AggFirst, r)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(blobPoints[0]).To(Equal(blobPoint))
-				})
-				It("should get first and last elements in timeseries with 'double aggregates'", func() {
-					err := timeseries.DoubleAggregateBatch(timeseries.columns[1].Name(), &doubleAggs)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(doublePoints[0]).To(Equal(doubleAggs[0].Result()))
-					Expect(doublePoints[count-1]).To(Equal(doubleAggs[1].Result()))
-					Expect(doublePoints[2]).ToNot(Equal(doubleAggs[1].Result()))
-				})
-				It("should get first and last elements in timeseries with 'blob aggregates'", func() {
-					err := timeseries.BlobAggregateBatch(timeseries.columns[0].Name(), &blobAggs)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(blobPoints[0]).To(Equal(blobAggs[0].Result()))
-					Expect(blobPoints[count-1]).To(Equal(blobAggs[1].Result()))
-					Expect(blobPoints[2]).ToNot(Equal(blobAggs[1].Result()))
-				})
-				It("should not work with empty double aggregations", func() {
-					doubleAggs = []TsDoubleAggregation{}
-					err := timeseries.DoubleAggregateBatch(timeseries.columns[1].Name(), &doubleAggs)
-					Expect(err).To(HaveOccurred())
-				})
-				It("should not work with empty double aggregations", func() {
-					blobAggs = []TsBlobAggregation{}
-					err := timeseries.BlobAggregateBatch(timeseries.columns[0].Name(), &blobAggs)
-					Expect(err).To(HaveOccurred())
+				Context("Blob", func() {
+					var blobAggs []TsBlobAggregation
+					JustBeforeEach(func() {
+						blobAggFirst := NewBlobAggregation(AggFirst, r)
+						blobAggLast := NewBlobAggregation(AggLast, r)
+						blobAggs = []TsBlobAggregation{blobAggFirst, blobAggLast}
+					})
+					It("should create a blob aggregation", func() {
+						agg := NewBlobAggregation(AggMin, r)
+						Expect(AggMin).To(Equal(agg.Type()))
+						Expect(r).To(Equal(agg.Range()))
+					})
+					It("should not work with empty blob aggregations", func() {
+						blobAggs = []TsBlobAggregation{}
+						err := timeseries.BlobAggregateBatch(timeseries.columns[0].Name(), &blobAggs)
+						Expect(err).To(HaveOccurred())
+					})
+					It("should get first blob with 'blob aggregation'", func() {
+						first := blobPoints[start]
+						result, err := timeseries.BlobAggregate(timeseries.columns[0].Name(), AggFirst, r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(first).To(Equal(result))
+					})
+					It("should get first and last elements in timeseries with 'blob aggregates'", func() {
+						first := blobPoints[start]
+						last := blobPoints[end]
+						err := timeseries.BlobAggregateBatch(timeseries.columns[0].Name(), &blobAggs)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(1).To(BeNumerically("==", blobAggs[0].Count()))
+						Expect(first).To(Equal(blobAggs[0].Result()))
+
+						Expect(1).To(BeNumerically("==", blobAggs[1].Count()))
+						Expect(last).To(Equal(blobAggs[1].Result()))
+
+						if start != end {
+							Expect(first).ToNot(Equal(blobAggs[1].Result()))
+						}
+					})
 				})
 			})
-
 		})
 	})
 })

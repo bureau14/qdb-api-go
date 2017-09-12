@@ -264,8 +264,8 @@ func (t TsDoubleAggregation) Range() TsRange {
 }
 
 // Count : returns the number of points aggregated into the result
-func (t TsDoubleAggregation) Count() SizeType {
-	return t.s
+func (t TsDoubleAggregation) Count() int64 {
+	return int64(t.s)
 }
 
 // Result : result of the aggregation
@@ -331,8 +331,8 @@ func (t TsBlobAggregation) Range() TsRange {
 }
 
 // Count : returns the number of points aggregated into the result
-func (t TsBlobAggregation) Count() SizeType {
-	return t.s
+func (t TsBlobAggregation) Count() int64 {
+	return int64(t.s)
 }
 
 // Result : result of the aggregation
