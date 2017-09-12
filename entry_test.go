@@ -9,19 +9,12 @@ import (
 
 var _ = Describe("Tests", func() {
 	var (
-		handle HandleType
-		alias  string
-		err    error
+		alias string
+		err   error
 	)
 
 	BeforeEach(func() {
-		handle, err = SetupHandle("qdb://127.0.0.1:30083", 120*time.Second)
-		Expect(err).ToNot(HaveOccurred())
 		alias = generateAlias(16)
-	})
-
-	AfterEach(func() {
-		handle.Close()
 	})
 
 	// :: Entry tests ::
@@ -59,9 +52,7 @@ var _ = Describe("Tests", func() {
 				tags []string
 			)
 			BeforeEach(func() {
-				for i := 0; i < 5; i++ {
-					tags = append(tags, generateAlias(16))
-				}
+				tags = []string{"asd", "dsa", "ede", "esd", "fds"}
 				tag = tags[0]
 			})
 			It("'attach tag' should work", func() {
@@ -85,10 +76,12 @@ var _ = Describe("Tests", func() {
 			})
 			Context("Attach tags before", func() {
 				JustBeforeEach(func() {
-					integer.AttachTags(tags)
+					err = integer.AttachTags(tags)
+					Expect(err).ToNot(HaveOccurred())
 				})
 				AfterEach(func() {
-					integer.DetachTags(tags)
+					err = integer.DetachTags(tags)
+					Expect(err).ToNot(HaveOccurred())
 				})
 				It("'detach tag' should work", func() {
 					err = integer.DetachTag(tag)
@@ -145,11 +138,16 @@ var _ = Describe("Tests", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(0).To(Equal(len(aliasesObtained)))
 				})
+				It("'get tagged' should return empty output when provided wrong tag", func() {
+					aliasesObtained, err := integer.GetTagged("asd")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(0).To(Equal(len(aliasesObtained)))
+					Expect([]string{}).To(Equal(aliasesObtained))
+				})
 			})
 		})
 
 		// Expiry tests
-		// TODO(vianney): check expiry values (with getmetadata)
 		Context("Expiry", func() {
 			var (
 				expiry   time.Time
@@ -167,6 +165,10 @@ var _ = Describe("Tests", func() {
 				It("should set expire at", func() {
 					err = integer.ExpiresAt(expiry)
 					Expect(err).ToNot(HaveOccurred())
+
+					meta, err := integer.GetMetadata()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
 				})
 				It("should set expire from now", func() {
 					err = integer.ExpiresFromNow(duration)
@@ -180,6 +182,10 @@ var _ = Describe("Tests", func() {
 				It("should set expire at", func() {
 					err = integer.ExpiresAt(expiry)
 					Expect(err).ToNot(HaveOccurred())
+
+					meta, err := integer.GetMetadata()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
 				})
 				It("should set expire from now", func() {
 					err = integer.ExpiresFromNow(duration)
@@ -188,11 +194,15 @@ var _ = Describe("Tests", func() {
 			})
 			Context("Ultra short future", func() {
 				BeforeEach(func() {
-					duration, _ = time.ParseDuration("1µs")
+					duration, _ = time.ParseDuration("2ms")
 				})
 				It("should set expire at", func() {
 					err = integer.ExpiresAt(expiry)
 					Expect(err).ToNot(HaveOccurred())
+
+					meta, err := integer.GetMetadata()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
 				})
 				It("should set expire from now", func() {
 					err = integer.ExpiresFromNow(duration)
@@ -223,6 +233,24 @@ var _ = Describe("Tests", func() {
 				It("should not set expire from now", func() {
 					err = integer.ExpiresFromNow(duration)
 					Expect(err).To(HaveOccurred())
+				})
+			})
+			Context("Basic functions", func() {
+				BeforeEach(func() {
+					duration, _ = time.ParseDuration("1h")
+				})
+				It("should retrieve the right result", func() {
+					meta, err := integer.GetMetadata()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(meta.ExpiryTime).To(Equal(NeverExpires()))
+				})
+				It("should retrieve the right result", func() {
+					integer.Update(12, expiry)
+					integer.Update(14, PreserveExpiration())
+
+					meta, err := integer.GetMetadata()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
 				})
 			})
 		})

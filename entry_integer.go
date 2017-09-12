@@ -23,7 +23,7 @@ type IntegerEntry struct {
 //	The value will be correctly translated independently of the endianness of the client’s platform.
 func (entry IntegerEntry) Put(content int64, expiry time.Time) error {
 	alias := C.CString(entry.alias)
-	err := C.qdb_int_put(entry.handle, alias, C.qdb_int_t(content), C.qdb_time_t(expiry.UnixNano()))
+	err := C.qdb_int_put(entry.handle, alias, C.qdb_int_t(content), toQdbTime(expiry))
 	return makeErrorOrNil(err)
 }
 
@@ -32,9 +32,9 @@ func (entry IntegerEntry) Put(content int64, expiry time.Time) error {
 //	If the entry doesn’t exist, it will be created.
 //
 //	You can specify an expiry time or use NeverExpires if you don’t want the entry to expire.
-func (entry *IntegerEntry) Update(newContent int64, newExpiry time.Time) error {
+func (entry *IntegerEntry) Update(newContent int64, expiry time.Time) error {
 	alias := C.CString(entry.alias)
-	err := C.qdb_int_update(entry.handle, alias, C.qdb_int_t(newContent), C.qdb_time_t(newExpiry.UnixNano()))
+	err := C.qdb_int_update(entry.handle, alias, C.qdb_int_t(newContent), toQdbTime(expiry))
 	return makeErrorOrNil(err)
 }
 

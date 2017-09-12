@@ -269,6 +269,11 @@ func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesE
 	return TimeseriesEntry{Entry{h, alias}, columns}
 }
 
+// Node : Create a node object
+func (h HandleType) Node(uri string) *Node {
+	return &Node{h, uri}
+}
+
 // Query : Create a query object to execute
 func (h HandleType) Query() *Query {
 	return &Query{h, []string{}, []string{}, []string{}}

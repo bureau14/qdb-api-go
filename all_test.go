@@ -2,6 +2,7 @@ package qdb
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,12 +21,24 @@ const (
 	userPrivateKeyFile    string = "user_private.key"
 	usersConfigFile       string = "users.cfg"
 	qdbPort               int    = 30083
+	nodeURI               string = "qdb://127.0.0.1:30083"
+	clusterURI            string = "qdb://127.0.0.1:30083"
+	securedURI            string = "qdb://127.0.0.1:30084"
 )
 
 var (
+	handle      HandleType
 	unsecuredDB *db
 	securedDB   *db
-	// encryptedDB db
+	// encryptedDB *db
+)
+
+type Security string
+
+const (
+	SecurityNone      Security = ""
+	SecurityEnabled   Security = "secured"
+	SecurityEncrypted Security = "encrypted"
 )
 
 func TestMain(m *testing.M) {
@@ -34,11 +47,11 @@ func TestMain(m *testing.M) {
 
 	generateUser(qdbUserAdd)
 	generateClusterKeys(qdbClusterKeygen)
-	unsecuredDB, err = newDB(qdbd, false, false)
+	unsecuredDB, err = newDB(qdbd, SecurityNone)
 	if err != nil {
 		panic(err)
 	}
-	securedDB, err = newDB(qdbd, true, false)
+	securedDB, err = newDB(qdbd, SecurityEnabled)
 	if err != nil {
 		panic(err)
 	}
@@ -70,12 +83,15 @@ func TestAll(t *testing.T) {
 
 var _ = Describe("Tests", func() {
 	BeforeSuite(func() {
-
+		var err error
+		handle, err = SetupHandle(clusterURI, 120*time.Second)
+		Expect(err).ToNot(HaveOccurred())
 		// stupid thing to boast about having 100% test coverage
 		fmt.Errorf("error: %s", ErrorType(2))
 	})
 
 	AfterSuite(func() {
+		handle.Close()
 	})
 })
 
@@ -115,29 +131,29 @@ type db struct {
 	port   int
 }
 
-func newDB(qdbd string, secured, encrypted bool) (*db, error) {
+func newDB(qdbd string, s Security) (*db, error) {
 	d := &db{}
-	d.setInfo(secured, encrypted)
+	d.setInfo(s)
 	_, err := exec.Command("cp", qdbd, d.bin).Output()
 	if err != nil {
 		return d, err
 	}
-	err = d.prepareConfig(secured, encrypted)
+	err = d.prepareConfig(s)
 	return d, err
 }
 
-func (d *db) setInfo(secured, encrypted bool) {
+func (d *db) setInfo(s Security) {
 	d.config = "qdb"
 	d.data = "db"
 	d.port = qdbPort
 	d.bin = "./test_qdbd"
-	if secured {
+	if s == SecurityEnabled {
 		d.config += "_secured"
 		d.bin += "_secured"
 		d.data += "_secured"
 		d.port++
 	}
-	if encrypted {
+	if s == SecurityEncrypted {
 		d.config += "_encrypted"
 		d.bin += "_encrypted"
 		d.data += "_encrypted"
@@ -146,27 +162,33 @@ func (d *db) setInfo(secured, encrypted bool) {
 	d.config += ".cfg"
 }
 
-func (d db) prepareConfig(secured, encrypted bool) error {
+func (d db) prepareConfig(s Security) error {
 	data, err := exec.Command(d.bin, "--gen-config").Output()
 	if err != nil {
 		return err
 	}
 
-	var qdbConfig jsonQdbConfig
-	err = ConvertConfig(data, &qdbConfig)
+	var nodeConfig NodeConfig
+	err = json.Unmarshal(data, &nodeConfig)
 	if err != nil {
 		return err
 	}
 
-	qdbConfig.Local.Depot.Root = d.data
-	qdbConfig.Global.Security.Enabled = secured
-	qdbConfig.Global.Security.EncryptTraffic = encrypted
-	if qdbConfig.Global.Security.Enabled {
-		qdbConfig.Global.Security.ClusterPrivateFile = clusterPrivateKeyFile
-		qdbConfig.Global.Security.UserList = usersConfigFile
+	nodeConfig.Local.Depot.Root = d.data
+	nodeConfig.Global.Security.Enabled = false
+	nodeConfig.Global.Security.EncryptTraffic = false
+	if s == SecurityEnabled {
+		nodeConfig.Global.Security.Enabled = true
+		if s == SecurityEncrypted {
+			nodeConfig.Global.Security.EncryptTraffic = true
+		}
 	}
-	qdbConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
-	err = WriteConfig(d.config, qdbConfig)
+	if nodeConfig.Global.Security.Enabled {
+		nodeConfig.Global.Security.ClusterPrivateFile = clusterPrivateKeyFile
+		nodeConfig.Global.Security.UserList = usersConfigFile
+	}
+	nodeConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
+	err = writeJsonToFile(d.config, nodeConfig)
 	if err != nil {
 		return err
 	}
