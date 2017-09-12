@@ -135,19 +135,19 @@ func ExampleTimeseriesEntry() {
 
 	timeseries.Create()
 
-	tsRange := TsRange{time.Unix(0, 0), time.Unix(40, 0)}
+	tsRange := NewRange(time.Unix(0, 0), time.Unix(40, 0))
 	tsRanges := []TsRange{tsRange}
 
 	contentDouble := float64(3.4)
 	doublePoint1 := NewTsDoublePoint(time.Unix(10, 0), contentDouble)
 	doublePoint2 := NewTsDoublePoint(time.Unix(20, 0), contentDouble)
-	timeseries.InsertDouble("serie_column_double", []TsDoublePoint{doublePoint1, doublePoint2})
+	timeseries.InsertDouble("serie_column_double", doublePoint1, doublePoint2)
 
 	var tsDoublePoints []TsDoublePoint
-	tsDoublePoints, _ = timeseries.GetDoubleRanges("serie_column_double", tsRanges)
+	tsDoublePoints, _ = timeseries.GetDoubleRanges("serie_column_double", tsRanges...)
 
-	fmt.Println("Timestamp first double value:", tsDoublePoints[0].Timestamp)
-	fmt.Println("Content first double value:", tsDoublePoints[0].Content)
+	fmt.Println("Timestamp first double value:", tsDoublePoints[0].Timestamp())
+	fmt.Println("Content first double value:", tsDoublePoints[0].Content())
 
 	contentBlob := []byte("data")
 	blobPoint1 := NewTsBlobPoint(time.Unix(10, 0), contentBlob)
@@ -155,10 +155,10 @@ func ExampleTimeseriesEntry() {
 	timeseries.InsertBlob("serie_column_blob", []TsBlobPoint{blobPoint1, blobPoint2})
 
 	var tsBlobPoints []TsBlobPoint
-	tsBlobPoints, _ = timeseries.GetBlobRanges("serie_column_blob", tsRanges)
+	tsBlobPoints, _ = timeseries.GetBlobRanges("serie_column_blob", tsRanges...)
 
-	fmt.Println("Timestamp second blob value:", tsBlobPoints[1].Timestamp)
-	fmt.Println("Content second blob value:", string(tsBlobPoints[1].Content))
+	fmt.Println("Timestamp second blob value:", tsBlobPoints[1].Timestamp())
+	fmt.Println("Content second blob value:", string(tsBlobPoints[1].Content()))
 
 	// Output:
 	// Timestamp first double value: 1970-01-01 01:00:10 +0100 CET
