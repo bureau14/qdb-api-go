@@ -92,6 +92,10 @@ var _ = Describe("Tests", func() {
 					Expect(len(columns)).To(Equal(len(columnsAdded)))
 					Expect(columns).Should(ConsistOf(columnsAdded))
 				})
+				It("should not work to insert no columns", func() {
+					err := timeseries.InsertColumns()
+					Expect(err).To(HaveOccurred())
+				})
 				It("should not work to insert columns with already existing names", func() {
 					err := timeseries.InsertColumns(NewTsColumnInfo("blob_column", TsColumnBlob))
 					Expect(err).To(HaveOccurred())
