@@ -56,12 +56,15 @@ func (t C.qdb_ts_column_info_t) toStructG() TsColumnInfo {
 	return TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}
 }
 
-func columnInfoArrayToC(cols ...TsColumnInfo) []C.qdb_ts_column_info_t {
+func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
+	if len(cols) == 0 {
+		return nil
+	}
 	columns := make([]C.qdb_ts_column_info_t, len(cols))
 	for idx, col := range cols {
 		columns[idx] = col.toStructC()
 	}
-	return columns
+	return &columns[0]
 }
 
 // :: End - Column Information ::
@@ -100,12 +103,15 @@ func (t C.qdb_ts_double_point) toStructG() TsDoublePoint {
 	return TsDoublePoint{t.timestamp.toStructG(), float64(t.value)}
 }
 
-func doublePointArrayToC(pts ...TsDoublePoint) []C.qdb_ts_double_point {
+func doublePointArrayToC(pts ...TsDoublePoint) *C.qdb_ts_double_point {
+	if len(pts) == 0 {
+		return nil
+	}
 	points := make([]C.qdb_ts_double_point, len(pts))
 	for idx, pt := range pts {
 		points[idx] = pt.toStructC()
 	}
-	return points
+	return &points[0]
 }
 
 // :: :: End - Double Point ::
@@ -147,6 +153,17 @@ func (t C.qdb_ts_blob_point) toStructG() TsBlobPoint {
 	return TsBlobPoint{t.timestamp.toStructG(), C.GoBytes(t.content, C.int(t.content_length))}
 }
 
+func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
+	if len(pts) == 0 {
+		return nil
+	}
+	points := make([]C.qdb_ts_blob_point, len(pts))
+	for idx, pt := range pts {
+		points[idx] = pt.toStructC()
+	}
+	return &points[0]
+}
+
 // :: :: End - Double Point ::
 
 // :: End - Data points ::
@@ -183,12 +200,15 @@ func (t C.qdb_ts_range_t) toStructG() TsRange {
 	return NewRange(t.begin.toStructG(), t.end.toStructG())
 }
 
-func rangeArrayToC(rs ...TsRange) []C.qdb_ts_range_t {
+func rangeArrayToC(rs ...TsRange) *C.qdb_ts_range_t {
+	if len(rs) == 0 {
+		return nil
+	}
 	var ranges []C.qdb_ts_range_t
 	for _, r := range rs {
 		ranges = append(ranges, r.toStructC())
 	}
-	return ranges
+	return &ranges[0]
 }
 
 // :: End - Range ::
@@ -277,12 +297,15 @@ func (t C.qdb_ts_double_aggregation_t) toStructG() TsDoubleAggregation {
 	return gAgg
 }
 
-func doubleAggregationArrayToC(ags ...TsDoubleAggregation) []C.qdb_ts_double_aggregation_t {
+func doubleAggregationArrayToC(ags ...TsDoubleAggregation) *C.qdb_ts_double_aggregation_t {
+	if len(ags) == 0 {
+		return nil
+	}
 	var doubleAggregations []C.qdb_ts_double_aggregation_t
 	for _, ag := range ags {
 		doubleAggregations = append(doubleAggregations, ag.toStructC())
 	}
-	return doubleAggregations
+	return &doubleAggregations[0]
 }
 
 // :: :: End - Double Aggregation
@@ -341,12 +364,15 @@ func (t C.qdb_ts_blob_aggregation_t) toStructG() TsBlobAggregation {
 	return gAgg
 }
 
-func blobAggregationArrayToC(ags ...TsBlobAggregation) []C.qdb_ts_blob_aggregation_t {
+func blobAggregationArrayToC(ags ...TsBlobAggregation) *C.qdb_ts_blob_aggregation_t {
+	if len(ags) == 0 {
+		return nil
+	}
 	var blobAggregations []C.qdb_ts_blob_aggregation_t
 	for _, ag := range ags {
 		blobAggregations = append(blobAggregations, ag.toStructC())
 	}
-	return blobAggregations
+	return &blobAggregations[0]
 }
 
 // :: :: End - Blob Aggregation

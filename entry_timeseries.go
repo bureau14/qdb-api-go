@@ -26,13 +26,7 @@ func (entry TimeseriesEntry) ColumnInfos() []TsColumnInfo {
 func (entry TimeseriesEntry) Create() error {
 	alias := C.CString(entry.alias)
 	columnsCount := C.qdb_size_t(len(entry.columns))
-	columnsArray := columnInfoArrayToC(entry.columns...)
-	var columns *C.qdb_ts_column_info_t
-	if columnsCount != 0 {
-		columns = &columnsArray[0]
-	} else {
-		columns = nil
-	}
+	columns := columnInfoArrayToC(entry.columns...)
 	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
 	if err == 0 {
 		length := int(columnsCount)
@@ -53,15 +47,8 @@ func (entry TimeseriesEntry) InsertDouble(column string, points ...TsDoublePoint
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	contentCount := C.qdb_size_t(len(points))
-	var contentPtr *C.qdb_ts_double_point
-	var dataPoints []C.qdb_ts_double_point
-	if contentCount != 0 {
-		dataPoints = doublePointArrayToC(points...)
-		contentPtr = &dataPoints[0]
-	} else {
-		contentPtr = nil
-	}
-	err := C.qdb_ts_double_insert(entry.handle, alias, columnName, contentPtr, contentCount)
+	content := doublePointArrayToC(points...)
+	err := C.qdb_ts_double_insert(entry.handle, alias, columnName, content, contentCount)
 	return makeErrorOrNil(err)
 }
 
@@ -72,29 +59,9 @@ func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) err
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	contentCount := C.qdb_size_t(len(points))
-	var contentPtr *C.qdb_ts_blob_point
-	if contentCount != 0 {
-		content := make([]C.qdb_ts_blob_point, contentCount)
-		for i := C.qdb_size_t(0); i < contentCount; i++ {
-			content[i] = points[i].toStructC()
-		}
-		contentPtr = &content[0]
-	} else {
-		contentPtr = nil
-	}
-	err := C.qdb_ts_blob_insert(entry.handle, alias, columnName, contentPtr, contentCount)
+	content := blobPointArrayToC(points...)
+	err := C.qdb_ts_blob_insert(entry.handle, alias, columnName, content, contentCount)
 	return makeErrorOrNil(err)
-}
-
-// TsRanges : multiple timeseries range with begin and end timestamp
-type TsRanges []TsRange
-
-func (r TsRanges) toStructC() []C.qdb_ts_range_t {
-	var cRanges []C.qdb_ts_range_t
-	for index := range r {
-		cRanges = append(cRanges, r[index].toStructC())
-	}
-	return cRanges
 }
 
 // GetDoubleRanges : Retrieves blobs in the specitypefied range of the time series column.
@@ -103,13 +70,7 @@ func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges ...TsRange) (
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbRangesCount := C.qdb_size_t(len(ranges))
-	qdbRangesC := rangeArrayToC(ranges...)
-	var qdbRanges *C.qdb_ts_range_t
-	if len(qdbRangesC) == 0 {
-		qdbRanges = nil
-	} else {
-		qdbRanges = &qdbRangesC[0]
-	}
+	qdbRanges := rangeArrayToC(ranges...)
 	var qdbPoints *C.qdb_ts_double_point
 	var qdbPointsCount C.qdb_size_t
 	err := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
@@ -135,13 +96,7 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges ...TsRange) ([]
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbRangesCount := C.qdb_size_t(len(ranges))
-	qdbRangesC := rangeArrayToC(ranges...)
-	var qdbRanges *C.qdb_ts_range_t
-	if len(qdbRangesC) == 0 {
-		qdbRanges = nil
-	} else {
-		qdbRanges = &qdbRangesC[0]
-	}
+	qdbRanges := rangeArrayToC(ranges...)
 	var qdbPoints *C.qdb_ts_blob_point
 	var qdbPointsCount C.qdb_size_t
 	err := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
@@ -170,8 +125,8 @@ func (entry TimeseriesEntry) DoubleAggregate(column string, t TsAggregationType,
 	qdbAggregation._type = C.qdb_ts_aggregation_type_t(t)
 	qdbAggregation._range = r.toStructC()
 	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, &qdbAggregation, 1)
-	timestamp := qdbAggregation.result.timestamp
-	result := TsDoublePoint{time.Unix(int64(timestamp.tv_sec), int64(timestamp.tv_nsec)), float64(qdbAggregation.result.value)}
+	cResult := qdbAggregation.result
+	result := TsDoublePoint{cResult.timestamp.toStructG(), float64(cResult.value)}
 	return result, makeErrorOrNil(err)
 }
 
@@ -181,13 +136,7 @@ func (entry TimeseriesEntry) DoubleAggregateBatch(column string, aggs *[]TsDoubl
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
-	qdbAggsC := doubleAggregationArrayToC((*aggs)...)
-	var qdbAggregations *C.qdb_ts_double_aggregation_t
-	if qdbAggregationsCount != 0 {
-		qdbAggregations = &qdbAggsC[0]
-	} else {
-		qdbAggregations = nil
-	}
+	qdbAggregations := doubleAggregationArrayToC((*aggs)...)
 	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
 	if err == 0 {
 		length := int(qdbAggregationsCount)
@@ -221,13 +170,7 @@ func (entry TimeseriesEntry) BlobAggregateBatch(column string, aggs *[]TsBlobAgg
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
 	qdbAggregationsCount := C.qdb_size_t(len(*aggs))
-	qdbAggsC := blobAggregationArrayToC((*aggs)...)
-	var qdbAggregations *C.qdb_ts_blob_aggregation_t
-	if qdbAggregationsCount != 0 {
-		qdbAggregations = &qdbAggsC[0]
-	} else {
-		qdbAggregations = nil
-	}
+	qdbAggregations := blobAggregationArrayToC((*aggs)...)
 	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
 	if err == 0 {
 		length := int(qdbAggregationsCount)
