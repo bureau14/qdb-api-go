@@ -9,9 +9,6 @@ import (
 	"unsafe"
 )
 
-// SizeType typedef qdb_size_t
-type SizeType C.qdb_size_t
-
 // :: Start - Column Information ::
 
 // TsColumnType : Timeseries column types
@@ -285,7 +282,7 @@ const (
 type TsDoubleAggregation struct {
 	t TsAggregationType
 	r TsRange
-	s SizeType
+	s int64
 	p TsDoublePoint
 }
 
@@ -301,7 +298,7 @@ func (t TsDoubleAggregation) Range() TsRange {
 
 // Count : returns the number of points aggregated into the result
 func (t TsDoubleAggregation) Count() int64 {
-	return int64(t.s)
+	return t.s
 }
 
 // Result : result of the aggregation
@@ -328,7 +325,7 @@ func (t C.qdb_ts_double_aggregation_t) toStructG() TsDoubleAggregation {
 	var gAgg TsDoubleAggregation
 	gAgg.t = TsAggregationType(t._type)
 	gAgg.r = t._range.toStructG()
-	gAgg.s = SizeType(t.count)
+	gAgg.s = int64(t.count)
 	gAgg.p = t.result.toStructG()
 	return gAgg
 }
@@ -365,7 +362,7 @@ func doubleAggregationArrayToGo(aggregations *C.qdb_ts_double_aggregation_t, agg
 type TsBlobAggregation struct {
 	t TsAggregationType
 	r TsRange
-	s SizeType
+	s int64
 	p TsBlobPoint
 }
 
@@ -381,7 +378,7 @@ func (t TsBlobAggregation) Range() TsRange {
 
 // Count : returns the number of points aggregated into the result
 func (t TsBlobAggregation) Count() int64 {
-	return int64(t.s)
+	return t.s
 }
 
 // Result : result of the aggregation
@@ -408,7 +405,7 @@ func (t C.qdb_ts_blob_aggregation_t) toStructG() TsBlobAggregation {
 	var gAgg TsBlobAggregation
 	gAgg.t = TsAggregationType(t._type)
 	gAgg.r = t._range.toStructG()
-	gAgg.s = SizeType(t.count)
+	gAgg.s = int64(t.count)
 	gAgg.p = t.result.toStructG()
 	return gAgg
 }
