@@ -193,6 +193,18 @@ var _ = Describe("Tests", func() {
 							Expect(first).ToNot(Equal(doubleAggs[1].Result()))
 						}
 					})
+					It("should get sum of all the doubles", func() {
+						sum := func(pts []TsDoublePoint) (s float64) {
+							for _, pt := range pts {
+								s += pt.Content()
+							}
+							return
+						}(doublePoints)
+						aggs, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), NewDoubleAggregation(AggSum, r))
+						Expect(err).ToNot(HaveOccurred())
+						Expect(count).To(Equal(aggs[0].Count()))
+						Expect(sum).To(Equal(aggs[0].Result().Content()))
+					})
 				})
 				Context("Blob", func() {
 					var blobAggs []*TsBlobAggregation
