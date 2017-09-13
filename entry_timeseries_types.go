@@ -9,18 +9,61 @@ import (
 	"unsafe"
 )
 
-// :: Start - Column Information ::
+// :: Start - Column ::
 
 // TsColumnType : Timeseries column types
 type TsColumnType C.qdb_ts_column_type_t
 
 // Values
-//	TsColumnDouble : column is a double point
-//	TsColumnBlob : column is a blob point
+//	tsColumnDouble : column is a double point
+//	tsColumnBlob : column is a blob point
 const (
-	TsColumnDouble TsColumnType = C.qdb_ts_column_double
-	TsColumnBlob   TsColumnType = C.qdb_ts_column_blob
+	TsColumnUninitialized TsColumnType = C.qdb_ts_column_uninitialized
+	TsColumnDouble        TsColumnType = C.qdb_ts_column_double
+	TsColumnBlob          TsColumnType = C.qdb_ts_column_blob
 )
+
+type tsColumn struct {
+	TsColumnInfo
+	parent TimeseriesEntry
+}
+
+// TsDoubleColumn : a time series double column
+type TsDoubleColumn struct {
+	tsColumn
+}
+
+// TsBlobColumn : a time series blob column
+type TsBlobColumn struct {
+	tsColumn
+}
+
+// :: internals
+
+func (t C.qdb_ts_column_info_t) toStructG(entry TimeseriesEntry) tsColumn {
+	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}, entry}
+}
+
+func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) ([]TsDoubleColumn, []TsBlobColumn) {
+	length := int(columnsCount)
+	doubleColumns := []TsDoubleColumn{}
+	blobColumns := []TsBlobColumn{}
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		for _, s := range tmpslice {
+			if s._type == C.qdb_ts_column_double {
+				doubleColumns = append(doubleColumns, TsDoubleColumn{s.toStructG(entry)})
+			} else if s._type == C.qdb_ts_column_blob {
+				blobColumns = append(blobColumns, TsBlobColumn{s.toStructG(entry)})
+			}
+		}
+	}
+	return doubleColumns, blobColumns
+}
+
+// :: End - Column ::
+
+// :: Start - Column Information ::
 
 // TsColumnInfo : column information in timeseries
 type TsColumnInfo struct {
@@ -49,10 +92,6 @@ func (t TsColumnInfo) toStructC() C.qdb_ts_column_info_t {
 	return C.qdb_ts_column_info_t{C.CString(t.n), C.qdb_ts_column_type_t(t.t), [4]byte{}}
 }
 
-func (t C.qdb_ts_column_info_t) toStructG() TsColumnInfo {
-	return TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}
-}
-
 func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 	if len(cols) == 0 {
 		return nil
@@ -62,18 +101,6 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 		columns[idx] = col.toStructC()
 	}
 	return &columns[0]
-}
-
-func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) []TsColumnInfo {
-	length := int(columnsCount)
-	output := make([]TsColumnInfo, length)
-	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
-		for i, s := range tmpslice {
-			output[i] = s.toStructG()
-		}
-	}
-	return output
 }
 
 // :: End - Column Information ::

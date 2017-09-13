@@ -129,11 +129,14 @@ func ExampleTimeseriesEntry() {
 	defer h.Close()
 
 	alias := "TimeseriesAlias"
-	columns := []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble)}
-	timeseries := h.Timeseries(alias, columns)
+	columnsInfo := []TsColumnInfo{NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble)}
+	timeseries := h.Timeseries(alias)
+
+	timeseries.Create(columnsInfo...)
 	defer timeseries.Remove()
 
-	timeseries.Create()
+	blobColumn := timeseries.BlobColumn("serie_column_blob")
+	doubleColumn := timeseries.DoubleColumn("serie_column_double")
 
 	tsRange := NewRange(time.Unix(0, 0), time.Unix(40, 0))
 	tsRanges := []TsRange{tsRange}
@@ -141,10 +144,11 @@ func ExampleTimeseriesEntry() {
 	contentDouble := float64(3.4)
 	doublePoint1 := NewTsDoublePoint(time.Unix(10, 0), contentDouble)
 	doublePoint2 := NewTsDoublePoint(time.Unix(20, 0), contentDouble)
-	timeseries.InsertDouble("serie_column_double", doublePoint1, doublePoint2)
+	doublePoints := append([]TsDoublePoint{}, doublePoint1, doublePoint2)
+	doubleColumn.Insert(doublePoints...)
 
 	var tsDoublePoints []TsDoublePoint
-	tsDoublePoints, _ = timeseries.GetDoubleRanges("serie_column_double", tsRanges...)
+	tsDoublePoints, _ = doubleColumn.GetRanges(tsRanges...)
 
 	fmt.Println("Timestamp first double value:", tsDoublePoints[0].Timestamp())
 	fmt.Println("Content first double value:", tsDoublePoints[0].Content())
@@ -152,10 +156,11 @@ func ExampleTimeseriesEntry() {
 	contentBlob := []byte("data")
 	blobPoint1 := NewTsBlobPoint(time.Unix(10, 0), contentBlob)
 	blobPoint2 := NewTsBlobPoint(time.Unix(20, 0), contentBlob)
-	timeseries.InsertBlob("serie_column_blob", []TsBlobPoint{blobPoint1, blobPoint2})
+	blobPoints := append([]TsBlobPoint{}, blobPoint1, blobPoint2)
+	blobColumn.Insert(blobPoints...)
 
 	var tsBlobPoints []TsBlobPoint
-	tsBlobPoints, _ = timeseries.GetBlobRanges("serie_column_blob", tsRanges...)
+	tsBlobPoints, _ = blobColumn.GetRanges(tsRanges...)
 
 	fmt.Println("Timestamp second blob value:", tsBlobPoints[1].Timestamp())
 	fmt.Println("Content second blob value:", string(tsBlobPoints[1].Content()))

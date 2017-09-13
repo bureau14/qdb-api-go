@@ -21,15 +21,17 @@ var _ = Describe("Tests", func() {
 	// TODO(vianney): Debug timestamps, seems like they don't get to see the database
 	Context("Timeseries", func() {
 		var (
-			timeseries  TimeseriesEntry
-			columnsInfo []TsColumnInfo
+			timeseries   TimeseriesEntry
+			doubleColumn TsDoubleColumn
+			blobColumn   TsBlobColumn
+			columnsInfo  []TsColumnInfo
 		)
 		BeforeEach(func() {
 			columnsInfo = []TsColumnInfo{}
 			columnsInfo = append(columnsInfo, NewTsColumnInfo("blob_column", TsColumnBlob), NewTsColumnInfo("double_column", TsColumnDouble))
 		})
 		JustBeforeEach(func() {
-			timeseries = handle.Timeseries(alias, columnsInfo)
+			timeseries = handle.Timeseries(alias)
 		})
 		AfterEach(func() {
 			timeseries.Remove()
@@ -39,9 +41,19 @@ var _ = Describe("Tests", func() {
 				columnsInfo = []TsColumnInfo{}
 			})
 			It("should create even with empty columns", func() {
-				err := timeseries.Create()
+				err := timeseries.Create(columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(columnsInfo).To(ConsistOf(timeseries.ColumnInfos()))
+			})
+			It("should not work to get columns before creating the time series", func() {
+				_, _, err := timeseries.Columns()
+				Expect(err).To(HaveOccurred())
+			})
+			It("should have zero columns", func() {
+				err := timeseries.Create(columnsInfo...)
+				doubles, blobs, err := timeseries.Columns()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(0).To(Equal(len(doubles)))
+				Expect(0).To(Equal(len(blobs)))
 			})
 		})
 		Context("Created", func() {
@@ -66,18 +78,34 @@ var _ = Describe("Tests", func() {
 				}
 			})
 			JustBeforeEach(func() {
-				err := timeseries.Create()
+				err := timeseries.Create(columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(columnsInfo[0].Type()).To(Equal(timeseries.ColumnInfos()[0].Type()))
-				Expect(columnsInfo).To(ConsistOf(timeseries.ColumnInfos()))
+				doubleColumn = timeseries.DoubleColumn(columnsInfo[1].Name())
+				blobColumn = timeseries.BlobColumn(columnsInfo[0].Name())
+			})
+			It("should have one blob column and one double column", func() {
+				doubles, blobs, err := timeseries.Columns()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(1).To(Equal(len(doubles)))
+				Expect(1).To(Equal(len(blobs)))
+				Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
+				Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
 			})
 			Context("Insert Data Points", func() {
-				It("should work to insert blob points", func() {
-					err := timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
+				It("should work to insert a double point", func() {
+					err := doubleColumn.Insert(NewTsDoublePoint(time.Now(), 3.2))
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should work to insert a blob point", func() {
+					err := blobColumn.Insert(NewTsBlobPoint(time.Now(), []byte("asd")))
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should work to insert double points", func() {
-					err := timeseries.InsertDouble(timeseries.columns[1].Name(), doublePoints...)
+					err := doubleColumn.Insert(doublePoints...)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should work to insert blob points", func() {
+					err := blobColumn.Insert(blobPoints...)
 					Expect(err).ToNot(HaveOccurred())
 				})
 				Context("Empty Points Array", func() {
@@ -86,11 +114,11 @@ var _ = Describe("Tests", func() {
 						blobPoints = []TsBlobPoint{}
 					})
 					It("should not work to insert double points", func() {
-						err := timeseries.InsertDouble(timeseries.columns[1].Name(), doublePoints...)
+						err := doubleColumn.Insert(doublePoints...)
 						Expect(err).To(HaveOccurred())
 					})
 					It("should not work to insert blob points", func() {
-						err := timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
+						err := blobColumn.Insert(blobPoints...)
 						Expect(err).To(HaveOccurred())
 					})
 				})
@@ -98,8 +126,10 @@ var _ = Describe("Tests", func() {
 			// TODO(vianney): better tests on ranges (at least low, middle high timestamps, count number of results and such)
 			Context("Ranges", func() {
 				JustBeforeEach(func() {
-					timeseries.InsertDouble(timeseries.columns[1].Name(), doublePoints...)
-					timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
+					err := doubleColumn.Insert(doublePoints...)
+					Expect(err).ToNot(HaveOccurred())
+					err = blobColumn.Insert(blobPoints...)
+					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should create a range", func() {
 					r := NewRange(timestamps[start], timestamps[end])
@@ -108,7 +138,7 @@ var _ = Describe("Tests", func() {
 				})
 				It("should get all double points", func() {
 					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
-					results, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name(), r)
+					results, err := doubleColumn.GetRanges(r)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(doublePoints).To(ConsistOf(results))
 				})
@@ -116,13 +146,13 @@ var _ = Describe("Tests", func() {
 					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
 					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
 					points := []TsDoublePoint{doublePoints[start], doublePoints[end]}
-					results, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name(), r1, r2)
+					results, err := doubleColumn.GetRanges(r1, r2)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(points).To(ConsistOf(results))
 				})
 				It("should get all blob points", func() {
 					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
-					results, err := timeseries.GetBlobRanges(timeseries.columns[0].Name(), r)
+					results, err := blobColumn.GetRanges(r)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(blobPoints).To(ConsistOf(results))
 				})
@@ -130,18 +160,18 @@ var _ = Describe("Tests", func() {
 					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
 					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
 					results := []TsBlobPoint{blobPoints[start], blobPoints[end]}
-					tsBlobPoints, err := timeseries.GetBlobRanges(timeseries.columns[0].Name(), r1, r2)
+					tsBlobPoints, err := blobColumn.GetRanges(r1, r2)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(results).To(ConsistOf(tsBlobPoints))
 				})
 				Context("Empty", func() {
 					It("should not get double ranges", func() {
-						results, err := timeseries.GetDoubleRanges(timeseries.columns[1].Name())
+						results, err := doubleColumn.GetRanges()
 						Expect(err).To(HaveOccurred())
 						Expect([]TsDoublePoint{}).To(ConsistOf(results))
 					})
 					It("should not get blob ranges", func() {
-						results, err := timeseries.GetBlobRanges(timeseries.columns[0].Name())
+						results, err := blobColumn.GetRanges()
 						Expect(err).To(HaveOccurred())
 						Expect([]TsBlobPoint{}).To(ConsistOf(results))
 					})
@@ -150,8 +180,8 @@ var _ = Describe("Tests", func() {
 			Context("Aggregate", func() {
 				var r TsRange
 				JustBeforeEach(func() {
-					timeseries.InsertDouble(timeseries.columns[1].Name(), doublePoints...)
-					timeseries.InsertBlob(timeseries.columns[0].Name(), blobPoints)
+					doubleColumn.Insert(doublePoints...)
+					blobColumn.Insert(blobPoints...)
 
 					r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
 				})
@@ -168,19 +198,19 @@ var _ = Describe("Tests", func() {
 						Expect(r).To(Equal(agg.Range()))
 					})
 					It("should not work with empty double aggregations", func() {
-						_, err := timeseries.DoubleAggregate(timeseries.columns[1].Name())
+						_, err := doubleColumn.Aggregate()
 						Expect(err).To(HaveOccurred())
 					})
 					It("should get first double with 'double aggregation'", func() {
 						first := doublePoints[start]
-						aggs, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), NewDoubleAggregation(AggFirst, r))
+						aggs, err := doubleColumn.Aggregate(NewDoubleAggregation(AggFirst, r))
 						Expect(err).ToNot(HaveOccurred())
 						Expect(first).To(Equal(aggs[0].Result()))
 					})
 					It("should get first and last elements in timeseries with 'double aggregates'", func() {
 						first := doublePoints[start]
 						last := doublePoints[end]
-						_, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), doubleAggs...)
+						_, err := doubleColumn.Aggregate(doubleAggs...)
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(1).To(BeNumerically("==", doubleAggs[0].Count()))
@@ -200,7 +230,7 @@ var _ = Describe("Tests", func() {
 							}
 							return
 						}(doublePoints)
-						aggs, err := timeseries.DoubleAggregate(timeseries.columns[1].Name(), NewDoubleAggregation(AggSum, r))
+						aggs, err := doubleColumn.Aggregate(NewDoubleAggregation(AggSum, r))
 						Expect(err).ToNot(HaveOccurred())
 						Expect(count).To(Equal(aggs[0].Count()))
 						Expect(sum).To(Equal(aggs[0].Result().Content()))
@@ -219,19 +249,19 @@ var _ = Describe("Tests", func() {
 						Expect(r).To(Equal(agg.Range()))
 					})
 					It("should not work with empty blob aggregations", func() {
-						_, err := timeseries.BlobAggregate(timeseries.columns[0].Name())
+						_, err := blobColumn.Aggregate()
 						Expect(err).To(HaveOccurred())
 					})
 					It("should get first blob with 'blob aggregation'", func() {
 						first := blobPoints[start]
-						aggs, err := timeseries.BlobAggregate(timeseries.columns[0].Name(), NewBlobAggregation(AggFirst, r))
+						aggs, err := blobColumn.Aggregate(NewBlobAggregation(AggFirst, r))
 						Expect(err).ToNot(HaveOccurred())
 						Expect(first).To(Equal(aggs[0].Result()))
 					})
 					It("should get first and last elements in timeseries with 'blob aggregates'", func() {
 						first := blobPoints[start]
 						last := blobPoints[end]
-						_, err := timeseries.BlobAggregate(timeseries.columns[0].Name(), blobAggs...)
+						_, err := blobColumn.Aggregate(blobAggs...)
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(1).To(BeNumerically("==", blobAggs[0].Count()))
