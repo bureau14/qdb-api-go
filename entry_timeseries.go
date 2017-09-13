@@ -28,13 +28,7 @@ func (entry TimeseriesEntry) Create() error {
 	columns := columnInfoArrayToC(entry.columns...)
 	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
 	if err == 0 {
-		length := int(columnsCount)
-		if length > 0 {
-			tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
-			for i, s := range tmpslice {
-				entry.columns[i] = s.toStructG()
-			}
-		}
+		entry.columns = columnInfoArrayToGo(columns, columnsCount)
 	}
 	return makeErrorOrNil(err)
 }
@@ -65,52 +59,36 @@ func (entry TimeseriesEntry) InsertBlob(column string, points []TsBlobPoint) err
 
 // GetDoubleRanges : Retrieves blobs in the specitypefied range of the time series column.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) GetDoubleRanges(column string, ranges ...TsRange) ([]TsDoublePoint, error) {
+func (entry TimeseriesEntry) GetDoubleRanges(column string, rgs ...TsRange) ([]TsDoublePoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	qdbRangesCount := C.qdb_size_t(len(ranges))
-	qdbRanges := rangeArrayToC(ranges...)
-	var qdbPoints *C.qdb_ts_double_point
-	var qdbPointsCount C.qdb_size_t
-	err := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	var points *C.qdb_ts_double_point
+	var pointsCount C.qdb_size_t
+	err := C.qdb_ts_double_get_ranges(entry.handle, alias, columnName, ranges, rangesCount, &points, &pointsCount)
 
 	if err == 0 {
-		defer entry.Release(unsafe.Pointer(qdbPoints))
-		length := int(qdbPointsCount)
-		output := make([]TsDoublePoint, length)
-		if length > 0 {
-			tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(qdbPoints))[:length:length]
-			for i, s := range tmpslice {
-				output[i] = s.toStructG()
-			}
-		}
-		return output, nil
+		defer entry.Release(unsafe.Pointer(points))
+		return doublePointArrayToGo(points, pointsCount), nil
 	}
 	return nil, ErrorType(err)
 }
 
 // GetBlobRanges : Retrieves blobs in the specified range of the time series column.
 //	It is an error to call this function on a non existing time-series.
-func (entry TimeseriesEntry) GetBlobRanges(column string, ranges ...TsRange) ([]TsBlobPoint, error) {
+func (entry TimeseriesEntry) GetBlobRanges(column string, rgs ...TsRange) ([]TsBlobPoint, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	qdbRangesCount := C.qdb_size_t(len(ranges))
-	qdbRanges := rangeArrayToC(ranges...)
-	var qdbPoints *C.qdb_ts_blob_point
-	var qdbPointsCount C.qdb_size_t
-	err := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, qdbRanges, qdbRangesCount, &qdbPoints, &qdbPointsCount)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	var points *C.qdb_ts_blob_point
+	var pointsCount C.qdb_size_t
+	err := C.qdb_ts_blob_get_ranges(entry.handle, alias, columnName, ranges, rangesCount, &points, &pointsCount)
 
 	if err == 0 {
-		defer entry.Release(unsafe.Pointer(qdbPoints))
-		length := int(qdbPointsCount)
-		output := make([]TsBlobPoint, length)
-		if length > 0 {
-			tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(qdbPoints))[:length:length]
-			for i, s := range tmpslice {
-				output[i] = s.toStructG()
-			}
-		}
-		return output, nil
+		defer entry.Release(unsafe.Pointer(points))
+		return blobPointArrayToGo(points, pointsCount), nil
 	}
 	return nil, ErrorType(err)
 }
@@ -120,22 +98,14 @@ func (entry TimeseriesEntry) GetBlobRanges(column string, ranges ...TsRange) ([]
 func (entry TimeseriesEntry) DoubleAggregate(column string, aggs ...*TsDoubleAggregation) ([]TsDoubleAggregation, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	qdbAggregationsCount := C.qdb_size_t(len(aggs))
-	qdbAggregations := doubleAggregationArrayToC(aggs...)
-	aggregations := append([]*TsDoubleAggregation{}, aggs...)
-	aggsCopy := make([]TsDoubleAggregation, len(aggs))
-	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
+	aggregations := doubleAggregationArrayToC(aggs...)
+	aggregationsCount := C.qdb_size_t(len(aggs))
+	var output []TsDoubleAggregation
+	err := C.qdb_ts_double_aggregate(entry.handle, alias, columnName, aggregations, aggregationsCount)
 	if err == 0 {
-		length := int(qdbAggregationsCount)
-		if length > 0 {
-			tmpslice := (*[1 << 30]C.qdb_ts_double_aggregation_t)(unsafe.Pointer(qdbAggregations))[:length:length]
-			for i, s := range tmpslice {
-				*aggregations[i] = s.toStructG()
-				aggsCopy[i] = s.toStructG()
-			}
-		}
+		output = doubleAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
-	return aggsCopy, makeErrorOrNil(err)
+	return output, makeErrorOrNil(err)
 }
 
 // BlobAggregate : Aggregate a sub-part of the time series.
@@ -143,20 +113,12 @@ func (entry TimeseriesEntry) DoubleAggregate(column string, aggs ...*TsDoubleAgg
 func (entry TimeseriesEntry) BlobAggregate(column string, aggs ...*TsBlobAggregation) ([]TsBlobAggregation, error) {
 	alias := C.CString(entry.alias)
 	columnName := C.CString(column)
-	qdbAggregationsCount := C.qdb_size_t(len(aggs))
-	qdbAggregations := blobAggregationArrayToC(aggs...)
-	aggregations := append([]*TsBlobAggregation{}, aggs...)
-	aggsCopy := make([]TsBlobAggregation, len(aggs))
-	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, qdbAggregations, qdbAggregationsCount)
+	aggregations := blobAggregationArrayToC(aggs...)
+	aggregationsCount := C.qdb_size_t(len(aggs))
+	var output []TsBlobAggregation
+	err := C.qdb_ts_blob_aggregate(entry.handle, alias, columnName, aggregations, aggregationsCount)
 	if err == 0 {
-		length := int(qdbAggregationsCount)
-		if length > 0 {
-			tmpslice := (*[1 << 30]C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(qdbAggregations))[:length:length]
-			for i, s := range tmpslice {
-				*aggregations[i] = s.toStructG()
-				aggsCopy[i] = s.toStructG()
-			}
-		}
+		output = blobAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
-	return aggsCopy, makeErrorOrNil(err)
+	return output, makeErrorOrNil(err)
 }

@@ -67,6 +67,18 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 	return &columns[0]
 }
 
+func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) []TsColumnInfo {
+	length := int(columnsCount)
+	output := make([]TsColumnInfo, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		for i, s := range tmpslice {
+			output[i] = s.toStructG()
+		}
+	}
+	return output
+}
+
 // :: End - Column Information ::
 
 // :: Start - Data points ::
@@ -112,6 +124,18 @@ func doublePointArrayToC(pts ...TsDoublePoint) *C.qdb_ts_double_point {
 		points[idx] = pt.toStructC()
 	}
 	return &points[0]
+}
+
+func doublePointArrayToGo(points *C.qdb_ts_double_point, pointsCount C.qdb_size_t) []TsDoublePoint {
+	length := int(pointsCount)
+	output := make([]TsDoublePoint, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(points))[:length:length]
+		for i, s := range tmpslice {
+			output[i] = s.toStructG()
+		}
+	}
+	return output
 }
 
 // :: :: End - Double Point ::
@@ -162,6 +186,18 @@ func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
 		points[idx] = pt.toStructC()
 	}
 	return &points[0]
+}
+
+func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) []TsBlobPoint {
+	length := int(pointsCount)
+	output := make([]TsBlobPoint, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(points))[:length:length]
+		for i, s := range tmpslice {
+			output[i] = s.toStructG()
+		}
+	}
+	return output
 }
 
 // :: :: End - Double Point ::
@@ -308,6 +344,19 @@ func doubleAggregationArrayToC(ags ...*TsDoubleAggregation) *C.qdb_ts_double_agg
 	return &doubleAggregations[0]
 }
 
+func doubleAggregationArrayToGo(aggregations *C.qdb_ts_double_aggregation_t, aggregationsCount C.qdb_size_t, aggs []*TsDoubleAggregation) []TsDoubleAggregation {
+	length := int(aggregationsCount)
+	output := make([]TsDoubleAggregation, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_double_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		for i, s := range tmpslice {
+			*aggs[i] = s.toStructG()
+			output[i] = s.toStructG()
+		}
+	}
+	return output
+}
+
 // :: :: End - Double Aggregation
 
 // :: :: Start - Blob Aggregation
@@ -373,6 +422,19 @@ func blobAggregationArrayToC(ags ...*TsBlobAggregation) *C.qdb_ts_blob_aggregati
 		blobAggregations = append(blobAggregations, ag.toStructC())
 	}
 	return &blobAggregations[0]
+}
+
+func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggregationsCount C.qdb_size_t, aggs []*TsBlobAggregation) []TsBlobAggregation {
+	length := int(aggregationsCount)
+	output := make([]TsBlobAggregation, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		for i, s := range tmpslice {
+			*aggs[i] = s.toStructG()
+			output[i] = s.toStructG()
+		}
+	}
+	return output
 }
 
 // :: :: End - Blob Aggregation
