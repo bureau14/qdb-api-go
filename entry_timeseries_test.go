@@ -94,13 +94,14 @@ var _ = Describe("Tests", func() {
 			Context("Insert Columns", func() {
 				It("should work to insert new columns", func() {
 					newColumns := []TsColumnInfo{NewTsColumnInfo("blob_column_2", TsColumnBlob), NewTsColumnInfo("double_column_2", TsColumnDouble)}
-					columnsAdded := append(columnsInfo, newColumns...)
+					allColumns := append(columnsInfo, newColumns...)
 
 					err := timeseries.InsertColumns(newColumns...)
 					Expect(err).ToNot(HaveOccurred())
 
-					doubles, blobs, err := timeseries.Columns()
-					Expect(len(doubles) + len(blobs)).To(Equal(len(columnsAdded)))
+					cols, err := timeseries.ColumnsInfo()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(cols).To(ConsistOf(allColumns))
 				})
 				It("should not work to insert no columns", func() {
 					err := timeseries.InsertColumns()

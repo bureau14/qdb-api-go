@@ -29,6 +29,19 @@ func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, error)
 	return doubleColumns, blobColumns, makeErrorOrNil(err)
 }
 
+// ColumnsInfo : return the current columns information
+func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
+	alias := C.CString(entry.alias)
+	var columns *C.qdb_ts_column_info_t
+	var columnsCount C.qdb_size_t
+	err := C.qdb_ts_list_columns(entry.handle, alias, &columns, &columnsCount)
+	var columnsInfo []TsColumnInfo
+	if err == 0 {
+		columnsInfo = columnInfoArrayToGo(columns, columnsCount)
+	}
+	return columnsInfo, makeErrorOrNil(err)
+}
+
 // Create : create a new timeseries
 func (entry TimeseriesEntry) Create(cols ...TsColumnInfo) error {
 	alias := C.CString(entry.alias)
