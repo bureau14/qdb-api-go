@@ -91,6 +91,57 @@ var _ = Describe("Tests", func() {
 				Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
 				Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
 			})
+			Context("Another timeseries", func() {
+				var (
+					anotherTimeseries TimeseriesEntry
+				)
+				JustBeforeEach(func() {
+					doubleColumn.Insert(doublePoints...)
+					blobColumn.Insert(blobPoints...)
+					anotherTimeseries = handle.Timeseries(alias)
+				})
+				It("should be able to retrieve all columns", func() {
+					doubles, blobs, err := anotherTimeseries.Columns()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(1).To(Equal(len(doubles)))
+					Expect(1).To(Equal(len(blobs)))
+					Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
+					Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
+				})
+				Context("Columns retrieved", func() {
+					var (
+						doubles []TsDoubleColumn
+						blobs   []TsBlobColumn
+						r       TsRange
+					)
+					JustBeforeEach(func() {
+						var err error
+						doubles, blobs, err = anotherTimeseries.Columns()
+						Expect(err).ToNot(HaveOccurred())
+						r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					})
+					It("should retrieve all the doubles", func() {
+						points, err := doubles[0].GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(doublePoints).To(Equal(points))
+					})
+					It("should retrieve all the blobs", func() {
+						points, err := blobs[0].GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(blobPoints).To(Equal(points))
+					})
+					It("should be possible to insert a double", func() {
+						err := doubles[0].Insert(NewTsDoublePoint(timestamps[start], 3.2))
+						Expect(err).ToNot(HaveOccurred())
+						points, err := doubleColumn.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						anotherPoints, err := doubles[0].GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(points).To(Equal(anotherPoints))
+						Expect(len(blobPoints) + 1).To(Equal(len(anotherPoints)))
+					})
+				})
+			})
 			Context("Insert Data Points", func() {
 				It("should work to insert a double point", func() {
 					err := doubleColumn.Insert(NewTsDoublePoint(time.Now(), 3.2))
