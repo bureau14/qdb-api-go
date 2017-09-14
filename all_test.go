@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -59,13 +58,16 @@ func TestMain(m *testing.M) {
 	unsecuredDB.start()
 	securedDB.start()
 	time.Sleep(10 * time.Second)
+
 	m.Run()
+
 	if err := unsecuredDB.stop(); err != nil {
 		fmt.Println(err)
 	}
 	if err := securedDB.stop(); err != nil {
 		fmt.Println(err)
 	}
+	time.Sleep(10 * time.Second)
 
 	if err := unsecuredDB.remove(); err != nil {
 		fmt.Println(err)
@@ -73,6 +75,7 @@ func TestMain(m *testing.M) {
 	if err := securedDB.remove(); err != nil {
 		fmt.Println(err)
 	}
+
 	cleanup()
 }
 
@@ -101,9 +104,9 @@ func checkInput() (string, string, string) {
 		panic(errors.New("A path to qdb binaries shall be provided"))
 	}
 
-	qdbd := filepath.Join(qdbBinariesPath, "qdbd")
-	qdbUserAdd := filepath.Join(qdbBinariesPath, "qdb_user_add")
-	qdbClusterKeygen := filepath.Join(qdbBinariesPath, "qdb_cluster_keygen")
+	qdbd := mkBinaryPath(qdbBinariesPath, "qdbd")
+	qdbUserAdd := mkBinaryPath(qdbBinariesPath, "qdb_user_add")
+	qdbClusterKeygen := mkBinaryPath(qdbBinariesPath, "qdb_cluster_keygen")
 
 	found := true
 	if _, err := os.Stat(qdbd); os.IsNotExist(err) {
@@ -134,32 +137,12 @@ type db struct {
 func newDB(qdbd string, s Security) (*db, error) {
 	d := &db{}
 	d.setInfo(s)
-	_, err := exec.Command("cp", qdbd, d.bin).Output()
+	err := copyFile(qdbd, d.bin)
 	if err != nil {
 		return d, err
 	}
 	err = d.prepareConfig(s)
 	return d, err
-}
-
-func (d *db) setInfo(s Security) {
-	d.config = "qdb"
-	d.data = "db"
-	d.port = qdbPort
-	d.bin = "./test_qdbd"
-	if s == SecurityEnabled {
-		d.config += "_secured"
-		d.bin += "_secured"
-		d.data += "_secured"
-		d.port++
-	}
-	if s == SecurityEncrypted {
-		d.config += "_encrypted"
-		d.bin += "_encrypted"
-		d.data += "_encrypted"
-		d.port++
-	}
-	d.config += ".cfg"
 }
 
 func (d db) prepareConfig(s Security) error {
@@ -202,11 +185,6 @@ func (d db) start() error {
 	runQdbServer.Stderr = &errbuf
 	runQdbServer.Start()
 	return nil
-}
-
-func (d db) stop() error {
-	_, err := exec.Command("killall", d.bin).Output()
-	return err
 }
 
 func (d *db) remove() error {
