@@ -92,6 +92,10 @@ func (t TsColumnInfo) toStructC() C.qdb_ts_column_info_t {
 	return C.qdb_ts_column_info_t{C.CString(t.name), C.qdb_ts_column_type_t(t.kind), [4]byte{}}
 }
 
+func (t C.qdb_ts_column_info_t) toStructInfoG() TsColumnInfo {
+	return TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}
+}
+
 func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 	if len(cols) == 0 {
 		return nil
@@ -101,6 +105,18 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 		columns[idx] = col.toStructC()
 	}
 	return &columns[0]
+}
+
+func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) []TsColumnInfo {
+	length := int(columnsCount)
+	columnsInfo := make([]TsColumnInfo, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		for i, s := range tmpslice {
+			columnsInfo[i] = s.toStructInfoG()
+		}
+	}
+	return columnsInfo
 }
 
 // :: End - Column Information ::

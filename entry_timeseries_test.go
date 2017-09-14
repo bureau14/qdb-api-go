@@ -91,6 +91,27 @@ var _ = Describe("Tests", func() {
 				Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
 				Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
 			})
+			Context("Insert Columns", func() {
+				It("should work to insert new columns", func() {
+					newColumns := []TsColumnInfo{NewTsColumnInfo("blob_column_2", TsColumnBlob), NewTsColumnInfo("double_column_2", TsColumnDouble)}
+					allColumns := append(columnsInfo, newColumns...)
+
+					err := timeseries.InsertColumns(newColumns...)
+					Expect(err).ToNot(HaveOccurred())
+
+					cols, err := timeseries.ColumnsInfo()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(cols).To(ConsistOf(allColumns))
+				})
+				It("should not work to insert no columns", func() {
+					err := timeseries.InsertColumns()
+					Expect(err).To(HaveOccurred())
+				})
+				It("should not work to insert columns with already existing names", func() {
+					err := timeseries.InsertColumns(NewTsColumnInfo("blob_column", TsColumnBlob))
+					Expect(err).To(HaveOccurred())
+				})
+			})
 			Context("Another timeseries", func() {
 				var (
 					anotherTimeseries TimeseriesEntry

@@ -130,6 +130,7 @@
 [ completion: 7/10 ]
 
 ### [ timeseries ]
+    [v] qdb_ts_insert_columns
     [v] qdb_ts_double_insert
     [v] qdb_ts_double_get_ranges
     [v] qdb_ts_double_aggregate
@@ -138,4 +139,4 @@
     [v] qdb_ts_blob_aggregate
     [v] qdb_ts_create
     [v] qdb_ts_list_columns
-[ completion: 8/8 ]
+[ completion: 9/9 ]
