@@ -51,7 +51,7 @@ func (entry TimeseriesEntry) BlobColumn(columnName string) TsBlobColumn {
 // Insert double points into a timeseries
 func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
 	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.n)
+	columnName := C.CString(column.name)
 	contentCount := C.qdb_size_t(len(points))
 	content := doublePointArrayToC(points...)
 	err := C.qdb_ts_double_insert(column.parent.handle, alias, columnName, content, contentCount)
@@ -61,7 +61,7 @@ func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
 // Insert blob points into a timeseries
 func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
 	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.n)
+	columnName := C.CString(column.name)
 	contentCount := C.qdb_size_t(len(points))
 	content := blobPointArrayToC(points...)
 	err := C.qdb_ts_blob_insert(column.parent.handle, alias, columnName, content, contentCount)
@@ -72,7 +72,7 @@ func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
 //	It is an error to call this function on a non existing time-series.
 func (column TsDoubleColumn) GetRanges(rgs ...TsRange) ([]TsDoublePoint, error) {
 	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.n)
+	columnName := C.CString(column.name)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	var points *C.qdb_ts_double_point
@@ -90,7 +90,7 @@ func (column TsDoubleColumn) GetRanges(rgs ...TsRange) ([]TsDoublePoint, error) 
 //	It is an error to call this function on a non existing time-series.
 func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.n)
+	columnName := C.CString(column.name)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	var points *C.qdb_ts_blob_point
@@ -108,7 +108,7 @@ func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 //	It is an error to call this function on a non existing time-series.
 func (column TsDoubleColumn) Aggregate(aggs ...*TsDoubleAggregation) ([]TsDoubleAggregation, error) {
 	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.n)
+	columnName := C.CString(column.name)
 	aggregations := doubleAggregationArrayToC(aggs...)
 	aggregationsCount := C.qdb_size_t(len(aggs))
 	var output []TsDoubleAggregation
@@ -123,7 +123,7 @@ func (column TsDoubleColumn) Aggregate(aggs ...*TsDoubleAggregation) ([]TsDouble
 //	It is an error to call this function on a non existing time-series.
 func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggregation, error) {
 	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.n)
+	columnName := C.CString(column.name)
 	aggregations := blobAggregationArrayToC(aggs...)
 	aggregationsCount := C.qdb_size_t(len(aggs))
 	var output []TsBlobAggregation

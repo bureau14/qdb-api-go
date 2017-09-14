@@ -67,18 +67,18 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, col
 
 // TsColumnInfo : column information in timeseries
 type TsColumnInfo struct {
-	n string
-	t TsColumnType
+	name string
+	kind TsColumnType
 }
 
 // Name : return column name
 func (t TsColumnInfo) Name() string {
-	return t.n
+	return t.name
 }
 
 // Type : return column type
 func (t TsColumnInfo) Type() TsColumnType {
-	return t.t
+	return t.kind
 }
 
 // NewTsColumnInfo : create a column info structure
@@ -89,7 +89,7 @@ func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
 // :: internals
 func (t TsColumnInfo) toStructC() C.qdb_ts_column_info_t {
 	// The [4]byte is some sort of padding necessary for Go : struct(char *, int, 4 byte of padding)
-	return C.qdb_ts_column_info_t{C.CString(t.n), C.qdb_ts_column_type_t(t.t), [4]byte{}}
+	return C.qdb_ts_column_info_t{C.CString(t.name), C.qdb_ts_column_type_t(t.kind), [4]byte{}}
 }
 
 func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
