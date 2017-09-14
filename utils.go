@@ -5,8 +5,6 @@ package qdb
 */
 import "C"
 import (
-	"encoding/json"
-	"io/ioutil"
 	"math/rand"
 	"time"
 	"unsafe"
@@ -48,13 +46,4 @@ func generateAlias(n int) string {
 	}
 
 	return string(b)
-}
-
-// writeJsonToFile : Write a json object to a file
-func writeJsonToFile(path string, jsonObject interface{}) error {
-	data, err := json.MarshalIndent(&jsonObject, "", "    ")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(path, data, 0744)
 }

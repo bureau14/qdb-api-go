@@ -188,10 +188,6 @@ func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 	if err != nil {
 		return h, err
 	}
-	err = h.SetEncryption(EncryptNone)
-	if err != nil {
-		return h, err
-	}
 	err = h.Connect(clusterURI)
 	return h, err
 }

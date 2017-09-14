@@ -82,7 +82,7 @@ func (n Node) RawConfig() ([]byte, error) {
 //
 //	The topology is a JSON object containing the node address, and the addresses of its successor and predecessor.
 func (n Node) Topology() (NodeTopology, error) {
-	data, err := n.RawConfig()
+	data, err := n.RawTopology()
 	if err != nil {
 		return NodeTopology{}, err
 	}
@@ -91,7 +91,7 @@ func (n Node) Topology() (NodeTopology, error) {
 	return output, err
 }
 
-// RawConfig :
+// RawTopology :
 //	Returns the topology of a node.
 //
 //	The topology is a JSON object as a byte array containing the node address, and the addresses of its successor and predecessor.

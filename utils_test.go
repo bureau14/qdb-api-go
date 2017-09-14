@@ -3,7 +3,9 @@
 package qdb
 
 import (
+	"encoding/json"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,4 +62,12 @@ func (d *db) setInfo(s Security) {
 func (d db) stop() error {
 	_, err := exec.Command("killall", d.bin).Output()
 	return err
+}
+
+func writeJsonToFile(path string, jsonObject interface{}) error {
+	data, err := json.MarshalIndent(&jsonObject, "", "    ")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(path, data, 0744)
 }
