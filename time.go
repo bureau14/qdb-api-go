@@ -10,9 +10,6 @@ import (
 	"time"
 )
 
-// SizeType typedef qdb_size_t
-type SizeType C.qdb_size_t
-
 func toQdbTimespec(time time.Time) C.qdb_timespec_t {
 	return C.qdb_timespec_t{C.qdb_time_t(time.Unix()), C.qdb_time_t(time.Nanosecond())}
 }

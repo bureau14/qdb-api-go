@@ -265,8 +265,8 @@ func (h HandleType) Integer(alias string) IntegerEntry {
 }
 
 // Timeseries : Create a timeseries entry object
-func (h HandleType) Timeseries(alias string, columns []TsColumnInfo) TimeseriesEntry {
-	return TimeseriesEntry{Entry{h, alias}, columns}
+func (h HandleType) Timeseries(alias string) TimeseriesEntry {
+	return TimeseriesEntry{Entry{h, alias}}
 }
 
 // Node : Create a node object

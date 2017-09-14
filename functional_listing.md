@@ -137,4 +137,5 @@
     [v] qdb_ts_blob_get_ranges
     [v] qdb_ts_blob_aggregate
     [v] qdb_ts_create
-[ completion: 7/7 ]
+    [v] qdb_ts_list_columns
+[ completion: 8/8 ]
