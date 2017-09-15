@@ -127,18 +127,18 @@ func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_siz
 
 // TsDoublePoint : timestamped double data point
 type TsDoublePoint struct {
-	t time.Time
-	c float64
+	timestamp time.Time
+	content   float64
 }
 
 // Timestamp : return data point timestamp
 func (t TsDoublePoint) Timestamp() time.Time {
-	return t.t
+	return t.timestamp
 }
 
 // Content : return data point content
 func (t TsDoublePoint) Content() float64 {
-	return t.c
+	return t.content
 }
 
 // NewTsDoublePoint : Create new timeseries double point
@@ -148,7 +148,7 @@ func NewTsDoublePoint(timestamp time.Time, value float64) TsDoublePoint {
 
 // :: internals
 func (t TsDoublePoint) toStructC() C.qdb_ts_double_point {
-	return C.qdb_ts_double_point{toQdbTimespec(t.t), C.double(t.c)}
+	return C.qdb_ts_double_point{toQdbTimespec(t.timestamp), C.double(t.content)}
 }
 
 func (t C.qdb_ts_double_point) toStructG() TsDoublePoint {
@@ -184,18 +184,18 @@ func doublePointArrayToGo(points *C.qdb_ts_double_point, pointsCount C.qdb_size_
 
 // TsBlobPoint : timestamped data
 type TsBlobPoint struct {
-	t time.Time
-	c []byte
+	timestamp time.Time
+	content   []byte
 }
 
 // Timestamp : return data point timestamp
 func (t TsBlobPoint) Timestamp() time.Time {
-	return t.t
+	return t.timestamp
 }
 
 // Content : return data point content
 func (t TsBlobPoint) Content() []byte {
-	return t.c
+	return t.content
 }
 
 // NewTsBlobPoint : Create new timeseries double point
@@ -208,9 +208,9 @@ func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
 // TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
 // solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
 func (t TsBlobPoint) toStructC() C.qdb_ts_blob_point {
-	dataSize := C.qdb_size_t(len(t.c))
-	data := unsafe.Pointer(C.CString(string(t.c)))
-	return C.qdb_ts_blob_point{toQdbTimespec(t.t), data, dataSize}
+	dataSize := C.qdb_size_t(len(t.content))
+	data := unsafe.Pointer(C.CString(string(t.content)))
+	return C.qdb_ts_blob_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
 func (t C.qdb_ts_blob_point) toStructG() TsBlobPoint {
@@ -248,18 +248,18 @@ func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) [
 
 // TsRange : timeseries range with begin and end timestamp
 type TsRange struct {
-	b time.Time
-	e time.Time
+	begin time.Time
+	end   time.Time
 }
 
 // Begin : returns the start of the time range
 func (t TsRange) Begin() time.Time {
-	return t.b
+	return t.begin
 }
 
 // End : returns the end of the time range
 func (t TsRange) End() time.Time {
-	return t.e
+	return t.end
 }
 
 // NewRange : creats a time range
@@ -269,7 +269,7 @@ func NewRange(begin, end time.Time) TsRange {
 
 // :: internals
 func (t TsRange) toStructC() C.qdb_ts_range_t {
-	return C.qdb_ts_range_t{toQdbTimespec(t.b), toQdbTimespec(t.e)}
+	return C.qdb_ts_range_t{toQdbTimespec(t.begin), toQdbTimespec(t.end)}
 }
 
 func (t C.qdb_ts_range_t) toStructG() TsRange {
@@ -323,53 +323,53 @@ const (
 
 // TsDoubleAggregation : Aggregation of double type
 type TsDoubleAggregation struct {
-	t TsAggregationType
-	r TsRange
-	s int64
-	p TsDoublePoint
+	kind  TsAggregationType
+	rng   TsRange
+	count int64
+	point TsDoublePoint
 }
 
 // Type : returns the type of the aggregation
 func (t TsDoubleAggregation) Type() TsAggregationType {
-	return t.t
+	return t.kind
 }
 
 // Range : returns the range of the aggregation
 func (t TsDoubleAggregation) Range() TsRange {
-	return t.r
+	return t.rng
 }
 
 // Count : returns the number of points aggregated into the result
 func (t TsDoubleAggregation) Count() int64 {
-	return t.s
+	return t.count
 }
 
 // Result : result of the aggregation
 func (t TsDoubleAggregation) Result() TsDoublePoint {
-	return t.p
+	return t.point
 }
 
 // NewDoubleAggregation : Create new timeseries double aggregation
-func NewDoubleAggregation(t TsAggregationType, r TsRange) *TsDoubleAggregation {
-	return &TsDoubleAggregation{t, r, 0, TsDoublePoint{}}
+func NewDoubleAggregation(kind TsAggregationType, rng TsRange) *TsDoubleAggregation {
+	return &TsDoubleAggregation{kind, rng, 0, TsDoublePoint{}}
 }
 
 // :: internals
 func (t TsDoubleAggregation) toStructC() C.qdb_ts_double_aggregation_t {
 	var cAgg C.qdb_ts_double_aggregation_t
-	cAgg._type = C.qdb_ts_aggregation_type_t(t.t)
-	cAgg._range = t.r.toStructC()
-	cAgg.count = C.qdb_size_t(t.s)
-	cAgg.result = t.p.toStructC()
+	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
+	cAgg._range = t.rng.toStructC()
+	cAgg.count = C.qdb_size_t(t.count)
+	cAgg.result = t.point.toStructC()
 	return cAgg
 }
 
 func (t C.qdb_ts_double_aggregation_t) toStructG() TsDoubleAggregation {
 	var gAgg TsDoubleAggregation
-	gAgg.t = TsAggregationType(t._type)
-	gAgg.r = t._range.toStructG()
-	gAgg.s = int64(t.count)
-	gAgg.p = t.result.toStructG()
+	gAgg.kind = TsAggregationType(t._type)
+	gAgg.rng = t._range.toStructG()
+	gAgg.count = int64(t.count)
+	gAgg.point = t.result.toStructG()
 	return gAgg
 }
 
@@ -403,53 +403,53 @@ func doubleAggregationArrayToGo(aggregations *C.qdb_ts_double_aggregation_t, agg
 
 // TsBlobAggregation : Aggregation of double type
 type TsBlobAggregation struct {
-	t TsAggregationType
-	r TsRange
-	s int64
-	p TsBlobPoint
+	kind  TsAggregationType
+	rng   TsRange
+	count int64
+	point TsBlobPoint
 }
 
 // Type : returns the type of the aggregation
 func (t TsBlobAggregation) Type() TsAggregationType {
-	return t.t
+	return t.kind
 }
 
 // Range : returns the range of the aggregation
 func (t TsBlobAggregation) Range() TsRange {
-	return t.r
+	return t.rng
 }
 
 // Count : returns the number of points aggregated into the result
 func (t TsBlobAggregation) Count() int64 {
-	return t.s
+	return t.count
 }
 
 // Result : result of the aggregation
 func (t TsBlobAggregation) Result() TsBlobPoint {
-	return t.p
+	return t.point
 }
 
 // NewBlobAggregation : Create new timeseries blob aggregation
-func NewBlobAggregation(t TsAggregationType, r TsRange) *TsBlobAggregation {
-	return &TsBlobAggregation{t, r, 0, TsBlobPoint{}}
+func NewBlobAggregation(kind TsAggregationType, rng TsRange) *TsBlobAggregation {
+	return &TsBlobAggregation{kind, rng, 0, TsBlobPoint{}}
 }
 
 // :: internals
 func (t TsBlobAggregation) toStructC() C.qdb_ts_blob_aggregation_t {
 	var cAgg C.qdb_ts_blob_aggregation_t
-	cAgg._type = C.qdb_ts_aggregation_type_t(t.t)
-	cAgg._range = t.r.toStructC()
-	cAgg.count = C.qdb_size_t(t.s)
-	cAgg.result = t.p.toStructC()
+	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
+	cAgg._range = t.rng.toStructC()
+	cAgg.count = C.qdb_size_t(t.count)
+	cAgg.result = t.point.toStructC()
 	return cAgg
 }
 
 func (t C.qdb_ts_blob_aggregation_t) toStructG() TsBlobAggregation {
 	var gAgg TsBlobAggregation
-	gAgg.t = TsAggregationType(t._type)
-	gAgg.r = t._range.toStructG()
-	gAgg.s = int64(t.count)
-	gAgg.p = t.result.toStructG()
+	gAgg.kind = TsAggregationType(t._type)
+	gAgg.rng = t._range.toStructG()
+	gAgg.count = int64(t.count)
+	gAgg.point = t.result.toStructG()
 	return gAgg
 }
 
