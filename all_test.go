@@ -1,7 +1,6 @@
 package qdb
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -132,6 +131,7 @@ type db struct {
 	data   string
 	config string
 	port   int
+	exe    *exec.Cmd
 }
 
 func newDB(qdbd string, s Security) (*db, error) {
@@ -178,13 +178,14 @@ func (d db) prepareConfig(s Security) error {
 	return nil
 }
 
-func (d db) start() error {
-	runQdbServer := exec.Command(d.bin, "-c", d.config)
-	var outbuf, errbuf bytes.Buffer
-	runQdbServer.Stdout = &outbuf
-	runQdbServer.Stderr = &errbuf
-	runQdbServer.Start()
+func (d *db) start() error {
+	d.exe = exec.Command(d.bin, "-c", d.config)
+	d.exe.Start()
 	return nil
+}
+
+func (d *db) stop() error {
+	return d.exe.Process.Kill()
 }
 
 func (d *db) remove() error {

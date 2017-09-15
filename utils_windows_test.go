@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
@@ -58,11 +57,6 @@ func (d *db) setInfo(s Security) {
 	}
 	d.bin += ".exe"
 	d.config += ".cfg"
-}
-
-func (d db) stop() error {
-	_, err := exec.Command("taskkill", "/F", "/T", "/IM", d.bin).Output()
-	return err
 }
 
 func writeJsonToFile(path string, jsonObject interface{}) error {
