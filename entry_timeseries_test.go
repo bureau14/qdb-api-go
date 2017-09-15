@@ -144,12 +144,18 @@ var _ = Describe("Tests", func() {
 					It("should retrieve all the doubles", func() {
 						points, err := doubles[0].GetRanges(r)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(doublePoints).To(Equal(points))
+						for i := range doublePoints {
+							Expect(doublePoints[i].Timestamp()).To(Equal(points[i].Timestamp()))
+							Expect(doublePoints[i].Content()).To(Equal(points[i].Content()))
+						}
 					})
 					It("should retrieve all the blobs", func() {
 						points, err := blobs[0].GetRanges(r)
 						Expect(err).ToNot(HaveOccurred())
-						Expect(blobPoints).To(Equal(points))
+						for i := range blobPoints {
+							Expect(blobPoints[i].Timestamp()).To(Equal(points[i].Timestamp()))
+							Expect(blobPoints[i].Content()).To(Equal(points[i].Content()))
+						}
 					})
 					It("should be possible to insert a double", func() {
 						err := doubles[0].Insert(NewTsDoublePoint(timestamps[start], 3.2))
