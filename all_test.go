@@ -1,11 +1,7 @@
 package qdb
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -89,141 +85,10 @@ var _ = Describe("Tests", func() {
 		handle, err = SetupHandle(clusterURI, 120*time.Second)
 		Expect(err).ToNot(HaveOccurred())
 		// stupid thing to boast about having 100% test coverage
-		fmt.Errorf("error: %s", ErrorType(2))
+		Expect(string(fmt.Errorf("error: %s", ErrorType(2)).Error())).To(Equal("error: An unknown error occurred."))
 	})
 
 	AfterSuite(func() {
 		handle.Close()
 	})
 })
-
-func checkInput() (string, string, string) {
-	qdbBinariesPath := os.Getenv("QDB_SERVER_PATH")
-	if qdbBinariesPath == "" {
-		panic(errors.New("A path to qdb binaries shall be provided"))
-	}
-
-	qdbd := mkBinaryPath(qdbBinariesPath, "qdbd")
-	qdbUserAdd := mkBinaryPath(qdbBinariesPath, "qdb_user_add")
-	qdbClusterKeygen := mkBinaryPath(qdbBinariesPath, "qdb_cluster_keygen")
-
-	found := true
-	if _, err := os.Stat(qdbd); os.IsNotExist(err) {
-		fmt.Println("qdbd binary is needed to run the tests")
-		found = false
-	}
-	if _, err := os.Stat(qdbUserAdd); os.IsNotExist(err) {
-		fmt.Println("qdb_user_add binary is needed to run the tests")
-		found = false
-	}
-	if _, err := os.Stat(qdbClusterKeygen); os.IsNotExist(err) {
-		fmt.Println("qdb_cluster_keygen binary is needed to run the tests")
-		found = false
-	}
-	if found == false {
-		panic(errors.New("Binaries are missing"))
-	}
-	return qdbd, qdbUserAdd, qdbClusterKeygen
-}
-
-type db struct {
-	bin    string
-	data   string
-	config string
-	port   int
-	exe    *exec.Cmd
-}
-
-func newDB(qdbd string, s Security) (*db, error) {
-	d := &db{}
-	d.setInfo(s)
-	err := copyFile(qdbd, d.bin)
-	if err != nil {
-		return d, err
-	}
-	err = d.prepareConfig(s)
-	return d, err
-}
-
-func (d db) prepareConfig(s Security) error {
-	data, err := exec.Command(d.bin, "--gen-config").Output()
-	if err != nil {
-		return err
-	}
-
-	var nodeConfig NodeConfig
-	err = json.Unmarshal(data, &nodeConfig)
-	if err != nil {
-		return err
-	}
-
-	nodeConfig.Local.Depot.Root = d.data
-	nodeConfig.Global.Security.Enabled = false
-	nodeConfig.Global.Security.EncryptTraffic = false
-	if s == SecurityEnabled {
-		nodeConfig.Global.Security.Enabled = true
-		if s == SecurityEncrypted {
-			nodeConfig.Global.Security.EncryptTraffic = true
-		}
-	}
-	if nodeConfig.Global.Security.Enabled {
-		nodeConfig.Global.Security.ClusterPrivateFile = clusterPrivateKeyFile
-		nodeConfig.Global.Security.UserList = usersConfigFile
-	}
-	nodeConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
-	err = writeJsonToFile(d.config, nodeConfig)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (d *db) start() error {
-	d.exe = exec.Command(d.bin, "-c", d.config)
-	d.exe.Start()
-	return nil
-}
-
-func (d *db) stop() error {
-	return d.exe.Process.Kill()
-}
-
-func (d *db) remove() error {
-	var finalError error
-	err := os.Remove(d.bin)
-	if err != nil {
-		fmt.Println("Could not remove", d.bin)
-		finalError = err
-	}
-	err = os.Remove(d.config)
-	if err != nil {
-		fmt.Println("Could not remove", d.config)
-		finalError = err
-	}
-	err = os.RemoveAll(d.data)
-	if err != nil {
-		fmt.Println("Could not remove", d.data)
-		finalError = err
-	}
-	d.bin = ""
-	d.data = ""
-	d.config = ""
-	return finalError
-}
-
-func generateUser(qdbUserAdd string) error {
-	_, err := exec.Command(qdbUserAdd, "-u", "test", "-p", usersConfigFile, "-s", userPrivateKeyFile).Output()
-	return err
-}
-
-func generateClusterKeys(qdbClusterKeygen string) error {
-	_, err := exec.Command(qdbClusterKeygen, "-p", clusterPublicKeyFile, "-s", clusterPrivateKeyFile).Output()
-	return err
-}
-
-func cleanup() {
-	os.Remove(clusterPrivateKeyFile)
-	os.Remove(clusterPublicKeyFile)
-	os.Remove(userPrivateKeyFile)
-	os.Remove(usersConfigFile)
-}

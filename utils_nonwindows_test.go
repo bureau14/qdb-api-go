@@ -1,23 +1,23 @@
-// +build windows
+// +build !windows
 
 package qdb
 
 import (
-	"fmt"
+	"os"
 	"path/filepath"
 )
 
 func setBinaryRights(path string) {
+	os.Chmod(path, 0744)
 }
 
 func mkBinaryPath(path string, binary string) string {
-	return fmt.Sprintf("%s.exe", filepath.Join(path, binary))
+	return filepath.Join(path, binary)
 }
 
 func addBinarybase(path *string) {
-	*path += "test_qdbd"
+	*path += "./test_qdbd"
 }
 
 func addBinaryExtension(path *string) {
-	*path += ".exe"
 }

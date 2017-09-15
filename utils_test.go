@@ -1,18 +1,14 @@
-// +build !windows
-
 package qdb
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
+	"os/exec"
 )
-
-func mkBinaryPath(path string, binary string) string {
-	return filepath.Join(path, binary)
-}
 
 func copyFile(src, dst string) (err error) {
 	in, err := os.Open(src)
@@ -34,28 +30,8 @@ func copyFile(src, dst string) (err error) {
 		return
 	}
 	err = out.Sync()
-	os.Chmod(dst, 0744)
+	setBinaryRights(dst)
 	return
-}
-
-func (d *db) setInfo(s Security) {
-	d.config = "qdb"
-	d.data = "db"
-	d.port = qdbPort
-	d.bin = "./test_qdbd"
-	if s == SecurityEnabled {
-		d.config += "_secured"
-		d.bin += "_secured"
-		d.data += "_secured"
-		d.port++
-	}
-	if s == SecurityEncrypted {
-		d.config += "_encrypted"
-		d.bin += "_encrypted"
-		d.data += "_encrypted"
-		d.port++
-	}
-	d.config += ".cfg"
 }
 
 func writeJsonToFile(path string, jsonObject interface{}) error {
@@ -64,4 +40,50 @@ func writeJsonToFile(path string, jsonObject interface{}) error {
 		return err
 	}
 	return ioutil.WriteFile(path, data, 0744)
+}
+
+func checkInput() (string, string, string) {
+	qdbBinariesPath := os.Getenv("QDB_SERVER_PATH")
+	if qdbBinariesPath == "" {
+		panic(errors.New("A path to qdb binaries shall be provided - set 'QDB_SERVER_PATH' environment varialbe"))
+	}
+
+	qdbd := mkBinaryPath(qdbBinariesPath, "qdbd")
+	qdbUserAdd := mkBinaryPath(qdbBinariesPath, "qdb_user_add")
+	qdbClusterKeygen := mkBinaryPath(qdbBinariesPath, "qdb_cluster_keygen")
+
+	found := true
+	if _, err := os.Stat(qdbd); os.IsNotExist(err) {
+		fmt.Println("qdbd binary is needed to run the tests")
+		found = false
+	}
+	if _, err := os.Stat(qdbUserAdd); os.IsNotExist(err) {
+		fmt.Println("qdb_user_add binary is needed to run the tests")
+		found = false
+	}
+	if _, err := os.Stat(qdbClusterKeygen); os.IsNotExist(err) {
+		fmt.Println("qdb_cluster_keygen binary is needed to run the tests")
+		found = false
+	}
+	if found == false {
+		panic(errors.New("Binaries are missing"))
+	}
+	return qdbd, qdbUserAdd, qdbClusterKeygen
+}
+
+func generateUser(qdbUserAdd string) error {
+	_, err := exec.Command(qdbUserAdd, "-u", "test", "-p", usersConfigFile, "-s", userPrivateKeyFile).Output()
+	return err
+}
+
+func generateClusterKeys(qdbClusterKeygen string) error {
+	_, err := exec.Command(qdbClusterKeygen, "-p", clusterPublicKeyFile, "-s", clusterPrivateKeyFile).Output()
+	return err
+}
+
+func cleanup() {
+	os.Remove(clusterPrivateKeyFile)
+	os.Remove(clusterPublicKeyFile)
+	os.Remove(userPrivateKeyFile)
+	os.Remove(usersConfigFile)
 }
