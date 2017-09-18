@@ -47,11 +47,9 @@ func (entry BlobEntry) GetAndRemove() ([]byte, error) {
 func (entry BlobEntry) Put(content []byte, expiry time.Time) error {
 	alias := C.CString(entry.alias)
 	contentSize := C.qdb_size_t(len(content))
-	var contentPtr unsafe.Pointer
+	contentPtr := unsafe.Pointer(nil)
 	if contentSize != 0 {
 		contentPtr = unsafe.Pointer(&content[0])
-	} else {
-		contentPtr = unsafe.Pointer(nil)
 	}
 	err := C.qdb_blob_put(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
 	return makeErrorOrNil(err)
@@ -63,11 +61,9 @@ func (entry BlobEntry) Put(content []byte, expiry time.Time) error {
 func (entry *BlobEntry) Update(newContent []byte, expiry time.Time) error {
 	alias := C.CString(entry.alias)
 	contentSize := C.qdb_size_t(len(newContent))
-	var contentPtr unsafe.Pointer
+	contentPtr := unsafe.Pointer(nil)
 	if contentSize != 0 {
 		contentPtr = unsafe.Pointer(&newContent[0])
-	} else {
-		contentPtr = unsafe.Pointer(nil)
 	}
 	err := C.qdb_blob_update(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
 	return makeErrorOrNil(err)
@@ -77,11 +73,9 @@ func (entry *BlobEntry) Update(newContent []byte, expiry time.Time) error {
 //	The entry must already exist.
 func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byte, error) {
 	contentSize := C.qdb_size_t(len(newContent))
-	var contentPtr unsafe.Pointer
+	contentPtr := unsafe.Pointer(nil)
 	if contentSize != 0 {
 		contentPtr = unsafe.Pointer(&newContent[0])
-	} else {
-		contentPtr = unsafe.Pointer(nil)
 	}
 	var contentLength C.qdb_size_t
 	var content unsafe.Pointer
@@ -98,18 +92,14 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byt
 func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, expiry time.Time) ([]byte, error) {
 	alias := C.CString(entry.alias)
 	valueLength := C.qdb_size_t(len(newValue))
-	var value unsafe.Pointer
+	value := unsafe.Pointer(nil)
 	if valueLength != 0 {
 		value = unsafe.Pointer(&newValue[0])
-	} else {
-		value = nil
 	}
 	comparandLength := C.qdb_size_t(len(newComparand))
-	var comparand unsafe.Pointer
+	comparand := unsafe.Pointer(nil)
 	if comparandLength != 0 {
 		comparand = unsafe.Pointer(&newComparand[0])
-	} else {
-		comparand = nil
 	}
 	var originalLength C.qdb_size_t
 	var originalValue unsafe.Pointer
@@ -125,11 +115,9 @@ func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, exp
 func (entry BlobEntry) RemoveIf(comparand []byte) error {
 	alias := C.CString(entry.alias)
 	comparandLength := C.qdb_size_t(len(comparand))
-	var comparandC unsafe.Pointer
+	comparandC := unsafe.Pointer(nil)
 	if comparandLength != 0 {
 		comparandC = unsafe.Pointer(&comparand[0])
-	} else {
-		comparandC = nil
 	}
 	err := C.qdb_blob_remove_if(entry.handle, alias, comparandC, comparandLength)
 	return makeErrorOrNil(err)
@@ -141,8 +129,8 @@ func (entry BlobEntry) RemoveIf(comparand []byte) error {
 //	and return `buffer is too small`, content length will nevertheless be
 // 	returned with entry size so that the caller may resize its buffer and try again.
 func (entry BlobEntry) GetNoAlloc(content []byte) (int, error) {
-	var contentLength C.qdb_size_t = C.qdb_size_t(len(content))
-	var contentPtr unsafe.Pointer = unsafe.Pointer(nil)
+	contentLength := C.qdb_size_t(len(content))
+	contentPtr := unsafe.Pointer(nil)
 	if contentLength != 0 {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
