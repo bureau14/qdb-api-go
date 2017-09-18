@@ -169,6 +169,68 @@ var _ = Describe("Tests", func() {
 					})
 				})
 			})
+			Context("Erase Data points", func() {
+				JustBeforeEach(func() {
+					doubleColumn.Insert(doublePoints...)
+					blobColumn.Insert(blobPoints...)
+				})
+				Context("Double", func() {
+					It("should not work to erase an empty range", func() {
+						erasedCount, err := doubleColumn.EraseRanges()
+						Expect(err).To(HaveOccurred())
+						Expect(uint64(0)).To(BeNumerically("==", erasedCount))
+					})
+					It("should work to erase a point", func() {
+						r := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+						erasedCount, err := doubleColumn.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(1).To(BeNumerically("==", erasedCount))
+
+						rAll := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						doubles, err := doubleColumn.GetRanges(rAll)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(doublePoints[1:]).To(ConsistOf(doubles))
+					})
+					It("should work to erase a complete range", func() {
+						r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						erasedCount, err := doubleColumn.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(count).To(BeNumerically("==", erasedCount))
+
+						doubles, err := doubleColumn.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(0).To(Equal(len(doubles)))
+					})
+				})
+				Context("Blob", func() {
+					It("should not work to erase an empty range", func() {
+						erasedCount, err := blobColumn.EraseRanges()
+						Expect(err).To(HaveOccurred())
+						Expect(uint64(0)).To(Equal(erasedCount))
+					})
+					It("should work to erase a point", func() {
+						r := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+						erasedCount, err := blobColumn.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(1).To(BeNumerically("==", erasedCount))
+
+						rAll := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						blobs, err := blobColumn.GetRanges(rAll)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(blobPoints[1:]).To(ConsistOf(blobs))
+					})
+					It("should work to erase a complete range", func() {
+						r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						erasedCount, err := blobColumn.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(count).To(BeNumerically("==", erasedCount))
+
+						blobs, err := blobColumn.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(0).To(Equal(len(blobs)))
+					})
+				})
+			})
 			Context("Insert Data Points", func() {
 				It("should work to insert a double point", func() {
 					err := doubleColumn.Insert(NewTsDoublePoint(time.Now(), 3.2))

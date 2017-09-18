@@ -70,6 +70,28 @@ func (entry TimeseriesEntry) BlobColumn(columnName string) TsBlobColumn {
 	return TsBlobColumn{tsColumn{TsColumnInfo{columnName, TsColumnBlob}, entry}}
 }
 
+// EraseRanges : erase all points in the specified ranges
+func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	erasedCount := C.qdb_uint_t(0)
+	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+	return uint64(erasedCount), makeErrorOrNil(err)
+}
+
+// EraseRanges : erase all points in the specified ranges
+func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	erasedCount := C.qdb_uint_t(0)
+	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+	return uint64(erasedCount), makeErrorOrNil(err)
+}
+
 // Insert double points into a timeseries
 func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
 	alias := C.CString(column.parent.alias)

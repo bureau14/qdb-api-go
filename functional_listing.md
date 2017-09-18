@@ -138,5 +138,6 @@
     [v] qdb_ts_blob_get_ranges
     [v] qdb_ts_blob_aggregate
     [v] qdb_ts_create
+    [v] qdb_ts_erase_ranges
     [v] qdb_ts_list_columns
-[ completion: 9/9 ]
+[ completion: 10/10 ]
