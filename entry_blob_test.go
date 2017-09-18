@@ -177,6 +177,29 @@ var _ = Describe("Tests", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(content).To(Equal(contentObtained))
 				})
+				It("should 'get no alloc' with exact buffer size", func() {
+					exactbuf := make([]byte, len(content))
+
+					n, err := blob.GetNoAlloc(exactbuf)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(n).To(Equal(len(content)))
+					Expect(content).To(Equal(exactbuf))
+				})
+				It("should not 'get no alloc' with small buffer size", func() {
+					smallbuf := make([]byte, len(content)-2)
+
+					n, err := blob.GetNoAlloc(smallbuf)
+					Expect(err).To(HaveOccurred())
+					Expect(n).To(Equal(len(content)))
+				})
+				It("should 'get no alloc' with bigger buffer size", func() {
+					bigbuf := make([]byte, len(content)+2)
+
+					n, err := blob.GetNoAlloc(bigbuf)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(n).To(Equal(len(content)))
+					Expect(content).To(Equal(bigbuf[:n]))
+				})
 			})
 		})
 	})

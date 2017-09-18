@@ -134,3 +134,20 @@ func (entry BlobEntry) RemoveIf(comparand []byte) error {
 	err := C.qdb_blob_remove_if(entry.handle, alias, comparandC, comparandLength)
 	return makeErrorOrNil(err)
 }
+
+// GetNoAlloc : Retrieve an entry's content to already allocated buffer
+//	If the entry does not exist, the function will fail and return 'alias not found' error.
+//	If the buffer is not large enough to hold the data, the function will fail
+//	and return `buffer is too small`, content length will nevertheless be
+// 	returned with entry size so that the caller may resize its buffer and try again.
+func (entry BlobEntry) GetNoAlloc(content []byte) (int, error) {
+	var contentLength C.qdb_size_t = C.qdb_size_t(len(content))
+	var contentPtr unsafe.Pointer = unsafe.Pointer(nil)
+	if contentLength != 0 {
+		contentPtr = unsafe.Pointer(&content[0])
+	}
+
+	err := C.qdb_blob_get_noalloc(entry.handle, C.CString(entry.alias), contentPtr, &contentLength)
+
+	return int(contentLength), makeErrorOrNil(err)
+}

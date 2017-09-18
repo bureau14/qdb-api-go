@@ -24,7 +24,7 @@
 [ completion: 18/22 ]
 
 ### [ blobs ]
-    [ ] qdb_blob_get_noalloc
+    [v] qdb_blob_get_noalloc
     [v] qdb_blob_get
     [x] qdb_reserved_blob_get (internal usage only, should not be exported in api)
     [v] qdb_blob_get_and_remove
@@ -36,7 +36,7 @@
     [v] qdb_blob_remove_if
     [ ] qdb_blob_scan (experimental function, should I implement?)
     [ ] qdb_blob_scan_regex (experimental function, should I implement?)
-[ completion: 9/12 ]
+[ completion: 10/12 ]
 
 ### [ cluster and nodes ]
     [v] qdb_node_status
