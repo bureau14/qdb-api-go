@@ -269,7 +269,7 @@ func NewRange(begin, end time.Time) TsRange {
 
 // :: internals
 func (t TsRange) toStructC() C.qdb_ts_range_t {
-	return C.qdb_ts_range_t{toQdbTimespec(t.begin), toQdbTimespec(t.end)}
+	return C.qdb_ts_range_t{begin: toQdbTimespec(t.begin), end: toQdbTimespec(t.end)}
 }
 
 func (t C.qdb_ts_range_t) toStructG() TsRange {
