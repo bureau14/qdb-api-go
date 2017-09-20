@@ -2,6 +2,12 @@ package qdb
 
 /*
 	#include <qdb/ts.h>
+
+	typedef struct
+	{
+		double min;
+		double max;
+	} double_range;
 */
 import "C"
 import (
@@ -248,8 +254,9 @@ func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) [
 
 // TsRange : timeseries range with begin and end timestamp
 type TsRange struct {
-	begin time.Time
-	end   time.Time
+	begin  time.Time
+	end    time.Time
+	filter rangeFilter
 }
 
 // Begin : returns the start of the time range
@@ -262,18 +269,59 @@ func (t TsRange) End() time.Time {
 	return t.end
 }
 
-// NewRange : creats a time range
+// NewRange : creates a time range
 func NewRange(begin, end time.Time) TsRange {
-	return TsRange{begin, end}
+	return TsRange{begin: begin, end: end}
+}
+
+// Sample : add a sampling size for the range
+//	Override information set by DoubleLimits function if called before
+func (t TsRange) Sample(sampleSize int64) TsRange {
+	t.filter.sampleSize = sampleSize
+	t.filter.filterType = FilterSample
+	return t
+}
+
+// DoubleLimits : add double range limits
+//	Override information set by Sample function if called before
+func (t TsRange) DoubleLimits(min, max float64, filterType RangeFilterTypeDouble) TsRange {
+	t.filter.span = doubleSpan{min: min, max: max}
+	t.filter.filterType = RangeFilterType(filterType)
+	return t
 }
 
 // :: internals
 func (t TsRange) toStructC() C.qdb_ts_range_t {
-	return C.qdb_ts_range_t{begin: toQdbTimespec(t.begin), end: toQdbTimespec(t.end)}
+	r := C.qdb_ts_range_t{begin: toQdbTimespec(t.begin), end: toQdbTimespec(t.end), filter: C.qdb_ts_filter_type_t(t.filter.filterType)}
+	switch t.filter.filterType {
+	case FilterNone:
+	case FilterSample:
+		*(*C.qdb_size_t)(unsafe.Pointer(&r.filter_params)) = C.qdb_size_t(t.filter.sampleSize)
+	case RangeFilterType(FilterDoubleInsideRange):
+		fallthrough
+	case RangeFilterType(FilterDoubleOutsideRange):
+		*(*C.double_range)(unsafe.Pointer(&r.filter_params)) = C.double_range{C.double(t.filter.span.min), C.double(t.filter.span.max)}
+	default:
+	}
+	return r
 }
 
 func (t C.qdb_ts_range_t) toStructG() TsRange {
-	return NewRange(t.begin.toStructG(), t.end.toStructG())
+	r := NewRange(t.begin.toStructG(), t.end.toStructG())
+	r.filter.filterType = RangeFilterType(t.filter)
+	switch r.filter.filterType {
+	case FilterNone:
+	case FilterSample:
+		r.filter.sampleSize = *(*int64)(unsafe.Pointer(&t.filter_params))
+	case RangeFilterType(FilterDoubleInsideRange):
+		fallthrough
+	case RangeFilterType(FilterDoubleOutsideRange):
+		doubles := *(*C.double_range)(unsafe.Pointer(&t.filter_params))
+		r.filter.span.min = float64(doubles.min)
+		r.filter.span.max = float64(doubles.max)
+	default:
+	}
+	return r
 }
 
 func rangeArrayToC(rs ...TsRange) *C.qdb_ts_range_t {
@@ -286,6 +334,41 @@ func rangeArrayToC(rs ...TsRange) *C.qdb_ts_range_t {
 	}
 	return &ranges[0]
 }
+
+// :: Start Range Filter ::
+
+// RangeFilterType : A filter type for qdb timeseries range
+type RangeFilterType int64
+
+// RangeFilterTypeDouble : A filter type for qdb timeseries range specific to double columns
+type RangeFilterTypeDouble RangeFilterType
+
+// RangeFilterType Values
+//	FilterNone : No filter type
+//	FilterUnique : Not implemented
+//	FilterSample : Not implemented
+//	FilterDoubleInsideRange : Not implemented
+//	FilterDoubleOutsideRange : Not implemented
+const (
+	FilterNone               RangeFilterType       = C.qdb_filter_none
+	FilterUnique             RangeFilterType       = C.qdb_filter_unique
+	FilterSample             RangeFilterType       = C.qdb_filter_sample
+	FilterDoubleInsideRange  RangeFilterTypeDouble = C.qdb_filter_double_inside_range
+	FilterDoubleOutsideRange RangeFilterTypeDouble = C.qdb_filter_double_outside_range
+)
+
+type doubleSpan struct {
+	min, max float64
+}
+
+// RangeFilter : a helper struct to filter on a range
+type rangeFilter struct {
+	filterType RangeFilterType
+	sampleSize int64
+	span       doubleSpan
+}
+
+// :: End - RangeFilter ::
 
 // :: End - Range ::
 
