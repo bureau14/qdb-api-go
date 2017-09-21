@@ -316,6 +316,14 @@ var _ = Describe("Tests", func() {
 						Expect([]TsBlobPoint{}).To(ConsistOf(results))
 					})
 				})
+				Context("Filters", func() {
+					It("should get half values", func() {
+						r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond)).DoubleLimits(2, 4, FilterDoubleInsideRange)
+						results, err := doubleColumn.GetRanges(r)
+						Expect(err).To(HaveOccurred())
+						Expect([]TsDoublePoint{}).To(ConsistOf(results))
+					})
+				})
 			})
 			Context("Aggregate", func() {
 				var r TsRange
