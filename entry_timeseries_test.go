@@ -450,6 +450,71 @@ var _ = Describe("Tests", func() {
 					})
 				})
 			})
+			Context("Bulk", func() {
+				var (
+					content []byte
+					value   float64
+				)
+				BeforeEach(func() {
+					content = []byte("content")
+					value = 3.2
+				})
+				It("should append all columns", func() {
+					bulk, err := timeseries.Bulk()
+					Expect(err).ToNot(HaveOccurred())
+					for i := int64(0); i < count; i++ {
+						err := bulk.Row(time.Now()).Blob(content).Double(value).Append()
+						Expect(err).ToNot(HaveOccurred())
+					}
+					err = bulk.Push()
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should append columns", func() {
+					bulk, err := timeseries.Bulk(columnsInfo...)
+					Expect(err).ToNot(HaveOccurred())
+					for i := int64(0); i < count; i++ {
+						err := bulk.Row(time.Now()).Blob(content).Double(value).Append()
+						Expect(err).ToNot(HaveOccurred())
+					}
+					err = bulk.Push()
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should append columns and ignore fields", func() {
+					bulk, err := timeseries.Bulk(columnsInfo...)
+					Expect(err).ToNot(HaveOccurred())
+					for i := int64(0); i < count; i++ {
+						value := 3.2
+						err := bulk.Row(time.Now()).Ignore().Double(value).Append()
+						Expect(err).ToNot(HaveOccurred())
+					}
+					err = bulk.Push()
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should append columns on part of timeseries", func() {
+					bulk, err := timeseries.Bulk(columnsInfo[0])
+					Expect(err).ToNot(HaveOccurred())
+					for i := int64(0); i < count; i++ {
+						content := []byte("content")
+						err := bulk.Row(time.Now()).Blob(content).Append()
+						Expect(err).ToNot(HaveOccurred())
+					}
+					err = bulk.Push()
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should fail to append columns - too much values", func() {
+					bulk, err := timeseries.Bulk(columnsInfo...)
+					Expect(err).ToNot(HaveOccurred())
+					content := []byte("content")
+					value := 3.2
+					err = bulk.Row(time.Now()).Blob(content).Double(value).Double(value).Append()
+					Expect(err).To(HaveOccurred())
+				})
+				It("should fail to append columns - additional column does not exist", func() {
+					columnsInfo = append(columnsInfo, NewTsColumnInfo("asd", TsColumnDouble))
+					_, err := timeseries.Bulk(columnsInfo...)
+					Expect(err).To(HaveOccurred())
+				})
+			})
 		})
 	})
 })
