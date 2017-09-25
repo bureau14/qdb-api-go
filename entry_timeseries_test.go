@@ -498,6 +498,7 @@ var _ = Describe("Tests", func() {
 						err := bulk.Row(time.Now()).Blob(content).Append()
 						Expect(err).ToNot(HaveOccurred())
 					}
+					Expect(count).To(Equal(int64(bulk.RowCount())))
 					err = bulk.Push()
 					Expect(err).ToNot(HaveOccurred())
 				})
@@ -512,6 +513,11 @@ var _ = Describe("Tests", func() {
 				It("should fail to append columns - additional column does not exist", func() {
 					columnsInfo = append(columnsInfo, NewTsColumnInfo("asd", TsColumnDouble))
 					_, err := timeseries.Bulk(columnsInfo...)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should fail to retrieve all columns from a non existing timeseries", func() {
+					ts := handle.Timeseries("asd")
+					_, err := ts.Bulk()
 					Expect(err).To(HaveOccurred())
 				})
 			})
