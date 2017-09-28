@@ -590,14 +590,17 @@ func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggrega
 
 // TsBulk : A structure that permits to append data to a timeseries
 type TsBulk struct {
-	err error
+	err       error
 	rowCount  int
 	index     int
 	timestamp time.Time
+	alias     string
+	handle    C.qdb_handle_t
+	columns   []TsColumnInfo
 	table     C.qdb_local_table_t
 }
 
-// RowCount : returns the number of rows to be append
+// RowCount : returns the number of rows to be appended
 func (t TsBulk) RowCount() int {
 	return t.rowCount
 }
