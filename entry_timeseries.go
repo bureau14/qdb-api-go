@@ -7,6 +7,7 @@ package qdb
 */
 import "C"
 import (
+	"time"
 	"unsafe"
 )
 
@@ -176,4 +177,79 @@ func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggreg
 		output = blobAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
 	return output, makeErrorOrNil(err)
+}
+
+// Bulk : create a bulk object for the specified columns
+//	If no columns are specified it gets the server side registered columns
+func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
+	if len(cols) == 0 {
+		var err error
+		cols, err = entry.ColumnsInfo()
+		if err != nil {
+			return nil, err
+		}
+	}
+	alias := C.CString(entry.alias)
+	columns := columnInfoArrayToC(cols...)
+	columnsCount := C.qdb_size_t(len(cols))
+	bulk := &TsBulk{}
+	err := C.qdb_ts_local_table_init(entry.handle, alias, columns, columnsCount, &bulk.table)
+	return bulk, makeErrorOrNil(err)
+}
+
+// Row : initialize a row append
+func (t *TsBulk) Row(timestamp time.Time) *TsBulk {
+	t.timestamp = timestamp
+	t.index = 0
+	return t
+}
+
+// Double : adds a double in row transaction
+func (t *TsBulk) Double(value float64) *TsBulk {
+	if t.err == nil {
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_double(t.table, C.qdb_size_t(t.index), C.double(value)))
+	}
+	t.index++
+	return t
+}
+
+// Blob : adds a blob in row transaction
+func (t *TsBulk) Blob(content []byte) *TsBulk {
+	contentSize := C.qdb_size_t(len(content))
+	contentPtr := unsafe.Pointer(nil)
+	if contentSize != 0 {
+		contentPtr = unsafe.Pointer(&content[0])
+	}
+	if t.err == nil {
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_blob(t.table, C.qdb_size_t(t.index), contentPtr, contentSize))
+	}
+	t.index++
+	return t
+}
+
+// Ignore : ignores this column in a row transaction
+func (t *TsBulk) Ignore() *TsBulk {
+	t.index++
+	return t
+}
+
+// Append : Adds the append to the list to be pushed
+func (t *TsBulk) Append() error {
+	if t.err != nil {
+		return t.err
+	}
+	rowIndex := C.qdb_size_t(0)
+	timespec := toQdbTimespec(t.timestamp)
+	err := C.qdb_ts_table_row_append(t.table, &timespec, &rowIndex)
+	if err == 0 {
+		t.rowCount = int(rowIndex) + 1
+	}
+	t.timestamp = time.Unix(0, 0)
+	return makeErrorOrNil(err)
+}
+
+// Push : push the list of appended rows
+func (t *TsBulk) Push() error {
+	err := C.qdb_ts_push(t.table)
+	return makeErrorOrNil(err)
 }
