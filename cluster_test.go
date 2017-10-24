@@ -74,6 +74,18 @@ var _ = Describe("Tests", func() {
 				Expect(content).To(Equal(contentObtained))
 			})
 		})
+		Context("TrimAll", func() {
+			It("should not work with bad handle", func() {
+				h := HandleType{}
+				c := h.Cluster()
+				err := c.TrimAll()
+				Expect(err).To(HaveOccurred())
+			})
+			It("should work work with valid handle", func() {
+				err := cluster.TrimAll()
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
 		Context("WaitStabilization", func() {
 			It("should not work with bad handle", func() {
 				h := HandleType{}

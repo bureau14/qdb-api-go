@@ -30,6 +30,18 @@ func (c Cluster) PurgeCache() error {
 	return makeErrorOrNil(err)
 }
 
+// TrimAll : Trims all data on all the nodes of the cluster.
+//	Quasardb uses Multi-Version Concurrency Control (MVCC) as a foundation of its transaction engine. It will automatically clean up old versions as entries are accessed.
+//	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
+//	Entries that are not accessed may not be cleaned up, resulting in increasing disk usage.
+//
+//	This function will request each nodes to trim all entries, release unused memory and compact files on disk.
+//	Because this operation is I/O and CPU intensive it is not recommended to run it when the cluster is heavily used.
+func (c Cluster) TrimAll() error {
+	err := C.qdb_trim_all(c.handle, 60*60*1000)
+	return makeErrorOrNil(err)
+}
+
 // WaitStabilization : Wait for all nodes of the cluster to be stabilized.
 //	Takes a timeout value, in milliseconds.
 func (c Cluster) WaitStabilization(timeout time.Duration) error {
