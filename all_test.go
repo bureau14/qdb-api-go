@@ -21,9 +21,10 @@ const (
 )
 
 var (
-	handle      HandleType
-	unsecuredDB *db
-	securedDB   *db
+	handle        HandleType
+	securedHandle HandleType
+	unsecuredDB   *db
+	securedDB     *db
 	// encryptedDB *db
 )
 
@@ -35,17 +36,24 @@ const (
 	SecurityEncrypted Security = "encrypted"
 )
 
+type Purge int
+
+const (
+	PurgeNothing Purge = 0
+	PurgeAll     Purge = 1
+)
+
 func TestMain(m *testing.M) {
 	var err error
 	qdbd, qdbUserAdd, qdbClusterKeygen := checkInput()
 
 	generateUser(qdbUserAdd)
 	generateClusterKeys(qdbClusterKeygen)
-	unsecuredDB, err = newDB(qdbd, SecurityNone)
+	unsecuredDB, err = newDB(qdbd, SecurityNone, PurgeNothing)
 	if err != nil {
 		panic(err)
 	}
-	securedDB, err = newDB(qdbd, SecurityEnabled)
+	securedDB, err = newDB(qdbd, SecurityEnabled, PurgeAll)
 	if err != nil {
 		panic(err)
 	}
@@ -84,11 +92,16 @@ var _ = Describe("Tests", func() {
 		var err error
 		handle, err = SetupHandle(clusterURI, 120*time.Second)
 		Expect(err).ToNot(HaveOccurred())
+
+		securedHandle, err = SetupSecuredHandle(securedURI, clusterPublicKeyFile, userPrivateKeyFile, 120*time.Second, EncryptNone)
+		Expect(err).ToNot(HaveOccurred())
+
 		// stupid thing to boast about having 100% test coverage
 		Expect(string(fmt.Errorf("error: %s", ErrorType(2)).Error())).To(Equal("error: An unknown error occurred."))
 	})
 
 	AfterSuite(func() {
 		handle.Close()
+		securedHandle.Close()
 	})
 })

@@ -274,3 +274,8 @@ func (h HandleType) Node(uri string) *Node {
 func (h HandleType) Query() *Query {
 	return &Query{h, []string{}, []string{}, []string{}}
 }
+
+// Cluster : Create a cluster object to execute commands on a cluster
+func (h HandleType) Cluster() *Cluster {
+	return &Cluster{h}
+}

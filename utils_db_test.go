@@ -15,18 +15,18 @@ type db struct {
 	exe    *exec.Cmd
 }
 
-func newDB(qdbd string, s Security) (*db, error) {
+func newDB(qdbd string, s Security, purge Purge) (*db, error) {
 	d := &db{}
 	d.setInfo(s)
 	err := copyFile(qdbd, d.bin)
 	if err != nil {
 		return d, err
 	}
-	err = d.prepareConfig(s)
+	err = d.prepareConfig(s, purge)
 	return d, err
 }
 
-func (d db) prepareConfig(s Security) error {
+func (d db) prepareConfig(s Security, purge Purge) error {
 	data, err := exec.Command(d.bin, "--gen-config").Output()
 	if err != nil {
 		return err
@@ -50,6 +50,9 @@ func (d db) prepareConfig(s Security) error {
 	if nodeConfig.Global.Security.Enabled {
 		nodeConfig.Global.Security.ClusterPrivateFile = clusterPrivateKeyFile
 		nodeConfig.Global.Security.UserList = usersConfigFile
+	}
+	if purge == PurgeAll {
+		nodeConfig.Global.Security.EnablePurgeAll = true
 	}
 	nodeConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
 	err = writeJsonToFile(d.config, nodeConfig)
