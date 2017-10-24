@@ -88,15 +88,15 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
-		Context("WaitStabilization", func() {
+		Context("WaitForStabilization", func() {
 			It("should not work with bad handle", func() {
 				h := HandleType{}
 				c := h.Cluster()
-				err := c.WaitStabilization(60 * time.Second)
+				err := c.WaitForStabilization(60 * time.Second)
 				Expect(err).To(HaveOccurred())
 			})
 			It("should work work with valid handle", func() {
-				err := cluster.WaitStabilization(60 * time.Second)
+				err := cluster.WaitForStabilization(60 * time.Second)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})

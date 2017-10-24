@@ -42,9 +42,9 @@ func (c Cluster) TrimAll() error {
 	return makeErrorOrNil(err)
 }
 
-// WaitStabilization : Wait for all nodes of the cluster to be stabilized.
+// WaitForStabilization : Wait for all nodes of the cluster to be stabilized.
 //	Takes a timeout value, in milliseconds.
-func (c Cluster) WaitStabilization(timeout time.Duration) error {
+func (c Cluster) WaitForStabilization(timeout time.Duration) error {
 	err := C.qdb_wait_for_stabilization(c.handle, C.int(timeout/time.Millisecond))
 	return makeErrorOrNil(err)
 }
