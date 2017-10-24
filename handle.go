@@ -59,7 +59,7 @@ func (h HandleType) APIBuild() string {
 //	Not needed if you created your handle with NewHandle.
 func (h HandleType) Open(protocol Protocol) error {
 	err := C.qdb_open(&h.handle, C.qdb_protocol_t(protocol))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // SetTimeout : Sets the timeout of all network operations.
@@ -67,7 +67,7 @@ func (h HandleType) Open(protocol Protocol) error {
 //	Keep in mind that the server-side timeout might be shorter.
 func (h HandleType) SetTimeout(timeout time.Duration) error {
 	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // Encryption : encryption option
@@ -86,7 +86,7 @@ const (
 //	Not needed if you created your handle with NewHandle.
 func (h HandleType) SetEncryption(encryption Encryption) error {
 	err := C.qdb_option_set_encryption(h.handle, C.qdb_encryption_t(encryption))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 type jSONCredentialConfig struct {
@@ -108,7 +108,7 @@ func (h HandleType) AddUserCredentials(userCredentialFile string) error {
 	username := C.CString(jsonConfig.Username)
 	secretKey := C.CString(jsonConfig.SecretKey)
 	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, secretKey)
-	return makeErrorOrNil(qdbErr)
+	return makeErrorOrNil(ErrorType(qdbErr))
 }
 
 // AddClusterPublicKey : add the cluster public key from a cluster config file.
@@ -119,21 +119,21 @@ func (h HandleType) AddClusterPublicKey(clusterPublicKeyFile string) error {
 	}
 	clusterPublicKey := C.CString(string(fileConfig))
 	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
-	return makeErrorOrNil(qdbErr)
+	return makeErrorOrNil(ErrorType(qdbErr))
 }
 
 // SetMaxCardinality : Sets the maximum allowed cardinality of a quasardb query.
 //	The default value is 10,007. The minimum allowed values is 100.
 func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
 	err := C.qdb_option_set_max_cardinality(h.handle, C.qdb_uint_t(maxCardinality))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // SetCompression : Set the compression level for all future messages emitted by the specified handle.
 //	Regardless of this parameter, the API will be able to read whatever compression the server uses.
 func (h HandleType) SetCompression(compressionLevel Compression) error {
 	err := C.qdb_option_set_compression(h.handle, C.qdb_compression_t(compressionLevel))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // Connect : connect a previously opened handle
@@ -147,7 +147,7 @@ func (h HandleType) SetCompression(compressionLevel Compression) error {
 //		qdb://[::1]:2836 - Connects to the local IPv6 loopback on the port 2836
 func (h HandleType) Connect(clusterURI string) error {
 	err := C.qdb_connect(h.handle, C.CString(clusterURI))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // Close : Closes the handle previously opened.
@@ -155,7 +155,7 @@ func (h HandleType) Connect(clusterURI string) error {
 //	including buffers which may have been allocated as or a result of batch operations or get operations.
 func (h HandleType) Close() error {
 	err := C.qdb_close(h.handle)
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // Release : Releases an API-allocated buffer.
@@ -173,7 +173,7 @@ func (h HandleType) Release(buffer unsafe.Pointer) {
 func NewHandle() (HandleType, error) {
 	var h HandleType
 	err := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_protocol_t(ProtocolTCP))
-	return h, makeErrorOrNil(err)
+	return h, makeErrorOrNil(ErrorType(err))
 }
 
 // SetupHandle : Setup an handle, return error if needed

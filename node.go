@@ -44,7 +44,7 @@ func (n Node) RawStatus() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, makeErrorOrNil(ErrorType(err))
 }
 
 // Config :
@@ -74,7 +74,7 @@ func (n Node) RawConfig() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, makeErrorOrNil(ErrorType(err))
 }
 
 // Topology :
@@ -104,5 +104,5 @@ func (n Node) RawTopology() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, makeErrorOrNil(ErrorType(err))
 }

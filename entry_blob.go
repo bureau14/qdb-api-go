@@ -26,7 +26,7 @@ func (entry BlobEntry) Get() ([]byte, error) {
 	err := C.qdb_blob_get(entry.handle, C.CString(entry.alias), &content, &contentLength)
 
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
-	return output, makeErrorOrNil(err)
+	return output, makeErrorOrNil(ErrorType(err))
 }
 
 // GetAndRemove : Atomically gets an entry from the quasardb server and removes it.
@@ -38,7 +38,7 @@ func (entry BlobEntry) GetAndRemove() ([]byte, error) {
 	err := C.qdb_blob_get_and_remove(entry.handle, C.CString(entry.alias), &content, &contentLength)
 
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
-	return output, makeErrorOrNil(err)
+	return output, makeErrorOrNil(ErrorType(err))
 }
 
 // Put : Creates a new entry and sets its content to the provided blob.
@@ -52,7 +52,7 @@ func (entry BlobEntry) Put(content []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
 	err := C.qdb_blob_put(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // Update : Creates or updates an entry and sets its content to the provided blob.
@@ -66,7 +66,7 @@ func (entry *BlobEntry) Update(newContent []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&newContent[0])
 	}
 	err := C.qdb_blob_update(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // GetAndUpdate : Atomically gets and updates (in this order) the entry on the quasardb server.
@@ -82,7 +82,7 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byt
 	defer entry.Release(content)
 	err := C.qdb_blob_get_and_update(entry.handle, C.CString(entry.alias), contentPtr, contentSize, toQdbTime(expiry), &content, &contentLength)
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
-	return output, makeErrorOrNil(err)
+	return output, makeErrorOrNil(ErrorType(err))
 }
 
 // CompareAndSwap : Atomically compares the entry with comparand and updates it to new_value if, and only if, they match.
@@ -106,7 +106,7 @@ func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, exp
 	defer entry.Release(unsafe.Pointer(originalValue))
 	err := C.qdb_blob_compare_and_swap(entry.handle, alias, value, valueLength, comparand, comparandLength, toQdbTime(expiry), &originalValue, &originalLength)
 	output := C.GoBytes(originalValue, C.int(originalLength))
-	return output, makeErrorOrNil(err)
+	return output, makeErrorOrNil(ErrorType(err))
 }
 
 // RemoveIf : Atomically removes the entry on the server if the content matches.
@@ -120,7 +120,7 @@ func (entry BlobEntry) RemoveIf(comparand []byte) error {
 		comparandC = unsafe.Pointer(&comparand[0])
 	}
 	err := C.qdb_blob_remove_if(entry.handle, alias, comparandC, comparandLength)
-	return makeErrorOrNil(err)
+	return makeErrorOrNil(ErrorType(err))
 }
 
 // GetNoAlloc : Retrieve an entry's content to already allocated buffer
@@ -137,5 +137,5 @@ func (entry BlobEntry) GetNoAlloc(content []byte) (int, error) {
 
 	err := C.qdb_blob_get_noalloc(entry.handle, C.CString(entry.alias), contentPtr, &contentLength)
 
-	return int(contentLength), makeErrorOrNil(err)
+	return int(contentLength), makeErrorOrNil(ErrorType(err))
 }
