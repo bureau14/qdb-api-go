@@ -30,7 +30,7 @@ func (e Entry) Alias() string {
 //	The call is ACID, regardless of the type of the entry and a transaction will be created if need be
 func (e Entry) Remove() error {
 	err := C.qdb_remove(e.handle, C.CString(e.alias))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // ::: EXPIRY RELATED FUNCTIONS :::
@@ -55,7 +55,7 @@ func PreserveExpiration() time.Time {
 //	Values in the past are refused, but the cluster will have a certain tolerance to account for clock skews.
 func (e Entry) ExpiresAt(expiry time.Time) error {
 	err := C.qdb_expires_at(e.handle, C.CString(e.alias), toQdbTime(expiry))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // ExpiresFromNow : Sets the expiration time of an entry, relative to the current time of the client.
@@ -65,7 +65,7 @@ func (e Entry) ExpiresAt(expiry time.Time) error {
 //	To remove the expiration time of an entry or to use an absolute expiration time use ExpiresAt.
 func (e Entry) ExpiresFromNow(expiry time.Duration) error {
 	err := C.qdb_expires_from_now(e.handle, C.CString(e.alias), C.qdb_time_t(expiry/time.Millisecond))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // ::: END OF EXPIRY RELATED FUNCTIONS :::
@@ -83,7 +83,7 @@ func (e Entry) GetLocation() (NodeLocation, error) {
 	var location C.qdb_remote_node_t
 	defer e.Release(unsafe.Pointer(&location))
 	err := C.qdb_get_location(e.handle, C.CString(e.alias), &location)
-	return NodeLocation{C.GoString(location.address), int16(location.port)}, makeErrorOrNil(ErrorType(err))
+	return NodeLocation{C.GoString(location.address), int16(location.port)}, makeErrorOrNil(err)
 }
 
 // RefID : Unique identifier
@@ -125,7 +125,7 @@ type Metadata struct {
 func (e Entry) GetMetadata() (Metadata, error) {
 	var m C.qdb_entry_metadata_t
 	err := C.qdb_get_metadata(e.handle, C.CString(e.alias), &m)
-	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), m.modification_time.toStructG(), m.expiry_time.toStructG()}, makeErrorOrNil(ErrorType(err))
+	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), m.modification_time.toStructG(), m.expiry_time.toStructG()}, makeErrorOrNil(err)
 }
 
 // ::: TAGS RELATED FUNCTIONS :::
@@ -136,7 +136,7 @@ func (e Entry) GetMetadata() (Metadata, error) {
 //	The tag may or may not exist.
 func (e Entry) AttachTag(tag string) error {
 	err := C.qdb_attach_tag(e.handle, C.CString(e.alias), C.CString(tag))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // AttachTags : Adds a collection of tags to a single entry.
@@ -148,7 +148,7 @@ func (e Entry) AttachTags(tags []string) error {
 	data := convertToCharStarStar(tags)
 	defer C.free(data)
 	err := C.qdb_attach_tags(e.handle, C.CString(e.alias), (**C.char)(data), C.size_t(len(tags)))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // HasTag : Tests if an entry has the request tag.
@@ -156,7 +156,7 @@ func (e Entry) AttachTags(tags []string) error {
 //	The entry must exist.
 func (e Entry) HasTag(tag string) error {
 	err := C.qdb_has_tag(e.handle, C.CString(e.alias), C.CString(tag))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // DetachTag : Removes a tag from an entry.
@@ -165,7 +165,7 @@ func (e Entry) HasTag(tag string) error {
 //	The tag must exist.
 func (e Entry) DetachTag(tag string) error {
 	err := C.qdb_detach_tag(e.handle, C.CString(e.alias), C.CString(tag))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // DetachTags : Removes a collection of tags from a single entry.
@@ -176,7 +176,7 @@ func (e Entry) DetachTags(tags []string) error {
 	data := convertToCharStarStar(tags)
 	defer C.free(data)
 	err := C.qdb_detach_tags(e.handle, C.CString(e.alias), (**C.char)(data), C.size_t(len(tags)))
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // GetTagged : Retrieves all entries that have the specified tag.

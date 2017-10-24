@@ -27,7 +27,7 @@ func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, error)
 	if err == 0 {
 		doubleColumns, blobColumns = columnArrayToGo(entry, columns, columnsCount)
 	}
-	return doubleColumns, blobColumns, makeErrorOrNil(ErrorType(err))
+	return doubleColumns, blobColumns, makeErrorOrNil(err)
 }
 
 // ColumnsInfo : return the current columns information
@@ -40,7 +40,7 @@ func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 	if err == 0 {
 		columnsInfo = columnInfoArrayToGo(columns, columnsCount)
 	}
-	return columnsInfo, makeErrorOrNil(ErrorType(err))
+	return columnsInfo, makeErrorOrNil(err)
 }
 
 // Create : create a new timeseries
@@ -49,7 +49,7 @@ func (entry TimeseriesEntry) Create(cols ...TsColumnInfo) error {
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // InsertColumns : insert columns in a existing timeseries
@@ -58,7 +58,7 @@ func (entry TimeseriesEntry) InsertColumns(cols ...TsColumnInfo) error {
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_insert_columns(entry.handle, alias, columns, columnsCount)
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // DoubleColumn : create a column object
@@ -79,7 +79,7 @@ func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
-	return uint64(erasedCount), makeErrorOrNil(ErrorType(err))
+	return uint64(erasedCount), makeErrorOrNil(err)
 }
 
 // EraseRanges : erase all points in the specified ranges
@@ -90,7 +90,7 @@ func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
-	return uint64(erasedCount), makeErrorOrNil(ErrorType(err))
+	return uint64(erasedCount), makeErrorOrNil(err)
 }
 
 // Insert double points into a timeseries
@@ -100,7 +100,7 @@ func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := doublePointArrayToC(points...)
 	err := C.qdb_ts_double_insert(column.parent.handle, alias, columnName, content, contentCount)
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // Insert blob points into a timeseries
@@ -110,7 +110,7 @@ func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := blobPointArrayToC(points...)
 	err := C.qdb_ts_blob_insert(column.parent.handle, alias, columnName, content, contentCount)
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // GetRanges : Retrieves blobs in the specified range of the time series column.
@@ -161,7 +161,7 @@ func (column TsDoubleColumn) Aggregate(aggs ...*TsDoubleAggregation) ([]TsDouble
 	if err == 0 {
 		output = doubleAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
-	return output, makeErrorOrNil(ErrorType(err))
+	return output, makeErrorOrNil(err)
 }
 
 // Aggregate : Aggregate a sub-part of the time series.
@@ -176,7 +176,7 @@ func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggreg
 	if err == 0 {
 		output = blobAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
-	return output, makeErrorOrNil(ErrorType(err))
+	return output, makeErrorOrNil(err)
 }
 
 // Bulk : create a bulk object for the specified columns
@@ -194,7 +194,7 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	columnsCount := C.qdb_size_t(len(cols))
 	bulk := &TsBulk{}
 	err := C.qdb_ts_local_table_init(entry.handle, alias, columns, columnsCount, &bulk.table)
-	return bulk, makeErrorOrNil(ErrorType(err))
+	return bulk, makeErrorOrNil(err)
 }
 
 // Row : initialize a row append
@@ -207,7 +207,7 @@ func (t *TsBulk) Row(timestamp time.Time) *TsBulk {
 // Double : adds a double in row transaction
 func (t *TsBulk) Double(value float64) *TsBulk {
 	if t.err == nil {
-		t.err = makeErrorOrNil(ErrorType(C.qdb_ts_row_set_double(t.table, C.qdb_size_t(t.index), C.double(value))))
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_double(t.table, C.qdb_size_t(t.index), C.double(value)))
 	}
 	t.index++
 	return t
@@ -221,7 +221,7 @@ func (t *TsBulk) Blob(content []byte) *TsBulk {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
 	if t.err == nil {
-		t.err = makeErrorOrNil(ErrorType(C.qdb_ts_row_set_blob(t.table, C.qdb_size_t(t.index), contentPtr, contentSize)))
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_blob(t.table, C.qdb_size_t(t.index), contentPtr, contentSize))
 	}
 	t.index++
 	return t
@@ -245,11 +245,11 @@ func (t *TsBulk) Append() error {
 		t.rowCount = int(rowIndex) + 1
 	}
 	t.timestamp = time.Unix(0, 0)
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }
 
 // Push : push the list of appended rows
 func (t *TsBulk) Push() error {
 	err := C.qdb_ts_push(t.table)
-	return makeErrorOrNil(ErrorType(err))
+	return makeErrorOrNil(err)
 }

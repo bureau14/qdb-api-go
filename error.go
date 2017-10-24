@@ -123,9 +123,9 @@ const (
 
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
 
-func makeErrorOrNil(err ErrorType) error {
-	if err != Success && err != Created {
-		return err
+func makeErrorOrNil(err C.qdb_error_t) error {
+	if err != 0 && err != C.qdb_e_ok_created {
+		return ErrorType(err)
 	}
 	return nil
 }
