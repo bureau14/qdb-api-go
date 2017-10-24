@@ -15,18 +15,18 @@ type db struct {
 	exe    *exec.Cmd
 }
 
-func newDB(qdbd string, s Security, enablePurgeAll bool) (*db, error) {
+func newDB(qdbd string, s Security, purge Purge) (*db, error) {
 	d := &db{}
 	d.setInfo(s)
 	err := copyFile(qdbd, d.bin)
 	if err != nil {
 		return d, err
 	}
-	err = d.prepareConfig(s, enablePurgeAll)
+	err = d.prepareConfig(s, purge)
 	return d, err
 }
 
-func (d db) prepareConfig(s Security, enablePurgeAll bool) error {
+func (d db) prepareConfig(s Security, purge Purge) error {
 	data, err := exec.Command(d.bin, "--gen-config").Output()
 	if err != nil {
 		return err
@@ -42,7 +42,6 @@ func (d db) prepareConfig(s Security, enablePurgeAll bool) error {
 	nodeConfig.Global.Security.Enabled = false
 	nodeConfig.Global.Security.EncryptTraffic = false
 	if s == SecurityEnabled {
-		nodeConfig.Global.Security.EnablePurgeAll = true
 		nodeConfig.Global.Security.Enabled = true
 		if s == SecurityEncrypted {
 			nodeConfig.Global.Security.EncryptTraffic = true
@@ -51,6 +50,9 @@ func (d db) prepareConfig(s Security, enablePurgeAll bool) error {
 	if nodeConfig.Global.Security.Enabled {
 		nodeConfig.Global.Security.ClusterPrivateFile = clusterPrivateKeyFile
 		nodeConfig.Global.Security.UserList = usersConfigFile
+	}
+	if purge == PurgeAll {
+		nodeConfig.Global.Security.EnablePurgeAll = true
 	}
 	nodeConfig.Local.Network.ListenOn = fmt.Sprintf("127.0.0.1:%d", d.port)
 	err = writeJsonToFile(d.config, nodeConfig)

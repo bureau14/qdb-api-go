@@ -36,17 +36,24 @@ const (
 	SecurityEncrypted Security = "encrypted"
 )
 
+type Purge int
+
+const (
+	PurgeNothing Purge = 0
+	PurgeAll     Purge = 1
+)
+
 func TestMain(m *testing.M) {
 	var err error
 	qdbd, qdbUserAdd, qdbClusterKeygen := checkInput()
 
 	generateUser(qdbUserAdd)
 	generateClusterKeys(qdbClusterKeygen)
-	unsecuredDB, err = newDB(qdbd, SecurityNone, false)
+	unsecuredDB, err = newDB(qdbd, SecurityNone, PurgeNothing)
 	if err != nil {
 		panic(err)
 	}
-	securedDB, err = newDB(qdbd, SecurityEnabled, true)
+	securedDB, err = newDB(qdbd, SecurityEnabled, PurgeAll)
 	if err != nil {
 		panic(err)
 	}
