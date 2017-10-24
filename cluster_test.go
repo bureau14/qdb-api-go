@@ -32,8 +32,10 @@ var _ = Describe("Tests", func() {
 			securedCluster = securedHandle.Cluster()
 			content = []byte("content_blob")
 			blob = handle.Blob(alias)
-			blobSecured = handle.Blob(aliasSecured)
+			blobSecured = securedHandle.Blob(aliasSecured)
 			err := blob.Put(content, NeverExpires())
+			Expect(err).ToNot(HaveOccurred())
+			err = blobSecured.Put(content, NeverExpires())
 			Expect(err).ToNot(HaveOccurred())
 		})
 		AfterEach(func() {
