@@ -187,11 +187,11 @@ type NodeConfig struct {
 			ListenOn        string `json:"listen_on"`
 		} `json:"network"`
 		Chord struct {
-			NodeID                   string        `json:"node_id"`
-			NoStabilization          bool          `json:"no_stabilization"`
-			BootstrappingPeers       []interface{} `json:"bootstrapping_peers"`
-			MinStabilizationInterval int           `json:"min_stabilization_interval"`
-			MaxStabilizationInterval int           `json:"max_stabilization_interval"`
+			NodeID                   string   `json:"node_id"`
+			NoStabilization          bool     `json:"no_stabilization"`
+			BootstrappingPeers       []string `json:"bootstrapping_peers"`
+			MinStabilizationInterval int      `json:"min_stabilization_interval"`
+			MaxStabilizationInterval int      `json:"max_stabilization_interval"`
 		} `json:"chord"`
 	} `json:"local"`
 	Global struct {
