@@ -43,12 +43,31 @@ func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 	return columnsInfo, makeErrorOrNil(err)
 }
 
+// ShardSize : A qdb defined shard size
+type ShardSize C.qdb_duration_t
+
+// Millisecond : ...
+// Second : ...
+// Minute : ...
+// Hour : ...
+// Day : ...
+// Week : ...
+const (
+	Millisecond ShardSize = C.qdb_millisecond
+	Second      ShardSize = C.qdb_second
+	Minute      ShardSize = C.qdb_minute
+	Hour        ShardSize = C.qdb_hour
+	Day         ShardSize = C.qdb_day
+	Week        ShardSize = C.qdb_week
+)
+
 // Create : create a new timeseries
-func (entry TimeseriesEntry) Create(cols ...TsColumnInfo) error {
+func (entry TimeseriesEntry) Create(shardSize ShardSize, cols ...TsColumnInfo) error {
 	alias := C.CString(entry.alias)
+	size := C.qdb_duration_t(shardSize)
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
-	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
+	err := C.qdb_ts_create(entry.handle, alias, size, columns, columnsCount)
 	return makeErrorOrNil(err)
 }
 
