@@ -192,7 +192,7 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	alias := C.CString(entry.alias)
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
-	bulk := &TsBulk{alias: entry.alias, handle: entry.handle, columns: cols}
+	bulk := &TsBulk{}
 	err := C.qdb_ts_local_table_init(entry.handle, alias, columns, columnsCount, &bulk.table)
 	return bulk, makeErrorOrNil(err)
 }
@@ -251,14 +251,5 @@ func (t *TsBulk) Append() error {
 // Push : push the list of appended rows
 func (t *TsBulk) Push() error {
 	err := C.qdb_ts_push(t.table)
-	return makeErrorOrNil(err)
-}
-
-// Reset : reset the list, reusing the same columns
-func (t *TsBulk) Reset() error {
-	alias := C.CString(t.alias)
-	columns := columnInfoArrayToC(t.columns...)
-	columnsCount := C.qdb_size_t(len(t.columns))
-	err := C.qdb_ts_local_table_init(t.handle, alias, columns, columnsCount, &t.table)
 	return makeErrorOrNil(err)
 }

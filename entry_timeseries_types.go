@@ -594,13 +594,10 @@ type TsBulk struct {
 	rowCount  int
 	index     int
 	timestamp time.Time
-	alias     string
-	handle    C.qdb_handle_t
-	columns   []TsColumnInfo
 	table     C.qdb_local_table_t
 }
 
-// RowCount : returns the number of rows to be appended
+// RowCount : returns the number of rows to be append
 func (t TsBulk) RowCount() int {
 	return t.rowCount
 }
