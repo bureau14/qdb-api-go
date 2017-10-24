@@ -15,18 +15,18 @@ type db struct {
 	exe    *exec.Cmd
 }
 
-func newDB(qdbd string, s Security) (*db, error) {
+func newDB(qdbd string, s Security, enablePurgeAll bool) (*db, error) {
 	d := &db{}
 	d.setInfo(s)
 	err := copyFile(qdbd, d.bin)
 	if err != nil {
 		return d, err
 	}
-	err = d.prepareConfig(s)
+	err = d.prepareConfig(s, enablePurgeAll)
 	return d, err
 }
 
-func (d db) prepareConfig(s Security) error {
+func (d db) prepareConfig(s Security, enablePurgeAll bool) error {
 	data, err := exec.Command(d.bin, "--gen-config").Output()
 	if err != nil {
 		return err
@@ -42,6 +42,7 @@ func (d db) prepareConfig(s Security) error {
 	nodeConfig.Global.Security.Enabled = false
 	nodeConfig.Global.Security.EncryptTraffic = false
 	if s == SecurityEnabled {
+		nodeConfig.Global.Security.EnablePurgeAll = true
 		nodeConfig.Global.Security.Enabled = true
 		if s == SecurityEncrypted {
 			nodeConfig.Global.Security.EncryptTraffic = true
