@@ -61,7 +61,7 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should not work with a shard size inferior to 1ms", func() {
-				err := timeseries.Create(100, columnsInfo...)
+				err := timeseries.Create(100*time.Nanosecond, columnsInfo...)
 				Expect(err).To(HaveOccurred())
 			})
 		})
