@@ -44,11 +44,14 @@ func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 }
 
 // Create : create a new timeseries
-func (entry TimeseriesEntry) Create(cols ...TsColumnInfo) error {
+//	First parameter is the duration limit to organize a shard
+//	Ex: shardSize := 24 * time.Hour
+func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInfo) error {
 	alias := C.CString(entry.alias)
+	duration := C.qdb_duration_t(shardSize / time.Millisecond)
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
-	err := C.qdb_ts_create(entry.handle, alias, columns, columnsCount)
+	err := C.qdb_ts_create(entry.handle, alias, duration, columns, columnsCount)
 	return makeErrorOrNil(err)
 }
 

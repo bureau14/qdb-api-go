@@ -130,7 +130,10 @@ func ExampleTimeseriesEntry() {
 
 	timeseries := h.Timeseries("TimeseriesAlias")
 
-	timeseries.Create(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
+	err = timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
+	if err != nil {
+		return
+	}
 	defer timeseries.Remove()
 
 	blobColumn := timeseries.BlobColumn("serie_column_blob")
