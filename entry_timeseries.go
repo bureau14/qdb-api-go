@@ -48,7 +48,7 @@ func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 //	Ex: shardSize := 24 * time.Hour
 func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInfo) error {
 	alias := C.CString(entry.alias)
-	duration := C.qdb_duration_t(shardSize / time.Millisecond)
+	duration := C.qdb_uint_t(shardSize / time.Millisecond)
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_create(entry.handle, alias, duration, columns, columnsCount)
