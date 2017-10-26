@@ -41,19 +41,28 @@ var _ = Describe("Tests", func() {
 				columnsInfo = []TsColumnInfo{}
 			})
 			It("should create even with empty columns", func() {
-				err := timeseries.Create(columnsInfo...)
+				err := timeseries.Create(24*time.Hour, columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should not work to get columns before creating the time series", func() {
 				_, _, err := timeseries.Columns()
 				Expect(err).To(HaveOccurred())
 			})
-			It("should have zero columns", func() {
-				err := timeseries.Create(columnsInfo...)
+			It("should work with zero columns", func() {
+				err := timeseries.Create(24*time.Hour, columnsInfo...)
+				Expect(err).ToNot(HaveOccurred())
 				doubles, blobs, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(0).To(Equal(len(doubles)))
 				Expect(0).To(Equal(len(blobs)))
+			})
+			It("should work with a shard size of 1ms", func() {
+				err := timeseries.Create(1*time.Millisecond, columnsInfo...)
+				Expect(err).ToNot(HaveOccurred())
+			})
+			It("should not work with a shard size inferior to 1ms", func() {
+				err := timeseries.Create(100, columnsInfo...)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 		Context("Created", func() {
@@ -78,7 +87,7 @@ var _ = Describe("Tests", func() {
 				}
 			})
 			JustBeforeEach(func() {
-				err := timeseries.Create(columnsInfo...)
+				err := timeseries.Create(24*time.Hour, columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
 				doubleColumn = timeseries.DoubleColumn(columnsInfo[1].Name())
 				blobColumn = timeseries.BlobColumn(columnsInfo[0].Name())
