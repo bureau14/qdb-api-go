@@ -590,7 +590,7 @@ func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggrega
 
 // TsBulk : A structure that permits to append data to a timeseries
 type TsBulk struct {
-	err error
+	err       error
 	rowCount  int
 	index     int
 	timestamp time.Time
