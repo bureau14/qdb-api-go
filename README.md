@@ -6,6 +6,8 @@ Quasardb Go API
 
 **Warning:** Early stage development version. Use at your own risk.
 
+**Warning:** Go1.9.0 is not supported. If you encounter a compilation problem with time.go please upgrade.
+
 Go API for [quasardb](https://www.quasardb.net/).
 
 
