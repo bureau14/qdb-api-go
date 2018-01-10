@@ -22,10 +22,14 @@ type TsColumnType C.qdb_ts_column_type_t
 // Values
 //	TsColumnDouble : column is a double point
 //	TsColumnBlob : column is a blob point
+//	TsColumnInt64 : column is a int64 point
+//	TsColumnTimestamp : column is a timestamp point
 const (
 	TsColumnUninitialized TsColumnType = C.qdb_ts_column_uninitialized
 	TsColumnDouble        TsColumnType = C.qdb_ts_column_double
 	TsColumnBlob          TsColumnType = C.qdb_ts_column_blob
+	TsColumnInt64         TsColumnType = C.qdb_ts_column_int64
+	TsColumnTimestamp     TsColumnType = C.qdb_ts_column_timestamp
 )
 
 type tsColumn struct {
@@ -43,16 +47,27 @@ type TsBlobColumn struct {
 	tsColumn
 }
 
+// TsInt64Column : a time series int64 column
+type TsInt64Column struct {
+	tsColumn
+}
+// TsTimestampColumn : a time series timestamp column
+type TsTimestampColumn struct {
+	tsColumn
+}
+
 // :: internals
 
 func (t C.qdb_ts_column_info_t) toStructG(entry TimeseriesEntry) tsColumn {
 	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}, entry}
 }
 
-func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) ([]TsDoubleColumn, []TsBlobColumn) {
+func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) ([]TsDoubleColumn, []TsBlobColumn, []TsInt64Column, []TsTimestampColumn) {
 	length := int(columnsCount)
 	doubleColumns := []TsDoubleColumn{}
 	blobColumns := []TsBlobColumn{}
+	int64Columns := []TsInt64Column{}
+	timestampColumns := []TsTimestampColumn{}
 	if length > 0 {
 		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
 		for _, s := range tmpslice {
@@ -60,10 +75,14 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, col
 				doubleColumns = append(doubleColumns, TsDoubleColumn{s.toStructG(entry)})
 			} else if s._type == C.qdb_ts_column_blob {
 				blobColumns = append(blobColumns, TsBlobColumn{s.toStructG(entry)})
+			} else if s._type == C.qdb_ts_column_int64 {
+				int64Columns = append(int64Columns, TsInt64Column{s.toStructG(entry)})
+			} else if s._type == C.qdb_ts_column_timestamp {
+				timestampColumns = append(timestampColumns, TsTimestampColumn{s.toStructG(entry)})
 			}
 		}
 	}
-	return doubleColumns, blobColumns
+	return doubleColumns, blobColumns, int64Columns, timestampColumns
 }
 
 // :: End - Column ::

@@ -17,17 +17,19 @@ type TimeseriesEntry struct {
 }
 
 // Columns : return the current columns
-func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, error) {
+func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, []TsInt64Column, []TsTimestampColumn, error) {
 	alias := C.CString(entry.alias)
 	var columns *C.qdb_ts_column_info_t
 	var columnsCount C.qdb_size_t
 	err := C.qdb_ts_list_columns(entry.handle, alias, &columns, &columnsCount)
 	var doubleColumns []TsDoubleColumn
 	var blobColumns []TsBlobColumn
+	var int64Columns []TsInt64Column
+	var timestampColumns []TsTimestampColumn
 	if err == 0 {
-		doubleColumns, blobColumns = columnArrayToGo(entry, columns, columnsCount)
+		doubleColumns, blobColumns, int64Columns, timestampColumns  = columnArrayToGo(entry, columns, columnsCount)
 	}
-	return doubleColumns, blobColumns, makeErrorOrNil(err)
+	return doubleColumns, blobColumns, int64Columns, timestampColumns, makeErrorOrNil(err)
 }
 
 // ColumnsInfo : return the current columns information

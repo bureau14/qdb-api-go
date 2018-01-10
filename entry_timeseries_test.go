@@ -45,16 +45,18 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should not work to get columns before creating the time series", func() {
-				_, _, err := timeseries.Columns()
+				_, _, _, _, err := timeseries.Columns()
 				Expect(err).To(HaveOccurred())
 			})
 			It("should work with zero columns", func() {
 				err := timeseries.Create(24*time.Hour, columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
-				doubles, blobs, err := timeseries.Columns()
+				doubles, blobs, int64s, timestampColumns, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(0).To(Equal(len(doubles)))
 				Expect(0).To(Equal(len(blobs)))
+				Expect(0).To(Equal(len(int64s)))
+				Expect(0).To(Equal(len(timestampColumns)))
 			})
 			It("should work with a shard size of 1ms", func() {
 				err := timeseries.Create(1*time.Millisecond, columnsInfo...)
@@ -93,10 +95,12 @@ var _ = Describe("Tests", func() {
 				blobColumn = timeseries.BlobColumn(columnsInfo[0].Name())
 			})
 			It("should have one blob column and one double column", func() {
-				doubles, blobs, err := timeseries.Columns()
+				doubles, blobs, int64s, timestampColumns, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(1).To(Equal(len(doubles)))
 				Expect(1).To(Equal(len(blobs)))
+				Expect(0).To(Equal(len(int64s)))
+				Expect(0).To(Equal(len(timestampColumns)))
 				Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
 				Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
 			})
@@ -131,10 +135,12 @@ var _ = Describe("Tests", func() {
 					anotherTimeseries = handle.Timeseries(alias)
 				})
 				It("should be able to retrieve all columns", func() {
-					doubles, blobs, err := anotherTimeseries.Columns()
+					doubles, blobs, int64s, timestampColumns, err := anotherTimeseries.Columns()
 					Expect(err).ToNot(HaveOccurred())
 					Expect(1).To(Equal(len(doubles)))
 					Expect(1).To(Equal(len(blobs)))
+					Expect(0).To(Equal(len(int64s)))
+					Expect(0).To(Equal(len(timestampColumns)))
 					Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
 					Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
 				})
@@ -142,11 +148,13 @@ var _ = Describe("Tests", func() {
 					var (
 						doubles []TsDoubleColumn
 						blobs   []TsBlobColumn
+						int64s   []TsInt64Column
+						timestampColumns []TsTimestampColumn
 						r       TsRange
 					)
 					JustBeforeEach(func() {
 						var err error
-						doubles, blobs, err = anotherTimeseries.Columns()
+						doubles, blobs, int64s, timestampColumns, err = anotherTimeseries.Columns()
 						Expect(err).ToNot(HaveOccurred())
 						r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
 					})
