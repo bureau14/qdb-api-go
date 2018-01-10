@@ -201,3 +201,163 @@ func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggrega
 }
 
 // :: :: End - Blob Aggregation
+
+// :: :: Start - Int64 Aggregation
+
+// TsInt64Aggregation : Aggregation of int64 type
+type TsInt64Aggregation struct {
+	kind  TsAggregationType
+	rng   TsRange
+	count int64
+	point TsInt64Point
+}
+
+// Type : returns the type of the aggregation
+func (t TsInt64Aggregation) Type() TsAggregationType {
+	return t.kind
+}
+
+// Range : returns the range of the aggregation
+func (t TsInt64Aggregation) Range() TsRange {
+	return t.rng
+}
+
+// Count : returns the number of points aggregated into the result
+func (t TsInt64Aggregation) Count() int64 {
+	return t.count
+}
+
+// Result : result of the aggregation
+func (t TsInt64Aggregation) Result() TsInt64Point {
+	return t.point
+}
+
+// NewInt64Aggregation : Create new timeseries int64 aggregation
+func NewInt64Aggregation(kind TsAggregationType, rng TsRange) *TsInt64Aggregation {
+	return &TsInt64Aggregation{kind, rng, 0, TsInt64Point{}}
+}
+
+// :: internals
+func (t TsInt64Aggregation) toStructC() C.qdb_ts_int64_aggregation_t {
+	var cAgg C.qdb_ts_int64_aggregation_t
+	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
+	cAgg.filtered_range = t.rng.toStructC()
+	cAgg.count = C.qdb_size_t(t.count)
+	cAgg.result = t.point.toStructC()
+	return cAgg
+}
+
+func (t C.qdb_ts_int64_aggregation_t) toStructG() TsInt64Aggregation {
+	var gAgg TsInt64Aggregation
+	gAgg.kind = TsAggregationType(t._type)
+	gAgg.rng = t.filtered_range.toStructG()
+	gAgg.count = int64(t.count)
+	gAgg.point = t.result.toStructG()
+	return gAgg
+}
+
+func int64AggregationArrayToC(ags ...*TsInt64Aggregation) *C.qdb_ts_int64_aggregation_t {
+	if len(ags) == 0 {
+		return nil
+	}
+	var int64Aggregations []C.qdb_ts_int64_aggregation_t
+	for _, ag := range ags {
+		int64Aggregations = append(int64Aggregations, ag.toStructC())
+	}
+	return &int64Aggregations[0]
+}
+
+func int64AggregationArrayToGo(aggregations *C.qdb_ts_int64_aggregation_t, aggregationsCount C.qdb_size_t, aggs []*TsInt64Aggregation) []TsInt64Aggregation {
+	length := int(aggregationsCount)
+	output := make([]TsInt64Aggregation, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_int64_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		for i, s := range tmpslice {
+			*aggs[i] = s.toStructG()
+			output[i] = s.toStructG()
+		}
+	}
+	return output
+}
+
+// :: :: End - Int64 Aggregation
+
+// :: :: Start - Timestamp Aggregation
+
+// TsTimestampAggregation : Aggregation of timestamp type
+type TsTimestampAggregation struct {
+	kind  TsAggregationType
+	rng   TsRange
+	count int64
+	point TsTimestampPoint
+}
+
+// Type : returns the type of the aggregation
+func (t TsTimestampAggregation) Type() TsAggregationType {
+	return t.kind
+}
+
+// Range : returns the range of the aggregation
+func (t TsTimestampAggregation) Range() TsRange {
+	return t.rng
+}
+
+// Count : returns the number of points aggregated into the result
+func (t TsTimestampAggregation) Count() int64 {
+	return t.count
+}
+
+// Result : result of the aggregation
+func (t TsTimestampAggregation) Result() TsTimestampPoint {
+	return t.point
+}
+
+// NewTimestampAggregation : Create new timeseries timestamp aggregation
+func NewTimestampAggregation(kind TsAggregationType, rng TsRange) *TsTimestampAggregation {
+	return &TsTimestampAggregation{kind, rng, 0, TsTimestampPoint{}}
+}
+
+// :: internals
+func (t TsTimestampAggregation) toStructC() C.qdb_ts_timestamp_aggregation_t {
+	var cAgg C.qdb_ts_timestamp_aggregation_t
+	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
+	cAgg.filtered_range = t.rng.toStructC()
+	cAgg.count = C.qdb_size_t(t.count)
+	cAgg.result = t.point.toStructC()
+	return cAgg
+}
+
+func (t C.qdb_ts_timestamp_aggregation_t) toStructG() TsTimestampAggregation {
+	var gAgg TsTimestampAggregation
+	gAgg.kind = TsAggregationType(t._type)
+	gAgg.rng = t.filtered_range.toStructG()
+	gAgg.count = int64(t.count)
+	gAgg.point = t.result.toStructG()
+	return gAgg
+}
+
+func timestampAggregationArrayToC(ags ...*TsTimestampAggregation) *C.qdb_ts_timestamp_aggregation_t {
+	if len(ags) == 0 {
+		return nil
+	}
+	var timestampAggregations []C.qdb_ts_timestamp_aggregation_t
+	for _, ag := range ags {
+		timestampAggregations = append(timestampAggregations, ag.toStructC())
+	}
+	return &timestampAggregations[0]
+}
+
+func timestampAggregationArrayToGo(aggregations *C.qdb_ts_timestamp_aggregation_t, aggregationsCount C.qdb_size_t, aggs []*TsTimestampAggregation) []TsTimestampAggregation {
+	length := int(aggregationsCount)
+	output := make([]TsTimestampAggregation, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_timestamp_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		for i, s := range tmpslice {
+			*aggs[i] = s.toStructG()
+			output[i] = s.toStructG()
+		}
+	}
+	return output
+}
+
+// :: :: End - Timestamp Aggregation

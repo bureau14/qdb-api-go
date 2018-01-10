@@ -76,6 +76,16 @@ func (entry TimeseriesEntry) BlobColumn(columnName string) TsBlobColumn {
 	return TsBlobColumn{tsColumn{TsColumnInfo{columnName, TsColumnBlob}, entry}}
 }
 
+// Int64Column : create a column object
+func (entry TimeseriesEntry) Int64Column(columnName string) TsInt64Column {
+	return TsInt64Column{tsColumn{TsColumnInfo{columnName, TsColumnInt64}, entry}}
+}
+
+// TimestampColumn : create a column object
+func (entry TimeseriesEntry) TimestampColumn(columnName string) TsTimestampColumn {
+	return TsTimestampColumn{tsColumn{TsColumnInfo{columnName, TsColumnTimestamp}, entry}}
+}
+
 // EraseRanges : erase all points in the specified ranges
 func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	alias := C.CString(column.parent.alias)
@@ -89,6 +99,28 @@ func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 
 // EraseRanges : erase all points in the specified ranges
 func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	erasedCount := C.qdb_uint_t(0)
+	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+	return uint64(erasedCount), makeErrorOrNil(err)
+}
+
+// EraseRanges : erase all points in the specified ranges
+func (column TsInt64Column) EraseRanges(rgs ...TsRange) (uint64, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	erasedCount := C.qdb_uint_t(0)
+	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+	return uint64(erasedCount), makeErrorOrNil(err)
+}
+
+// EraseRanges : erase all points in the specified ranges
+func (column TsTimestampColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	alias := C.CString(column.parent.alias)
 	columnName := C.CString(column.name)
 	ranges := rangeArrayToC(rgs...)
@@ -115,6 +147,26 @@ func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := blobPointArrayToC(points...)
 	err := C.qdb_ts_blob_insert(column.parent.handle, alias, columnName, content, contentCount)
+	return makeErrorOrNil(err)
+}
+
+// Insert int64 points into a timeseries
+func (column TsInt64Column) Insert(points ...TsInt64Point) error {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	contentCount := C.qdb_size_t(len(points))
+	content := int64PointArrayToC(points...)
+	err := C.qdb_ts_int64_insert(column.parent.handle, alias, columnName, content, contentCount)
+	return makeErrorOrNil(err)
+}
+
+// Insert timestamp points into a timeseries
+func (column TsTimestampColumn) Insert(points ...TsTimestampPoint) error {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	contentCount := C.qdb_size_t(len(points))
+	content := timestampPointArrayToC(points...)
+	err := C.qdb_ts_timestamp_insert(column.parent.handle, alias, columnName, content, contentCount)
 	return makeErrorOrNil(err)
 }
 
@@ -150,6 +202,42 @@ func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 	if err == 0 {
 		defer column.parent.Release(unsafe.Pointer(points))
 		return blobPointArrayToGo(points, pointsCount), nil
+	}
+	return nil, ErrorType(err)
+}
+
+// GetRanges : Retrieves int64s in the specified range of the time series column.
+//	It is an error to call this function on a non existing time-series.
+func (column TsInt64Column) GetRanges(rgs ...TsRange) ([]TsInt64Point, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	var points *C.qdb_ts_int64_point
+	var pointsCount C.qdb_size_t
+	err := C.qdb_ts_int64_get_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &points, &pointsCount)
+
+	if err == 0 {
+		defer column.parent.Release(unsafe.Pointer(points))
+		return int64PointArrayToGo(points, pointsCount), nil
+	}
+	return nil, ErrorType(err)
+}
+
+// GetRanges : Retrieves timestamps in the specified range of the time series column.
+//	It is an error to call this function on a non existing time-series.
+func (column TsTimestampColumn) GetRanges(rgs ...TsRange) ([]TsTimestampPoint, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	var points *C.qdb_ts_timestamp_point
+	var pointsCount C.qdb_size_t
+	err := C.qdb_ts_timestamp_get_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &points, &pointsCount)
+
+	if err == 0 {
+		defer column.parent.Release(unsafe.Pointer(points))
+		return timestampPointArrayToGo(points, pointsCount), nil
 	}
 	return nil, ErrorType(err)
 }
