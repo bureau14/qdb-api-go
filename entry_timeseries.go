@@ -286,6 +286,7 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
 	bulk := &TsBulk{}
+	bulk.HandleType = entry.HandleType
 	err := C.qdb_ts_local_table_init(entry.handle, alias, columns, columnsCount, &bulk.table)
 	return bulk, makeErrorOrNil(err)
 }
@@ -315,6 +316,25 @@ func (t *TsBulk) Blob(content []byte) *TsBulk {
 	}
 	if t.err == nil {
 		t.err = makeErrorOrNil(C.qdb_ts_row_set_blob(t.table, C.qdb_size_t(t.index), contentPtr, contentSize))
+	}
+	t.index++
+	return t
+}
+
+// Int64 : adds a int64 in row transaction
+func (t *TsBulk) Int64(value int64) *TsBulk {
+	if t.err == nil {
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_int64(t.table, C.qdb_size_t(t.index), C.qdb_int_t(value)))
+	}
+	t.index++
+	return t
+}
+
+// Timestamp : adds a double in row transaction
+func (t *TsBulk) Timestamp(value time.Time) *TsBulk {
+	if t.err == nil {
+		cValue := toQdbTimespec(value)
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_timestamp(t.table, C.qdb_size_t(t.index), &cValue))
 	}
 	t.index++
 	return t
