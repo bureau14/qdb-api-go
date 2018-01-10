@@ -366,3 +366,39 @@ func (t *TsBulk) Push() error {
 	err := C.qdb_ts_push(t.table)
 	return makeErrorOrNil(err)
 }
+
+// GetDouble : gets a double in row
+func (t *TsBulk) GetDouble() (float64, error) {
+	var content C.double
+	err := C.qdb_ts_row_get_double(t.table, C.qdb_size_t(t.index), &content)
+	t.index++
+	return float64(content), makeErrorOrNil(err)
+}
+
+// GetBlob : gets a blob in row
+func (t *TsBulk) GetBlob() ([]byte, error) {
+	var content unsafe.Pointer
+	defer t.Release(content)
+	var contentLength C.qdb_size_t
+	err := C.qdb_ts_row_get_blob(t.table, C.qdb_size_t(t.index), &content, &contentLength)
+
+	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	t.index++
+	return output, makeErrorOrNil(err)
+}
+
+// GetInt64 : gets a int64 in row
+func (t *TsBulk) GetInt64() (int64, error) {
+	var content C.qdb_int_t
+	err := C.qdb_ts_row_get_int64(t.table, C.qdb_size_t(t.index), &content)
+	t.index++
+	return int64(content), makeErrorOrNil(err)
+}
+
+// GetTimestamp : gets a timestamp in row
+func (t *TsBulk) GetTimestamp() (time.Time, error) {
+	var content C.qdb_timespec_t
+	err := C.qdb_ts_row_get_timestamp(t.table, C.qdb_size_t(t.index), &content)
+	t.index++
+	return content.toStructG(), makeErrorOrNil(err)
+}
