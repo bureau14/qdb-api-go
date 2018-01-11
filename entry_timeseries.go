@@ -364,6 +364,7 @@ func (t *TsBulk) Append() error {
 // Push : push the list of appended rows
 func (t *TsBulk) Push() error {
 	err := C.qdb_ts_push(t.table)
+	t.rowCount = 0
 	return makeErrorOrNil(err)
 }
 
@@ -401,4 +402,23 @@ func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	err := C.qdb_ts_row_get_timestamp(t.table, C.qdb_size_t(t.index), &content)
 	t.index++
 	return content.toStructG(), makeErrorOrNil(err)
+}
+
+// GetRanges : create a range bulk query 
+func (t *TsBulk) GetRanges(rgs ...TsRange) error {
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	err := C.qdb_ts_table_get_ranges(t.table, ranges, rangesCount)
+	t.rowCount = -1
+	t.index = 0
+	return makeErrorOrNil(err)
+}
+
+// NextRow : advance to the next row, or the first one if not already used
+func (t *TsBulk) NextRow() (time.Time, error) {
+	var timestamp C.qdb_timespec_t
+	err := C.qdb_ts_table_next_row(t.table, &timestamp)
+	t.rowCount++
+	t.index = 0
+	return timestamp.toStructG(), makeErrorOrNil(err)
 }

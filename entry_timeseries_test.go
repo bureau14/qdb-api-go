@@ -630,74 +630,135 @@ var _ = Describe("Tests", func() {
 				})
 			})
 			Context("Bulk", func() {
-				var (
-					content []byte
-					value   float64
-				)
-				BeforeEach(func() {
-					content = []byte("content")
-					value = 3.2
-				})
-				It("should append all columns", func() {
-					bulk, err := timeseries.Bulk()
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						err := bulk.Row(time.Now()).Blob(content).Double(value).Append()
+				Context("Insert", func() {
+					var (
+						blobValue []byte  = []byte("content")
+						doubleValue   float64  = 3.2
+						int64Value int64  = 2
+						timestampValue time.Time  = time.Now()
+					)
+					It("should append all columns", func() {
+						bulk, err := timeseries.Bulk()
 						Expect(err).ToNot(HaveOccurred())
-					}
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should append columns", func() {
-					bulk, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						err := bulk.Row(time.Now()).Blob(content).Double(value).Append()
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
-					}
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should append columns and ignore fields", func() {
-					bulk, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						value := 3.2
-						err := bulk.Row(time.Now()).Ignore().Double(value).Append()
+					})
+					It("should append columns", func() {
+						bulk, err := timeseries.Bulk(columnsInfo...)
 						Expect(err).ToNot(HaveOccurred())
-					}
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should append columns on part of timeseries", func() {
-					bulk, err := timeseries.Bulk(columnsInfo[0])
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						content := []byte("content")
-						err := bulk.Row(time.Now()).Blob(content).Append()
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
-					}
-					Expect(count).To(Equal(int64(bulk.RowCount())))
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
+					})
+					It("should append columns and ignore fields", func() {
+						bulk, err := timeseries.Bulk(columnsInfo...)
+						Expect(err).ToNot(HaveOccurred())
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Ignore().Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						err = bulk.Push()
+						Expect(err).ToNot(HaveOccurred())
+					})
+					It("should append columns on part of timeseries", func() {
+						bulk, err := timeseries.Bulk(columnsInfo[0])
+						Expect(err).ToNot(HaveOccurred())
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Blob(blobValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						Expect(count).To(Equal(int64(bulk.RowCount())))
+						err = bulk.Push()
+						Expect(err).ToNot(HaveOccurred())
+					})
+					It("should fail to append columns - too much values", func() {
+						bulk, err := timeseries.Bulk(columnsInfo...)
+						Expect(err).ToNot(HaveOccurred())
+						err = bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Double(doubleValue).Append()
+						Expect(err).To(HaveOccurred())
+					})
+					It("should fail to append columns - additional column does not exist", func() {
+						columnsInfo = append(columnsInfo, NewTsColumnInfo("asd", TsColumnDouble))
+						_, err := timeseries.Bulk(columnsInfo...)
+						Expect(err).To(HaveOccurred())
+					})
+					It("should fail to retrieve all columns from a non existing timeseries", func() {
+						ts := handle.Timeseries("asd")
+						_, err := ts.Bulk()
+						Expect(err).To(HaveOccurred())
+					})
 				})
-				It("should fail to append columns - too much values", func() {
-					bulk, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).ToNot(HaveOccurred())
-					content := []byte("content")
-					value := 3.2
-					err = bulk.Row(time.Now()).Blob(content).Double(value).Double(value).Append()
-					Expect(err).To(HaveOccurred())
-				})
-				It("should fail to append columns - additional column does not exist", func() {
-					columnsInfo = append(columnsInfo, NewTsColumnInfo("asd", TsColumnDouble))
-					_, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).To(HaveOccurred())
-				})
-				It("should fail to retrieve all columns from a non existing timeseries", func() {
-					ts := handle.Timeseries("asd")
-					_, err := ts.Bulk()
-					Expect(err).To(HaveOccurred())
+				Context("Get", func() {
+					var (
+						r TsRange
+					)
+					BeforeEach(func() {
+						r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					})
+					JustBeforeEach(func() {
+						blobColumn.Insert(blobPoints...)
+						doubleColumn.Insert(doublePoints...)
+						int64Column.Insert(int64Points...)
+						timestampColumn.Insert(timestampPoints...)
+					})
+					It("Should work to get all values", func() {
+						bulk, err := timeseries.Bulk()
+						Expect(err).ToNot(HaveOccurred())
+						err = bulk.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						for ;; {
+							var timestamp time.Time
+							if timestamp, err = bulk.NextRow(); err != nil {
+								break
+							}
+							Expect(err).ToNot(HaveOccurred())
+							Expect(timestamps[bulk.RowCount()]).To(Equal(timestamp))
+
+							blobValue, err := bulk.GetBlob()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(blobPoints[bulk.RowCount()].Content()).To(Equal(blobValue))
+
+							doubleValue, err := bulk.GetDouble()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(doublePoints[bulk.RowCount()].Content()).To(Equal(doubleValue))
+
+							int64Value, err := bulk.GetInt64()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(int64Points[bulk.RowCount()].Content()).To(Equal(int64Value))
+
+							timestampValue, err := bulk.GetTimestamp()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(timestampPoints[bulk.RowCount()].Content()).To(Equal(timestampValue))
+						}
+						Expect(err).To(Equal(ErrIteratorEnd))
+					})
+					It("Should not work to get values when GetRanges has not been called", func() {
+						bulk, err := timeseries.Bulk()
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = bulk.NextRow()
+						Expect(err).To(HaveOccurred())
+					})
+					It("Should not work to get values in a non-correct order", func() {
+						bulk, err := timeseries.Bulk()
+						Expect(err).ToNot(HaveOccurred())
+
+						err = bulk.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = bulk.NextRow()
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = bulk.GetDouble()
+						Expect(err).To(HaveOccurred())
+					})
 				})
 			})
 		})
