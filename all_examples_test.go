@@ -9,7 +9,7 @@ func ExampleHandleType() {
 	var h HandleType
 	h.Open(ProtocolTCP)
 	fmt.Printf("API build: %s\n", h.APIVersion())
-	// Output: API build: 2.1.0master
+	// Output: API build: 2.3.0master
 }
 
 func ExampleEntry_Alias() {
@@ -127,47 +127,328 @@ func ExampleTimeseriesEntry() {
 		return
 	}
 	defer h.Close()
+	timeseries := h.Timeseries("alias")
 
-	timeseries := h.Timeseries("TimeseriesAlias")
+	fmt.Println("timeseries:", timeseries.Alias())
+	// Output:
+	// timeseries: alias
+}
 
-	err = timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
-	if err != nil {
+func ExampleTimeseriesEntry_Create() {
+	h, timeseries := createTimeseries("ExampleTimeseriesEntry_Create")
+	if h == nil {
 		return
 	}
-	defer timeseries.Remove()
+	defer h.Close()
 
-	blobColumn := timeseries.BlobColumn("serie_column_blob")
-	doubleColumn := timeseries.DoubleColumn("serie_column_double")
+	// duration, columns...
+	timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
+}
 
-	tsRange := NewRange(time.Unix(0, 0), time.Unix(40, 0))
-	tsRanges := append([]TsRange{}, tsRange)
+func ExampleTimeseriesEntry_Columns() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_Columns")
+	if h == nil {
+		return
+	}
+	defer h.Close()
 
-	contentDouble := float64(3.4)
-	doublePoint1 := NewTsDoublePoint(time.Unix(10, 0), contentDouble)
-	doublePoint2 := NewTsDoublePoint(time.Unix(20, 0), contentDouble)
-	doublePoints := append([]TsDoublePoint{}, doublePoint1, doublePoint2)
-	doubleColumn.Insert(doublePoints...)
-
-	tsDoublePoints, _ := doubleColumn.GetRanges(tsRanges...)
-
-	fmt.Println("Timestamp first double value:", tsDoublePoints[0].Timestamp().UTC())
-	fmt.Println("Content first double value:", tsDoublePoints[0].Content())
-
-	blobPoint1 := NewTsBlobPoint(time.Unix(10, 0), []byte("data"))
-	blobPoint2 := NewTsBlobPoint(time.Unix(20, 0), []byte("data"))
-	blobPoints := append([]TsBlobPoint{}, blobPoint1, blobPoint2)
-	blobColumn.Insert(blobPoints...)
-
-	tsBlobPoints, _ := blobColumn.GetRanges(tsRanges...)
-
-	fmt.Println("Timestamp second blob value:", tsBlobPoints[1].Timestamp().UTC())
-	fmt.Println("Content second blob value:", string(tsBlobPoints[1].Content()))
-
+	doubleColumns, blobColumns, err := timeseries.Columns()
+	if err != nil {
+		// handle error
+	}
+	for _, col := range doubleColumns {
+		fmt.Println("column:", col.Name())
+		// do something like Insert, GetRanges with a double column
+	}
+	for _, col := range blobColumns {
+		fmt.Println("column:", col.Name())
+		// do something like Insert, GetRanges with a blob column
+	}
 	// Output:
-	// Timestamp first double value: 1970-01-01 00:00:10 +0000 UTC
-	// Content first double value: 3.4
-	// Timestamp second blob value: 1970-01-01 00:00:20 +0000 UTC
-	// Content second blob value: data
+	// column: serie_column_double
+	// column: serie_column_blob
+}
+
+func ExampleTimeseriesEntry_ColumnsInfo() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_ColumnsInfo")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	columns, err := timeseries.ColumnsInfo()
+	if err != nil {
+		// handle error
+	}
+	for _, col := range columns {
+		fmt.Println("column:", col.Name())
+	}
+	// Output:
+	// column: serie_column_blob
+	// column: serie_column_double
+}
+
+func ExampleTimeseriesEntry_InsertColumns() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_InsertColumns")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	err := timeseries.InsertColumns(NewTsColumnInfo("serie_column_blob_2", TsColumnBlob), NewTsColumnInfo("serie_column_double_2", TsColumnDouble))
+	if err != nil {
+		// handle error
+	}
+	columns, err := timeseries.ColumnsInfo()
+	if err != nil {
+		// handle error
+	}
+	for _, col := range columns {
+		fmt.Println("column:", col.Name())
+	}
+	// Output:
+	// column: serie_column_blob
+	// column: serie_column_double
+	// column: serie_column_blob_2
+	// column: serie_column_double_2
+}
+
+func ExampleTimeseriesEntry_DoubleColumn() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_DoubleColumn")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.DoubleColumn("serie_column_double")
+	fmt.Println("column:", column.Name())
+	// Output:
+	// column: serie_column_double
+}
+
+func ExampleTsDoubleColumn_Insert() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTsDoubleColumn_Insert")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.DoubleColumn("serie_column_double")
+
+	// Insert only one point:
+	column.Insert(NewTsDoublePoint(time.Now(), 3.2))
+
+	// Insert multiple points
+	doublePoints := make([]TsDoublePoint, 2)
+	doublePoints[0] = NewTsDoublePoint(time.Now(), 3.2)
+	doublePoints[1] = NewTsDoublePoint(time.Now(), 4.8)
+
+	err := column.Insert(doublePoints...)
+	if err != nil {
+		// handle error
+	}
+}
+
+func ExampleTsDoubleColumn_GetRanges() {
+	h, timeseries := createTimeseriesWithData("ExampleTsDoubleColumn_GetRanges")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.DoubleColumn("serie_column_double")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	doublePoints, err := column.GetRanges(r)
+	if err != nil {
+		// handle error
+	}
+	for _, point := range doublePoints {
+		fmt.Println("timestamp:", point.Timestamp(), "- value:", point.Content())
+	}
+	// Output:
+	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: 0
+	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: 1
+	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: 2
+	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: 3
+}
+
+func ExampleTsDoubleColumn_EraseRanges() {
+	h, timeseries := createTimeseriesWithData("ExampleTsDoubleColumn_EraseRanges")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.DoubleColumn("serie_column_double")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	numberOfErasedValues, err := column.EraseRanges(r)
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("Number of erased values:", numberOfErasedValues)
+	// Output:
+	// Number of erased values: 4
+}
+
+func ExampleTsDoubleColumn_Aggregate() {
+	h, timeseries := createTimeseriesWithData("ExampleTsDoubleColumn_Aggregate")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.DoubleColumn("serie_column_double")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	aggFirst := NewDoubleAggregation(AggFirst, r)
+	aggMean := NewDoubleAggregation(AggArithmeticMean, r)
+	results, err := column.Aggregate(aggFirst, aggMean)
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("first:", results[0].Result().Content())
+	fmt.Println("mean:", results[1].Result().Content())
+	fmt.Println("number of elements reviewed for mean:", results[1].Count())
+	// Output:
+	// first: 0
+	// mean: 1.5
+	// number of elements reviewed for mean: 4
+}
+
+func ExampleTimeseriesEntry_BlobColumn() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_BlobColumn")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.BlobColumn("serie_column_blob")
+	fmt.Println("column:", column.Name())
+	// Output:
+	// column: serie_column_blob
+}
+
+func ExampleTsBlobColumn_Insert() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTsBlobColumn_Insert")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.BlobColumn("serie_column_blob")
+
+	// Insert only one point:
+	column.Insert(NewTsBlobPoint(time.Now(), []byte("content")))
+
+	// Insert multiple points
+	blobPoints := make([]TsBlobPoint, 2)
+	blobPoints[0] = NewTsBlobPoint(time.Now(), []byte("content"))
+	blobPoints[1] = NewTsBlobPoint(time.Now(), []byte("content_2"))
+
+	err := column.Insert(blobPoints...)
+	if err != nil {
+		// handle error
+	}
+}
+
+func ExampleTsBlobColumn_GetRanges() {
+	h, timeseries := createTimeseriesWithData("ExampleTsBlobColumn_GetRanges")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.BlobColumn("serie_column_blob")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	blobPoints, err := column.GetRanges(r)
+	if err != nil {
+		// handle error
+	}
+	for _, point := range blobPoints {
+		fmt.Println("timestamp:", point.Timestamp(), "- value:", string(point.Content()))
+	}
+	// Output:
+	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: content_0
+	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: content_1
+	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: content_2
+	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: content_3
+}
+
+func ExampleTsBlobColumn_EraseRanges() {
+	h, timeseries := createTimeseriesWithData("ExampleTsBlobColumn_EraseRanges")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.BlobColumn("serie_column_blob")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	numberOfErasedValues, err := column.EraseRanges(r)
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("Number of erased values:", numberOfErasedValues)
+	// Output:
+	// Number of erased values: 4
+}
+
+func ExampleTsBlobColumn_Aggregate() {
+	h, timeseries := createTimeseriesWithData("ExampleTsBlobColumn_Aggregate")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	column := timeseries.BlobColumn("serie_column_blob")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	aggFirst := NewBlobAggregation(AggFirst, r)
+	results, err := column.Aggregate(aggFirst)
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("first:", string(results[0].Result().Content()))
+	// Output:
+	// first: content_0
+}
+
+func ExampleTimeseriesEntry_Bulk() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_Bulk")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	bulk, err := timeseries.Bulk(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("RowCount:", bulk.RowCount())
+	// Output:
+	// RowCount: 0
+}
+
+func ExampleTsBulk_Push() {
+	h, timeseries := createTimeseriesWithColumns("ExampleTsBulk_Insert")
+	if h == nil {
+		return
+	}
+	defer h.Close()
+
+	bulk, err := timeseries.Bulk(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
+	bulk.Row(time.Now()).Blob([]byte("content")).Double(3.2).Append()
+	bulk.Row(time.Now()).Blob([]byte("content 2")).Double(4.8).Append()
+	err = bulk.Push()
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("RowCount:", bulk.RowCount())
+	// Output:
+	// RowCount: 2
 }
 
 func ExampleNode() {
