@@ -17,17 +17,19 @@ type TimeseriesEntry struct {
 }
 
 // Columns : return the current columns
-func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, error) {
+func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, []TsInt64Column, []TsTimestampColumn, error) {
 	alias := C.CString(entry.alias)
 	var columns *C.qdb_ts_column_info_t
 	var columnsCount C.qdb_size_t
 	err := C.qdb_ts_list_columns(entry.handle, alias, &columns, &columnsCount)
 	var doubleColumns []TsDoubleColumn
 	var blobColumns []TsBlobColumn
+	var int64Columns []TsInt64Column
+	var timestampColumns []TsTimestampColumn
 	if err == 0 {
-		doubleColumns, blobColumns = columnArrayToGo(entry, columns, columnsCount)
+		doubleColumns, blobColumns, int64Columns, timestampColumns = columnArrayToGo(entry, columns, columnsCount)
 	}
-	return doubleColumns, blobColumns, makeErrorOrNil(err)
+	return doubleColumns, blobColumns, int64Columns, timestampColumns, makeErrorOrNil(err)
 }
 
 // ColumnsInfo : return the current columns information
@@ -74,6 +76,16 @@ func (entry TimeseriesEntry) BlobColumn(columnName string) TsBlobColumn {
 	return TsBlobColumn{tsColumn{TsColumnInfo{columnName, TsColumnBlob}, entry}}
 }
 
+// Int64Column : create a column object
+func (entry TimeseriesEntry) Int64Column(columnName string) TsInt64Column {
+	return TsInt64Column{tsColumn{TsColumnInfo{columnName, TsColumnInt64}, entry}}
+}
+
+// TimestampColumn : create a column object
+func (entry TimeseriesEntry) TimestampColumn(columnName string) TsTimestampColumn {
+	return TsTimestampColumn{tsColumn{TsColumnInfo{columnName, TsColumnTimestamp}, entry}}
+}
+
 // EraseRanges : erase all points in the specified ranges
 func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	alias := C.CString(column.parent.alias)
@@ -87,6 +99,28 @@ func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 
 // EraseRanges : erase all points in the specified ranges
 func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	erasedCount := C.qdb_uint_t(0)
+	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+	return uint64(erasedCount), makeErrorOrNil(err)
+}
+
+// EraseRanges : erase all points in the specified ranges
+func (column TsInt64Column) EraseRanges(rgs ...TsRange) (uint64, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	erasedCount := C.qdb_uint_t(0)
+	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+	return uint64(erasedCount), makeErrorOrNil(err)
+}
+
+// EraseRanges : erase all points in the specified ranges
+func (column TsTimestampColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	alias := C.CString(column.parent.alias)
 	columnName := C.CString(column.name)
 	ranges := rangeArrayToC(rgs...)
@@ -113,6 +147,26 @@ func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := blobPointArrayToC(points...)
 	err := C.qdb_ts_blob_insert(column.parent.handle, alias, columnName, content, contentCount)
+	return makeErrorOrNil(err)
+}
+
+// Insert int64 points into a timeseries
+func (column TsInt64Column) Insert(points ...TsInt64Point) error {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	contentCount := C.qdb_size_t(len(points))
+	content := int64PointArrayToC(points...)
+	err := C.qdb_ts_int64_insert(column.parent.handle, alias, columnName, content, contentCount)
+	return makeErrorOrNil(err)
+}
+
+// Insert timestamp points into a timeseries
+func (column TsTimestampColumn) Insert(points ...TsTimestampPoint) error {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	contentCount := C.qdb_size_t(len(points))
+	content := timestampPointArrayToC(points...)
+	err := C.qdb_ts_timestamp_insert(column.parent.handle, alias, columnName, content, contentCount)
 	return makeErrorOrNil(err)
 }
 
@@ -148,6 +202,42 @@ func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 	if err == 0 {
 		defer column.parent.Release(unsafe.Pointer(points))
 		return blobPointArrayToGo(points, pointsCount), nil
+	}
+	return nil, ErrorType(err)
+}
+
+// GetRanges : Retrieves int64s in the specified range of the time series column.
+//	It is an error to call this function on a non existing time-series.
+func (column TsInt64Column) GetRanges(rgs ...TsRange) ([]TsInt64Point, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	var points *C.qdb_ts_int64_point
+	var pointsCount C.qdb_size_t
+	err := C.qdb_ts_int64_get_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &points, &pointsCount)
+
+	if err == 0 {
+		defer column.parent.Release(unsafe.Pointer(points))
+		return int64PointArrayToGo(points, pointsCount), nil
+	}
+	return nil, ErrorType(err)
+}
+
+// GetRanges : Retrieves timestamps in the specified range of the time series column.
+//	It is an error to call this function on a non existing time-series.
+func (column TsTimestampColumn) GetRanges(rgs ...TsRange) ([]TsTimestampPoint, error) {
+	alias := C.CString(column.parent.alias)
+	columnName := C.CString(column.name)
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	var points *C.qdb_ts_timestamp_point
+	var pointsCount C.qdb_size_t
+	err := C.qdb_ts_timestamp_get_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &points, &pointsCount)
+
+	if err == 0 {
+		defer column.parent.Release(unsafe.Pointer(points))
+		return timestampPointArrayToGo(points, pointsCount), nil
 	}
 	return nil, ErrorType(err)
 }
@@ -196,6 +286,7 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
 	bulk := &TsBulk{}
+	bulk.h = entry.HandleType
 	err := C.qdb_ts_local_table_init(entry.handle, alias, columns, columnsCount, &bulk.table)
 	return bulk, makeErrorOrNil(err)
 }
@@ -230,6 +321,25 @@ func (t *TsBulk) Blob(content []byte) *TsBulk {
 	return t
 }
 
+// Int64 : adds an int64 in row transaction
+func (t *TsBulk) Int64(value int64) *TsBulk {
+	if t.err == nil {
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_int64(t.table, C.qdb_size_t(t.index), C.qdb_int_t(value)))
+	}
+	t.index++
+	return t
+}
+
+// Timestamp : adds a timestamp in row transaction
+func (t *TsBulk) Timestamp(value time.Time) *TsBulk {
+	if t.err == nil {
+		cValue := toQdbTimespec(value)
+		t.err = makeErrorOrNil(C.qdb_ts_row_set_timestamp(t.table, C.qdb_size_t(t.index), &cValue))
+	}
+	t.index++
+	return t
+}
+
 // Ignore : ignores this column in a row transaction
 func (t *TsBulk) Ignore() *TsBulk {
 	t.index++
@@ -254,5 +364,66 @@ func (t *TsBulk) Append() error {
 // Push : push the list of appended rows
 func (t *TsBulk) Push() error {
 	err := C.qdb_ts_push(t.table)
+	t.rowCount = 0
 	return makeErrorOrNil(err)
+}
+
+// GetDouble : gets a double in row
+func (t *TsBulk) GetDouble() (float64, error) {
+	var content C.double
+	err := C.qdb_ts_row_get_double(t.table, C.qdb_size_t(t.index), &content)
+	t.index++
+	return float64(content), makeErrorOrNil(err)
+}
+
+// GetBlob : gets a blob in row
+func (t *TsBulk) GetBlob() ([]byte, error) {
+	var content unsafe.Pointer
+	defer t.h.Release(content)
+	var contentLength C.qdb_size_t
+	err := C.qdb_ts_row_get_blob(t.table, C.qdb_size_t(t.index), &content, &contentLength)
+
+	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	t.index++
+	return output, makeErrorOrNil(err)
+}
+
+// GetInt64 : gets an int64 in row
+func (t *TsBulk) GetInt64() (int64, error) {
+	var content C.qdb_int_t
+	err := C.qdb_ts_row_get_int64(t.table, C.qdb_size_t(t.index), &content)
+	t.index++
+	return int64(content), makeErrorOrNil(err)
+}
+
+// GetTimestamp : gets a timestamp in row
+func (t *TsBulk) GetTimestamp() (time.Time, error) {
+	var content C.qdb_timespec_t
+	err := C.qdb_ts_row_get_timestamp(t.table, C.qdb_size_t(t.index), &content)
+	t.index++
+	return content.toStructG(), makeErrorOrNil(err)
+}
+
+// GetRanges : create a range bulk query
+func (t *TsBulk) GetRanges(rgs ...TsRange) error {
+	ranges := rangeArrayToC(rgs...)
+	rangesCount := C.qdb_size_t(len(rgs))
+	err := C.qdb_ts_table_get_ranges(t.table, ranges, rangesCount)
+	t.rowCount = -1
+	t.index = 0
+	return makeErrorOrNil(err)
+}
+
+// NextRow : advance to the next row, or the first one if not already used
+func (t *TsBulk) NextRow() (time.Time, error) {
+	var timestamp C.qdb_timespec_t
+	err := C.qdb_ts_table_next_row(t.table, &timestamp)
+	t.rowCount++
+	t.index = 0
+	return timestamp.toStructG(), makeErrorOrNil(err)
+}
+
+// Release : release the memory of the local table
+func (t *TsBulk) Release() {
+	t.h.Release(unsafe.Pointer(t.table))
 }
