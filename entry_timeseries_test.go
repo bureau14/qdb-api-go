@@ -21,12 +21,12 @@ var _ = Describe("Tests", func() {
 	// TODO(vianney): Debug timestamps, seems like they don't get to see the database
 	Context("Timeseries", func() {
 		var (
-			timeseries   TimeseriesEntry
-			doubleColumn TsDoubleColumn
-			blobColumn   TsBlobColumn
-			int64Column TsInt64Column
-			timestampColumn   TsTimestampColumn
-			columnsInfo  []TsColumnInfo
+			timeseries      TimeseriesEntry
+			doubleColumn    TsDoubleColumn
+			blobColumn      TsBlobColumn
+			int64Column     TsInt64Column
+			timestampColumn TsTimestampColumn
+			columnsInfo     []TsColumnInfo
 		)
 		BeforeEach(func() {
 			columnsInfo = []TsColumnInfo{}
@@ -76,10 +76,10 @@ var _ = Describe("Tests", func() {
 				end   int64 = count - 1
 			)
 			var (
-				timestamps   []time.Time
-				doublePoints []TsDoublePoint
-				blobPoints   []TsBlobPoint
-				int64Points []TsInt64Point
+				timestamps      []time.Time
+				doublePoints    []TsDoublePoint
+				blobPoints      []TsBlobPoint
+				int64Points     []TsInt64Point
 				timestampPoints []TsTimestampPoint
 			)
 			BeforeEach(func() {
@@ -162,11 +162,11 @@ var _ = Describe("Tests", func() {
 				})
 				Context("Columns retrieved", func() {
 					var (
-						doubleCols []TsDoubleColumn
-						blobCols   []TsBlobColumn
-						int64Cols  []TsInt64Column
+						doubleCols    []TsDoubleColumn
+						blobCols      []TsBlobColumn
+						int64Cols     []TsInt64Column
 						timestampCols []TsTimestampColumn
-						r       TsRange
+						r             TsRange
 					)
 					JustBeforeEach(func() {
 						var err error
@@ -632,10 +632,10 @@ var _ = Describe("Tests", func() {
 			Context("Bulk", func() {
 				Context("Insert", func() {
 					var (
-						blobValue []byte  = []byte("content")
-						doubleValue   float64  = 3.2
-						int64Value int64  = 2
-						timestampValue time.Time  = time.Now()
+						blobValue      []byte    = []byte("content")
+						doubleValue    float64   = 3.2
+						int64Value     int64     = 2
+						timestampValue time.Time = time.Now()
 					)
 					It("should append all columns", func() {
 						bulk, err := timeseries.Bulk()
@@ -646,6 +646,7 @@ var _ = Describe("Tests", func() {
 						}
 						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
+						bulk.Release()
 					})
 					It("should append columns", func() {
 						bulk, err := timeseries.Bulk(columnsInfo...)
@@ -656,6 +657,7 @@ var _ = Describe("Tests", func() {
 						}
 						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
+						bulk.Release()
 					})
 					It("should append columns and ignore fields", func() {
 						bulk, err := timeseries.Bulk(columnsInfo...)
@@ -666,6 +668,7 @@ var _ = Describe("Tests", func() {
 						}
 						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
+						bulk.Release()
 					})
 					It("should append columns on part of timeseries", func() {
 						bulk, err := timeseries.Bulk(columnsInfo[0])
@@ -677,12 +680,14 @@ var _ = Describe("Tests", func() {
 						Expect(count).To(Equal(int64(bulk.RowCount())))
 						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
+						bulk.Release()
 					})
 					It("should fail to append columns - too much values", func() {
 						bulk, err := timeseries.Bulk(columnsInfo...)
 						Expect(err).ToNot(HaveOccurred())
 						err = bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Double(doubleValue).Append()
 						Expect(err).To(HaveOccurred())
+						bulk.Release()
 					})
 					It("should fail to append columns - additional column does not exist", func() {
 						columnsInfo = append(columnsInfo, NewTsColumnInfo("asd", TsColumnDouble))
@@ -713,7 +718,7 @@ var _ = Describe("Tests", func() {
 						Expect(err).ToNot(HaveOccurred())
 						err = bulk.GetRanges(r)
 						Expect(err).ToNot(HaveOccurred())
-						for ;; {
+						for {
 							var timestamp time.Time
 							if timestamp, err = bulk.NextRow(); err != nil {
 								break
@@ -738,6 +743,7 @@ var _ = Describe("Tests", func() {
 							Expect(timestampPoints[bulk.RowCount()].Content()).To(Equal(timestampValue))
 						}
 						Expect(err).To(Equal(ErrIteratorEnd))
+						bulk.Release()
 					})
 					It("Should not work to get values when GetRanges has not been called", func() {
 						bulk, err := timeseries.Bulk()

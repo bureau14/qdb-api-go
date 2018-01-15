@@ -18,7 +18,7 @@ import (
 
 // TsBulk : A structure that permits to append data to a timeseries
 type TsBulk struct {
-	HandleType
+	h         HandleType
 	err       error
 	rowCount  int
 	index     int

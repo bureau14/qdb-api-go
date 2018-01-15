@@ -286,7 +286,7 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	columns := columnInfoArrayToC(cols...)
 	columnsCount := C.qdb_size_t(len(cols))
 	bulk := &TsBulk{}
-	bulk.HandleType = entry.HandleType
+	bulk.h = entry.HandleType
 	err := C.qdb_ts_local_table_init(entry.handle, alias, columns, columnsCount, &bulk.table)
 	return bulk, makeErrorOrNil(err)
 }
@@ -379,7 +379,7 @@ func (t *TsBulk) GetDouble() (float64, error) {
 // GetBlob : gets a blob in row
 func (t *TsBulk) GetBlob() ([]byte, error) {
 	var content unsafe.Pointer
-	defer t.Release(content)
+	defer t.h.Release(content)
 	var contentLength C.qdb_size_t
 	err := C.qdb_ts_row_get_blob(t.table, C.qdb_size_t(t.index), &content, &contentLength)
 
@@ -421,4 +421,9 @@ func (t *TsBulk) NextRow() (time.Time, error) {
 	t.rowCount++
 	t.index = 0
 	return timestamp.toStructG(), makeErrorOrNil(err)
+}
+
+// Release : release the memory of the local table
+func (t *TsBulk) Release() {
+	t.h.Release(unsafe.Pointer(t.table))
 }
