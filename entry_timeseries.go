@@ -362,10 +362,12 @@ func (t *TsBulk) Append() error {
 }
 
 // Push : push the list of appended rows
-func (t *TsBulk) Push() error {
+// returns the number of rows added
+func (t *TsBulk) Push() (int, error) {
 	err := C.qdb_ts_push(t.table)
+	rowCount := t.rowCount
 	t.rowCount = 0
-	return makeErrorOrNil(err)
+	return rowCount, makeErrorOrNil(err)
 }
 
 // GetDouble : gets a double in row

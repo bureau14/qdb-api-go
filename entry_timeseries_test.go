@@ -644,7 +644,7 @@ var _ = Describe("Tests", func() {
 							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
 							Expect(err).ToNot(HaveOccurred())
 						}
-						err = bulk.Push()
+						_, err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
 						bulk.Release()
 					})
@@ -655,7 +655,7 @@ var _ = Describe("Tests", func() {
 							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
 							Expect(err).ToNot(HaveOccurred())
 						}
-						err = bulk.Push()
+						_, err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
 						bulk.Release()
 					})
@@ -666,7 +666,7 @@ var _ = Describe("Tests", func() {
 							err := bulk.Row(time.Now()).Ignore().Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
 							Expect(err).ToNot(HaveOccurred())
 						}
-						err = bulk.Push()
+						_, err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
 						bulk.Release()
 					})
@@ -678,7 +678,7 @@ var _ = Describe("Tests", func() {
 							Expect(err).ToNot(HaveOccurred())
 						}
 						Expect(count).To(Equal(int64(bulk.RowCount())))
-						err = bulk.Push()
+						_, err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
 						bulk.Release()
 					})
