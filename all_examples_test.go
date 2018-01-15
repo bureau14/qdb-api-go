@@ -134,7 +134,7 @@ func ExampleTimeseriesEntry_Columns() {
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Columns")
 	defer h.Close()
 
-	doubleColumns, blobColumns, err := timeseries.Columns()
+	doubleColumns, blobColumns, int64Columns, timestampColumns, err := timeseries.Columns()
 	if err != nil {
 		// handle error
 	}
@@ -146,9 +146,19 @@ func ExampleTimeseriesEntry_Columns() {
 		fmt.Println("column:", col.Name())
 		// do something like Insert, GetRanges with a blob column
 	}
+	for _, col := range int64Columns {
+		fmt.Println("column:", col.Name())
+		// do something like Insert, GetRanges with a blob column
+	}
+	for _, col := range timestampColumns {
+		fmt.Println("column:", col.Name())
+		// do something like Insert, GetRanges with a blob column
+	}
 	// Output:
 	// column: serie_column_double
 	// column: serie_column_blob
+	// column: serie_column_int64
+	// column: serie_column_timestamp
 }
 
 func ExampleTimeseriesEntry_ColumnsInfo() {
@@ -165,6 +175,8 @@ func ExampleTimeseriesEntry_ColumnsInfo() {
 	// Output:
 	// column: serie_column_blob
 	// column: serie_column_double
+	// column: serie_column_int64
+	// column: serie_column_timestamp
 }
 
 func ExampleTimeseriesEntry_InsertColumns() {
@@ -185,6 +197,8 @@ func ExampleTimeseriesEntry_InsertColumns() {
 	// Output:
 	// column: serie_column_blob
 	// column: serie_column_double
+	// column: serie_column_int64
+	// column: serie_column_timestamp
 	// column: serie_column_blob_2
 	// column: serie_column_double_2
 }
@@ -362,6 +376,140 @@ func ExampleTsBlobColumn_Aggregate() {
 	// first: content_0
 }
 
+func ExampleTimeseriesEntry_Int64Column() {
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Int64Column")
+	defer h.Close()
+
+	column := timeseries.Int64Column("serie_column_int64")
+	fmt.Println("column:", column.Name())
+	// Output:
+	// column: serie_column_int64
+}
+
+func ExampleTsInt64Column_Insert() {
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsInt64Column_Insert")
+	defer h.Close()
+
+	column := timeseries.Int64Column("serie_column_int64")
+
+	// Insert only one point:
+	column.Insert(NewTsInt64Point(time.Now(), 3))
+
+	// Insert multiple points
+	int64Points := make([]TsInt64Point, 2)
+	int64Points[0] = NewTsInt64Point(time.Now(), 3)
+	int64Points[1] = NewTsInt64Point(time.Now(), 4)
+
+	err := column.Insert(int64Points...)
+	if err != nil {
+		// handle error
+	}
+}
+
+func ExampleTsInt64Column_GetRanges() {
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsInt64Column_GetRanges")
+	defer h.Close()
+
+	column := timeseries.Int64Column("serie_column_int64")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	int64Points, err := column.GetRanges(r)
+	if err != nil {
+		// handle error
+	}
+	for _, point := range int64Points {
+		fmt.Println("timestamp:", point.Timestamp(), "- value:", point.Content())
+	}
+	// Output:
+	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: 0
+	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: 1
+	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: 2
+	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: 3
+}
+
+func ExampleTsInt64Column_EraseRanges() {
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsInt64Column_EraseRanges")
+	defer h.Close()
+
+	column := timeseries.Int64Column("serie_column_int64")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	numberOfErasedValues, err := column.EraseRanges(r)
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("Number of erased values:", numberOfErasedValues)
+	// Output:
+	// Number of erased values: 4
+}
+
+func ExampleTimeseriesEntry_TimestampColumn() {
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_TimestampColumn")
+	defer h.Close()
+
+	column := timeseries.TimestampColumn("serie_column_timestamp")
+	fmt.Println("column:", column.Name())
+	// Output:
+	// column: serie_column_timestamp
+}
+
+func ExampleTsTimestampColumn_Insert() {
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsTimestampColumn_Insert")
+	defer h.Close()
+
+	column := timeseries.TimestampColumn("serie_column_timestamp")
+
+	// Insert only one point:
+	column.Insert(NewTsTimestampPoint(time.Now(), time.Now()))
+
+	// Insert multiple points
+	timestampPoints := make([]TsTimestampPoint, 2)
+	timestampPoints[0] = NewTsTimestampPoint(time.Now(), time.Now())
+	timestampPoints[1] = NewTsTimestampPoint(time.Now(), time.Now())
+
+	err := column.Insert(timestampPoints...)
+	if err != nil {
+		// handle error
+	}
+}
+
+func ExampleTsTimestampColumn_GetRanges() {
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsTimestampColumn_GetRanges")
+	defer h.Close()
+
+	column := timeseries.TimestampColumn("serie_column_timestamp")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	timestampPoints, err := column.GetRanges(r)
+	if err != nil {
+		// handle error
+	}
+	for _, point := range timestampPoints {
+		fmt.Println("timestamp:", point.Timestamp(), "- value:", point.Content())
+	}
+	// Output:
+	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: 1970-01-01 01:00:10 +0100 CET
+	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: 1970-01-01 01:00:20 +0100 CET
+	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: 1970-01-01 01:00:30 +0100 CET
+	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: 1970-01-01 01:00:40 +0100 CET
+}
+
+func ExampleTsTimestampColumn_EraseRanges() {
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsTimestampColumn_EraseRanges")
+	defer h.Close()
+
+	column := timeseries.TimestampColumn("serie_column_timestamp")
+
+	r := NewRange(time.Unix(0, 0), time.Unix(40, 5))
+	numberOfErasedValues, err := column.EraseRanges(r)
+	if err != nil {
+		// handle error
+	}
+	fmt.Println("Number of erased values:", numberOfErasedValues)
+	// Output:
+	// Number of erased values: 4
+}
+
 func ExampleTimeseriesEntry_Bulk() {
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Bulk")
 	defer h.Close()
@@ -376,17 +524,18 @@ func ExampleTimeseriesEntry_Bulk() {
 }
 
 func ExampleTsBulk_Push() {
-	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsBulk_Insert")
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsBulk_Push")
 	defer h.Close()
 
 	bulk, err := timeseries.Bulk(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
 	bulk.Row(time.Now()).Blob([]byte("content")).Double(3.2).Append()
 	bulk.Row(time.Now()).Blob([]byte("content 2")).Double(4.8).Append()
-	err = bulk.Push()
+	rowCount, err := bulk.Push()
 	if err != nil {
 		// handle error
+		panic(err)
 	}
-	fmt.Println("RowCount:", bulk.RowCount())
+	fmt.Println("RowCount:", rowCount)
 	// Output:
 	// RowCount: 2
 }
