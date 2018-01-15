@@ -13,10 +13,7 @@ func ExampleHandleType() {
 }
 
 func ExampleEntry_Alias() {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return
-	}
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	defer h.Close()
 
 	blob1 := h.Blob("BLOB_1")
@@ -52,10 +49,7 @@ func ExampleEntry_Alias() {
 }
 
 func ExampleBlobEntry() {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return
-	}
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	defer h.Close()
 
 	alias := "BlobAlias"
@@ -89,10 +83,7 @@ func ExampleBlobEntry() {
 }
 
 func ExampleIntegerEntry() {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return
-	}
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	defer h.Close()
 
 	alias := "IntAlias"
@@ -122,10 +113,7 @@ func ExampleIntegerEntry() {
 }
 
 func ExampleTimeseriesEntry() {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return
-	}
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	defer h.Close()
 	timeseries := h.Timeseries("alias")
 
@@ -135,10 +123,7 @@ func ExampleTimeseriesEntry() {
 }
 
 func ExampleTimeseriesEntry_Create() {
-	h, timeseries := createTimeseries("ExampleTimeseriesEntry_Create")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseries("ExampleTimeseriesEntry_Create")
 	defer h.Close()
 
 	// duration, columns...
@@ -146,10 +131,7 @@ func ExampleTimeseriesEntry_Create() {
 }
 
 func ExampleTimeseriesEntry_Columns() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_Columns")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Columns")
 	defer h.Close()
 
 	doubleColumns, blobColumns, err := timeseries.Columns()
@@ -170,10 +152,7 @@ func ExampleTimeseriesEntry_Columns() {
 }
 
 func ExampleTimeseriesEntry_ColumnsInfo() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_ColumnsInfo")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_ColumnsInfo")
 	defer h.Close()
 
 	columns, err := timeseries.ColumnsInfo()
@@ -189,10 +168,7 @@ func ExampleTimeseriesEntry_ColumnsInfo() {
 }
 
 func ExampleTimeseriesEntry_InsertColumns() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_InsertColumns")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_InsertColumns")
 	defer h.Close()
 
 	err := timeseries.InsertColumns(NewTsColumnInfo("serie_column_blob_2", TsColumnBlob), NewTsColumnInfo("serie_column_double_2", TsColumnDouble))
@@ -214,10 +190,7 @@ func ExampleTimeseriesEntry_InsertColumns() {
 }
 
 func ExampleTimeseriesEntry_DoubleColumn() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_DoubleColumn")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_DoubleColumn")
 	defer h.Close()
 
 	column := timeseries.DoubleColumn("serie_column_double")
@@ -227,10 +200,7 @@ func ExampleTimeseriesEntry_DoubleColumn() {
 }
 
 func ExampleTsDoubleColumn_Insert() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTsDoubleColumn_Insert")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsDoubleColumn_Insert")
 	defer h.Close()
 
 	column := timeseries.DoubleColumn("serie_column_double")
@@ -250,10 +220,7 @@ func ExampleTsDoubleColumn_Insert() {
 }
 
 func ExampleTsDoubleColumn_GetRanges() {
-	h, timeseries := createTimeseriesWithData("ExampleTsDoubleColumn_GetRanges")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsDoubleColumn_GetRanges")
 	defer h.Close()
 
 	column := timeseries.DoubleColumn("serie_column_double")
@@ -274,10 +241,7 @@ func ExampleTsDoubleColumn_GetRanges() {
 }
 
 func ExampleTsDoubleColumn_EraseRanges() {
-	h, timeseries := createTimeseriesWithData("ExampleTsDoubleColumn_EraseRanges")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsDoubleColumn_EraseRanges")
 	defer h.Close()
 
 	column := timeseries.DoubleColumn("serie_column_double")
@@ -293,10 +257,7 @@ func ExampleTsDoubleColumn_EraseRanges() {
 }
 
 func ExampleTsDoubleColumn_Aggregate() {
-	h, timeseries := createTimeseriesWithData("ExampleTsDoubleColumn_Aggregate")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsDoubleColumn_Aggregate")
 	defer h.Close()
 
 	column := timeseries.DoubleColumn("serie_column_double")
@@ -318,10 +279,7 @@ func ExampleTsDoubleColumn_Aggregate() {
 }
 
 func ExampleTimeseriesEntry_BlobColumn() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_BlobColumn")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTimeseriesEntry_BlobColumn")
 	defer h.Close()
 
 	column := timeseries.BlobColumn("serie_column_blob")
@@ -331,10 +289,7 @@ func ExampleTimeseriesEntry_BlobColumn() {
 }
 
 func ExampleTsBlobColumn_Insert() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTsBlobColumn_Insert")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsBlobColumn_Insert")
 	defer h.Close()
 
 	column := timeseries.BlobColumn("serie_column_blob")
@@ -354,10 +309,7 @@ func ExampleTsBlobColumn_Insert() {
 }
 
 func ExampleTsBlobColumn_GetRanges() {
-	h, timeseries := createTimeseriesWithData("ExampleTsBlobColumn_GetRanges")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsBlobColumn_GetRanges")
 	defer h.Close()
 
 	column := timeseries.BlobColumn("serie_column_blob")
@@ -378,10 +330,7 @@ func ExampleTsBlobColumn_GetRanges() {
 }
 
 func ExampleTsBlobColumn_EraseRanges() {
-	h, timeseries := createTimeseriesWithData("ExampleTsBlobColumn_EraseRanges")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsBlobColumn_EraseRanges")
 	defer h.Close()
 
 	column := timeseries.BlobColumn("serie_column_blob")
@@ -397,10 +346,7 @@ func ExampleTsBlobColumn_EraseRanges() {
 }
 
 func ExampleTsBlobColumn_Aggregate() {
-	h, timeseries := createTimeseriesWithData("ExampleTsBlobColumn_Aggregate")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithData("ExampleTsBlobColumn_Aggregate")
 	defer h.Close()
 
 	column := timeseries.BlobColumn("serie_column_blob")
@@ -417,10 +363,7 @@ func ExampleTsBlobColumn_Aggregate() {
 }
 
 func ExampleTimeseriesEntry_Bulk() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTimeseriesEntry_Bulk")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Bulk")
 	defer h.Close()
 
 	bulk, err := timeseries.Bulk(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
@@ -433,10 +376,7 @@ func ExampleTimeseriesEntry_Bulk() {
 }
 
 func ExampleTsBulk_Push() {
-	h, timeseries := createTimeseriesWithColumns("ExampleTsBulk_Insert")
-	if h == nil {
-		return
-	}
+	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsBulk_Insert")
 	defer h.Close()
 
 	bulk, err := timeseries.Bulk(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
@@ -452,10 +392,7 @@ func ExampleTsBulk_Push() {
 }
 
 func ExampleNode() {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return
-	}
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	defer h.Close()
 
 	node := h.Node(nodeURI)
@@ -477,10 +414,7 @@ func ExampleNode() {
 }
 
 func ExampleQuery() {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return
-	}
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	defer h.Close()
 
 	var aliases []string
@@ -512,7 +446,7 @@ func ExampleQuery() {
 	obtainedAliases, _ = h.Query().Tag("adsda").Execute()
 	fmt.Println("Get no aliases:", obtainedAliases)
 
-	_, err = h.Query().NotTag("second").Execute()
+	_, err := h.Query().NotTag("second").Execute()
 	fmt.Println("Error:", err)
 
 	_, err = h.Query().Type("int").Execute()

@@ -5,33 +5,27 @@ import (
 	"time"
 )
 
-func createTimeseries(alias string) (*HandleType, *TimeseriesEntry) {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return nil, nil
-	}
+func MustCreateTimeseries(alias string) (*HandleType, *TimeseriesEntry) {
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	timeseries := h.Timeseries(alias)
 	return &h, &timeseries
 }
 
-func createTimeseriesWithColumns(alias string) (*HandleType, *TimeseriesEntry) {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return nil, nil
-	}
+func MustCreateTimeseriesWithColumns(alias string) (*HandleType, *TimeseriesEntry) {
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	timeseries := h.Timeseries(alias)
 	timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
 	return &h, &timeseries
 }
 
-func createTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) {
-	h, err := SetupHandle(clusterURI, 120*time.Second)
-	if err != nil {
-		return nil, nil
-	}
+func MustCreateTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) {
+	h := MustSetupHandle(clusterURI, 120*time.Second)
 	timeseries := h.Timeseries(alias)
 	timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
 	doubleColumns, blobColumns, err := timeseries.Columns()
+	if err != nil {
+		panic(err)
+	}
 
 	var count int64 = 4
 	timestamps := make([]time.Time, count)
@@ -42,7 +36,13 @@ func createTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) {
 		blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
 		doublePoints[idx] = NewTsDoublePoint(timestamps[idx], float64(idx))
 	}
-	doubleColumns[0].Insert(doublePoints...)
-	blobColumns[0].Insert(blobPoints...)
+	err = doubleColumns[0].Insert(doublePoints...)
+	if err != nil {
+		panic(err)
+	}
+	err = blobColumns[0].Insert(blobPoints...)
+	if err != nil {
+		panic(err)
+	}
 	return &h, &timeseries
 }
