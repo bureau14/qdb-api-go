@@ -21,14 +21,16 @@ var _ = Describe("Tests", func() {
 	// TODO(vianney): Debug timestamps, seems like they don't get to see the database
 	Context("Timeseries", func() {
 		var (
-			timeseries   TimeseriesEntry
-			doubleColumn TsDoubleColumn
-			blobColumn   TsBlobColumn
-			columnsInfo  []TsColumnInfo
+			timeseries      TimeseriesEntry
+			doubleColumn    TsDoubleColumn
+			blobColumn      TsBlobColumn
+			int64Column     TsInt64Column
+			timestampColumn TsTimestampColumn
+			columnsInfo     []TsColumnInfo
 		)
 		BeforeEach(func() {
 			columnsInfo = []TsColumnInfo{}
-			columnsInfo = append(columnsInfo, NewTsColumnInfo("blob_column", TsColumnBlob), NewTsColumnInfo("double_column", TsColumnDouble))
+			columnsInfo = append(columnsInfo, NewTsColumnInfo("blob_column", TsColumnBlob), NewTsColumnInfo("double_column", TsColumnDouble), NewTsColumnInfo("int64_column", TsColumnInt64), NewTsColumnInfo("timestamp_column", TsColumnTimestamp))
 		})
 		JustBeforeEach(func() {
 			timeseries = handle.Timeseries(alias)
@@ -45,16 +47,18 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should not work to get columns before creating the time series", func() {
-				_, _, err := timeseries.Columns()
+				_, _, _, _, err := timeseries.Columns()
 				Expect(err).To(HaveOccurred())
 			})
 			It("should work with zero columns", func() {
 				err := timeseries.Create(24*time.Hour, columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
-				doubles, blobs, err := timeseries.Columns()
+				doubleCols, blobCols, int64Cols, timestampCols, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(0).To(Equal(len(doubles)))
-				Expect(0).To(Equal(len(blobs)))
+				Expect(0).To(Equal(len(doubleCols)))
+				Expect(0).To(Equal(len(blobCols)))
+				Expect(0).To(Equal(len(int64Cols)))
+				Expect(0).To(Equal(len(timestampCols)))
 			})
 			It("should work with a shard size of 1ms", func() {
 				err := timeseries.Create(1*time.Millisecond, columnsInfo...)
@@ -72,33 +76,45 @@ var _ = Describe("Tests", func() {
 				end   int64 = count - 1
 			)
 			var (
-				timestamps   []time.Time
-				doublePoints []TsDoublePoint
-				blobPoints   []TsBlobPoint
+				timestamps      []time.Time
+				doublePoints    []TsDoublePoint
+				blobPoints      []TsBlobPoint
+				int64Points     []TsInt64Point
+				timestampPoints []TsTimestampPoint
 			)
 			BeforeEach(func() {
 				timestamps = make([]time.Time, count)
 				blobPoints = make([]TsBlobPoint, count)
 				doublePoints = make([]TsDoublePoint, count)
+				int64Points = make([]TsInt64Point, count)
+				timestampPoints = make([]TsTimestampPoint, count)
 				for idx := int64(0); idx < count; idx++ {
 					timestamps[idx] = time.Unix((idx+1)*10, 0)
 					blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
 					doublePoints[idx] = NewTsDoublePoint(timestamps[idx], float64(idx))
+					int64Points[idx] = NewTsInt64Point(timestamps[idx], idx)
+					timestampPoints[idx] = NewTsTimestampPoint(timestamps[idx], timestamps[idx])
 				}
 			})
 			JustBeforeEach(func() {
 				err := timeseries.Create(24*time.Hour, columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
-				doubleColumn = timeseries.DoubleColumn(columnsInfo[1].Name())
 				blobColumn = timeseries.BlobColumn(columnsInfo[0].Name())
+				doubleColumn = timeseries.DoubleColumn(columnsInfo[1].Name())
+				int64Column = timeseries.Int64Column(columnsInfo[2].Name())
+				timestampColumn = timeseries.TimestampColumn(columnsInfo[3].Name())
 			})
 			It("should have one blob column and one double column", func() {
-				doubles, blobs, err := timeseries.Columns()
+				doubleCols, blobCols, int64Cols, timestampCols, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(1).To(Equal(len(doubles)))
-				Expect(1).To(Equal(len(blobs)))
-				Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
-				Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
+				Expect(1).To(Equal(len(doubleCols)))
+				Expect(1).To(Equal(len(blobCols)))
+				Expect(1).To(Equal(len(int64Cols)))
+				Expect(1).To(Equal(len(timestampCols)))
+				Expect(TsColumnDouble).To(Equal(doubleCols[0].Type()))
+				Expect(TsColumnBlob).To(Equal(blobCols[0].Type()))
+				Expect(TsColumnInt64).To(Equal(int64Cols[0].Type()))
+				Expect(TsColumnTimestamp).To(Equal(timestampCols[0].Type()))
 			})
 			Context("Insert Columns", func() {
 				It("should work to insert new columns", func() {
@@ -128,50 +144,78 @@ var _ = Describe("Tests", func() {
 				JustBeforeEach(func() {
 					doubleColumn.Insert(doublePoints...)
 					blobColumn.Insert(blobPoints...)
+					int64Column.Insert(int64Points...)
+					timestampColumn.Insert(timestampPoints...)
 					anotherTimeseries = handle.Timeseries(alias)
 				})
 				It("should be able to retrieve all columns", func() {
-					doubles, blobs, err := anotherTimeseries.Columns()
+					doubleCols, blobCols, int64Cols, timestampCols, err := anotherTimeseries.Columns()
 					Expect(err).ToNot(HaveOccurred())
-					Expect(1).To(Equal(len(doubles)))
-					Expect(1).To(Equal(len(blobs)))
-					Expect(TsColumnDouble).To(Equal(doubles[0].Type()))
-					Expect(TsColumnBlob).To(Equal(blobs[0].Type()))
+					Expect(1).To(Equal(len(doubleCols)))
+					Expect(1).To(Equal(len(blobCols)))
+					Expect(1).To(Equal(len(int64Cols)))
+					Expect(1).To(Equal(len(timestampCols)))
+					Expect(TsColumnDouble).To(Equal(doubleCols[0].Type()))
+					Expect(TsColumnBlob).To(Equal(blobCols[0].Type()))
+					Expect(TsColumnInt64).To(Equal(int64Cols[0].Type()))
+					Expect(TsColumnTimestamp).To(Equal(timestampCols[0].Type()))
 				})
 				Context("Columns retrieved", func() {
 					var (
-						doubles []TsDoubleColumn
-						blobs   []TsBlobColumn
-						r       TsRange
+						doubleCols    []TsDoubleColumn
+						blobCols      []TsBlobColumn
+						int64Cols     []TsInt64Column
+						timestampCols []TsTimestampColumn
+						r             TsRange
 					)
 					JustBeforeEach(func() {
 						var err error
-						doubles, blobs, err = anotherTimeseries.Columns()
+						doubleCols, blobCols, int64Cols, timestampCols, err = anotherTimeseries.Columns()
 						Expect(err).ToNot(HaveOccurred())
 						r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
 					})
 					It("should retrieve all the doubles", func() {
-						points, err := doubles[0].GetRanges(r)
+						points, err := doubleCols[0].GetRanges(r)
 						Expect(err).ToNot(HaveOccurred())
-						for i := range doublePoints {
+						Expect(len(doublePoints)).To(Equal(len(points)))
+						for i := range points {
 							Expect(doublePoints[i].Timestamp()).To(Equal(points[i].Timestamp()))
 							Expect(doublePoints[i].Content()).To(Equal(points[i].Content()))
 						}
 					})
 					It("should retrieve all the blobs", func() {
-						points, err := blobs[0].GetRanges(r)
+						points, err := blobCols[0].GetRanges(r)
 						Expect(err).ToNot(HaveOccurred())
-						for i := range blobPoints {
+						Expect(len(blobPoints)).To(Equal(len(points)))
+						for i := range points {
 							Expect(blobPoints[i].Timestamp()).To(Equal(points[i].Timestamp()))
 							Expect(blobPoints[i].Content()).To(Equal(points[i].Content()))
 						}
 					})
+					It("should retrieve all the int64s", func() {
+						points, err := int64Cols[0].GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(len(int64Points)).To(Equal(len(points)))
+						for i := range points {
+							Expect(int64Points[i].Timestamp()).To(Equal(points[i].Timestamp()))
+							Expect(int64Points[i].Content()).To(Equal(points[i].Content()))
+						}
+					})
+					It("should retrieve all the timestamps", func() {
+						points, err := timestampCols[0].GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(len(timestampPoints)).To(Equal(len(points)))
+						for i := range points {
+							Expect(timestampPoints[i].Timestamp()).To(Equal(points[i].Timestamp()))
+							Expect(timestampPoints[i].Content()).To(Equal(points[i].Content()))
+						}
+					})
 					It("should be possible to insert a double", func() {
-						err := doubles[0].Insert(NewTsDoublePoint(timestamps[start], 3.2))
+						err := doubleCols[0].Insert(NewTsDoublePoint(timestamps[start], 3.2))
 						Expect(err).ToNot(HaveOccurred())
 						points, err := doubleColumn.GetRanges(r)
 						Expect(err).ToNot(HaveOccurred())
-						anotherPoints, err := doubles[0].GetRanges(r)
+						anotherPoints, err := doubleCols[0].GetRanges(r)
 						Expect(err).ToNot(HaveOccurred())
 						Expect(points).To(Equal(anotherPoints))
 						Expect(len(blobPoints) + 1).To(Equal(len(anotherPoints)))
@@ -182,6 +226,8 @@ var _ = Describe("Tests", func() {
 				JustBeforeEach(func() {
 					doubleColumn.Insert(doublePoints...)
 					blobColumn.Insert(blobPoints...)
+					int64Column.Insert(int64Points...)
+					timestampColumn.Insert(timestampPoints...)
 				})
 				Context("Double", func() {
 					It("should not work to erase an empty range", func() {
@@ -239,6 +285,62 @@ var _ = Describe("Tests", func() {
 						Expect(0).To(Equal(len(blobs)))
 					})
 				})
+				Context("Int64", func() {
+					It("should not work to erase an empty range", func() {
+						erasedCount, err := int64Column.EraseRanges()
+						Expect(err).To(HaveOccurred())
+						Expect(uint64(0)).To(Equal(erasedCount))
+					})
+					It("should work to erase a point", func() {
+						r := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+						erasedCount, err := int64Column.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(1).To(BeNumerically("==", erasedCount))
+
+						rAll := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						int64Results, err := int64Column.GetRanges(rAll)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(int64Points[1:]).To(ConsistOf(int64Results))
+					})
+					It("should work to erase a complete range", func() {
+						r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						erasedCount, err := int64Column.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(count).To(BeNumerically("==", erasedCount))
+
+						int64Results, err := int64Column.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(0).To(Equal(len(int64Results)))
+					})
+				})
+				Context("Timestamp", func() {
+					It("should not work to erase an empty range", func() {
+						erasedCount, err := timestampColumn.EraseRanges()
+						Expect(err).To(HaveOccurred())
+						Expect(uint64(0)).To(Equal(erasedCount))
+					})
+					It("should work to erase a point", func() {
+						r := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+						erasedCount, err := timestampColumn.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(1).To(BeNumerically("==", erasedCount))
+
+						rAll := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						timestampResults, err := timestampColumn.GetRanges(rAll)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(timestampPoints[1:]).To(ConsistOf(timestampResults))
+					})
+					It("should work to erase a complete range", func() {
+						r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+						erasedCount, err := timestampColumn.EraseRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(count).To(BeNumerically("==", erasedCount))
+
+						timestampResults, err := timestampColumn.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(0).To(Equal(len(timestampResults)))
+					})
+				})
 			})
 			Context("Insert Data Points", func() {
 				It("should work to insert a double point", func() {
@@ -249,6 +351,14 @@ var _ = Describe("Tests", func() {
 					err := blobColumn.Insert(NewTsBlobPoint(time.Now(), []byte("asd")))
 					Expect(err).ToNot(HaveOccurred())
 				})
+				It("should work to insert a int64 point", func() {
+					err := int64Column.Insert(NewTsInt64Point(time.Now(), 2))
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should work to insert a timestamp point", func() {
+					err := timestampColumn.Insert(NewTsTimestampPoint(time.Now(), time.Now()))
+					Expect(err).ToNot(HaveOccurred())
+				})
 				It("should work to insert double points", func() {
 					err := doubleColumn.Insert(doublePoints...)
 					Expect(err).ToNot(HaveOccurred())
@@ -257,10 +367,20 @@ var _ = Describe("Tests", func() {
 					err := blobColumn.Insert(blobPoints...)
 					Expect(err).ToNot(HaveOccurred())
 				})
+				It("should work to insert int64 points", func() {
+					err := int64Column.Insert(int64Points...)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should work to insert timestamp points", func() {
+					err := timestampColumn.Insert(timestampPoints...)
+					Expect(err).ToNot(HaveOccurred())
+				})
 				Context("Empty Points Array", func() {
 					BeforeEach(func() {
 						doublePoints = []TsDoublePoint{}
 						blobPoints = []TsBlobPoint{}
+						int64Points = []TsInt64Point{}
+						timestampPoints = []TsTimestampPoint{}
 					})
 					It("should not work to insert double points", func() {
 						err := doubleColumn.Insert(doublePoints...)
@@ -268,6 +388,14 @@ var _ = Describe("Tests", func() {
 					})
 					It("should not work to insert blob points", func() {
 						err := blobColumn.Insert(blobPoints...)
+						Expect(err).To(HaveOccurred())
+					})
+					It("should not work to insert int64 points", func() {
+						err := int64Column.Insert(int64Points...)
+						Expect(err).To(HaveOccurred())
+					})
+					It("should not work to insert timestamp points", func() {
+						err := timestampColumn.Insert(timestampPoints...)
 						Expect(err).To(HaveOccurred())
 					})
 				})
@@ -278,6 +406,10 @@ var _ = Describe("Tests", func() {
 					err := doubleColumn.Insert(doublePoints...)
 					Expect(err).ToNot(HaveOccurred())
 					err = blobColumn.Insert(blobPoints...)
+					Expect(err).ToNot(HaveOccurred())
+					err = int64Column.Insert(int64Points...)
+					Expect(err).ToNot(HaveOccurred())
+					err = timestampColumn.Insert(timestampPoints...)
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should create a range", func() {
@@ -291,7 +423,25 @@ var _ = Describe("Tests", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(doublePoints).To(ConsistOf(results))
 				})
-				It("should get the first and last points", func() {
+				It("should get all blob points", func() {
+					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					results, err := blobColumn.GetRanges(r)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(blobPoints).To(ConsistOf(results))
+				})
+				It("should get all int64 points", func() {
+					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					results, err := int64Column.GetRanges(r)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(int64Points).To(ConsistOf(results))
+				})
+				It("should get all timestamp points", func() {
+					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					results, err := timestampColumn.GetRanges(r)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(timestampPoints).To(ConsistOf(results))
+				})
+				It("should get the first and last double points", func() {
 					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
 					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
 					points := []TsDoublePoint{doublePoints[start], doublePoints[end]}
@@ -299,19 +449,29 @@ var _ = Describe("Tests", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(points).To(ConsistOf(results))
 				})
-				It("should get all blob points", func() {
-					r := NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
-					results, err := blobColumn.GetRanges(r)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(blobPoints).To(ConsistOf(results))
-				})
-				It("should get the first and last points", func() {
+				It("should get the first and last blob points", func() {
 					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
 					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
 					results := []TsBlobPoint{blobPoints[start], blobPoints[end]}
 					tsBlobPoints, err := blobColumn.GetRanges(r1, r2)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(results).To(ConsistOf(tsBlobPoints))
+				})
+				It("should get the first and last int64 points", func() {
+					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
+					results := []TsInt64Point{int64Points[start], int64Points[end]}
+					tsInt64Points, err := int64Column.GetRanges(r1, r2)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(results).To(ConsistOf(tsInt64Points))
+				})
+				It("should get the first and last timestamp points", func() {
+					r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
+					r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
+					results := []TsTimestampPoint{timestampPoints[start], timestampPoints[end]}
+					tsTimestampPoints, err := timestampColumn.GetRanges(r1, r2)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(results).To(ConsistOf(tsTimestampPoints))
 				})
 				Context("Empty", func() {
 					It("should not get double ranges", func() {
@@ -323,6 +483,16 @@ var _ = Describe("Tests", func() {
 						results, err := blobColumn.GetRanges()
 						Expect(err).To(HaveOccurred())
 						Expect([]TsBlobPoint{}).To(ConsistOf(results))
+					})
+					It("should not get int64 ranges", func() {
+						results, err := int64Column.GetRanges()
+						Expect(err).To(HaveOccurred())
+						Expect([]TsInt64Point{}).To(ConsistOf(results))
+					})
+					It("should not get timestamp ranges", func() {
+						results, err := timestampColumn.GetRanges()
+						Expect(err).To(HaveOccurred())
+						Expect([]TsTimestampPoint{}).To(ConsistOf(results))
 					})
 				})
 				Context("Filters", func() {
@@ -460,74 +630,141 @@ var _ = Describe("Tests", func() {
 				})
 			})
 			Context("Bulk", func() {
-				var (
-					content []byte
-					value   float64
-				)
-				BeforeEach(func() {
-					content = []byte("content")
-					value = 3.2
-				})
-				It("should append all columns", func() {
-					bulk, err := timeseries.Bulk()
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						err := bulk.Row(time.Now()).Blob(content).Double(value).Append()
+				Context("Insert", func() {
+					var (
+						blobValue      []byte    = []byte("content")
+						doubleValue    float64   = 3.2
+						int64Value     int64     = 2
+						timestampValue time.Time = time.Now()
+					)
+					It("should append all columns", func() {
+						bulk, err := timeseries.Bulk()
 						Expect(err).ToNot(HaveOccurred())
-					}
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should append columns", func() {
-					bulk, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						err := bulk.Row(time.Now()).Blob(content).Double(value).Append()
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
-					}
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should append columns and ignore fields", func() {
-					bulk, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						value := 3.2
-						err := bulk.Row(time.Now()).Ignore().Double(value).Append()
+						bulk.Release()
+					})
+					It("should append columns", func() {
+						bulk, err := timeseries.Bulk(columnsInfo...)
 						Expect(err).ToNot(HaveOccurred())
-					}
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should append columns on part of timeseries", func() {
-					bulk, err := timeseries.Bulk(columnsInfo[0])
-					Expect(err).ToNot(HaveOccurred())
-					for i := int64(0); i < count; i++ {
-						content := []byte("content")
-						err := bulk.Row(time.Now()).Blob(content).Append()
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						err = bulk.Push()
 						Expect(err).ToNot(HaveOccurred())
-					}
-					Expect(count).To(Equal(int64(bulk.RowCount())))
-					err = bulk.Push()
-					Expect(err).ToNot(HaveOccurred())
+						bulk.Release()
+					})
+					It("should append columns and ignore fields", func() {
+						bulk, err := timeseries.Bulk(columnsInfo...)
+						Expect(err).ToNot(HaveOccurred())
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Ignore().Double(doubleValue).Int64(int64Value).Timestamp(timestampValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						err = bulk.Push()
+						Expect(err).ToNot(HaveOccurred())
+						bulk.Release()
+					})
+					It("should append columns on part of timeseries", func() {
+						bulk, err := timeseries.Bulk(columnsInfo[0])
+						Expect(err).ToNot(HaveOccurred())
+						for i := int64(0); i < count; i++ {
+							err := bulk.Row(time.Now()).Blob(blobValue).Append()
+							Expect(err).ToNot(HaveOccurred())
+						}
+						Expect(count).To(Equal(int64(bulk.RowCount())))
+						err = bulk.Push()
+						Expect(err).ToNot(HaveOccurred())
+						bulk.Release()
+					})
+					It("should fail to append columns - too much values", func() {
+						bulk, err := timeseries.Bulk(columnsInfo...)
+						Expect(err).ToNot(HaveOccurred())
+						err = bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Double(doubleValue).Append()
+						Expect(err).To(HaveOccurred())
+						bulk.Release()
+					})
+					It("should fail to append columns - additional column does not exist", func() {
+						columnsInfo = append(columnsInfo, NewTsColumnInfo("asd", TsColumnDouble))
+						_, err := timeseries.Bulk(columnsInfo...)
+						Expect(err).To(HaveOccurred())
+					})
+					It("should fail to retrieve all columns from a non existing timeseries", func() {
+						ts := handle.Timeseries("asd")
+						_, err := ts.Bulk()
+						Expect(err).To(HaveOccurred())
+					})
 				})
-				It("should fail to append columns - too much values", func() {
-					bulk, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).ToNot(HaveOccurred())
-					content := []byte("content")
-					value := 3.2
-					err = bulk.Row(time.Now()).Blob(content).Double(value).Double(value).Append()
-					Expect(err).To(HaveOccurred())
-				})
-				It("should fail to append columns - additional column does not exist", func() {
-					columnsInfo = append(columnsInfo, NewTsColumnInfo("asd", TsColumnDouble))
-					_, err := timeseries.Bulk(columnsInfo...)
-					Expect(err).To(HaveOccurred())
-				})
-				It("should fail to retrieve all columns from a non existing timeseries", func() {
-					ts := handle.Timeseries("asd")
-					_, err := ts.Bulk()
-					Expect(err).To(HaveOccurred())
+				Context("Get", func() {
+					var (
+						r TsRange
+					)
+					BeforeEach(func() {
+						r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
+					})
+					JustBeforeEach(func() {
+						blobColumn.Insert(blobPoints...)
+						doubleColumn.Insert(doublePoints...)
+						int64Column.Insert(int64Points...)
+						timestampColumn.Insert(timestampPoints...)
+					})
+					It("Should work to get all values", func() {
+						bulk, err := timeseries.Bulk()
+						Expect(err).ToNot(HaveOccurred())
+						err = bulk.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+						for {
+							var timestamp time.Time
+							if timestamp, err = bulk.NextRow(); err != nil {
+								break
+							}
+							Expect(err).ToNot(HaveOccurred())
+							Expect(timestamps[bulk.RowCount()]).To(Equal(timestamp))
+
+							blobValue, err := bulk.GetBlob()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(blobPoints[bulk.RowCount()].Content()).To(Equal(blobValue))
+
+							doubleValue, err := bulk.GetDouble()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(doublePoints[bulk.RowCount()].Content()).To(Equal(doubleValue))
+
+							int64Value, err := bulk.GetInt64()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(int64Points[bulk.RowCount()].Content()).To(Equal(int64Value))
+
+							timestampValue, err := bulk.GetTimestamp()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(timestampPoints[bulk.RowCount()].Content()).To(Equal(timestampValue))
+						}
+						Expect(err).To(Equal(ErrIteratorEnd))
+						bulk.Release()
+					})
+					It("Should not work to get values when GetRanges has not been called", func() {
+						bulk, err := timeseries.Bulk()
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = bulk.NextRow()
+						Expect(err).To(HaveOccurred())
+					})
+					It("Should not work to get values in a non-correct order", func() {
+						bulk, err := timeseries.Bulk()
+						Expect(err).ToNot(HaveOccurred())
+
+						err = bulk.GetRanges(r)
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = bulk.NextRow()
+						Expect(err).ToNot(HaveOccurred())
+
+						_, err = bulk.GetDouble()
+						Expect(err).To(HaveOccurred())
+					})
 				})
 			})
 		})
