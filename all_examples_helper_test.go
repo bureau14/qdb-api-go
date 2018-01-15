@@ -12,16 +12,13 @@ func MustCreateTimeseries(alias string) (*HandleType, *TimeseriesEntry) {
 }
 
 func MustCreateTimeseriesWithColumns(alias string) (*HandleType, *TimeseriesEntry) {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
-	timeseries := h.Timeseries(alias)
+	h, timeseries := MustCreateTimeseries(alias)
 	timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble), NewTsColumnInfo("serie_column_int64", TsColumnInt64), NewTsColumnInfo("serie_column_timestamp", TsColumnTimestamp))
-	return &h, &timeseries
+	return h, timeseries
 }
 
 func MustCreateTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
-	timeseries := h.Timeseries(alias)
-	timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble), NewTsColumnInfo("serie_column_int64", TsColumnInt64), NewTsColumnInfo("serie_column_timestamp", TsColumnTimestamp))
+	h, timeseries := MustCreateTimeseriesWithColumns(alias)
 	doubleColumns, blobColumns, int64Columns, timestampColumns, err := timeseries.Columns()
 	if err != nil {
 		panic(err)
@@ -56,5 +53,5 @@ func MustCreateTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) 
 	if err != nil {
 		panic(err)
 	}
-	return &h, &timeseries
+	return h, timeseries
 }
