@@ -27,7 +27,7 @@ func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, []TsIn
 	var int64Columns []TsInt64Column
 	var timestampColumns []TsTimestampColumn
 	if err == 0 {
-		doubleColumns, blobColumns, int64Columns, timestampColumns  = columnArrayToGo(entry, columns, columnsCount)
+		doubleColumns, blobColumns, int64Columns, timestampColumns = columnArrayToGo(entry, columns, columnsCount)
 	}
 	return doubleColumns, blobColumns, int64Columns, timestampColumns, makeErrorOrNil(err)
 }
@@ -321,7 +321,7 @@ func (t *TsBulk) Blob(content []byte) *TsBulk {
 	return t
 }
 
-// Int64 : adds a int64 in row transaction
+// Int64 : adds an int64 in row transaction
 func (t *TsBulk) Int64(value int64) *TsBulk {
 	if t.err == nil {
 		t.err = makeErrorOrNil(C.qdb_ts_row_set_int64(t.table, C.qdb_size_t(t.index), C.qdb_int_t(value)))
@@ -330,7 +330,7 @@ func (t *TsBulk) Int64(value int64) *TsBulk {
 	return t
 }
 
-// Timestamp : adds a double in row transaction
+// Timestamp : adds a timestamp in row transaction
 func (t *TsBulk) Timestamp(value time.Time) *TsBulk {
 	if t.err == nil {
 		cValue := toQdbTimespec(value)
@@ -388,7 +388,7 @@ func (t *TsBulk) GetBlob() ([]byte, error) {
 	return output, makeErrorOrNil(err)
 }
 
-// GetInt64 : gets a int64 in row
+// GetInt64 : gets an int64 in row
 func (t *TsBulk) GetInt64() (int64, error) {
 	var content C.qdb_int_t
 	err := C.qdb_ts_row_get_int64(t.table, C.qdb_size_t(t.index), &content)
@@ -404,7 +404,7 @@ func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	return content.toStructG(), makeErrorOrNil(err)
 }
 
-// GetRanges : create a range bulk query 
+// GetRanges : create a range bulk query
 func (t *TsBulk) GetRanges(rgs ...TsRange) error {
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
