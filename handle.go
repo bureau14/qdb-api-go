@@ -279,3 +279,8 @@ func (h HandleType) Query() *Query {
 func (h HandleType) Cluster() *Cluster {
 	return &Cluster{h}
 }
+
+// QueryExp : Create an experimental query object to execute
+func (h HandleType) QueryExp(query string) *QueryExp {
+	return &QueryExp{h, query}
+}
