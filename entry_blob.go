@@ -23,7 +23,7 @@ func (entry BlobEntry) Get() ([]byte, error) {
 	var contentLength C.qdb_size_t
 	err := C.qdb_blob_get(entry.handle, C.CString(entry.alias), &content, &contentLength)
 
-	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	output := C.GoBytes(content, C.int(contentLength))
 	return output, makeErrorOrNil(err)
 }
 
