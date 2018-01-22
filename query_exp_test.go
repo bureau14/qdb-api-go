@@ -134,13 +134,10 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			for _, table := range result.Tables() {
 				for _, row := range table.Rows() {
-					for idx, column := range table.Columns(row) {
-						columnIdx := idx - 1
-						// get values with specific getters
-						if columnIdx == 0 {
-							_, err := column.GetDouble()
-							Expect(err).To(HaveOccurred())
-						}
+					for _, column := range table.Columns(row) {
+						columns := table.Columns(row)
+						_, err := columns[1].GetDouble()
+						Expect(err).To(HaveOccurred())
 					}
 				}
 			}
