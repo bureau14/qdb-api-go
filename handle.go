@@ -2,7 +2,6 @@
 package qdb
 
 /*
-	#include <qdb/client.h>
 	#include <qdb/node.h>
 */
 import "C"
@@ -278,4 +277,9 @@ func (h HandleType) Query() *Query {
 // Cluster : Create a cluster object to execute commands on a cluster
 func (h HandleType) Cluster() *Cluster {
 	return &Cluster{h}
+}
+
+// QueryExp : Create an experimental query object to execute
+func (h HandleType) QueryExp(query string) *QueryExp {
+	return &QueryExp{h, query}
 }
