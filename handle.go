@@ -2,7 +2,6 @@
 package qdb
 
 /*
-	#include <qdb/client.h>
 	#include <qdb/node.h>
 */
 import "C"

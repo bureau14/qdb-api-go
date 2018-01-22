@@ -2,8 +2,6 @@ package qdb
 
 /*
 	#include <qdb/blob.h>
-	#include <qdb/error.h>
-	#include <qdb/client.h>
 	#include <string.h>
 */
 import "C"

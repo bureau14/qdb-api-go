@@ -2,8 +2,6 @@ package qdb
 
 /*
 	#include <qdb/query.h>
-	#include <qdb/error.h>
-	#include <qdb/client.h>
 
 	qdb_int_t get_int64_from_payload(const qdb_point_result_t * result)
 	{
