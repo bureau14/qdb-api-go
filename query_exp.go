@@ -5,26 +5,26 @@ package qdb
 	#include <qdb/error.h>
 	#include <qdb/client.h>
 
-	qdb_int_t get_int64_from_payload(qdb_point_result_t result)
+	qdb_int_t get_int64_from_payload(const qdb_point_result_t * result)
 	{
-		return (qdb_int_t)result.payload.int64_.value;
+		return (qdb_int_t)result->payload.int64_.value;
 	}
 
-	double get_double_from_payload(qdb_point_result_t result)
+	double get_double_from_payload(const qdb_point_result_t * result)
 	{
-		return (double)result.payload.double_.value;
+		return (double)result->payload.double_.value;
 	}
 
-	void get_blob_from_payload(qdb_point_result_t result, const void ** content, qdb_size_t *length)
+	void get_blob_from_payload(const qdb_point_result_t *result, const void ** content, qdb_size_t *length)
 	{
-		*content = result.payload.blob.content;
-		*length = result.payload.blob.content_length;
+		*content = result->payload.blob.content;
+		*length = result->payload.blob.content_length;
 	}
 
 
-	qdb_timespec_t get_timestamp_from_payload(qdb_point_result_t result)
+	qdb_timespec_t get_timestamp_from_payload(const qdb_point_result_t * result)
 	{
-		return (qdb_timespec_t)result.payload.timestamp.value;
+		return (qdb_timespec_t)result->payload.timestamp.value;
 	}
 */
 import "C"
@@ -66,7 +66,7 @@ func (r QueryPointResult) Value() interface{} {
 }
 
 // Get : retrieve the raw interface
-func (r C.qdb_point_result_t) Get() QueryPointResult {
+func (r *C.qdb_point_result_t) Get() QueryPointResult {
 	output := QueryPointResult{valueType: QueryResultValueType(r._type)}
 
 	switch output.valueType {
@@ -86,7 +86,7 @@ func (r C.qdb_point_result_t) Get() QueryPointResult {
 }
 
 // GetDouble : retrieve a double from the interface
-func (r C.qdb_point_result_t) GetDouble() (float64, error) {
+func (r *C.qdb_point_result_t) GetDouble() (float64, error) {
 	if r._type == C.qdb_query_result_double {
 		return float64(C.get_double_from_payload(r)), nil
 	}
@@ -94,7 +94,7 @@ func (r C.qdb_point_result_t) GetDouble() (float64, error) {
 }
 
 // GetBlob : retrieve a double from the interface
-func (r C.qdb_point_result_t) GetBlob() ([]byte, error) {
+func (r *C.qdb_point_result_t) GetBlob() ([]byte, error) {
 	if r._type == C.qdb_query_result_blob {
 		var content unsafe.Pointer
 		var contentLength C.qdb_size_t
@@ -106,7 +106,7 @@ func (r C.qdb_point_result_t) GetBlob() ([]byte, error) {
 }
 
 // GetInt64 : retrieve an int64 from the interface
-func (r C.qdb_point_result_t) GetInt64() (int64, error) {
+func (r *C.qdb_point_result_t) GetInt64() (int64, error) {
 	if r._type == C.qdb_query_result_int64 {
 		return int64(C.get_int64_from_payload(r)), nil
 	}
@@ -114,7 +114,7 @@ func (r C.qdb_point_result_t) GetInt64() (int64, error) {
 }
 
 // GetTimestamp : retrieve a timestamp from the interface
-func (r C.qdb_point_result_t) GetTimestamp() (time.Time, error) {
+func (r *C.qdb_point_result_t) GetTimestamp() (time.Time, error) {
 	if r._type == C.qdb_query_result_timestamp {
 		return C.get_timestamp_from_payload(r).toStructG(), nil
 	}
