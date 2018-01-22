@@ -33,9 +33,56 @@ import (
 	"unsafe"
 )
 
+// QueryResultValueType : an enum of possible query point result types
+type QueryResultValueType int64
+
+// QueryResultNone : query result value none
+// QueryResultDouble : query result value double
+// QueryResultBlob : query result value blob
+// QueryResultInt64 : query result value int64
+// QueryResultTimestamp : query result value timestamp
+const (
+	QueryResultNone      QueryResultValueType = C.qdb_query_result_none
+	QueryResultDouble    QueryResultValueType = C.qdb_query_result_double
+	QueryResultBlob      QueryResultValueType = C.qdb_query_result_blob
+	QueryResultInt64     QueryResultValueType = C.qdb_query_result_int64
+	QueryResultTimestamp QueryResultValueType = C.qdb_query_result_timestamp
+)
+
+// QueryPointResult : a query result point
+type QueryPointResult struct {
+	valueType QueryResultValueType
+	value     interface{}
+}
+
+// Type : gives the type of the query point result
+func (r QueryPointResult) Type() QueryResultValueType {
+	return r.valueType
+}
+
+// Value : gives the interface{} value of the query point result
+func (r QueryPointResult) Value() interface{} {
+	return r.value
+}
+
 // Get : retrieve the raw interface
-func (r C.qdb_point_result_t) Get() interface{} {
-	return r
+func (r C.qdb_point_result_t) Get() QueryPointResult {
+	output := QueryPointResult{valueType: QueryResultValueType(r._type)}
+
+	switch valueType := r._type; valueType {
+	case C.qdb_query_result_double:
+		output.value = float64(C.get_double_from_payload(r))
+	case C.qdb_query_result_blob:
+		var content unsafe.Pointer
+		var contentLength C.qdb_size_t
+		C.get_blob_from_payload(r, &content, &contentLength)
+		output.value = C.GoBytes(content, C.int(contentLength))
+	case C.qdb_query_result_int64:
+		output.value = int64(C.get_int64_from_payload(r))
+	case C.qdb_query_result_timestamp:
+		output.value = C.get_timestamp_from_payload(r).toStructG()
+	}
+	return output
 }
 
 // GetDouble : retrieve a double from the interface
@@ -129,6 +176,11 @@ func (r QueryResult) Tables() QueryTables {
 	count := int64(r.result.tables_count)
 	tables := (*[1 << 30]C.qdb_table_result_t)(unsafe.Pointer(r.result.tables))[:count:count]
 	return tables
+}
+
+// TablesCount : get the number of tables of a query result
+func (r QueryResult) TablesCount() int64 {
+	return int64(r.result.tables_count)
 }
 
 // ScannedRows : number of rows scanned

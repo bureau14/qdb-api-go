@@ -76,21 +76,84 @@ var _ = Describe("Tests", func() {
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
 			for _, table := range result.Tables() {
-				fmt.Println("table:", table.Name())
-				for _, name := range table.ColumnsNames() {
-					fmt.Println("\tcolumn:", name)
-				}
-
-				for _, row := range table.Rows() {
+				for rowIdx, row := range table.Rows() {
 					for idx, column := range table.Columns(row) {
-						if idx == 1 {
-							blob, err := column.GetBlob()
+						columnIdx := idx - 1
+						// get values with universal getter
+						point := column.Get()
+						switch valueType := point.Type(); valueType {
+						case QueryResultBlob:
+							value := point.Value()
 							Expect(err).ToNot(HaveOccurred())
-							fmt.Println("result:", string(blob))
+							Expect(value).To(Equal(blobPoints[rowIdx].Content()))
+						case QueryResultDouble:
+							value := point.Value()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(value).To(Equal(doublePoints[rowIdx].Content()))
+						case QueryResultInt64:
+							value := point.Value()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(value).To(Equal(int64Points[rowIdx].Content()))
+						case QueryResultTimestamp:
+							value := point.Value()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
+						}
+						// get values with specific getters
+						if columnIdx == 0 {
+							value, err := column.GetBlob()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(value).To(Equal(blobPoints[rowIdx].Content()))
+						} else if columnIdx == 1 {
+							value, err := column.GetDouble()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(value).To(Equal(doublePoints[rowIdx].Content()))
+						} else if columnIdx == 2 {
+							value, err := column.GetInt64()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(value).To(Equal(int64Points[rowIdx].Content()))
+						} else if columnIdx == 3 {
+							value, err := column.GetTimestamp()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
 						}
 					}
 				}
 			}
+		})
+		It("should not work to do a wrong query", func() {
+			query := fmt.Sprintf("select")
+			q := handle.QueryExp(query)
+			_, err := q.Execute()
+			Expect(err).To(HaveOccurred())
+		})
+		It("should not work to do get the wrong type for a value", func() {
+			query := fmt.Sprintf("select * from %s in range(1970, +10d)", alias)
+			q := handle.QueryExp(query)
+			result, err := q.Execute()
+			defer handle.Release(unsafe.Pointer(result))
+			Expect(err).ToNot(HaveOccurred())
+			for _, table := range result.Tables() {
+				for _, row := range table.Rows() {
+					for idx, column := range table.Columns(row) {
+						columnIdx := idx - 1
+						// get values with specific getters
+						if columnIdx == 0 {
+							_, err := column.GetDouble()
+							Expect(err).To(HaveOccurred())
+						}
+					}
+				}
+			}
+		})
+		It("should get no results", func() {
+			query := fmt.Sprintf("select * from %s in range(1971, +10d)", alias)
+			q := handle.QueryExp(query)
+			result, err := q.Execute()
+			defer handle.Release(unsafe.Pointer(result))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.ScannedRows()).To(Equal(int64(0)))
+			Expect(result.TablesCount()).To(Equal(int64(0)))
 		})
 	})
 })
