@@ -69,7 +69,7 @@ func (r QueryPointResult) Value() interface{} {
 func (r C.qdb_point_result_t) Get() QueryPointResult {
 	output := QueryPointResult{valueType: QueryResultValueType(r._type)}
 
-	switch valueType := r._type; valueType {
+	switch output.valueType {
 	case C.qdb_query_result_double:
 		output.value = float64(C.get_double_from_payload(r))
 	case C.qdb_query_result_blob:

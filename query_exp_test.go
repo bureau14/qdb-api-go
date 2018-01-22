@@ -77,8 +77,25 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			for _, table := range result.Tables() {
 				for rowIdx, row := range table.Rows() {
-					for idx, column := range table.Columns(row) {
-						columnIdx := idx - 1
+					columns := table.Columns(row)
+					// first column is the timestamps of the row, values begin at one
+					blobValue, err := columns[1].GetBlob()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(blobValue).To(Equal(blobPoints[rowIdx].Content()))
+
+					doubleValue, err := columns[2].GetDouble()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(doubleValue).To(Equal(doublePoints[rowIdx].Content()))
+
+					int64Value, err := columns[3].GetInt64()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(int64Value).To(Equal(int64Points[rowIdx].Content()))
+
+					timestampValue, err := columns[4].GetTimestamp()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(timestampValue).To(Equal(timestampPoints[rowIdx].Content()))
+
+					for _, column := range table.Columns(row) {
 						// get values with universal getter
 						point := column.Get()
 						switch valueType := point.Type(); valueType {
@@ -96,24 +113,6 @@ var _ = Describe("Tests", func() {
 							Expect(value).To(Equal(int64Points[rowIdx].Content()))
 						case QueryResultTimestamp:
 							value := point.Value()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
-						}
-						// get values with specific getters
-						if columnIdx == 0 {
-							value, err := column.GetBlob()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(blobPoints[rowIdx].Content()))
-						} else if columnIdx == 1 {
-							value, err := column.GetDouble()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(doublePoints[rowIdx].Content()))
-						} else if columnIdx == 2 {
-							value, err := column.GetInt64()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(int64Points[rowIdx].Content()))
-						} else if columnIdx == 3 {
-							value, err := column.GetTimestamp()
 							Expect(err).ToNot(HaveOccurred())
 							Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
 						}
@@ -154,6 +153,58 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.ScannedRows()).To(Equal(int64(0)))
 			Expect(result.TablesCount()).To(Equal(int64(0)))
+		})
+		Context("Tricky cases", func() {
+			var (
+				newTimestamps   []time.Time
+				newBlobPoints   []TsBlobPoint
+				newDoublePoints []TsDoublePoint
+			)
+			JustBeforeEach(func() {
+				newTimestamps = make([]time.Time, count)
+				newBlobPoints = make([]TsBlobPoint, count)
+				newDoublePoints = make([]TsDoublePoint, count)
+				for idx := 0; idx < int(count); idx++ {
+					newTimestamps[idx] = time.Date(1971, 1, 1, 0, 0, (idx+1)*10, 0, time.UTC)
+					if (idx % 2) == 0 {
+						newBlobPoints[idx] = NewTsBlobPoint(newTimestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
+					} else {
+						newDoublePoints[idx] = NewTsDoublePoint(newTimestamps[idx], float64(idx))
+					}
+				}
+				doubleColumn.Insert(newDoublePoints...)
+				blobColumn.Insert(newBlobPoints...)
+			})
+			It("should have a none value for each column", func() {
+				query := fmt.Sprintf("select * from %s in range(1971, +10d)", alias)
+				q := handle.QueryExp(query)
+				result, err := q.Execute()
+				defer handle.Release(unsafe.Pointer(result))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.TablesCount()).To(Equal(int64(1)))
+				for _, table := range result.Tables() {
+					for rowIdx, row := range table.Rows() {
+						columns := table.Columns(row)
+						if (rowIdx % 2) == 0 {
+							blobValue, err := columns[1].GetBlob()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(blobValue).To(Equal(newBlobPoints[rowIdx].Content()))
+
+							doubleValue := columns[2].Get()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(doubleValue.Type()).To(Equal(QueryResultNone))
+						} else {
+							blobValue := columns[1].Get()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(blobValue.Type()).To(Equal(QueryResultNone))
+
+							doubleValue, err := columns[2].GetDouble()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(doubleValue).To(Equal(newDoublePoints[rowIdx].Content()))
+						}
+					}
+				}
+			})
 		})
 	})
 })
