@@ -98,7 +98,7 @@ var _ = Describe("Tests", func() {
 					for _, column := range table.Columns(row) {
 						// get values with universal getter
 						point := column.Get()
-						switch valueType := point.Type(); valueType {
+						switch point.Type() {
 						case QueryResultBlob:
 							value := point.Value()
 							Expect(err).ToNot(HaveOccurred())
@@ -134,11 +134,9 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			for _, table := range result.Tables() {
 				for _, row := range table.Rows() {
-					for _, column := range table.Columns(row) {
-						columns := table.Columns(row)
-						_, err := columns[1].GetDouble()
-						Expect(err).To(HaveOccurred())
-					}
+					columns := table.Columns(row)
+					_, err := columns[1].GetDouble()
+					Expect(err).To(HaveOccurred())
 				}
 			}
 		})
