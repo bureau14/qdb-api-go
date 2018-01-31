@@ -78,7 +78,7 @@ func (q Query) Execute() ([]string, error) {
 func (q Query) ExecuteString(query string) ([]string, error) {
 	var aliasCount C.size_t
 	var aliases **C.char
-	err := C.qdb_query(q.handle, C.CString(query), &aliases, &aliasCount)
+	err := C.qdb_query_find(q.handle, C.CString(query), &aliases, &aliasCount)
 	if err == 0 {
 		length := int(aliasCount)
 		output := make([]string, length)
