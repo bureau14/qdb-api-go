@@ -29,7 +29,9 @@ func (e Entry) Alias() string {
 //
 //	The call is ACID, regardless of the type of the entry and a transaction will be created if need be
 func (e Entry) Remove() error {
-	err := C.qdb_remove(e.handle, C.CString(e.alias))
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
+	err := C.qdb_remove(e.handle, alias)
 	return makeErrorOrNil(err)
 }
 
@@ -54,7 +56,9 @@ func PreserveExpiration() time.Time {
 //	To remove the expiration time of an entry, specify the value NeverExpires as ExpiryTime parameter.
 //	Values in the past are refused, but the cluster will have a certain tolerance to account for clock skews.
 func (e Entry) ExpiresAt(expiry time.Time) error {
-	err := C.qdb_expires_at(e.handle, C.CString(e.alias), toQdbTime(expiry))
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
+	err := C.qdb_expires_at(e.handle, alias, toQdbTime(expiry))
 	return makeErrorOrNil(err)
 }
 
@@ -64,7 +68,9 @@ func (e Entry) ExpiresAt(expiry time.Time) error {
 //	The expiration is relative to the current time of the machine.
 //	To remove the expiration time of an entry or to use an absolute expiration time use ExpiresAt.
 func (e Entry) ExpiresFromNow(expiry time.Duration) error {
-	err := C.qdb_expires_from_now(e.handle, C.CString(e.alias), C.qdb_time_t(expiry/time.Millisecond))
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
+	err := C.qdb_expires_from_now(e.handle, alias, C.qdb_time_t(expiry/time.Millisecond))
 	return makeErrorOrNil(err)
 }
 
@@ -80,9 +86,11 @@ type NodeLocation struct {
 //	The exact location of an entry should be assumed random and users should not bother about its location as the API will transparently locate the best node for the requested operation.
 //	This function is intended for higher level APIs that need to optimize transfers and potentially push computation close to the data.
 func (e Entry) GetLocation() (NodeLocation, error) {
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
 	var location C.qdb_remote_node_t
 	defer e.Release(unsafe.Pointer(&location))
-	err := C.qdb_get_location(e.handle, C.CString(e.alias), &location)
+	err := C.qdb_get_location(e.handle, alias, &location)
 	return NodeLocation{C.GoString(location.address), int16(location.port)}, makeErrorOrNil(err)
 }
 
@@ -123,8 +131,10 @@ type Metadata struct {
 
 // GetMetadata : Gets the meta-information about an entry, if it exists.
 func (e Entry) GetMetadata() (Metadata, error) {
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
 	var m C.qdb_entry_metadata_t
-	err := C.qdb_get_metadata(e.handle, C.CString(e.alias), &m)
+	err := C.qdb_get_metadata(e.handle, alias, &m)
 	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), m.modification_time.toStructG(), m.expiry_time.toStructG()}, makeErrorOrNil(err)
 }
 
@@ -135,7 +145,11 @@ func (e Entry) GetMetadata() (Metadata, error) {
 //	The entry must exist.
 //	The tag may or may not exist.
 func (e Entry) AttachTag(tag string) error {
-	err := C.qdb_attach_tag(e.handle, C.CString(e.alias), C.CString(tag))
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
+	cTag := convertToCharStar(tag)
+	defer releaseCharStar(cTag)
+	err := C.qdb_attach_tag(e.handle, alias, cTag)
 	return makeErrorOrNil(err)
 }
 
@@ -145,9 +159,11 @@ func (e Entry) AttachTag(tag string) error {
 //	The entry must exist.
 //	The tag may or may not exist.
 func (e Entry) AttachTags(tags []string) error {
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
 	data := convertToCharStarStar(tags)
-	defer C.free(data)
-	err := C.qdb_attach_tags(e.handle, C.CString(e.alias), (**C.char)(data), C.size_t(len(tags)))
+	defer releaseCharStarStar(data, len(tags))
+	err := C.qdb_attach_tags(e.handle, alias, (**C.char)(data), C.size_t(len(tags)))
 	return makeErrorOrNil(err)
 }
 
@@ -155,7 +171,11 @@ func (e Entry) AttachTags(tags []string) error {
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 func (e Entry) HasTag(tag string) error {
-	err := C.qdb_has_tag(e.handle, C.CString(e.alias), C.CString(tag))
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
+	cTag := convertToCharStar(tag)
+	defer releaseCharStar(cTag)
+	err := C.qdb_has_tag(e.handle, alias, cTag)
 	return makeErrorOrNil(err)
 }
 
@@ -164,7 +184,11 @@ func (e Entry) HasTag(tag string) error {
 //	The entry must exist.
 //	The tag must exist.
 func (e Entry) DetachTag(tag string) error {
-	err := C.qdb_detach_tag(e.handle, C.CString(e.alias), C.CString(tag))
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
+	cTag := convertToCharStar(tag)
+	defer releaseCharStar(cTag)
+	err := C.qdb_detach_tag(e.handle, alias, cTag)
 	return makeErrorOrNil(err)
 }
 
@@ -173,9 +197,11 @@ func (e Entry) DetachTag(tag string) error {
 //	The entry must exist.
 //	The tags must exist.
 func (e Entry) DetachTags(tags []string) error {
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
 	data := convertToCharStarStar(tags)
-	defer C.free(data)
-	err := C.qdb_detach_tags(e.handle, C.CString(e.alias), (**C.char)(data), C.size_t(len(tags)))
+	defer releaseCharStarStar(data, len(tags))
+	err := C.qdb_detach_tags(e.handle, alias, (**C.char)(data), C.size_t(len(tags)))
 	return makeErrorOrNil(err)
 }
 
@@ -184,9 +210,11 @@ func (e Entry) DetachTags(tags []string) error {
 //	The tag must exist.
 //	The complexity of this function is constant.
 func (e Entry) GetTagged(tag string) ([]string, error) {
+	cTag := convertToCharStar(tag)
+	defer releaseCharStar(cTag)
 	var aliasCount C.size_t
 	var aliases **C.char
-	err := C.qdb_get_tagged(e.handle, C.CString(tag), &aliases, &aliasCount)
+	err := C.qdb_get_tagged(e.handle, cTag, &aliases, &aliasCount)
 
 	if err == 0 {
 		defer e.Release(unsafe.Pointer(aliases))
@@ -207,9 +235,11 @@ func (e Entry) GetTagged(tag string) ([]string, error) {
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 func (e Entry) GetTags() ([]string, error) {
+	alias := convertToCharStar(e.alias)
+	defer releaseCharStar(alias)
 	var tagCount C.size_t
 	var tags **C.char
-	err := C.qdb_get_tags(e.handle, C.CString(e.alias), &tags, &tagCount)
+	err := C.qdb_get_tags(e.handle, alias, &tags, &tagCount)
 
 	if err == 0 {
 		defer e.Release(unsafe.Pointer(tags))

@@ -16,7 +16,8 @@ type TimeseriesEntry struct {
 
 // Columns : return the current columns
 func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, []TsInt64Column, []TsTimestampColumn, error) {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	var columns *C.qdb_ts_column_info_t
 	var columnsCount C.qdb_size_t
 	err := C.qdb_ts_list_columns(entry.handle, alias, &columns, &columnsCount)
@@ -32,7 +33,8 @@ func (entry TimeseriesEntry) Columns() ([]TsDoubleColumn, []TsBlobColumn, []TsIn
 
 // ColumnsInfo : return the current columns information
 func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	var columns *C.qdb_ts_column_info_t
 	var columnsCount C.qdb_size_t
 	err := C.qdb_ts_list_columns(entry.handle, alias, &columns, &columnsCount)
@@ -47,9 +49,11 @@ func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 //	First parameter is the duration limit to organize a shard
 //	Ex: shardSize := 24 * time.Hour
 func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInfo) error {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	duration := C.qdb_uint_t(shardSize / time.Millisecond)
 	columns := columnInfoArrayToC(cols...)
+	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_create(entry.handle, alias, duration, columns, columnsCount)
 	return makeErrorOrNil(err)
@@ -57,8 +61,10 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 
 // InsertColumns : insert columns in a existing timeseries
 func (entry TimeseriesEntry) InsertColumns(cols ...TsColumnInfo) error {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	columns := columnInfoArrayToC(cols...)
+	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_insert_columns(entry.handle, alias, columns, columnsCount)
 	return makeErrorOrNil(err)
@@ -86,8 +92,10 @@ func (entry TimeseriesEntry) TimestampColumn(columnName string) TsTimestampColum
 
 // EraseRanges : erase all points in the specified ranges
 func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
@@ -97,8 +105,10 @@ func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 
 // EraseRanges : erase all points in the specified ranges
 func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
@@ -108,8 +118,10 @@ func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 
 // EraseRanges : erase all points in the specified ranges
 func (column TsInt64Column) EraseRanges(rgs ...TsRange) (uint64, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
@@ -119,8 +131,10 @@ func (column TsInt64Column) EraseRanges(rgs ...TsRange) (uint64, error) {
 
 // EraseRanges : erase all points in the specified ranges
 func (column TsTimestampColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
@@ -130,8 +144,10 @@ func (column TsTimestampColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 
 // Insert double points into a timeseries
 func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	contentCount := C.qdb_size_t(len(points))
 	content := doublePointArrayToC(points...)
 	err := C.qdb_ts_double_insert(column.parent.handle, alias, columnName, content, contentCount)
@@ -140,18 +156,23 @@ func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
 
 // Insert blob points into a timeseries
 func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	contentCount := C.qdb_size_t(len(points))
 	content := blobPointArrayToC(points...)
+	defer releaseBlobPointArray(content, len(points))
 	err := C.qdb_ts_blob_insert(column.parent.handle, alias, columnName, content, contentCount)
 	return makeErrorOrNil(err)
 }
 
 // Insert int64 points into a timeseries
 func (column TsInt64Column) Insert(points ...TsInt64Point) error {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	contentCount := C.qdb_size_t(len(points))
 	content := int64PointArrayToC(points...)
 	err := C.qdb_ts_int64_insert(column.parent.handle, alias, columnName, content, contentCount)
@@ -160,8 +181,10 @@ func (column TsInt64Column) Insert(points ...TsInt64Point) error {
 
 // Insert timestamp points into a timeseries
 func (column TsTimestampColumn) Insert(points ...TsTimestampPoint) error {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	contentCount := C.qdb_size_t(len(points))
 	content := timestampPointArrayToC(points...)
 	err := C.qdb_ts_timestamp_insert(column.parent.handle, alias, columnName, content, contentCount)
@@ -171,8 +194,10 @@ func (column TsTimestampColumn) Insert(points ...TsTimestampPoint) error {
 // GetRanges : Retrieves blobs in the specified range of the time series column.
 //	It is an error to call this function on a non existing time-series.
 func (column TsDoubleColumn) GetRanges(rgs ...TsRange) ([]TsDoublePoint, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	var points *C.qdb_ts_double_point
@@ -189,8 +214,10 @@ func (column TsDoubleColumn) GetRanges(rgs ...TsRange) ([]TsDoublePoint, error) 
 // GetRanges : Retrieves blobs in the specified range of the time series column.
 //	It is an error to call this function on a non existing time-series.
 func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	var points *C.qdb_ts_blob_point
@@ -207,8 +234,10 @@ func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 // GetRanges : Retrieves int64s in the specified range of the time series column.
 //	It is an error to call this function on a non existing time-series.
 func (column TsInt64Column) GetRanges(rgs ...TsRange) ([]TsInt64Point, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	var points *C.qdb_ts_int64_point
@@ -225,8 +254,10 @@ func (column TsInt64Column) GetRanges(rgs ...TsRange) ([]TsInt64Point, error) {
 // GetRanges : Retrieves timestamps in the specified range of the time series column.
 //	It is an error to call this function on a non existing time-series.
 func (column TsTimestampColumn) GetRanges(rgs ...TsRange) ([]TsTimestampPoint, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
 	var points *C.qdb_ts_timestamp_point
@@ -243,8 +274,10 @@ func (column TsTimestampColumn) GetRanges(rgs ...TsRange) ([]TsTimestampPoint, e
 // Aggregate : Aggregate a sub-part of a timeseries from the specified aggregations.
 //	It is an error to call this function on a non existing time-series.
 func (column TsDoubleColumn) Aggregate(aggs ...*TsDoubleAggregation) ([]TsDoubleAggregation, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	aggregations := doubleAggregationArrayToC(aggs...)
 	aggregationsCount := C.qdb_size_t(len(aggs))
 	var output []TsDoubleAggregation
@@ -258,8 +291,10 @@ func (column TsDoubleColumn) Aggregate(aggs ...*TsDoubleAggregation) ([]TsDouble
 // Aggregate : Aggregate a sub-part of the time series.
 //	It is an error to call this function on a non existing time-series.
 func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggregation, error) {
-	alias := C.CString(column.parent.alias)
-	columnName := C.CString(column.name)
+	alias := convertToCharStar(column.parent.alias)
+	defer releaseCharStar(alias)
+	columnName := convertToCharStar(column.name)
+	defer releaseCharStar(columnName)
 	aggregations := blobAggregationArrayToC(aggs...)
 	aggregationsCount := C.qdb_size_t(len(aggs))
 	var output []TsBlobAggregation
@@ -280,8 +315,10 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 			return nil, err
 		}
 	}
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	columns := columnInfoArrayToC(cols...)
+	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	bulk := &TsBulk{}
 	bulk.h = entry.HandleType

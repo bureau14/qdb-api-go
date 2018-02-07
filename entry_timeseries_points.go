@@ -2,6 +2,7 @@ package qdb
 
 /*
 	#include <qdb/ts.h>
+	#include <stdlib.h>
 
 	typedef struct
 	{
@@ -101,7 +102,7 @@ func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
 // solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
 func (t TsBlobPoint) toStructC() C.qdb_ts_blob_point {
 	dataSize := C.qdb_size_t(len(t.content))
-	data := unsafe.Pointer(C.CString(string(t.content)))
+	data := unsafe.Pointer(convertToCharStar(string(t.content)))
 	return C.qdb_ts_blob_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
@@ -118,6 +119,15 @@ func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
 		points[idx] = pt.toStructC()
 	}
 	return &points[0]
+}
+
+func releaseBlobPointArray(points *C.qdb_ts_blob_point, length int) {
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(points))[:length:length]
+		for _, s := range tmpslice {
+			C.free(unsafe.Pointer(s.content))
+		}
+	}
 }
 
 func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) []TsBlobPoint {

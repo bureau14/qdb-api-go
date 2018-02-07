@@ -2,6 +2,7 @@ package qdb
 
 /*
 	#include <qdb/client.h>
+	#include <stdlib.h>
 */
 import "C"
 import (
@@ -11,14 +12,38 @@ import (
 )
 
 func convertToCharStarStar(toConvert []string) unsafe.Pointer {
-	ptrSize := unsafe.Sizeof(C.CString(toConvert[0]))
+	var v *C.char
+	ptrSize := unsafe.Sizeof(v)
 	size := len(toConvert)
 	data := C.malloc(C.size_t(size) * C.size_t(ptrSize))
 	for i := 0; i < size; i++ {
 		element := (**C.char)(unsafe.Pointer(uintptr(data) + uintptr(i)*ptrSize))
-		*element = (*C.char)(C.CString(toConvert[i]))
+		*element = (*C.char)(convertToCharStar(toConvert[i]))
 	}
 	return data
+}
+
+func releaseCharStarStar(data unsafe.Pointer, size int) {
+	var v *C.char
+	ptrSize := unsafe.Sizeof(v)
+	for i := 0; i < size; i++ {
+		element := (**C.char)(unsafe.Pointer(uintptr(data) + uintptr(i)*ptrSize))
+		releaseCharStar(*element)
+	}
+	C.free(data)
+}
+
+func convertToCharStar(toConvert string) *C.char {
+	if len(toConvert) == 0 {
+		return nil
+	}
+	return C.CString(toConvert)
+}
+
+func releaseCharStar(data *C.char) {
+	if data != nil {
+		C.free(unsafe.Pointer(data))
+	}
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

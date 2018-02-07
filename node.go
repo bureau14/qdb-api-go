@@ -36,9 +36,11 @@ func (n Node) Status() (NodeStatus, error) {
 //
 //	The status is a JSON object as a byte array and contains current information of the node state, as described in the documentation.
 func (n Node) RawStatus() ([]byte, error) {
+	uri := convertToCharStar(n.uri)
+	defer releaseCharStar(uri)
 	var contentLength C.qdb_size_t
 	var content *C.char
-	err := C.qdb_node_status(n.handle, C.CString(n.uri), &content, &contentLength)
+	err := C.qdb_node_status(n.handle, uri, &content, &contentLength)
 	var output []byte
 	if err == 0 {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
@@ -66,9 +68,11 @@ func (n Node) Config() (NodeConfig, error) {
 //
 //	The configuration is a JSON object as a byte array, as described in the documentation.
 func (n Node) RawConfig() ([]byte, error) {
+	uri := convertToCharStar(n.uri)
+	defer releaseCharStar(uri)
 	var contentLength C.qdb_size_t
 	var content *C.char
-	err := C.qdb_node_config(n.handle, C.CString(n.uri), &content, &contentLength)
+	err := C.qdb_node_config(n.handle, uri, &content, &contentLength)
 	var output []byte
 	if err == 0 {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
@@ -96,9 +100,11 @@ func (n Node) Topology() (NodeTopology, error) {
 //
 //	The topology is a JSON object as a byte array containing the node address, and the addresses of its successor and predecessor.
 func (n Node) RawTopology() ([]byte, error) {
+	uri := convertToCharStar(n.uri)
+	defer releaseCharStar(uri)
 	var contentLength C.qdb_size_t
 	var content *C.char
-	err := C.qdb_node_topology(n.handle, C.CString(n.uri), &content, &contentLength)
+	err := C.qdb_node_topology(n.handle, uri, &content, &contentLength)
 	var output []byte
 	if err == 0 {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))

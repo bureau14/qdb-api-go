@@ -2,6 +2,7 @@
 package qdb
 
 /*
+	#include <stdlib.h>
 	#include <qdb/node.h>
 */
 import "C"
@@ -104,8 +105,10 @@ func (h HandleType) AddUserCredentials(userCredentialFile string) error {
 	if err != nil {
 		return err
 	}
-	username := C.CString(jsonConfig.Username)
-	secretKey := C.CString(jsonConfig.SecretKey)
+	username := convertToCharStar(jsonConfig.Username)
+	defer releaseCharStar(username)
+	secretKey := convertToCharStar(jsonConfig.SecretKey)
+	defer releaseCharStar(secretKey)
 	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, secretKey)
 	return makeErrorOrNil(qdbErr)
 }
@@ -116,7 +119,8 @@ func (h HandleType) AddClusterPublicKey(clusterPublicKeyFile string) error {
 	if err != nil {
 		return err
 	}
-	clusterPublicKey := C.CString(string(fileConfig))
+	clusterPublicKey := convertToCharStar(string(fileConfig))
+	defer releaseCharStar(clusterPublicKey)
 	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
 	return makeErrorOrNil(qdbErr)
 }
@@ -145,7 +149,9 @@ func (h HandleType) SetCompression(compressionLevel Compression) error {
 //		qdb://myserver1.org:2836,myserver2.org:2836 - Connects to myserver1.org or myserver2.org on the port 2836
 //		qdb://[::1]:2836 - Connects to the local IPv6 loopback on the port 2836
 func (h HandleType) Connect(clusterURI string) error {
-	err := C.qdb_connect(h.handle, C.CString(clusterURI))
+	uri := convertToCharStar(clusterURI)
+	defer releaseCharStar(uri)
+	err := C.qdb_connect(h.handle, uri)
 	return makeErrorOrNil(err)
 }
 

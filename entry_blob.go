@@ -3,6 +3,7 @@ package qdb
 /*
 	#include <qdb/blob.h>
 	#include <string.h>
+	#include <stdlib.h>
 */
 import "C"
 import (
@@ -18,10 +19,12 @@ type BlobEntry struct {
 // Get : Retrieve an entry's content
 //	If the entry does not exist, the function will fail and return 'alias not found' error.
 func (entry BlobEntry) Get() ([]byte, error) {
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	var content unsafe.Pointer
 	defer entry.Release(content)
 	var contentLength C.qdb_size_t
-	err := C.qdb_blob_get(entry.handle, C.CString(entry.alias), &content, &contentLength)
+	err := C.qdb_blob_get(entry.handle, alias, &content, &contentLength)
 
 	output := C.GoBytes(content, C.int(contentLength))
 	return output, makeErrorOrNil(err)
@@ -33,7 +36,9 @@ func (entry BlobEntry) GetAndRemove() ([]byte, error) {
 	var content unsafe.Pointer
 	defer entry.Release(content)
 	var contentLength C.qdb_size_t
-	err := C.qdb_blob_get_and_remove(entry.handle, C.CString(entry.alias), &content, &contentLength)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
+	err := C.qdb_blob_get_and_remove(entry.handle, alias, &content, &contentLength)
 
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 	return output, makeErrorOrNil(err)
@@ -43,7 +48,8 @@ func (entry BlobEntry) GetAndRemove() ([]byte, error) {
 //	If the entry already exists the function will fail and will return 'alias already exists' error.
 //	You can specify an expiry or use NeverExpires if you don’t want the entry to expire.
 func (entry BlobEntry) Put(content []byte, expiry time.Time) error {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	contentSize := C.qdb_size_t(len(content))
 	contentPtr := unsafe.Pointer(nil)
 	if contentSize != 0 {
@@ -57,7 +63,8 @@ func (entry BlobEntry) Put(content []byte, expiry time.Time) error {
 //	If the entry already exists, the function will modify the entry.
 //	You can specify an expiry or use NeverExpires if you don’t want the entry to expire.
 func (entry *BlobEntry) Update(newContent []byte, expiry time.Time) error {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	contentSize := C.qdb_size_t(len(newContent))
 	contentPtr := unsafe.Pointer(nil)
 	if contentSize != 0 {
@@ -70,6 +77,8 @@ func (entry *BlobEntry) Update(newContent []byte, expiry time.Time) error {
 // GetAndUpdate : Atomically gets and updates (in this order) the entry on the quasardb server.
 //	The entry must already exist.
 func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byte, error) {
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	contentSize := C.qdb_size_t(len(newContent))
 	contentPtr := unsafe.Pointer(nil)
 	if contentSize != 0 {
@@ -78,7 +87,7 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byt
 	var contentLength C.qdb_size_t
 	var content unsafe.Pointer
 	defer entry.Release(content)
-	err := C.qdb_blob_get_and_update(entry.handle, C.CString(entry.alias), contentPtr, contentSize, toQdbTime(expiry), &content, &contentLength)
+	err := C.qdb_blob_get_and_update(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry), &content, &contentLength)
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 	return output, makeErrorOrNil(err)
 }
@@ -88,7 +97,8 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byt
 //	The entry must already exist.
 //	Update will occur if and only if the content of the entry matches bit for bit the content of the comparand buffer.
 func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, expiry time.Time) ([]byte, error) {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	valueLength := C.qdb_size_t(len(newValue))
 	value := unsafe.Pointer(nil)
 	if valueLength != 0 {
@@ -111,7 +121,8 @@ func (entry *BlobEntry) CompareAndSwap(newValue []byte, newComparand []byte, exp
 //	The entry must already exist.
 //	Removal will occur if and only if the content of the entry matches bit for bit the content of the comparand buffer.
 func (entry BlobEntry) RemoveIf(comparand []byte) error {
-	alias := C.CString(entry.alias)
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	comparandLength := C.qdb_size_t(len(comparand))
 	comparandC := unsafe.Pointer(nil)
 	if comparandLength != 0 {
@@ -127,13 +138,15 @@ func (entry BlobEntry) RemoveIf(comparand []byte) error {
 //	and return `buffer is too small`, content length will nevertheless be
 // 	returned with entry size so that the caller may resize its buffer and try again.
 func (entry BlobEntry) GetNoAlloc(content []byte) (int, error) {
+	alias := convertToCharStar(entry.alias)
+	defer releaseCharStar(alias)
 	contentLength := C.qdb_size_t(len(content))
 	contentPtr := unsafe.Pointer(nil)
 	if contentLength != 0 {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
 
-	err := C.qdb_blob_get_noalloc(entry.handle, C.CString(entry.alias), contentPtr, &contentLength)
+	err := C.qdb_blob_get_noalloc(entry.handle, alias, contentPtr, &contentLength)
 
 	return int(contentLength), makeErrorOrNil(err)
 }

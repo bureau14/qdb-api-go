@@ -44,6 +44,7 @@ func (q *Query) Type(t string) *Query {
 
 func (q Query) buildQuery() (string, error) {
 	var query bytes.Buffer
+	query.WriteString("find(")
 	for idx, t := range q.tags {
 		if idx != 0 {
 			query.WriteString(" and ")
@@ -51,7 +52,7 @@ func (q Query) buildQuery() (string, error) {
 		query.WriteString("tag=")
 		query.WriteString(strconv.Quote(t))
 	}
-	if query.Len() == 0 {
+	if query.Len() == len(string("find(")) {
 		return string(""), errors.New("query should have at least one valid tag")
 	}
 	for _, t := range q.tagsExcluded {
@@ -62,6 +63,7 @@ func (q Query) buildQuery() (string, error) {
 		query.WriteString(" and type=")
 		query.WriteString(t)
 	}
+	query.WriteString(")")
 	return query.String(), nil
 }
 
@@ -76,9 +78,11 @@ func (q Query) Execute() ([]string, error) {
 
 // ExecuteString : Execute a string query immediately
 func (q Query) ExecuteString(query string) ([]string, error) {
+	cQuery := convertToCharStar(query)
+	defer releaseCharStar(cQuery)
 	var aliasCount C.size_t
 	var aliases **C.char
-	err := C.qdb_query_find(q.handle, C.CString(query), &aliases, &aliasCount)
+	err := C.qdb_query_find(q.handle, cQuery, &aliases, &aliasCount)
 	if err == 0 {
 		length := int(aliasCount)
 		output := make([]string, length)

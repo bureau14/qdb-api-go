@@ -195,7 +195,9 @@ type QueryExp struct {
 
 // Execute : execute a query
 func (q QueryExp) Execute() (*QueryResult, error) {
+	query := convertToCharStar(q.query)
+	defer releaseCharStar(query)
 	var r QueryResult
-	err := C.qdb_exp_query(q.handle, C.CString(q.query), &r.result)
+	err := C.qdb_exp_query(q.handle, query, &r.result)
 	return &r, makeErrorOrNil(err)
 }
