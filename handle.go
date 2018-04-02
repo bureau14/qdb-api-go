@@ -270,6 +270,11 @@ func (h HandleType) Timeseries(alias string) TimeseriesEntry {
 	return TimeseriesEntry{Entry{h, alias}}
 }
 
+// Tag : Create a tag entry object
+func (h HandleType) Tag(alias string) TagEntry {
+	return TagEntry{Entry{h, alias}}
+}
+
 // Node : Create a node object
 func (h HandleType) Node(uri string) *Node {
 	return &Node{h, uri}
