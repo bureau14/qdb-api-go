@@ -4,6 +4,7 @@ package qdb
 /*
 	#include <stdlib.h>
 	#include <qdb/node.h>
+	#include <qdb/tag.h>
 */
 import "C"
 import (
@@ -172,6 +173,59 @@ func (h HandleType) Close() error {
 func (h HandleType) Release(buffer unsafe.Pointer) {
 	C.qdb_release(h.handle, buffer)
 }
+
+// GetTags : Retrieves all the tags of an entry.
+//	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
+//	The entry must exist.
+func (h HandleType) GetTags(entryAlias string) ([]string, error) {
+	alias := convertToCharStar(entryAlias)
+	defer releaseCharStar(alias)
+	var tagCount C.size_t
+	var tags **C.char
+	err := C.qdb_get_tags(h.handle, alias, &tags, &tagCount)
+
+	if err == 0 {
+		defer h.Release(unsafe.Pointer(tags))
+		length := int(tagCount)
+		output := make([]string, length)
+		if length > 0 {
+			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(tags))[:length:length]
+			for i, s := range tmpslice {
+				output[i] = C.GoString(s)
+			}
+		}
+		return output, nil
+	}
+	return nil, ErrorType(err)
+}
+
+// GetTagged : Retrieves all entries that have the specified tag.
+//	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
+//	The tag must exist.
+//	The complexity of this function is constant.
+func (h HandleType) GetTagged(tag string) ([]string, error) {
+	cTag := convertToCharStar(tag)
+	defer releaseCharStar(cTag)
+	var aliasCount C.size_t
+	var aliases **C.char
+	err := C.qdb_get_tagged(h.handle, cTag, &aliases, &aliasCount)
+
+	if err == 0 {
+		defer h.Release(unsafe.Pointer(aliases))
+		length := int(aliasCount)
+		output := make([]string, length)
+		if length > 0 {
+			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
+			for i, s := range tmpslice {
+				output[i] = C.GoString(s)
+			}
+		}
+		return output, nil
+	}
+	return nil, ErrorType(err)
+}
+
+// Handles Creators
 
 // NewHandle : Create a new handle, return error if needed
 //	The handle is already opened (not connected) with tcp protocol

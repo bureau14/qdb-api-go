@@ -496,37 +496,33 @@ var _ = Describe("Tests", func() {
 					})
 				})
 				Context("Filters", func() {
-					It("should get values - FilterUnique - should fail when implementation ready", func() {
+					It("should get values - FilterUnique", func() {
 						r := NewFilteredRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond), NewFilter().Unique())
 						results, err := doubleColumn.GetRanges(r)
-						Expect(err).To(HaveOccurred())
-						Expect([]TsDoublePoint{}).To(ConsistOf(results))
+						Expect(err).ToNot(HaveOccurred())
 						// Real result should be - unsure:
-						// Expect(doublePoints).To(ConsistOf(results))
+						Expect(doublePoints).To(ConsistOf(results))
 					})
-					It("should get values - FilterSample - should fail when implementation ready", func() {
+					It("should get values - FilterSample", func() {
 						r := NewFilteredRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond), NewFilter().Sample(8))
 						results, err := doubleColumn.GetRanges(r)
-						Expect(err).To(HaveOccurred())
-						Expect([]TsDoublePoint{}).To(ConsistOf(results))
+						Expect(err).ToNot(HaveOccurred())
 						// Real result should be:
-						// Expect(doublePoints).To(ConsistOf(results))
+						Expect(doublePoints).To(ConsistOf(results))
 					})
-					It("should get all values - FilterDoubleInsideRange - should fail when implementation ready", func() {
+					It("should get all values - FilterDoubleInsideRange", func() {
 						r := NewFilteredRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond), NewFilter().DoubleLimits(0, 100, FilterDoubleInsideRange))
 						results, err := doubleColumn.GetRanges(r)
-						Expect(err).To(HaveOccurred())
-						Expect([]TsDoublePoint{}).To(ConsistOf(results))
+						Expect(err).ToNot(HaveOccurred())
 						// Real result should be:
-						// Expect(doublePoints).To(ConsistOf(results))
+						Expect(doublePoints).To(ConsistOf(results))
 					})
-					It("should get all values - FilterDoubleOutsideRange - should fail when implementation ready", func() {
+					It("should get all values - FilterDoubleOutsideRange", func() {
 						r := NewFilteredRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond), NewFilter().DoubleLimits(100, 200, FilterDoubleOutsideRange))
 						results, err := doubleColumn.GetRanges(r)
-						Expect(err).To(HaveOccurred())
-						Expect([]TsDoublePoint{}).To(ConsistOf(results))
+						Expect(err).ToNot(HaveOccurred())
 						// Real result should be:
-						// Expect(doublePoints).To(ConsistOf(results))
+						Expect(doublePoints).To(ConsistOf(results))
 					})
 				})
 			})

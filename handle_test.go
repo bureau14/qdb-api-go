@@ -164,6 +164,47 @@ var _ = Describe("Tests", func() {
 					err := testHandle.SetCompression(5)
 					Expect(err).To(HaveOccurred())
 				})
+				Context("with an entry added", func() {
+					var (
+						alias   = generateAlias(16)
+						integer IntegerEntry
+					)
+					BeforeEach(func() {
+						integer = testHandle.Integer(alias)
+						integer.Put(8, NeverExpires())
+					})
+					AfterEach(func() {
+						integer.Remove()
+					})
+					It("'get tags' should work with no tags added", func() {
+						tags, err := testHandle.GetTags(alias)
+						Expect(err).ToNot(HaveOccurred())
+						Expect([]string{}).To(Equal(tags))
+					})
+					It("'get tags' should not work with a bad alias", func() {
+						tags, err := testHandle.GetTags("")
+						Expect(err).To(HaveOccurred())
+						Expect([]string(nil)).To(Equal(tags))
+					})
+					It("'get tags' should work with alias", func() {
+						err := integer.AttachTag("tag")
+						Expect(err).ToNot(HaveOccurred())
+						tags, err := testHandle.GetTags(alias)
+						Expect(err).ToNot(HaveOccurred())
+						Expect([]string{"tag"}).To(Equal(tags))
+					})
+					It("'get tagged' should work with \"tag\"", func() {
+						integer.AttachTag("tag")
+						entries, err := testHandle.GetTagged("tag")
+						Expect(err).ToNot(HaveOccurred())
+						Expect([]string{alias}).To(Equal(entries))
+					})
+					It("'get tagged' should return empty results with bad tag", func() {
+						tags, err := testHandle.GetTagged("bad")
+						Expect(err).ToNot(HaveOccurred())
+						Expect([]string{}).To(Equal(tags))
+					})
+				})
 			})
 		})
 	})
