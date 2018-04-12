@@ -119,6 +119,8 @@ const (
 	ErrColumnNotFound            ErrorType = C.qdb_e_column_not_found
 	ErrQueryTooComplex           ErrorType = C.qdb_e_query_too_complex
 	ErrInvalidCryptoKey          ErrorType = C.qdb_e_invalid_crypto_key
+	ErrInvalidQuery              ErrorType = C.qdb_e_invalid_query
+	ErrInvalidRegex              ErrorType = C.qdb_e_invalid_regex
 )
 
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
