@@ -35,7 +35,7 @@ var _ = Describe("Tests", func() {
 			It("should retrieve status with valid uri", func() {
 				status, err := handle.Node("qdb://127.0.0.1:30083").Status()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(status.Network.Partitions.MaxSessions).To(Equal(20000))
+				Expect(status.Network.Partitions.MaxSessions).To(Equal(5000))
 			})
 		})
 

@@ -51,10 +51,12 @@ func TestMain(m *testing.M) {
 	generateClusterKeys(qdbClusterKeygen)
 	unsecuredDB, err = newDB(qdbd, SecurityNone, PurgeNothing)
 	if err != nil {
+		cleanup()
 		panic(err)
 	}
 	securedDB, err = newDB(qdbd, SecurityEnabled, PurgeAll)
 	if err != nil {
+		cleanup()
 		panic(err)
 	}
 

@@ -556,7 +556,7 @@ func ExampleNode() {
 	topology, _ := node.Topology()
 	fmt.Println("Topology - Successor is same as predecessor:", topology.Successor.Endpoint == topology.Predecessor.Endpoint)
 	// Output:
-	// Status - Max sessions: 20000
+	// Status - Max sessions: 5000
 	// Config - Root Depot: db
 	// Config - Listen On: 127.0.0.1:30083
 	// Topology - Successor is same as predecessor: true
