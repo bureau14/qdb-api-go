@@ -85,12 +85,6 @@
     [ ] qdb_log_remove_callback
 [ completion: 0/2 ]
 
-### [ hash sets ]
-    [ ] qdb_hset_insert
-    [ ] qdb_hset_erase
-    [ ] qdb_hset_contains
-[ completion: 0/3 ]
-
 ### [ prefix ]
     [ ] qdb_prefix_get
     [ ] qdb_prefix_count

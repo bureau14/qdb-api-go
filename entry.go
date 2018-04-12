@@ -23,9 +23,9 @@ func (e Entry) Alias() string {
 }
 
 // Remove : Removes an entry from the cluster, regardless of its type.
-//	This call will remove the entry, whether it is a blob, integer, deque, stream or hset.
+//	This call will remove the entry, whether it is a blob, integer, deque, stream.
 //	It will properly untag the entry.
-//	If the entry spawns on multiple entries or nodes (deques, hsets and streams) all blocks will be properly removed.
+//	If the entry spawns on multiple entries or nodes (deques and streams) all blocks will be properly removed.
 //
 //	The call is ACID, regardless of the type of the entry and a transaction will be created if need be
 func (e Entry) Remove() error {
