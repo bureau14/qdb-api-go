@@ -2,7 +2,7 @@ Quasardb Go API
 =================
 [![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/bureau14/qdb-api-go)
 
-**Note:** The Go API works only on Unix-like operating systems. Windows is not currently supported.
+**Note:** The Go API works on Windows x64 and Unix-like operating systems. 32-bit Windows is not currently supported.
 
 **Warning:** Early stage development version. Use at your own risk.
 
