@@ -81,7 +81,7 @@ func NewDoubleAggregation(kind TsAggregationType, rng TsRange) *TsDoubleAggregat
 func (t TsDoubleAggregation) toStructC() C.qdb_ts_double_aggregation_t {
 	var cAgg C.qdb_ts_double_aggregation_t
 	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
-	cAgg.filtered_range = t.rng.toStructC()
+	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
 	return cAgg
@@ -90,7 +90,7 @@ func (t TsDoubleAggregation) toStructC() C.qdb_ts_double_aggregation_t {
 func (t C.qdb_ts_double_aggregation_t) toStructG() TsDoubleAggregation {
 	var gAgg TsDoubleAggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t.filtered_range.toStructG()
+	gAgg.rng = t._range.toStructG()
 	gAgg.count = int64(t.count)
 	gAgg.point = t.result.toStructG()
 	return gAgg
@@ -161,7 +161,7 @@ func NewBlobAggregation(kind TsAggregationType, rng TsRange) *TsBlobAggregation 
 func (t TsBlobAggregation) toStructC() C.qdb_ts_blob_aggregation_t {
 	var cAgg C.qdb_ts_blob_aggregation_t
 	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
-	cAgg.filtered_range = t.rng.toStructC()
+	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
 	return cAgg
@@ -170,7 +170,7 @@ func (t TsBlobAggregation) toStructC() C.qdb_ts_blob_aggregation_t {
 func (t C.qdb_ts_blob_aggregation_t) toStructG() TsBlobAggregation {
 	var gAgg TsBlobAggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t.filtered_range.toStructG()
+	gAgg.rng = t._range.toStructG()
 	gAgg.count = int64(t.count)
 	gAgg.point = t.result.toStructG()
 	return gAgg
@@ -241,7 +241,7 @@ func NewInt64Aggregation(kind TsAggregationType, rng TsRange) *TsInt64Aggregatio
 func (t TsInt64Aggregation) toStructC() C.qdb_ts_int64_aggregation_t {
 	var cAgg C.qdb_ts_int64_aggregation_t
 	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
-	cAgg.filtered_range = t.rng.toStructC()
+	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
 	return cAgg
@@ -250,7 +250,7 @@ func (t TsInt64Aggregation) toStructC() C.qdb_ts_int64_aggregation_t {
 func (t C.qdb_ts_int64_aggregation_t) toStructG() TsInt64Aggregation {
 	var gAgg TsInt64Aggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t.filtered_range.toStructG()
+	gAgg.rng = t._range.toStructG()
 	gAgg.count = int64(t.count)
 	gAgg.point = t.result.toStructG()
 	return gAgg
@@ -321,7 +321,7 @@ func NewTimestampAggregation(kind TsAggregationType, rng TsRange) *TsTimestampAg
 func (t TsTimestampAggregation) toStructC() C.qdb_ts_timestamp_aggregation_t {
 	var cAgg C.qdb_ts_timestamp_aggregation_t
 	cAgg._type = C.qdb_ts_aggregation_type_t(t.kind)
-	cAgg.filtered_range = t.rng.toStructC()
+	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
 	return cAgg
@@ -330,7 +330,7 @@ func (t TsTimestampAggregation) toStructC() C.qdb_ts_timestamp_aggregation_t {
 func (t C.qdb_ts_timestamp_aggregation_t) toStructG() TsTimestampAggregation {
 	var gAgg TsTimestampAggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t.filtered_range.toStructG()
+	gAgg.rng = t._range.toStructG()
 	gAgg.count = int64(t.count)
 	gAgg.point = t.result.toStructG()
 	return gAgg
