@@ -6,3 +6,5 @@ db/
 /thirdparty/quasardb/examples/
 /thirdparty/quasardb/include/
 /thirdparty/quasardb/lib/
+
+delete_all.sh
