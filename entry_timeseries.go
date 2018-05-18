@@ -464,3 +464,105 @@ func (t *TsBulk) NextRow() (time.Time, error) {
 func (t *TsBulk) Release() {
 	t.h.Release(unsafe.Pointer(t.table))
 }
+
+// AddBlob : Add one or more blob point to the batch disregarding the order of initialization
+func (t *TsBatch) AddBlob(timeseries, column string, points ...TsBlobPoint) error {
+	ts := convertToCharStar(timeseries)
+	defer releaseCharStar(ts)
+	col := convertToCharStar(column)
+	defer releaseCharStar(col)
+	pointsCount := C.qdb_size_t(len(points))
+	pointsPtr := blobPointArrayToC(points...)
+	defer releaseBlobPointArray(pointsPtr, len(points))
+	return makeErrorOrNil(C.qdb_ts_batch_add_blob(t.table, ts, col, pointsPtr, pointsCount))
+}
+
+// AddDouble : Add one or more double point to the batch disregarding the order of initialization
+func (t *TsBatch) AddDouble(timeseries, column string, points ...TsDoublePoint) error {
+	ts := convertToCharStar(timeseries)
+	defer releaseCharStar(ts)
+	col := convertToCharStar(column)
+	defer releaseCharStar(col)
+	pointsCount := C.qdb_size_t(len(points))
+	pointsPtr := doublePointArrayToC(points...)
+	return makeErrorOrNil(C.qdb_ts_batch_add_double(t.table, ts, col, pointsPtr, pointsCount))
+}
+
+// AddInt64 : Add one or more int64 to the batch disregarding the order of initialization
+func (t *TsBatch) AddInt64(timeseries, column string, points ...TsInt64Point) error {
+	ts := convertToCharStar(timeseries)
+	defer releaseCharStar(ts)
+	col := convertToCharStar(column)
+	defer releaseCharStar(col)
+	pointsCount := C.qdb_size_t(len(points))
+	pointsPtr := int64PointArrayToC(points...)
+	return makeErrorOrNil(C.qdb_ts_batch_add_int64(t.table, ts, col, pointsPtr, pointsCount))
+}
+
+// AddTimestamp : Add one or more timestamp to the batch disregarding the order of initialization
+func (t *TsBatch) AddTimestamp(timeseries, column string, points ...TsTimestampPoint) error {
+	ts := convertToCharStar(timeseries)
+	defer releaseCharStar(ts)
+	col := convertToCharStar(column)
+	defer releaseCharStar(col)
+	pointsCount := C.qdb_size_t(len(points))
+	pointsPtr := timestampPointArrayToC(points...)
+	return makeErrorOrNil(C.qdb_ts_batch_add_timestamp(t.table, ts, col, pointsPtr, pointsCount))
+}
+
+// RowSetBlob : Add a blob to current row
+func (t *TsBatch) RowSetBlob(content []byte) error {
+	contentSize := C.qdb_size_t(len(content))
+	contentPtr := unsafe.Pointer(nil)
+	if contentSize != 0 {
+		contentPtr = unsafe.Pointer(&content[0])
+	}
+	return makeErrorOrNil(C.qdb_ts_batch_row_set_blob(t.table, contentPtr, contentSize))
+}
+
+// RowSetBlobNoCopy : Add a blob to current row without copying it
+func (t *TsBatch) RowSetBlobNoCopy(content []byte) error {
+	contentSize := C.qdb_size_t(len(content))
+	contentPtr := unsafe.Pointer(nil)
+	if contentSize != 0 {
+		contentPtr = unsafe.Pointer(&content[0])
+	}
+	return makeErrorOrNil(C.qdb_ts_batch_row_set_blob_no_copy(t.table, contentPtr, contentSize))
+}
+
+// RowSetDouble : Add a double to current row
+func (t *TsBatch) RowSetDouble(value float64) error {
+	return makeErrorOrNil(C.qdb_ts_batch_row_set_double(t.table, C.double(value)))
+}
+
+// RowSetInt64 : Add an int64 to current row
+func (t *TsBatch) RowSetInt64(value int64) error {
+	return makeErrorOrNil(C.qdb_ts_batch_row_set_int64(t.table, C.qdb_int_t(value)))
+}
+
+// RowSetTimestamp : Add a timestamp to current row
+func (t *TsBatch) RowSetTimestamp(value time.Time) error {
+	cValue := toQdbTimespec(value)
+	return makeErrorOrNil(C.qdb_ts_batch_row_set_timestamp(t.table, &cValue))
+}
+
+// RowSkipColumn : Skip this column in the current row
+func (t *TsBatch) RowSkipColumn() error {
+	return makeErrorOrNil(C.qdb_ts_batch_row_skip_column(t.table))
+}
+
+// RowFinalize : Finalize a row
+func (t *TsBatch) RowFinalize(timestamp time.Time) error {
+	cTimestamp := toQdbTimespec(timestamp)
+	return makeErrorOrNil(C.qdb_ts_batch_row_finalize(t.table, &cTimestamp))
+}
+
+// Push : Push the inserted data
+func (t *TsBatch) Push() error {
+	return makeErrorOrNil(C.qdb_ts_batch_push(t.table))
+}
+
+// Release : release the memory of the batch table
+func (t *TsBatch) Release() {
+	t.h.Release(unsafe.Pointer(t.table))
+}

@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 	#include <qdb/node.h>
 	#include <qdb/tag.h>
+	#include <qdb/ts.h>
 */
 import "C"
 import (
@@ -342,4 +343,15 @@ func (h HandleType) Cluster() *Cluster {
 // QueryExp : Create an experimental query object to execute
 func (h HandleType) QueryExp(query string) *QueryExp {
 	return &QueryExp{h, query}
+}
+
+// TsBatch : create a batch object for the specified columns
+func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
+	columns := tsBtachColumnInfoArrayToC(cols...)
+	defer releaseTsBtachColumnInfoArray(columns, len(cols))
+	columnsCount := C.qdb_size_t(len(cols))
+	batch := &TsBatch{}
+	batch.h = h
+	err := C.qdb_ts_batch_table_init(h.handle, columns, columnsCount, &batch.table)
+	return batch, makeErrorOrNil(err)
 }

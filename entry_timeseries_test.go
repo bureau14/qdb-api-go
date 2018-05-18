@@ -733,6 +733,142 @@ var _ = Describe("Tests", func() {
 					})
 				})
 			})
+
+			Context("Batch", func() {
+				var (
+					batchColumnsInfos []TsBatchColumnInfo
+				)
+				BeforeEach(func() {
+					batchColumnsInfos = make([]TsBatchColumnInfo, 0)
+					for _, col := range columnsInfo {
+						batchColumnsInfos = append(batchColumnsInfos, TsBatchColumnInfo{alias, col.name, 10})
+					}
+				})
+				Context("Init", func() {
+					It("should not work with no columns", func() {
+						_, err := handle.TsBatch()
+						Expect(err).To(HaveOccurred())
+					})
+					It("should not work with a bad column", func() {
+						newBatchColumnsInfos := make([]TsBatchColumnInfo, len(batchColumnsInfos))
+						copy(newBatchColumnsInfos, batchColumnsInfos)
+						newBatchColumnsInfos[0].Timeseries = "alias"
+						_, err := handle.TsBatch(newBatchColumnsInfos...)
+						Expect(err).To(HaveOccurred())
+					})
+				})
+				Context("Initialized", func() {
+					var (
+						tsBatch *TsBatch
+					)
+					JustBeforeEach(func() {
+						var err error
+						tsBatch, err = handle.TsBatch(batchColumnsInfos...)
+						Expect(err).ToNot(HaveOccurred())
+					})
+					AfterEach(func() {
+						tsBatch.Release()
+					})
+					Context("Row", func() {
+						var (
+							blobValue      []byte    = []byte("content")
+							doubleValue    float64   = 3.2
+							int64Value     int64     = 2
+							timestampValue time.Time = time.Now()
+						)
+						It("should append all columns", func() {
+							err := tsBatch.RowSetBlob(blobValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetDouble(doubleValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetInt64(int64Value)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetTimestamp(timestampValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowFinalize(timestampValue)
+							Expect(err).ToNot(HaveOccurred())
+						})
+						It("should append columns and ignore fields", func() {
+							err := tsBatch.RowSetBlob(blobValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetDouble(doubleValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetInt64(int64Value)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSkipColumn()
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowFinalize(timestampValue)
+							Expect(err).ToNot(HaveOccurred())
+						})
+						It("should append columns on part of timeseries", func() {
+							err := tsBatch.RowSetBlob(blobValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowFinalize(timestampValue)
+							Expect(err).ToNot(HaveOccurred())
+						})
+						It("should fail to append columns - too much values", func() {
+							err := tsBatch.RowSetBlob(blobValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetDouble(doubleValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetInt64(int64Value)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSkipColumn()
+							Expect(err).ToNot(HaveOccurred())
+
+							err = tsBatch.RowSetInt64(int64Value)
+							Expect(err).To(HaveOccurred())
+
+							err = tsBatch.RowFinalize(timestampValue)
+							Expect(err).ToNot(HaveOccurred())
+						})
+						It("should fail to append columns - wrong column type", func() {
+							err := tsBatch.RowSetInt64(int64Value)
+							Expect(err).To(HaveOccurred())
+						})
+						Context("Push", func() {
+							JustBeforeEach(func() {
+								err := tsBatch.RowSetBlob(blobValue)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetDouble(doubleValue)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetInt64(int64Value)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetTimestamp(timestampValue)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowFinalize(timestampValue)
+								Expect(err).ToNot(HaveOccurred())
+							})
+							It("should push", func() {
+								err := tsBatch.Push()
+								Expect(err).ToNot(HaveOccurred())
+
+								rg := NewRange(timestampValue, timestampValue.Add(5*time.Nanosecond))
+
+								blobs, err := blobColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(blobs)).To(Equal(1))
+								Expect(blobs[0].Content()).To(Equal(blobValue))
+
+								doubles, err := doubleColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(doubles)).To(Equal(1))
+								Expect(doubles[0].Content()).To(Equal(doubleValue))
+
+								int64s, err := int64Column.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(int64s)).To(Equal(1))
+								Expect(int64s[0].Content()).To(Equal(int64Value))
+
+								nTimestamps, err := timestampColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(nTimestamps)).To(Equal(1))
+								Expect(nTimestamps[0].Content().Equal(timestampValue)).To(BeTrue())
+							})
+						})
+					})
+				})
+			})
 		})
 	})
 })
