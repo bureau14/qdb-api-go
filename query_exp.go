@@ -3,6 +3,11 @@ package qdb
 /*
 	#include <qdb/query.h>
 
+	qdb_size_t get_count_from_payload(const qdb_point_result_t * result)
+	{
+		return (qdb_size_t)result->payload.count;
+	}
+
 	qdb_int_t get_int64_from_payload(const qdb_point_result_t * result)
 	{
 		return (qdb_int_t)result->payload.int64_.value;
@@ -39,12 +44,14 @@ type QueryResultValueType int64
 // QueryResultBlob : query result value blob
 // QueryResultInt64 : query result value int64
 // QueryResultTimestamp : query result value timestamp
+// QueryResultCount : query result value count
 const (
 	QueryResultNone      QueryResultValueType = C.qdb_query_result_none
 	QueryResultDouble    QueryResultValueType = C.qdb_query_result_double
 	QueryResultBlob      QueryResultValueType = C.qdb_query_result_blob
 	QueryResultInt64     QueryResultValueType = C.qdb_query_result_int64
 	QueryResultTimestamp QueryResultValueType = C.qdb_query_result_timestamp
+	QueryResultCount     QueryResultValueType = C.qdb_query_result_count
 )
 
 // QueryPointResult : a query result point
@@ -83,6 +90,8 @@ func (r *C.qdb_point_result_t) Get() QueryPointResult {
 		output.value = int64(C.get_int64_from_payload(r))
 	case C.qdb_query_result_timestamp:
 		output.value = C.get_timestamp_from_payload(r).toStructG()
+	case C.qdb_query_result_count:
+		output.value = int64(C.get_count_from_payload(r))
 	}
 	return output
 }
@@ -117,6 +126,14 @@ func (r *C.qdb_point_result_t) GetTimestamp() (time.Time, error) {
 		return C.get_timestamp_from_payload(r).toStructG(), nil
 	}
 	return time.Unix(-1, -1), makeErrorOrNil(C.qdb_e_operation_not_permitted)
+}
+
+// GetCount : retrieve the count from the interface
+func (r *C.qdb_point_result_t) GetCount() (int64, error) {
+	if r._type == C.qdb_query_result_count {
+		return int64(C.get_count_from_payload(r)), nil
+	}
+	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
 // QueryRow : query result table row
