@@ -5,7 +5,7 @@ package qdb
 
 	qdb_size_t get_count_from_payload(const qdb_point_result_t * result)
 	{
-		return (qdb_size_t)result->payload.count;
+		return (qdb_size_t)result->payload.count.value;
 	}
 
 	qdb_int_t get_int64_from_payload(const qdb_point_result_t * result)
