@@ -187,11 +187,11 @@ var _ = Describe("Tests", func() {
 
 							doubleValue := columns[2].Get()
 							Expect(err).ToNot(HaveOccurred())
-							Expect(doubleValue.Type()).To(Equal(QueryResultDouble))
+							Expect(doubleValue.Type()).To(Equal(QueryResultNone))
 						} else {
 							blobValue := columns[1].Get()
 							Expect(err).ToNot(HaveOccurred())
-							Expect(blobValue.Type()).To(Equal(QueryResultBlob))
+							Expect(blobValue.Type()).To(Equal(QueryResultNone))
 
 							doubleValue, err := columns[2].GetDouble()
 							Expect(err).ToNot(HaveOccurred())
