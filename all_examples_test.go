@@ -9,7 +9,7 @@ func ExampleHandleType() {
 	var h HandleType
 	h.Open(ProtocolTCP)
 	fmt.Printf("API build: %s\n", h.APIVersion())
-	// Output: API build: 2.6.0master
+	// Output: API build: 2.7.0master
 }
 
 func ExampleEntry_Alias() {
@@ -45,7 +45,6 @@ func ExampleEntry_Alias() {
 	// Tagged with 'tag blob 1': [BLOB_1]
 	// Tagged with 'tag blob 2': [BLOB_2]
 	// Tagged with 'tag both blob': [BLOB_2 BLOB_1]
-
 }
 
 func ExampleBlobEntry() {
@@ -245,13 +244,13 @@ func ExampleTsDoubleColumn_GetRanges() {
 		// handle error
 	}
 	for _, point := range doublePoints {
-		fmt.Println("timestamp:", point.Timestamp(), "- value:", point.Content())
+		fmt.Println("timestamp:", point.Timestamp().UTC(), "- value:", point.Content())
 	}
 	// Output:
-	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: 0
-	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: 1
-	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: 2
-	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: 3
+	// timestamp: 1970-01-01 00:00:10 +0000 UTC - value: 0
+	// timestamp: 1970-01-01 00:00:20 +0000 UTC - value: 1
+	// timestamp: 1970-01-01 00:00:30 +0000 UTC - value: 2
+	// timestamp: 1970-01-01 00:00:40 +0000 UTC - value: 3
 }
 
 func ExampleTsDoubleColumn_EraseRanges() {
@@ -334,13 +333,13 @@ func ExampleTsBlobColumn_GetRanges() {
 		// handle error
 	}
 	for _, point := range blobPoints {
-		fmt.Println("timestamp:", point.Timestamp(), "- value:", string(point.Content()))
+		fmt.Println("timestamp:", point.Timestamp().UTC(), "- value:", string(point.Content()))
 	}
 	// Output:
-	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: content_0
-	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: content_1
-	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: content_2
-	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: content_3
+	// timestamp: 1970-01-01 00:00:10 +0000 UTC - value: content_0
+	// timestamp: 1970-01-01 00:00:20 +0000 UTC - value: content_1
+	// timestamp: 1970-01-01 00:00:30 +0000 UTC - value: content_2
+	// timestamp: 1970-01-01 00:00:40 +0000 UTC - value: content_3
 }
 
 func ExampleTsBlobColumn_EraseRanges() {
@@ -418,13 +417,13 @@ func ExampleTsInt64Column_GetRanges() {
 		// handle error
 	}
 	for _, point := range int64Points {
-		fmt.Println("timestamp:", point.Timestamp(), "- value:", point.Content())
+		fmt.Println("timestamp:", point.Timestamp().UTC(), "- value:", point.Content())
 	}
 	// Output:
-	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: 0
-	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: 1
-	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: 2
-	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: 3
+	// timestamp: 1970-01-01 00:00:10 +0000 UTC - value: 0
+	// timestamp: 1970-01-01 00:00:20 +0000 UTC - value: 1
+	// timestamp: 1970-01-01 00:00:30 +0000 UTC - value: 2
+	// timestamp: 1970-01-01 00:00:40 +0000 UTC - value: 3
 }
 
 func ExampleTsInt64Column_EraseRanges() {
@@ -485,13 +484,13 @@ func ExampleTsTimestampColumn_GetRanges() {
 		// handle error
 	}
 	for _, point := range timestampPoints {
-		fmt.Println("timestamp:", point.Timestamp(), "- value:", point.Content())
+		fmt.Println("timestamp:", point.Timestamp().UTC(), "- value:", point.Content().UTC())
 	}
 	// Output:
-	// timestamp: 1970-01-01 01:00:10 +0100 CET - value: 1970-01-01 01:00:10 +0100 CET
-	// timestamp: 1970-01-01 01:00:20 +0100 CET - value: 1970-01-01 01:00:20 +0100 CET
-	// timestamp: 1970-01-01 01:00:30 +0100 CET - value: 1970-01-01 01:00:30 +0100 CET
-	// timestamp: 1970-01-01 01:00:40 +0100 CET - value: 1970-01-01 01:00:40 +0100 CET
+	// timestamp: 1970-01-01 00:00:10 +0000 UTC - value: 1970-01-01 00:00:10 +0000 UTC
+	// timestamp: 1970-01-01 00:00:20 +0000 UTC - value: 1970-01-01 00:00:20 +0000 UTC
+	// timestamp: 1970-01-01 00:00:30 +0000 UTC - value: 1970-01-01 00:00:30 +0000 UTC
+	// timestamp: 1970-01-01 00:00:40 +0000 UTC - value: 1970-01-01 00:00:40 +0000 UTC
 }
 
 func ExampleTsTimestampColumn_EraseRanges() {
