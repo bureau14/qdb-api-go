@@ -83,7 +83,7 @@ var _ = Describe("Tests", func() {
 				err := c.TrimAll()
 				Expect(err).To(HaveOccurred())
 			})
-			It("should work work with valid handle", func() {
+			It("should work with valid handle", func() {
 				err := cluster.TrimAll()
 				Expect(err).ToNot(HaveOccurred())
 			})
@@ -95,7 +95,7 @@ var _ = Describe("Tests", func() {
 				err := c.WaitForStabilization(60 * time.Second)
 				Expect(err).To(HaveOccurred())
 			})
-			It("should work work with valid handle", func() {
+			It("should work with valid handle", func() {
 				err := cluster.WaitForStabilization(60 * time.Second)
 				Expect(err).ToNot(HaveOccurred())
 			})
