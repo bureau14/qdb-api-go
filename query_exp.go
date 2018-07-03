@@ -81,7 +81,7 @@ func getBlobUnsafe(r *QueryPoint) []byte {
 // Get : retrieve the raw interface
 func (r *QueryPoint) Get() QueryPointResult {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
-	output := QueryPointResult{valueType: QueryResultValueType(r._type)}
+	output := QueryPointResult{valueType: QueryResultValueType(result._type)}
 
 	switch output.valueType {
 	case C.qdb_query_result_double:
@@ -101,7 +101,7 @@ func (r *QueryPoint) Get() QueryPointResult {
 // GetDouble : retrieve a double from the interface
 func (r *QueryPoint) GetDouble() (float64, error) {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
-	if r._type == C.qdb_query_result_double {
+	if result._type == C.qdb_query_result_double {
 		return float64(C.get_double_from_payload(result)), nil
 	}
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
@@ -118,7 +118,7 @@ func (r *QueryPoint) GetBlob() ([]byte, error) {
 // GetInt64 : retrieve an int64 from the interface
 func (r *QueryPoint) GetInt64() (int64, error) {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
-	if r._type == C.qdb_query_result_int64 {
+	if result._type == C.qdb_query_result_int64 {
 		return int64(C.get_int64_from_payload(result)), nil
 	}
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
@@ -127,7 +127,7 @@ func (r *QueryPoint) GetInt64() (int64, error) {
 // GetTimestamp : retrieve a timestamp from the interface
 func (r *QueryPoint) GetTimestamp() (time.Time, error) {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
-	if r._type == C.qdb_query_result_timestamp {
+	if result._type == C.qdb_query_result_timestamp {
 		return C.get_timestamp_from_payload(result).toStructG(), nil
 	}
 	return time.Unix(-1, -1), makeErrorOrNil(C.qdb_e_operation_not_permitted)
@@ -136,7 +136,7 @@ func (r *QueryPoint) GetTimestamp() (time.Time, error) {
 // GetCount : retrieve the count from the interface
 func (r *QueryPoint) GetCount() (int64, error) {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
-	if r._type == C.qdb_query_result_count {
+	if result._type == C.qdb_query_result_count {
 		return int64(C.get_count_from_payload(result)), nil
 	}
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
