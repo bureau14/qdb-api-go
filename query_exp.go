@@ -70,103 +70,111 @@ func (r QueryPointResult) Value() interface{} {
 	return r.value
 }
 
-func getBlobUnsafe(r *C.qdb_point_result_t) []byte {
+func getBlobUnsafe(result *C.qdb_point_result_t) []byte {
 	var content unsafe.Pointer
 	var contentLength C.qdb_size_t
-	C.get_blob_from_payload(r, &content, &contentLength)
+	C.get_blob_from_payload(result, &content, &contentLength)
 	return C.GoBytes(content, C.int(contentLength))
 }
 
 // Get : retrieve the raw interface
-func (r *C.qdb_point_result_t) Get() QueryPointResult {
-	output := QueryPointResult{valueType: QueryResultValueType(r._type)}
+func (r *QueryPoint) Get() QueryPointResult {
+	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+	output := QueryPointResult{valueType: QueryResultValueType(result._type)}
 
 	switch output.valueType {
 	case C.qdb_query_result_double:
-		output.value = float64(C.get_double_from_payload(r))
+		output.value = float64(C.get_double_from_payload(result))
 	case C.qdb_query_result_blob:
-		output.value = getBlobUnsafe(r)
+		output.value = getBlobUnsafe(result)
 	case C.qdb_query_result_int64:
-		output.value = int64(C.get_int64_from_payload(r))
+		output.value = int64(C.get_int64_from_payload(result))
 	case C.qdb_query_result_timestamp:
-		output.value = C.get_timestamp_from_payload(r).toStructG()
+		output.value = C.get_timestamp_from_payload(result).toStructG()
 	case C.qdb_query_result_count:
-		output.value = int64(C.get_count_from_payload(r))
+		output.value = int64(C.get_count_from_payload(result))
 	}
 	return output
 }
 
 // GetDouble : retrieve a double from the interface
-func (r *C.qdb_point_result_t) GetDouble() (float64, error) {
-	if r._type == C.qdb_query_result_double {
-		return float64(C.get_double_from_payload(r)), nil
+func (r *QueryPoint) GetDouble() (float64, error) {
+	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+	if result._type == C.qdb_query_result_double {
+		return float64(C.get_double_from_payload(result)), nil
 	}
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
 // GetBlob : retrieve a double from the interface
-func (r *C.qdb_point_result_t) GetBlob() ([]byte, error) {
+func (r *QueryPoint) GetBlob() ([]byte, error) {
 	if r._type == C.qdb_query_result_blob {
-		return getBlobUnsafe(r), nil
+		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+		return getBlobUnsafe(result), nil
 	}
 	return []byte{}, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
 // GetInt64 : retrieve an int64 from the interface
-func (r *C.qdb_point_result_t) GetInt64() (int64, error) {
-	if r._type == C.qdb_query_result_int64 {
-		return int64(C.get_int64_from_payload(r)), nil
+func (r *QueryPoint) GetInt64() (int64, error) {
+	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+	if result._type == C.qdb_query_result_int64 {
+		return int64(C.get_int64_from_payload(result)), nil
 	}
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
 // GetTimestamp : retrieve a timestamp from the interface
-func (r *C.qdb_point_result_t) GetTimestamp() (time.Time, error) {
-	if r._type == C.qdb_query_result_timestamp {
-		return C.get_timestamp_from_payload(r).toStructG(), nil
+func (r *QueryPoint) GetTimestamp() (time.Time, error) {
+	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+	if result._type == C.qdb_query_result_timestamp {
+		return C.get_timestamp_from_payload(result).toStructG(), nil
 	}
 	return time.Unix(-1, -1), makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
 // GetCount : retrieve the count from the interface
-func (r *C.qdb_point_result_t) GetCount() (int64, error) {
-	if r._type == C.qdb_query_result_count {
-		return int64(C.get_count_from_payload(r)), nil
+func (r *QueryPoint) GetCount() (int64, error) {
+	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+	if result._type == C.qdb_query_result_count {
+		return int64(C.get_count_from_payload(result)), nil
 	}
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
+type QueryPoint C.qdb_point_result_t
+
 // QueryRow : query result table row
-type QueryRow []C.qdb_point_result_t
+type QueryRow []QueryPoint
 
 // QueryRows : query result table rows
-type QueryRows []*C.qdb_point_result_t
+type QueryRows []*QueryPoint
 
 // QueryTable : query result table
 type QueryTable C.qdb_table_result_t
 
 // QueryTables : query result tables
-type QueryTables []C.qdb_table_result_t
+type QueryTables []QueryTable
 
 // Columns : create columns from a row
-func (r C.qdb_table_result_t) Columns(row *C.qdb_point_result_t) QueryRow {
+func (r QueryTable) Columns(row *QueryPoint) QueryRow {
 	count := int64(r.columns_count)
-	return (*[1 << 30]C.qdb_point_result_t)(unsafe.Pointer(row))[:count:count]
+	return (*[1 << 30]QueryPoint)(unsafe.Pointer(row))[:count:count]
 }
 
 // Rows : get rows of a query table result
-func (r C.qdb_table_result_t) Rows() QueryRows {
+func (r QueryTable) Rows() QueryRows {
 	count := int64(r.rows_count)
-	return (*[1 << 30]*C.qdb_point_result_t)(unsafe.Pointer(r.rows))[:count:count]
+	return (*[1 << 30]*QueryPoint)(unsafe.Pointer(r.rows))[:count:count]
 }
 
 // Name : get table name
-func (r C.qdb_table_result_t) Name() string {
+func (r QueryTable) Name() string {
 	return C.GoString(r.table_name.data)
 }
 
 // ColumnsNames : get the number of columns names of each row
-func (r C.qdb_table_result_t) ColumnsNames() []string {
+func (r QueryTable) ColumnsNames() []string {
 	count := int64(r.columns_count)
 	result := make([]string, count)
 	rawNames := (*[1 << 30]C.qdb_string_t)(unsafe.Pointer(r.columns_names))[:count:count]
@@ -177,7 +185,7 @@ func (r C.qdb_table_result_t) ColumnsNames() []string {
 }
 
 // ColumnsCount : get the number of columns of each row
-func (r C.qdb_table_result_t) ColumnsCount() int64 {
+func (r QueryTable) ColumnsCount() int64 {
 	return int64(r.columns_count)
 }
 
@@ -189,7 +197,7 @@ type QueryResult struct {
 // Tables : get tables of a query result
 func (r QueryResult) Tables() QueryTables {
 	count := int64(r.result.tables_count)
-	tables := (*[1 << 30]C.qdb_table_result_t)(unsafe.Pointer(r.result.tables))[:count:count]
+	tables := (*[1 << 30]QueryTable)(unsafe.Pointer(r.result.tables))[:count:count]
 	return tables
 }
 
