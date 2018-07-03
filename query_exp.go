@@ -70,8 +70,7 @@ func (r QueryPointResult) Value() interface{} {
 	return r.value
 }
 
-func getBlobUnsafe(r *QueryPoint) []byte {
-	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+func getBlobUnsafe(result *C.qdb_point_result_t) []byte {
 	var content unsafe.Pointer
 	var contentLength C.qdb_size_t
 	C.get_blob_from_payload(result, &content, &contentLength)
@@ -87,7 +86,7 @@ func (r *QueryPoint) Get() QueryPointResult {
 	case C.qdb_query_result_double:
 		output.value = float64(C.get_double_from_payload(result))
 	case C.qdb_query_result_blob:
-		output.value = getBlobUnsafe(r)
+		output.value = getBlobUnsafe(result)
 	case C.qdb_query_result_int64:
 		output.value = int64(C.get_int64_from_payload(result))
 	case C.qdb_query_result_timestamp:
@@ -110,7 +109,8 @@ func (r *QueryPoint) GetDouble() (float64, error) {
 // GetBlob : retrieve a double from the interface
 func (r *QueryPoint) GetBlob() ([]byte, error) {
 	if r._type == C.qdb_query_result_blob {
-		return getBlobUnsafe(r), nil
+		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+		return getBlobUnsafe(result), nil
 	}
 	return []byte{}, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
