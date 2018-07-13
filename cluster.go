@@ -6,6 +6,7 @@ package qdb
 */
 import "C"
 import (
+	"fmt"
 	"time"
 	"unsafe"
 )
@@ -57,6 +58,11 @@ func (c Cluster) WaitForStabilization(timeout time.Duration) error {
 type Endpoint struct {
 	Address string
 	Port    int64
+}
+
+// URI : Returns a formatted URI of the endpoint
+func (t Endpoint) URI() string {
+	return fmt.Sprintf("%s:%d", t.Address, t.Port)
 }
 
 // TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
