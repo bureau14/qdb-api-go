@@ -2,9 +2,13 @@ package qdb
 
 /*
 	#include <qdb/client.h>
+	#include <stdlib.h>
 */
 import "C"
-import "time"
+import (
+	"time"
+	"unsafe"
+)
 
 // Cluster : An object permitting calls to a cluster
 type Cluster struct {
@@ -47,4 +51,67 @@ func (c Cluster) TrimAll() error {
 func (c Cluster) WaitForStabilization(timeout time.Duration) error {
 	err := C.qdb_wait_for_stabilization(c.handle, C.int(timeout/time.Millisecond))
 	return makeErrorOrNil(err)
+}
+
+// Endpoint : A structure representing a qdb url endpoint
+type Endpoint struct {
+	Address string
+	Port    int64
+}
+
+// TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
+// solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
+func (t Endpoint) toStructC() C.qdb_remote_node_t {
+	address := convertToCharStar(string(t.Address))
+	port := C.ushort(t.Port)
+	// The [6]byte is some sort of padding necessary for Go : struct(char *, short, 6 byte of padding)
+	return C.qdb_remote_node_t{address, port, [6]byte{}}
+}
+
+func (t C.qdb_remote_node_t) toStructG() Endpoint {
+	return Endpoint{C.GoString(t.address), int64(t.port)}
+}
+
+func endpointArrayToC(edpts ...Endpoint) *C.qdb_remote_node_t {
+	if len(edpts) == 0 {
+		return nil
+	}
+	endpoints := make([]C.qdb_remote_node_t, len(edpts))
+	for idx, pt := range edpts {
+		endpoints[idx] = pt.toStructC()
+	}
+	return &endpoints[0]
+}
+
+func releaseEndpointArray(endpoints *C.qdb_remote_node_t, length int) {
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_remote_node_t)(unsafe.Pointer(endpoints))[:length:length]
+		for _, s := range tmpslice {
+			C.free(unsafe.Pointer(s.address))
+		}
+	}
+}
+
+func endpointArrayToGo(endpoints *C.qdb_remote_node_t, endpointsCount C.qdb_size_t) []Endpoint {
+	length := int(endpointsCount)
+	output := make([]Endpoint, length)
+	if length > 0 {
+		tmpslice := (*[1 << 30]C.qdb_remote_node_t)(unsafe.Pointer(endpoints))[:length:length]
+		for i, s := range tmpslice {
+			output[i] = s.toStructG()
+		}
+	}
+	return output
+}
+
+// Endpoints : Retrieve all endpoints accessible to this handle.
+func (c Cluster) Endpoints() ([]Endpoint, error) {
+	var endpoints *C.qdb_remote_node_t
+	var endpointsCount C.qdb_size_t
+	err := C.qdb_cluster_endpoints(c.handle, &endpoints, &endpointsCount)
+	if err == 0 {
+		defer c.Release(unsafe.Pointer(endpoints))
+		return endpointArrayToGo(endpoints, endpointsCount), nil
+	}
+	return nil, makeErrorOrNil(err)
 }
