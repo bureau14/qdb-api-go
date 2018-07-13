@@ -71,9 +71,13 @@ var _ = Describe("Tests", func() {
 		})
 		Context("Created", func() {
 			const (
-				count int64 = 8
-				start int64 = 0
-				end   int64 = count - 1
+				count          int64 = 8
+				start          int64 = 0
+				end            int64 = count - 1
+				blobIndex      int64 = 0
+				doubleIndex    int64 = 1
+				int64Index     int64 = 2
+				timestampIndex int64 = 3
 			)
 			var (
 				timestamps      []time.Time
@@ -760,9 +764,10 @@ var _ = Describe("Tests", func() {
 				Context("Initialized", func() {
 					var (
 						tsBatch *TsBatch
+						err     error
 					)
 					JustBeforeEach(func() {
-						var err error
+						err = nil
 						tsBatch, err = handle.TsBatch(batchColumnsInfos...)
 						Expect(err).ToNot(HaveOccurred())
 					})
@@ -777,70 +782,56 @@ var _ = Describe("Tests", func() {
 							timestampValue time.Time = time.Now()
 						)
 						It("should append all columns", func() {
-							err := tsBatch.RowSetBlob(blobValue)
+							err = tsBatch.NextRow(timestampValue)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSetDouble(doubleValue)
+							err = tsBatch.RowSetBlob(blobIndex, blobValue)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSetInt64(int64Value)
+							err = tsBatch.RowSetDouble(doubleIndex, doubleValue)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSetTimestamp(timestampValue)
+							err = tsBatch.RowSetInt64(int64Index, int64Value)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowFinalize(timestampValue)
+							err = tsBatch.RowSetTimestamp(timestampIndex, timestampValue)
 							Expect(err).ToNot(HaveOccurred())
 						})
 						It("should append columns and ignore fields", func() {
-							err := tsBatch.RowSetBlob(blobValue)
+							err = tsBatch.NextRow(timestampValue)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSetDouble(doubleValue)
+							err = tsBatch.RowSetBlob(blobIndex, blobValue)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSetInt64(int64Value)
+							err = tsBatch.RowSetDouble(doubleIndex, doubleValue)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSkipColumn()
-							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowFinalize(timestampValue)
+							err = tsBatch.RowSetTimestamp(timestampIndex, timestampValue)
 							Expect(err).ToNot(HaveOccurred())
 						})
 						It("should append columns on part of timeseries", func() {
-							err := tsBatch.RowSetBlob(blobValue)
+							err = tsBatch.NextRow(timestampValue)
 							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowFinalize(timestampValue)
-							Expect(err).ToNot(HaveOccurred())
-						})
-						It("should fail to append columns - too much values", func() {
-							err := tsBatch.RowSetBlob(blobValue)
-							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSetDouble(doubleValue)
-							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSetInt64(int64Value)
-							Expect(err).ToNot(HaveOccurred())
-							err = tsBatch.RowSkipColumn()
-							Expect(err).ToNot(HaveOccurred())
-
-							err = tsBatch.RowSetInt64(int64Value)
-							Expect(err).To(HaveOccurred())
-
-							err = tsBatch.RowFinalize(timestampValue)
+							err = tsBatch.RowSetBlob(blobIndex, blobValue)
 							Expect(err).ToNot(HaveOccurred())
 						})
 						It("should fail to append columns - wrong column type", func() {
-							err := tsBatch.RowSetInt64(int64Value)
+							err := tsBatch.RowSetInt64(0, int64Value)
+							Expect(err).To(HaveOccurred())
+						})
+						It("should fail to append columns - index past the end", func() {
+							err = tsBatch.RowSetInt64(timestampIndex+1, int64Value)
 							Expect(err).To(HaveOccurred())
 						})
 						Context("Push", func() {
 							JustBeforeEach(func() {
-								err := tsBatch.RowSetBlob(blobValue)
+								err = tsBatch.NextRow(timestampValue)
 								Expect(err).ToNot(HaveOccurred())
-								err = tsBatch.RowSetDouble(doubleValue)
+								err := tsBatch.RowSetBlob(blobIndex, blobValue)
 								Expect(err).ToNot(HaveOccurred())
-								err = tsBatch.RowSetInt64(int64Value)
+								err = tsBatch.RowSetDouble(doubleIndex, doubleValue)
 								Expect(err).ToNot(HaveOccurred())
-								err = tsBatch.RowSetTimestamp(timestampValue)
+								err = tsBatch.RowSetInt64(int64Index, int64Value)
 								Expect(err).ToNot(HaveOccurred())
-								err = tsBatch.RowFinalize(timestampValue)
+								err = tsBatch.RowSetTimestamp(timestampIndex, timestampValue)
 								Expect(err).ToNot(HaveOccurred())
 							})
 							It("should push", func() {
-								err := tsBatch.Push()
+								err = tsBatch.Push()
 								Expect(err).ToNot(HaveOccurred())
 
 								rg := NewRange(timestampValue, timestampValue.Add(5*time.Nanosecond))
