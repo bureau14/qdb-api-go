@@ -465,10 +465,10 @@ func (t *TsBulk) Release() {
 	t.h.Release(unsafe.Pointer(t.table))
 }
 
-// NextRow : Start a new row
-func (t *TsBatch) NextRow(timestamp time.Time) error {
+// StartRow : Start a new row
+func (t *TsBatch) StartRow(timestamp time.Time) error {
 	cTimestamp := toQdbTimespec(timestamp)
-	return makeErrorOrNil(C.qdb_ts_batch_next_row(t.table, &cTimestamp))
+	return makeErrorOrNil(C.qdb_ts_batch_start_row(t.table, &cTimestamp))
 }
 
 // RowSetBlob : Set blob at specified index in current row

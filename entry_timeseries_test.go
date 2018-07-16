@@ -782,7 +782,7 @@ var _ = Describe("Tests", func() {
 							timestampValue time.Time = time.Now()
 						)
 						It("should append all columns", func() {
-							err = tsBatch.NextRow(timestampValue)
+							err = tsBatch.StartRow(timestampValue)
 							Expect(err).ToNot(HaveOccurred())
 							err = tsBatch.RowSetBlob(blobIndex, blobValue)
 							Expect(err).ToNot(HaveOccurred())
@@ -794,7 +794,7 @@ var _ = Describe("Tests", func() {
 							Expect(err).ToNot(HaveOccurred())
 						})
 						It("should append columns and ignore fields", func() {
-							err = tsBatch.NextRow(timestampValue)
+							err = tsBatch.StartRow(timestampValue)
 							Expect(err).ToNot(HaveOccurred())
 							err = tsBatch.RowSetBlob(blobIndex, blobValue)
 							Expect(err).ToNot(HaveOccurred())
@@ -804,7 +804,7 @@ var _ = Describe("Tests", func() {
 							Expect(err).ToNot(HaveOccurred())
 						})
 						It("should append columns on part of timeseries", func() {
-							err = tsBatch.NextRow(timestampValue)
+							err = tsBatch.StartRow(timestampValue)
 							Expect(err).ToNot(HaveOccurred())
 							err = tsBatch.RowSetBlob(blobIndex, blobValue)
 							Expect(err).ToNot(HaveOccurred())
@@ -819,7 +819,7 @@ var _ = Describe("Tests", func() {
 						})
 						Context("Push", func() {
 							JustBeforeEach(func() {
-								err = tsBatch.NextRow(timestampValue)
+								err = tsBatch.StartRow(timestampValue)
 								Expect(err).ToNot(HaveOccurred())
 								err := tsBatch.RowSetBlob(blobIndex, blobValue)
 								Expect(err).ToNot(HaveOccurred())
