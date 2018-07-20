@@ -513,7 +513,12 @@ func ExampleTimeseriesEntry_Bulk() {
 
 	bulk, err := timeseries.Bulk(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
 	if err != nil {
-		// handle error
+		return // handle error
+	}
+	// Don't forget to release
+	defer bulk.Release()
+	if err != nil {
+		return // handle error
 	}
 	fmt.Println("RowCount:", bulk.RowCount())
 	// Output:
@@ -525,12 +530,18 @@ func ExampleTsBulk_Push() {
 	defer h.Close()
 
 	bulk, err := timeseries.Bulk(NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble))
+	if err != nil {
+		// handle error
+		return
+	}
+	// Don't forget to release
+	defer bulk.Release()
+
 	bulk.Row(time.Now()).Blob([]byte("content")).Double(3.2).Append()
 	bulk.Row(time.Now()).Blob([]byte("content 2")).Double(4.8).Append()
 	rowCount, err := bulk.Push()
 	if err != nil {
 		// handle error
-		panic(err)
 	}
 	fmt.Println("RowCount:", rowCount)
 	// Output:
