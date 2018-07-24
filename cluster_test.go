@@ -40,6 +40,7 @@ var _ = Describe("Tests", func() {
 		})
 		AfterEach(func() {
 			blob.Remove()
+			blobSecured.Remove()
 		})
 		Context("PurgeAll", func() {
 			It("should remove all contents", func() {
