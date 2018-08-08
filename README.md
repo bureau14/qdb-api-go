@@ -106,8 +106,10 @@ This could prove useful if you need to manage the flow of creation of your handl
     err = handle.SetEncryption(qdb.EncryptAES)
 
     // add security if enabled server side
-    err = handle.AddClusterPublicKey("/path/to/cluster_public.key")
-    err = handle.AddUserCredentials("/path/to/user_private.key")
+    clusterKey, err := ClusterKeyFromFile("/path/to/cluster_public.key")
+    err = handle.AddClusterPublicKey(clusterKey)
+    user, secret, err := ClusterKeyFromFile("/path/to/cluster_public.key")
+    err = handle.AddUserCredentials(user, secret)
 
     // connect
     err = handle.Connect("qdb://127.0.0.1:2836)

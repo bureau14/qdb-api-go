@@ -93,27 +93,29 @@ var _ = Describe("Tests", func() {
 				testHandle.Close()
 			})
 			It("should not add cluster public key with invalid filename", func() {
-				err := testHandle.AddClusterPublicKey("asd")
+				_, err := ClusterKeyFromFile("asd")
 				Expect(err).To(HaveOccurred())
 			})
 			It("should add cluster public key with valid file", func() {
 				ioutil.WriteFile("test.key", []byte("PPm6ZeBCVlDTR9xtYasXd31s8rXnQpb+CNTMohOlQqBw="), 0777)
-				err := testHandle.AddClusterPublicKey("test.key")
+				_, err := ClusterKeyFromFile("test.key")
 				Expect(err).ToNot(HaveOccurred())
 				os.Remove("test.key")
 			})
 			It("should not add credentials with invalid filename", func() {
-				err := testHandle.AddUserCredentials("asd")
+				_, _, err := UserCredentialFromFile("asd")
 				Expect(err).To(HaveOccurred())
 			})
 			It("should not add credentials with invalid file", func() {
-				err := testHandle.AddUserCredentials("error.go")
+				_, _, err := UserCredentialFromFile("error.go")
 				Expect(err).To(HaveOccurred())
 			})
 			It("should add credentials with valid file", func() {
 				ioutil.WriteFile("test.key", []byte("{\"username\": \"vianney\",\"secret_key\": \"SeVUamemy6GWb8npfh9lum1zhdAu76W+l0PAW03G5yl4=\"}"), 0777)
-				err := testHandle.AddUserCredentials("test.key")
+				user, secret, err := UserCredentialFromFile("test.key")
 				Expect(err).ToNot(HaveOccurred())
+				Expect(string("vianney")).To(Equal(user))
+				Expect(string("SeVUamemy6GWb8npfh9lum1zhdAu76W+l0PAW03G5yl4=")).To(Equal(secret))
 				os.Remove("test.key")
 			})
 			It("should not connect without address", func() {

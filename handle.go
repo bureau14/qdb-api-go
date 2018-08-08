@@ -96,32 +96,42 @@ type jSONCredentialConfig struct {
 	SecretKey string `json:"secret_key"`
 }
 
-// AddUserCredentials : add a username and key from a user config file.
-func (h HandleType) AddUserCredentials(userCredentialFile string) error {
+// UserCredentialFromFile : retrieve user credentials from a file
+func UserCredentialFromFile(userCredentialFile string) (string, string, error) {
 	fileConfig, err := ioutil.ReadFile(userCredentialFile)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	var jsonConfig jSONCredentialConfig
 	err = json.Unmarshal(fileConfig, &jsonConfig)
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	username := convertToCharStar(jsonConfig.Username)
+	return jsonConfig.Username, jsonConfig.SecretKey, nil
+}
+
+// ClusterKeyFromFile : retrieve cluster key from a file
+func ClusterKeyFromFile(clusterPublicKeyFile string) (string, error) {
+	clusterPublicKey, err := ioutil.ReadFile(clusterPublicKeyFile)
+	if err != nil {
+		return "", err
+	}
+	return string(clusterPublicKey), nil
+}
+
+// AddUserCredentials : add a username and key from a user name and secret.
+func (h HandleType) AddUserCredentials(name, secret string) error {
+	username := convertToCharStar(name)
 	defer releaseCharStar(username)
-	secretKey := convertToCharStar(jsonConfig.SecretKey)
-	defer releaseCharStar(secretKey)
-	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, secretKey)
+	userSecret := convertToCharStar(secret)
+	defer releaseCharStar(userSecret)
+	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, userSecret)
 	return makeErrorOrNil(qdbErr)
 }
 
 // AddClusterPublicKey : add the cluster public key from a cluster config file.
-func (h HandleType) AddClusterPublicKey(clusterPublicKeyFile string) error {
-	fileConfig, err := ioutil.ReadFile(clusterPublicKeyFile)
-	if err != nil {
-		return err
-	}
-	clusterPublicKey := convertToCharStar(string(fileConfig))
+func (h HandleType) AddClusterPublicKey(secret string) error {
+	clusterPublicKey := convertToCharStar(secret)
 	defer releaseCharStar(clusterPublicKey)
 	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
 	return makeErrorOrNil(qdbErr)
@@ -275,11 +285,19 @@ func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile str
 	if err != nil {
 		return h, err
 	}
-	err = h.AddClusterPublicKey(clusterPublicKeyFile)
+	clusterKey, err := ClusterKeyFromFile(clusterPublicKeyFile)
 	if err != nil {
 		return h, err
 	}
-	err = h.AddUserCredentials(userCredentialFile)
+	err = h.AddClusterPublicKey(clusterKey)
+	if err != nil {
+		return h, err
+	}
+	user, secret, err := UserCredentialFromFile(userCredentialFile)
+	if err != nil {
+		return h, err
+	}
+	err = h.AddUserCredentials(user, secret)
 	if err != nil {
 		return h, err
 	}
