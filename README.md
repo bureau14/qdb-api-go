@@ -16,6 +16,7 @@ Go API for [quasardb](https://www.quasardb.net/).
 1. [Go compiler and tools](https://golang.org/)
 1. [quasardb daemon](https://www.quasardb.net/download/index.html)
 1. [quasardb C API](https://www.quasardb.net/download/index.html) version corresponding to the OS you use
+1. The version of the quasardb C API *must match* the current git branch, the master branch corresponds to the nightly C API
 
 ### Build instructions:
 1. `go get -d github.com/bureau14/qdb-api-go`
