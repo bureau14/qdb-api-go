@@ -6,6 +6,7 @@ package qdb
 */
 import "C"
 import (
+	"math"
 	"time"
 	"unsafe"
 )
@@ -44,7 +45,7 @@ func NeverExpires() time.Time {
 
 // PreserveExpiration : return a time value corresponding to quasardb preserve expiration value
 func PreserveExpiration() time.Time {
-	return time.Unix(0, C.qdb_preserve_expiration)
+	return time.Unix(math.MaxInt64, math.MaxInt64)
 }
 
 // ExpiresAt : Sets the absolute expiration time of an entry.
