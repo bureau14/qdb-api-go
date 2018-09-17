@@ -44,7 +44,7 @@ func NeverExpires() time.Time {
 
 // PreserveExpiration : return a time value corresponding to quasardb preserve expiration value
 func PreserveExpiration() time.Time {
-	return time.Unix(0, -1)
+	return time.Unix(0, C.qdb_preserve_expiration)
 }
 
 // ExpiresAt : Sets the absolute expiration time of an entry.
