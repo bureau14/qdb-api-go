@@ -203,7 +203,11 @@ func (r QueryResult) Tables() QueryTables {
 
 // TablesCount : get the number of tables of a query result
 func (r QueryResult) TablesCount() int64 {
-	return int64(r.result.tables_count)
+	result := r.result
+	if result != nil {
+		return int64(result.tables_count)
+	}
+	return int64(0)
 }
 
 // ScannedRows : number of rows scanned
