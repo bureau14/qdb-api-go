@@ -149,6 +149,26 @@ var _ = Describe("Tests", func() {
 			Expect(result.ScannedRows()).To(Equal(int64(0)))
 			Expect(result.TablesCount()).To(Equal(int64(0)))
 		})
+		It("create table should return 0 tables", func() {
+			new_alias := generateAlias(16)
+			query := fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)
+			q := handle.QueryExp(query)
+			result, err := q.Execute()
+			defer handle.Release(unsafe.Pointer(result))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.TablesCount()).To(Equal(int64(0)))
+			handle.QueryExp(fmt.Sprintf("drop table %s", new_alias)).Execute()
+		})
+		It("drop table should return 0 tables", func() {
+			new_alias := generateAlias(16)
+			handle.QueryExp(fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)).Execute()
+			query := fmt.Sprintf("drop table %s", new_alias)
+			q := handle.QueryExp(query)
+			result, err := q.Execute()
+			defer handle.Release(unsafe.Pointer(result))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.TablesCount()).To(Equal(int64(0)))
+		})
 		Context("Tricky cases", func() {
 			var (
 				newTimestamps   []time.Time
