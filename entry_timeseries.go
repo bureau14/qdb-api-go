@@ -465,6 +465,15 @@ func (t *TsBulk) Release() {
 	t.h.Release(unsafe.Pointer(t.table))
 }
 
+// ExtraColumns : Appends columns to the current batch table
+func (t *TsBatch) ExtraColumns(cols ...TsBatchColumnInfo) error {
+	columns := tsBtachColumnInfoArrayToC(cols...)
+	defer releaseTsBtachColumnInfoArray(columns, len(cols))
+	columnsCount := C.qdb_size_t(len(cols))
+	err := C.qdb_ts_batch_table_extra_columns(t.table, columns, columnsCount)
+	return makeErrorOrNil(err)
+}
+
 // StartRow : Start a new row
 func (t *TsBatch) StartRow(timestamp time.Time) error {
 	cTimestamp := toQdbTimespec(timestamp)
