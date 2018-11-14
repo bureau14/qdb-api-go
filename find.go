@@ -12,12 +12,12 @@ import (
 	"unsafe"
 )
 
-// Query : a building type to execute a query
+// Find : a building type to execute a query
 // Retrieves all entries’ aliases that match the specified query.
 // For the complete grammar, please refer to the documentation.
 // Queries are transactional.
 // The complexity of this function is dependent on the complexity of the query.
-type Query struct {
+type Find struct {
 	HandleType
 	tagsExcluded []string
 	tags         []string
@@ -25,24 +25,24 @@ type Query struct {
 }
 
 // Tag : Adds a tag to include into the current query results
-func (q *Query) Tag(t string) *Query {
+func (q *Find) Tag(t string) *Find {
 	q.tags = append(q.tags, t)
 	return q
 }
 
 // NotTag : Adds a tag to exclude from the current query results
-func (q *Query) NotTag(t string) *Query {
+func (q *Find) NotTag(t string) *Find {
 	q.tagsExcluded = append(q.tagsExcluded, t)
 	return q
 }
 
 // Type : Restrict the query results to a particular type
-func (q *Query) Type(t string) *Query {
+func (q *Find) Type(t string) *Find {
 	q.types = append(q.types, t)
 	return q
 }
 
-func (q Query) buildQuery() (string, error) {
+func (q Find) buildQuery() (string, error) {
 	var query bytes.Buffer
 	query.WriteString("find(")
 	for idx, t := range q.tags {
@@ -68,7 +68,7 @@ func (q Query) buildQuery() (string, error) {
 }
 
 // Execute : Execute the current query
-func (q Query) Execute() ([]string, error) {
+func (q Find) Execute() ([]string, error) {
 	query, err := q.buildQuery()
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (q Query) Execute() ([]string, error) {
 }
 
 // ExecuteString : Execute a string query immediately
-func (q Query) ExecuteString(query string) ([]string, error) {
+func (q Find) ExecuteString(query string) ([]string, error) {
 	cQuery := convertToCharStar(query)
 	defer releaseCharStar(cQuery)
 	var aliasCount C.size_t

@@ -216,14 +216,14 @@ func (r QueryResult) ScannedRows() int64 {
 	return int64(r.result.scanned_rows_count)
 }
 
-// QueryExp : Experimental query
-type QueryExp struct {
+// Query : query object
+type Query struct {
 	HandleType
 	query string
 }
 
 // Execute : execute a query
-func (q QueryExp) Execute() (*QueryResult, error) {
+func (q Query) Execute() (*QueryResult, error) {
 	query := convertToCharStar(q.query)
 	defer releaseCharStar(query)
 	var r QueryResult

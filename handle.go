@@ -348,9 +348,9 @@ func (h HandleType) Node(uri string) *Node {
 	return &Node{h, uri}
 }
 
-// Query : Create a query object to execute
-func (h HandleType) Query() *Query {
-	return &Query{h, []string{}, []string{}, []string{}}
+// Find : Create a query object to execute
+func (h HandleType) Find() *Find {
+	return &Find{h, []string{}, []string{}, []string{}}
 }
 
 // Cluster : Create a cluster object to execute commands on a cluster
@@ -358,9 +358,9 @@ func (h HandleType) Cluster() *Cluster {
 	return &Cluster{h}
 }
 
-// QueryExp : Create an experimental query object to execute
-func (h HandleType) QueryExp(query string) *QueryExp {
-	return &QueryExp{h, query}
+// Query : Create an query object to execute
+func (h HandleType) Query(query string) *Query {
+	return &Query{h, query}
 }
 
 // TsBatch : create a batch object for the specified columns

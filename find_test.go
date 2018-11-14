@@ -51,67 +51,67 @@ var _ = Describe("Tests", func() {
 		aliases = []string{}
 	})
 	// :: Entry tests ::
-	Context("Query", func() {
+	Context("Find", func() {
 		It("should get all aliases", func() {
-			obtainedAliases, err := handle.Query().Tag("all").Execute()
+			obtainedAliases, err := handle.Find().Tag("all").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(3))
 			Expect(obtainedAliases).To(ConsistOf(aliases))
 		})
 		It("should get both first, and third aliases", func() {
-			obtainedAliases, err := handle.Query().Tag("all").NotTag("second").Execute()
+			obtainedAliases, err := handle.Find().Tag("all").NotTag("second").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(2))
 			Expect(obtainedAliases).To(ConsistOf([]string{blob1.Alias(), integer.Alias()}))
 		})
 		It("should not get the not \"second\" tags", func() {
-			obtainedAliases, err := handle.Query().NotTag("second").Execute()
+			obtainedAliases, err := handle.Find().NotTag("second").Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(0))
 			Expect(obtainedAliases).To(ConsistOf([]string(nil)))
 		})
 		It("should get the third alias by getting both \"all\" and \"third\"", func() {
-			obtainedAliases, err := handle.Query().Tag("all").Tag("third").Execute()
+			obtainedAliases, err := handle.Find().Tag("all").Tag("third").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(1))
 			Expect(obtainedAliases).To(ConsistOf([]string{integer.Alias()}))
 		})
 		It("should get no results because tags are not compatible", func() {
-			obtainedAliases, err := handle.Query().Tag("first").Tag("third").Execute()
+			obtainedAliases, err := handle.Find().Tag("first").Tag("third").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(0))
 			Expect(obtainedAliases).To(ConsistOf([]string{}))
 		})
 		It("should get both blob elements", func() {
-			obtainedAliases, err := handle.Query().Tag("all").Type("blob").Execute()
+			obtainedAliases, err := handle.Find().Tag("all").Type("blob").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(2))
 			Expect(obtainedAliases).To(ConsistOf([]string{blob1.Alias(), blob2.Alias()}))
 		})
 		It("should not be able to simply call with a type", func() {
-			obtainedAliases, err := handle.Query().Type("blob").Execute()
+			obtainedAliases, err := handle.Find().Type("blob").Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(obtainedAliases).To(Equal([]string(nil)))
 		})
 		It("should get integer element only", func() {
-			obtainedAliases, err := handle.Query().Tag("all").Type("int").Execute()
+			obtainedAliases, err := handle.Find().Tag("all").Type("int").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(1))
 			Expect(obtainedAliases).To(ConsistOf([]string{integer.Alias()}))
 		})
 		It("should not be able to retrieve anything", func() {
-			obtainedAliases, err := handle.Query().Tag("dsas").Execute()
+			obtainedAliases, err := handle.Find().Tag("dsas").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(0))
 			Expect(obtainedAliases).To(Equal([]string{}))
 		})
 		It("should not be able to use a bad type", func() {
-			obtainedAliases, err := handle.Query().Tag("all").Type("dsas").Execute()
+			obtainedAliases, err := handle.Find().Tag("all").Type("dsas").Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(obtainedAliases).To(Equal([]string(nil)))
 		})
 		It("should be able to execute a string quert with valid input", func() {
-			obtainedAliases, err := handle.Query().ExecuteString("find(tag=\"all\")")
+			obtainedAliases, err := handle.Find().ExecuteString("find(tag=\"all\")")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(3))
 			Expect(obtainedAliases).To(ConsistOf(aliases))

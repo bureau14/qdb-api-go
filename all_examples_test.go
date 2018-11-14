@@ -591,22 +591,22 @@ func ExampleQuery() {
 	integer.AttachTag("second")
 
 	var obtainedAliases []string
-	obtainedAliases, _ = h.Query().Tag("all").Execute()
+	obtainedAliases, _ = h.Find().Tag("all").Execute()
 	fmt.Println("Get all aliases:", obtainedAliases)
 
-	obtainedAliases, _ = h.Query().Tag("all").NotTag("second").Execute()
+	obtainedAliases, _ = h.Find().Tag("all").NotTag("second").Execute()
 	fmt.Println("Get only first alias:", obtainedAliases)
 
-	obtainedAliases, _ = h.Query().Tag("all").Type("int").Execute()
+	obtainedAliases, _ = h.Find().Tag("all").Type("int").Execute()
 	fmt.Println("Get only integer alias:", obtainedAliases)
 
-	obtainedAliases, _ = h.Query().Tag("adsda").Execute()
+	obtainedAliases, _ = h.Find().Tag("adsda").Execute()
 	fmt.Println("Get no aliases:", obtainedAliases)
 
-	_, err := h.Query().NotTag("second").Execute()
+	_, err := h.Find().NotTag("second").Execute()
 	fmt.Println("Error:", err)
 
-	_, err = h.Query().Type("int").Execute()
+	_, err = h.Find().Type("int").Execute()
 	fmt.Println("Error:", err)
 	// Output:
 	// Get all aliases: [alias_blob alias_integer]

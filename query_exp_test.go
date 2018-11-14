@@ -68,10 +68,10 @@ var _ = Describe("Tests", func() {
 	AfterEach(func() {
 		timeseries.Remove()
 	})
-	Context("QueryExp", func() {
+	Context("Query", func() {
 		It("should work", func() {
 			query := fmt.Sprintf("select * from %s in range(1970, +10d)", alias)
-			q := handle.QueryExp(query)
+			q := handle.Query(query)
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
@@ -122,13 +122,13 @@ var _ = Describe("Tests", func() {
 		})
 		It("should not work to do a wrong query", func() {
 			query := fmt.Sprintf("select")
-			q := handle.QueryExp(query)
+			q := handle.Query(query)
 			_, err := q.Execute()
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not work to do get the wrong type for a value", func() {
 			query := fmt.Sprintf("select * from %s in range(1970, +10d)", alias)
-			q := handle.QueryExp(query)
+			q := handle.Query(query)
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
@@ -142,7 +142,7 @@ var _ = Describe("Tests", func() {
 		})
 		It("should get no results", func() {
 			query := fmt.Sprintf("select * from %s in range(1971, +10d)", alias)
-			q := handle.QueryExp(query)
+			q := handle.Query(query)
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
@@ -152,18 +152,18 @@ var _ = Describe("Tests", func() {
 		It("create table should return 0 tables", func() {
 			new_alias := generateAlias(16)
 			query := fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)
-			q := handle.QueryExp(query)
+			q := handle.Query(query)
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.TablesCount()).To(Equal(int64(0)))
-			handle.QueryExp(fmt.Sprintf("drop table %s", new_alias)).Execute()
+			handle.Query(fmt.Sprintf("drop table %s", new_alias)).Execute()
 		})
 		It("drop table should return 0 tables", func() {
 			new_alias := generateAlias(16)
-			handle.QueryExp(fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)).Execute()
+			handle.Query(fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)).Execute()
 			query := fmt.Sprintf("drop table %s", new_alias)
-			q := handle.QueryExp(query)
+			q := handle.Query(query)
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
@@ -192,7 +192,7 @@ var _ = Describe("Tests", func() {
 			})
 			It("should have a none value for each column", func() {
 				query := fmt.Sprintf("select * from %s in range(1971, +10d)", alias)
-				q := handle.QueryExp(query)
+				q := handle.Query(query)
 				result, err := q.Execute()
 				defer handle.Release(unsafe.Pointer(result))
 				Expect(err).ToNot(HaveOccurred())

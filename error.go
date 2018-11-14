@@ -61,7 +61,7 @@ type ErrorType C.qdb_error_t
 // ErrAccessDenied : Access is denied.
 // ErrLoginFailed : Login failed.
 // ErrColumnNotFound : Column was not found.
-// ErrQueryTooComplex : Query is too complex.
+// ErrQueryTooComplex : Find is too complex.
 // ErrInvalidCryptoKey : Security key is invalid.
 const (
 	Success                      ErrorType = C.qdb_e_ok
