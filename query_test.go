@@ -146,7 +146,7 @@ var _ = Describe("Tests", func() {
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result.ScannedRows()).To(Equal(int64(0)))
+			Expect(result.ScannedPoints()).To(Equal(int64(0)))
 			Expect(result.TablesCount()).To(Equal(int64(0)))
 		})
 		It("create table should return 0 tables", func() {

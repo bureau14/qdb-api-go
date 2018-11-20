@@ -210,10 +210,10 @@ func (r QueryResult) TablesCount() int64 {
 	return int64(0)
 }
 
-// ScannedRows : number of rows scanned
-//	The actual number of scanned rows may be greater
-func (r QueryResult) ScannedRows() int64 {
-	return int64(r.result.scanned_rows_count)
+// ScannedPoints : number of points scanned
+//	The actual number of scanned points may be greater
+func (r QueryResult) ScannedPoints() int64 {
+	return int64(r.result.scanned_point_count)
 }
 
 // Query : query object
@@ -227,6 +227,6 @@ func (q Query) Execute() (*QueryResult, error) {
 	query := convertToCharStar(q.query)
 	defer releaseCharStar(query)
 	var r QueryResult
-	err := C.qdb_exp_query(q.handle, query, &r.result)
+	err := C.qdb_query(q.handle, query, &r.result)
 	return &r, makeErrorOrNil(err)
 }
