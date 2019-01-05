@@ -38,7 +38,8 @@ func (d db) prepareConfig(s Security, purge Purge) error {
 		return err
 	}
 
-	nodeConfig.Local.Depot.Root = d.data
+	nodeConfig.Local.Depot.RocksDB.Root = d.data
+	nodeConfig.Global.Cluster.StorageEngine = "rocksdb";
 	nodeConfig.Global.Security.Enabled = false
 	nodeConfig.Global.Security.EncryptTraffic = false
 	if s == SecurityEnabled {

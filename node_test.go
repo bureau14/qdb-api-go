@@ -51,7 +51,7 @@ var _ = Describe("Tests", func() {
 			It("should retrieve status with valid uri", func() {
 				config, err := handle.Node("qdb://127.0.0.1:30083").Config()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(config.Local.Depot.Root).To(Equal("db"))
+				Expect(config.Local.Depot.RocksDB.Root).To(Equal("db"))
 			})
 		})
 

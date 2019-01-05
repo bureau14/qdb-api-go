@@ -146,21 +146,37 @@ type NodeStatus struct {
 type NodeConfig struct {
 	Local struct {
 		Depot struct {
-			SyncEveryWrite         bool   `json:"sync_every_write"`
-			Root                   string `json:"root"`
-			HeliumURL              string `json:"helium_url"`
-			MaxBytes               int64  `json:"max_bytes"`
-			StorageWarningLevel    int    `json:"storage_warning_level"`
-			StorageWarningInterval int    `json:"storage_warning_interval"`
-			DisableWal             bool   `json:"disable_wal"`
-			DirectRead             bool   `json:"direct_read"`
-			DirectWrite            bool   `json:"direct_write"`
-			MaxTotalWalSize        int    `json:"max_total_wal_size"`
-			MetadataMemBudget      int    `json:"metadata_mem_budget"`
-			DataCache              int    `json:"data_cache"`
-			Threads                int    `json:"threads"`
-			HiThreads              int    `json:"hi_threads"`
-			MaxOpenFiles           int    `json:"max_open_files"`
+			RocksDB struct {
+				SyncEveryWrite         bool   `json:"sync_every_write"`
+				Root                   string `json:"root"`
+				MaxBytes               int64  `json:"max_bytes"`
+				StorageWarningLevel    int    `json:"storage_warning_level"`
+				StorageWarningInterval int    `json:"storage_warning_interval"`
+				DisableWal             bool   `json:"disable_wal"`
+				DirectRead             bool   `json:"direct_read"`
+				DirectWrite            bool   `json:"direct_write"`
+				MaxTotalWalSize        int    `json:"max_total_wal_size"`
+				MetadataMemBudget      int    `json:"metadata_mem_budget"`
+				DataCache              int    `json:"data_cache"`
+				Threads                int    `json:"threads"`
+				HiThreads              int    `json:"hi_threads"`
+				MaxOpenFiles           int    `json:"max_open_files"`
+			} `json:"rocksdb"`
+			Helium struct {
+				Url                    string `json:"url"`
+				Fanout                 int    `json:"fanout"`
+				GCFanout               int    `json:"gc_fanout"`
+				ReadCache              int64  `json:"read_cache"`
+				WriteCache             int64  `json:"write_cache"`
+				AutoCommitPeriod       int64  `json:"auto_commit_period"`
+				AutoCleanPeriod        int64  `json:"auto_clean_period"`
+			} `json:"helium"`
+			AsyncTS struct {
+                Pipelines              int    `json:"pipelines"`
+                PipelineBufferSize     int64  `json:"pipeline_buffer_size"`
+                PipelineQueueLength    int64  `json:"pipeline_queue_length"`
+                FlushDeadline          int    `json:"flush_deadline"`
+            } `json:"async_ts"`
 		} `json:"depot"`
 		User struct {
 			LicenseFile string `json:"license_file"`
@@ -196,7 +212,7 @@ type NodeConfig struct {
 	} `json:"local"`
 	Global struct {
 		Cluster struct {
-			Transient              bool `json:"transient"`
+			StorageEngine          string `json:"storage_engine"`
 			History                bool `json:"history"`
 			ReplicationFactor      int  `json:"replication_factor"`
 			MaxVersions            int  `json:"max_versions"`

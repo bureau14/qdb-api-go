@@ -558,7 +558,7 @@ func ExampleNode() {
 	fmt.Println("Status - Max sessions:", status.Network.Partitions.MaxSessions)
 
 	config, _ := node.Config()
-	fmt.Println("Config - Root Depot:", config.Local.Depot.Root)
+	fmt.Println("Config - Root Depot:", config.Local.Depot.RocksDB.Root)
 	fmt.Println("Config - Listen On:", config.Local.Network.ListenOn)
 
 	topology, _ := node.Topology()
