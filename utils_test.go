@@ -72,7 +72,7 @@ func checkInput() (string, string, string) {
 }
 
 func generateUser(qdbUserAdd string) error {
-	_, err := exec.Command(qdbUserAdd, "-u", "test", "-p", usersConfigFile, "-s", userPrivateKeyFile).Output()
+	_, err := exec.Command(qdbUserAdd, "-u", "test", "-p", usersConfigFile, "-s", userPrivateKeyFile, "--superuser=true").Output()
 	return err
 }
 
