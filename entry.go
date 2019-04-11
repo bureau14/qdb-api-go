@@ -6,7 +6,6 @@ package qdb
 */
 import "C"
 import (
-	"math"
 	"time"
 	"unsafe"
 )
@@ -37,16 +36,6 @@ func (e Entry) Remove() error {
 }
 
 // ::: EXPIRY RELATED FUNCTIONS :::
-
-// NeverExpires : return a time value corresponding to quasardb never expires value
-func NeverExpires() time.Time {
-	return time.Unix(0, C.qdb_never_expires)
-}
-
-// PreserveExpiration : return a time value corresponding to quasardb preserve expiration value
-func PreserveExpiration() time.Time {
-	return time.Unix(math.MaxInt64, math.MaxInt64)
-}
 
 // ExpiresAt : Sets the absolute expiration time of an entry.
 //	Blobs and integers can have an expiration time and will be automatically removed by the cluster when they expire.
