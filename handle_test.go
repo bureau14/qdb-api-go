@@ -166,6 +166,26 @@ var _ = Describe("Tests", func() {
 					err := testHandle.SetCompression(5)
 					Expect(err).To(HaveOccurred())
 				})
+				It("should be able to call 'set client max in buf size'", func() {
+					err := testHandle.SetClientMaxInBufSize(100000000)
+					Expect(err).ToNot(HaveOccurred())
+				})
+				It("should not be able to call 'set client max in buf size' with a value too small", func() {
+					err := testHandle.SetClientMaxInBufSize(100)
+					Expect(err).To(HaveOccurred())
+				})
+				It("should be able to get client max in buf size", func() {
+					err := testHandle.SetClientMaxInBufSize(100000000)
+					Expect(err).ToNot(HaveOccurred())
+					result, err := testHandle.GetClientMaxInBufSize()
+					Expect(err).To(HaveOccurred())
+					Expect(result).To(Equal(100000000))
+				})
+				It("should be able to get cluster max in buf size", func() {
+					result, err := testHandle.GetClusterMaxInBufSize()
+					Expect(err).To(HaveOccurred())
+					Expect(result).ToNot(Equal(0))
+				})
 				Context("with an entry added", func() {
 					var (
 						alias   = generateAlias(16)

@@ -151,6 +151,27 @@ func (h HandleType) SetCompression(compressionLevel Compression) error {
 	return makeErrorOrNil(err)
 }
 
+// SetClientMaxInBufSize : Set the Sets the maximum incoming buffer size for all network operations of the client. 
+//  Only modify this setting if you expect to receive very large answers from the server.
+func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
+	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
+	return makeErrorOrNil(err)
+}
+
+// GetClientMaxInBufSize : Gets the maximum incoming buffer size for all network operations of the client.
+func (h HandleType) GetClientMaxInBufSize() (uint,error) {
+	var bufSize C.size_t
+	err := C.qdb_option_get_client_max_in_buf_size(h.handle, &bufSize)
+	return uint(bufSize), makeErrorOrNil(err)
+}
+
+// GetClusterMaxInBufSize : Gets the maximum incoming buffer size for all network operations of the client.
+func (h HandleType) GetClusterMaxInBufSize() (uint,error) {
+	var bufSize C.size_t
+	err := C.qdb_option_get_cluster_max_in_buf_size(h.handle, &bufSize)
+	return uint(bufSize), makeErrorOrNil(err)
+}
+
 // Connect : connect a previously opened handle
 //	Binds the client instance to a quasardb cluster and connect to at least one node within.
 //	Quasardb URI are in the form qdb://<address>:<port> where <address> is either an IPv4 or IPv6 (surrounded with square brackets), or a domain name. It is recommended to specify multiple addresses should the designated node be unavailable.
