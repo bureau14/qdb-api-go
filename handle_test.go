@@ -226,6 +226,26 @@ var _ = Describe("Tests", func() {
 						Expect(err).ToNot(HaveOccurred())
 						Expect([]string{}).To(Equal(tags))
 					})
+					It("'prefix get' should return empty results with bad prefix", func() {
+						entries, err := testHandle.PrefixGet("bad", 10)
+						Expect(err).ToNot(HaveOccurred())
+						Expect([]string{}).To(Equal(entries))
+					})
+					It("'prefix get' should return alias value with proper prefix", func() {
+						entries, err := testHandle.PrefixGet(alias[:3], 10)
+						Expect(err).ToNot(HaveOccurred())
+						Expect([]string{alias}).To(Equal(entries))
+					})
+					It("'prefix count' should count no results with bad prefix", func() {
+						count, err := testHandle.PrefixCount("bad")
+						Expect(err).ToNot(HaveOccurred())
+						Expect(uint64(0)).To(Equal(count))
+					})
+					It("'prefix count' should count one entry with proper prefix", func() {
+						count, err := testHandle.PrefixCount(alias[:3])
+						Expect(err).ToNot(HaveOccurred())
+						Expect(uint64(1)).To(Equal(count))
+					})
 				})
 			})
 		})

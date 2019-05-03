@@ -6,6 +6,7 @@ package qdb
 	#include <qdb/node.h>
 	#include <qdb/tag.h>
 	#include <qdb/ts.h>
+	#include <qdb/prefix.h>
 */
 import "C"
 import (
@@ -151,7 +152,7 @@ func (h HandleType) SetCompression(compressionLevel Compression) error {
 	return makeErrorOrNil(err)
 }
 
-// SetClientMaxInBufSize : Set the Sets the maximum incoming buffer size for all network operations of the client. 
+// SetClientMaxInBufSize : Set the Sets the maximum incoming buffer size for all network operations of the client.
 //  Only modify this setting if you expect to receive very large answers from the server.
 func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
 	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
@@ -159,14 +160,14 @@ func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
 }
 
 // GetClientMaxInBufSize : Gets the maximum incoming buffer size for all network operations of the client.
-func (h HandleType) GetClientMaxInBufSize() (uint,error) {
+func (h HandleType) GetClientMaxInBufSize() (uint, error) {
 	var bufSize C.size_t
 	err := C.qdb_option_get_client_max_in_buf_size(h.handle, &bufSize)
 	return uint(bufSize), makeErrorOrNil(err)
 }
 
 // GetClusterMaxInBufSize : Gets the maximum incoming buffer size for all network operations of the client.
-func (h HandleType) GetClusterMaxInBufSize() (uint,error) {
+func (h HandleType) GetClusterMaxInBufSize() (uint, error) {
 	var bufSize C.size_t
 	err := C.qdb_option_get_cluster_max_in_buf_size(h.handle, &bufSize)
 	return uint(bufSize), makeErrorOrNil(err)
@@ -255,6 +256,42 @@ func (h HandleType) GetTagged(tag string) ([]string, error) {
 		return output, nil
 	}
 	return nil, ErrorType(err)
+}
+
+// PrefixGet : Retrieves the list of all entries matching the provided prefix.
+//	A prefix-based search will enable you to find all entries matching a provided prefix.
+//	This function returns the list of aliases. It’s up to the user to query the content associated with every entry, if needed.
+func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
+	cPrefix := convertToCharStar(prefix)
+	defer releaseCharStar(cPrefix)
+	var entryCount C.size_t
+	var entries **C.char
+	err := C.qdb_prefix_get(h.handle, cPrefix, C.qdb_int_t(limit), &entries, &entryCount)
+
+	if err == 0 {
+		defer h.Release(unsafe.Pointer(entries))
+		length := int(entryCount)
+		output := make([]string, length)
+		if length > 0 {
+			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(entries))[:length:length]
+			for i, s := range tmpslice {
+				output[i] = C.GoString(s)
+			}
+		}
+		return output, nil
+	}
+	return nil, ErrorType(err)
+}
+
+// PrefixCount : Retrieves the count of all entries matching the provided prefix.
+//	A prefix-based count counts all entries matching a provided prefix.
+func (h HandleType) PrefixCount(prefix string) (uint64, error) {
+	cPrefix := convertToCharStar(prefix)
+	defer releaseCharStar(cPrefix)
+	var count C.qdb_uint_t
+	err := C.qdb_prefix_count(h.handle, cPrefix, &count)
+
+	return uint64(count), makeErrorOrNil(err)
 }
 
 // Handles Creators
