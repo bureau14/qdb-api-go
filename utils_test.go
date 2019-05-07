@@ -72,13 +72,19 @@ func checkInput() (string, string, string) {
 }
 
 func generateUser(qdbUserAdd string) error {
-	_, err := exec.Command(qdbUserAdd, "-u", "test", "-p", usersConfigFile, "-s", userPrivateKeyFile, "--superuser=true").Output()
-	return err
+	output, err := exec.Command(qdbUserAdd, "-u", "test-user", "-p", usersConfigFile, "-s", userPrivateKeyFile, "--uid=1", "--superuser=1").Output()
+	if err != nil {
+		return fmt.Errorf(string(output))
+	}
+	return nil
 }
 
 func generateClusterKeys(qdbClusterKeygen string) error {
-	_, err := exec.Command(qdbClusterKeygen, "-p", clusterPublicKeyFile, "-s", clusterPrivateKeyFile).Output()
-	return err
+	output, err := exec.Command(qdbClusterKeygen, "-p", clusterPublicKeyFile, "-s", clusterPrivateKeyFile).Output()
+	if err != nil {
+		return fmt.Errorf(string(output))
+	}
+	return nil
 }
 
 func cleanup() {
