@@ -228,7 +228,7 @@ var _ = Describe("Tests", func() {
 					})
 					It("'prefix get' should return empty results with bad prefix", func() {
 						entries, err := testHandle.PrefixGet("bad", 10)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(err).To(Equal(ErrAliasNotFound))
 						Expect([]string{}).To(Equal(entries))
 					})
 					It("'prefix get' should return alias value with proper prefix", func() {
