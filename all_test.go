@@ -2,6 +2,7 @@ package qdb
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func TestMain(m *testing.M) {
 	securedDB.start()
 	time.Sleep(10 * time.Second)
 
-	m.Run()
+	exitCode := m.Run()
 
 	if err := unsecuredDB.stop(); err != nil {
 		fmt.Println(err)
@@ -82,6 +83,7 @@ func TestMain(m *testing.M) {
 	}
 
 	cleanup()
+	os.Exit(exictCode)
 }
 
 func TestAll(t *testing.T) {
