@@ -810,10 +810,14 @@ var _ = Describe("Tests", func() {
 							Expect(err).ToNot(HaveOccurred())
 						})
 						It("should fail to append columns - wrong column type", func() {
-							err := tsBatch.RowSetInt64(0, int64Value)
+							err = tsBatch.StartRow(timestampValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetInt64(0, int64Value)
 							Expect(err).To(HaveOccurred())
 						})
 						It("should fail to append columns - index past the end", func() {
+							err = tsBatch.StartRow(timestampValue)
+							Expect(err).ToNot(HaveOccurred())
 							err = tsBatch.RowSetInt64(timestampIndex+1, int64Value)
 							Expect(err).To(HaveOccurred())
 						})

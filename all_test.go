@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 	}
 
 	cleanup()
-	os.Exit(exictCode)
+	os.Exit(exitCode)
 }
 
 func TestAll(t *testing.T) {
