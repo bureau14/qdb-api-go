@@ -26,9 +26,8 @@ type NodeStatus struct {
 	Network struct {
 		ListeningEndpoint string `json:"listening_endpoint"`
 		Partitions        struct {
-			Count             int   `json:"count"`
-			MaxSessions       int   `json:"max_sessions"`
-			AvailableSessions []int `json:"available_sessions"`
+			Count       int `json:"count"`
+			MaxSessions int `json:"max_sessions"`
 		} `json:"partitions"`
 	} `json:"network"`
 	NodeID              string    `json:"node_id"`
@@ -163,20 +162,20 @@ type NodeConfig struct {
 				MaxOpenFiles           int    `json:"max_open_files"`
 			} `json:"rocksdb"`
 			Helium struct {
-				Url                    string `json:"url"`
-				Fanout                 int    `json:"fanout"`
-				GCFanout               int    `json:"gc_fanout"`
-				ReadCache              int64  `json:"read_cache"`
-				WriteCache             int64  `json:"write_cache"`
-				AutoCommitPeriod       int64  `json:"auto_commit_period"`
-				AutoCleanPeriod        int64  `json:"auto_clean_period"`
+				Url              string `json:"url"`
+				Fanout           int    `json:"fanout"`
+				GCFanout         int    `json:"gc_fanout"`
+				ReadCache        int64  `json:"read_cache"`
+				WriteCache       int64  `json:"write_cache"`
+				AutoCommitPeriod int64  `json:"auto_commit_period"`
+				AutoCleanPeriod  int64  `json:"auto_clean_period"`
 			} `json:"helium"`
 			AsyncTS struct {
-                Pipelines              int    `json:"pipelines"`
-                PipelineBufferSize     int64  `json:"pipeline_buffer_size"`
-                PipelineQueueLength    int64  `json:"pipeline_queue_length"`
-                FlushDeadline          int    `json:"flush_deadline"`
-            } `json:"async_ts"`
+				Pipelines           int   `json:"pipelines"`
+				PipelineBufferSize  int64 `json:"pipeline_buffer_size"`
+				PipelineQueueLength int64 `json:"pipeline_queue_length"`
+				FlushDeadline       int   `json:"flush_deadline"`
+			} `json:"async_ts"`
 		} `json:"depot"`
 		User struct {
 			LicenseFile string `json:"license_file"`
@@ -213,10 +212,10 @@ type NodeConfig struct {
 	Global struct {
 		Cluster struct {
 			StorageEngine          string `json:"storage_engine"`
-			History                bool `json:"history"`
-			ReplicationFactor      int  `json:"replication_factor"`
-			MaxVersions            int  `json:"max_versions"`
-			MaxTransactionDuration int  `json:"max_transaction_duration"`
+			History                bool   `json:"history"`
+			ReplicationFactor      int    `json:"replication_factor"`
+			MaxVersions            int    `json:"max_versions"`
+			MaxTransactionDuration int    `json:"max_transaction_duration"`
 		} `json:"cluster"`
 		Security struct {
 			EnableStop         bool   `json:"enable_stop"`
