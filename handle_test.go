@@ -179,11 +179,11 @@ var _ = Describe("Tests", func() {
 					Expect(err).ToNot(HaveOccurred())
 					result, err := testHandle.GetClientMaxInBufSize()
 					Expect(err).To(HaveOccurred())
-					Expect(result).To(Equal(100000000))
+					Expect(uint(result)).To(Equal(100000000))
 				})
 				It("should be able to get cluster max in buf size", func() {
 					result, err := testHandle.GetClusterMaxInBufSize()
-					Expect(err).To(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 					Expect(result).ToNot(Equal(0))
 				})
 				Context("with an entry added", func() {
