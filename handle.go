@@ -280,7 +280,7 @@ func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
 		}
 		return output, nil
 	}
-	return nil, ErrorType(err)
+	return []string{}, ErrorType(err)
 }
 
 // PrefixCount : Retrieves the count of all entries matching the provided prefix.
