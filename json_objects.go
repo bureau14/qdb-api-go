@@ -26,8 +26,9 @@ type NodeStatus struct {
 	Network struct {
 		ListeningEndpoint string `json:"listening_endpoint"`
 		Partitions        struct {
-			Count       int `json:"count"`
-			MaxSessions int `json:"max_sessions"`
+			Count             int `json:"count"`
+			MaxSessions       int `json:"max_sessions"`
+			AvailableSessions int `json:"available_sessions"`
 		} `json:"partitions"`
 	} `json:"network"`
 	NodeID              string    `json:"node_id"`
