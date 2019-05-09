@@ -5,6 +5,7 @@ package qdb
 */
 import "C"
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -85,6 +86,7 @@ func (h HandleType) getStatistics(prefix string, s interface{}) error {
 			if err != nil {
 				return err
 			}
+			content = bytes.Replace(content, []byte("\x00"), []byte{}, -1)
 			v.Field(i).SetString(string(content))
 		} else if vType.Kind() == reflect.Int64 {
 			value, err := h.Integer(prefix + name).Get()
@@ -99,7 +101,7 @@ func (h HandleType) getStatistics(prefix string, s interface{}) error {
 	return nil
 }
 
-// Statistics : Retrieve statistics for a specific node
+// NodeStatistics : Retrieve statistics for a specific node
 func (h HandleType) NodeStatistics(nodeID string) (Statistics, error) {
 	prefix := "$qdb.statistics." + nodeID + "."
 	stat := Statistics{}
