@@ -9,7 +9,7 @@ func ExampleHandleType() {
 	var h HandleType
 	h.Open(ProtocolTCP)
 	fmt.Printf("API build: %s\n", h.APIVersion())
-	// Output: API build: 2.7.0master
+	// Output: API build: 2.7.0
 }
 
 func ExampleEntry_Alias() {
