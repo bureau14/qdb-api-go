@@ -1,7 +1,7 @@
 .vscode*
 db/
 *.out
-
+*.DS_Store
 /thirdparty/quasardb/bin/
 /thirdparty/quasardb/examples/
 /thirdparty/quasardb/include/
