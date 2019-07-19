@@ -552,21 +552,19 @@ func ExampleNode() {
 	h := MustSetupHandle(clusterURI, 120*time.Second)
 	defer h.Close()
 
-	node := h.Node(nodeURI)
+	node := h.Node(clusterURI)
 
 	status, _ := node.Status()
 	fmt.Println("Status - Max sessions:", status.Network.Partitions.MaxSessions)
 
 	config, _ := node.Config()
-	fmt.Println("Config - Root Depot:", config.Local.Depot.RocksDB.Root)
 	fmt.Println("Config - Listen On:", config.Local.Network.ListenOn)
 
 	topology, _ := node.Topology()
 	fmt.Println("Topology - Successor is same as predecessor:", topology.Successor.Endpoint == topology.Predecessor.Endpoint)
 	// Output:
 	// Status - Max sessions: 64
-	// Config - Root Depot: db
-	// Config - Listen On: 127.0.0.1:30083
+	// Config - Listen On: 127.0.0.1:2836
 	// Topology - Successor is same as predecessor: true
 }
 

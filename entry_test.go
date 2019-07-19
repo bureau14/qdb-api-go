@@ -267,7 +267,7 @@ var _ = Describe("Tests", func() {
 			It("should locate", func() {
 				location, err := integer.GetLocation()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(int16(qdbPort)).To(Equal(location.Port))
+				Expect(int16(2836)).To(Equal(location.Port))
 				Expect(address).To(Equal(location.Address))
 			})
 		})
