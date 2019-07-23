@@ -9,44 +9,44 @@ import (
 
 var _ = Describe("Tests", func() {
 	var (
-		alias        string
-		aliasSecured string
+		alias       string
+		aliassecure string
 	)
 
 	BeforeEach(func() {
 		alias = generateAlias(16)
-		aliasSecured = generateAlias(16)
+		aliassecure = generateAlias(16)
 	})
 
 	// :: Blob tests ::
 	Context("Cluster", func() {
 		var (
-			blob           BlobEntry
-			blobSecured    BlobEntry
-			cluster        *Cluster
-			securedCluster *Cluster
-			content        []byte
+			blob          BlobEntry
+			blobsecure    BlobEntry
+			cluster       *Cluster
+			secureCluster *Cluster
+			content       []byte
 		)
 		BeforeEach(func() {
 			cluster = handle.Cluster()
-			securedCluster = securedHandle.Cluster()
+			secureCluster = secureHandle.Cluster()
 			content = []byte("content_blob")
 			blob = handle.Blob(alias)
-			blobSecured = securedHandle.Blob(aliasSecured)
+			blobsecure = secureHandle.Blob(aliassecure)
 			err := blob.Put(content, NeverExpires())
 			Expect(err).ToNot(HaveOccurred())
-			err = blobSecured.Put(content, NeverExpires())
+			err = blobsecure.Put(content, NeverExpires())
 			Expect(err).ToNot(HaveOccurred())
 		})
 		AfterEach(func() {
 			blob.Remove()
-			blobSecured.Remove()
+			blobsecure.Remove()
 		})
 		Context("PurgeAll", func() {
 			It("should remove all contents", func() {
-				err := securedCluster.PurgeAll()
+				err := secureCluster.PurgeAll()
 				Expect(err).ToNot(HaveOccurred())
-				contentObtained, err := blobSecured.Get()
+				contentObtained, err := blobsecure.Get()
 				Expect(content).ToNot(Equal(contentObtained))
 				Expect(err).To(HaveOccurred())
 			})
@@ -61,31 +61,28 @@ var _ = Describe("Tests", func() {
 		Context("PurgeCache", func() {
 			It("should remove all contents from memory", func() {
 				time.Sleep(5 * time.Second)
-				stats, err := handle.Statistics()
+				stats, err := secureHandle.Statistics()
 				Expect(err).ToNot(HaveOccurred())
-				var nodeStat Statistics
+				Expect(len(stats)).To(BeNumerically(">", 0))
+
+				var memBefore int64
 				for _, stat := range stats {
-					nodeStat = stat
+					memBefore = stat.Memory.BytesResident
 					break
 				}
-				Expect(int64(0)).ToNot(BeNumerically("==", nodeStat.Persistence.EntriesCount))
 
-				err = cluster.PurgeCache()
+				err = secureCluster.PurgeCache()
 				Expect(err).ToNot(HaveOccurred())
 
-				stats, err = handle.Statistics()
-				Expect(err).ToNot(HaveOccurred())
+				time.Sleep(5 * time.Second)
+				stats, err = secureHandle.Statistics()
+				Expect(len(stats)).To(BeNumerically(">", 0))
+				var memAfter int64
 				for _, stat := range stats {
-					nodeStat = stat
+					memAfter = stat.Memory.BytesResident
 					break
 				}
-				// FIXME(vianney): should work but need to be run separately I believe
-				// Expect(int64(0)).To(BeNumerically("==", nodeStat.Memory.ResidentCount))
-				Expect(int64(0)).ToNot(BeNumerically("==", nodeStat.Persistence.EntriesCount))
-
-				contentObtained, err := blob.Get()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(content).To(Equal(contentObtained))
+				Expect(memAfter).To(BeNumerically("<", memBefore))
 			})
 		})
 		Context("TrimAll", func() {

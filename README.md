@@ -20,7 +20,7 @@ Go API for [quasardb](https://www.quasardb.net/).
 
 ### Build instructions:
 1. `go get -d github.com/bureau14/qdb-api-go`
-1. Extract the downloaded C API into `$GOPATH/src/github.com/bureau14/qdb-api-go/thirdparty/quasardb`
+1. Extract the downloaded C API into `$GOPATH/src/github.com/bureau14/qdb-api-go/qdb`
 
 ### Test instructions:
 1.  `export QDB_SERVER_PATH=/path/to/qdb-server/bin` # a path to a dir containing qdbd, qdb_cluster_keygen and qdb_user_add executables
@@ -35,8 +35,8 @@ Go API for [quasardb](https://www.quasardb.net/).
 
 ### Usage (OS X)
 1. `mkdir $GOPATH/src/<PROJECT>`
-1. Extract the downloaded C API into `$GOPATH/src/<PROJECT>/thirdparty/quasardb`
-1. Ensure quasardb C library is in the **`DYLD_LIBRARY_PATH`**: `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$GOPATH/src/<PROJECT>/thirdparty/quasardb/lib`
+1. Extract the downloaded C API into `$GOPATH/src/<PROJECT>/qdb`
+1. Ensure quasardb C library is in the **`DYLD_LIBRARY_PATH`**: `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$GOPATH/src/<PROJECT>/qdb/lib`
 
 ### Troubleshooting
 
