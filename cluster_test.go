@@ -9,7 +9,7 @@ import (
 
 var _ = Describe("Tests", func() {
 	var (
-		alias        string
+		alias       string
 		aliassecure string
 	)
 
@@ -21,11 +21,11 @@ var _ = Describe("Tests", func() {
 	// :: Blob tests ::
 	Context("Cluster", func() {
 		var (
-			blob           BlobEntry
+			blob          BlobEntry
 			blobsecure    BlobEntry
-			cluster        *Cluster
+			cluster       *Cluster
 			secureCluster *Cluster
-			content        []byte
+			content       []byte
 		)
 		BeforeEach(func() {
 			cluster = handle.Cluster()
@@ -60,15 +60,29 @@ var _ = Describe("Tests", func() {
 		})
 		Context("PurgeCache", func() {
 			It("should remove all contents from memory", func() {
-				// we cannot really test that
-				// _, err := blobsecure.Get()
-				// Expect(err).ToNot(HaveOccurred())
+				time.Sleep(5 * time.Second)
+				stats, err := handle.Statistics()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(stats)).To(BeNumerically(">", 0))
 
-				// err = secureCluster.PurgeCache()
-				// Expect(err).ToNot(HaveOccurred())
+				var memBefore int64
+				for _, stat := range stats {
+					memBefore = stat.Memory.BytesResident
+					break
+				}
 
-				// _, err = blobsecure.Get()
-				// Expect(err).To(Equal(ErrAliasNotFound))
+				err = secureCluster.PurgeCache()
+				Expect(err).ToNot(HaveOccurred())
+
+				time.Sleep(5 * time.Second)
+				stats, err = handle.Statistics()
+				Expect(len(stats)).To(BeNumerically(">", 0))
+				var memAfter int64
+				for _, stat := range stats {
+					memAfter = stat.Memory.BytesResident
+					break
+				}
+				Expect(memAfter).To(BeNumerically("<", memBefore))
 			})
 		})
 		Context("TrimAll", func() {
