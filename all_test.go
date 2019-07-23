@@ -39,7 +39,7 @@ var _ = Describe("Tests", func() {
 		handle, err = SetupHandle(insecureURI, 120*time.Second)
 		Expect(err).ToNot(HaveOccurred())
 
-		secureHandle, err = SetupsecureHandle(secureURI, clusterPublicKeyFile, userPrivateKeyFile, 120*time.Second, EncryptNone)
+		secureHandle, err = SetupSecuredHandle(secureURI, clusterPublicKeyFile, userPrivateKeyFile, 120*time.Second, EncryptNone)
 		Expect(err).ToNot(HaveOccurred())
 
 		// stupid thing to boast about having 100% test coverage
