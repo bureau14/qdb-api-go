@@ -16,12 +16,12 @@ const (
 	usersConfigFile      string = "users.cfg"
 
 	insecureURI string = "qdb://127.0.0.1:2836"
-	securedURI string = "qdb://127.0.0.1:2837"
+	secureURI   string = "qdb://127.0.0.1:2837"
 )
 
 var (
-	handle        HandleType
-	securedHandle HandleType
+	handle       HandleType
+	secureHandle HandleType
 )
 
 func TestMain(m *testing.M) {
@@ -39,7 +39,7 @@ var _ = Describe("Tests", func() {
 		handle, err = SetupHandle(insecureURI, 120*time.Second)
 		Expect(err).ToNot(HaveOccurred())
 
-		securedHandle, err = SetupSecuredHandle(securedURI, clusterPublicKeyFile, userPrivateKeyFile, 120*time.Second, EncryptNone)
+		secureHandle, err = SetupsecureHandle(secureURI, clusterPublicKeyFile, userPrivateKeyFile, 120*time.Second, EncryptNone)
 		Expect(err).ToNot(HaveOccurred())
 
 		// stupid thing to boast about having 100% test coverage
@@ -48,6 +48,6 @@ var _ = Describe("Tests", func() {
 
 	AfterSuite(func() {
 		handle.Close()
-		securedHandle.Close()
+		secureHandle.Close()
 	})
 })

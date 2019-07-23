@@ -10,43 +10,43 @@ import (
 var _ = Describe("Tests", func() {
 	var (
 		alias        string
-		aliasSecured string
+		aliassecure string
 	)
 
 	BeforeEach(func() {
 		alias = generateAlias(16)
-		aliasSecured = generateAlias(16)
+		aliassecure = generateAlias(16)
 	})
 
 	// :: Blob tests ::
 	Context("Cluster", func() {
 		var (
 			blob           BlobEntry
-			blobSecured    BlobEntry
+			blobsecure    BlobEntry
 			cluster        *Cluster
-			securedCluster *Cluster
+			secureCluster *Cluster
 			content        []byte
 		)
 		BeforeEach(func() {
 			cluster = handle.Cluster()
-			securedCluster = securedHandle.Cluster()
+			secureCluster = secureHandle.Cluster()
 			content = []byte("content_blob")
 			blob = handle.Blob(alias)
-			blobSecured = securedHandle.Blob(aliasSecured)
+			blobsecure = secureHandle.Blob(aliassecure)
 			err := blob.Put(content, NeverExpires())
 			Expect(err).ToNot(HaveOccurred())
-			err = blobSecured.Put(content, NeverExpires())
+			err = blobsecure.Put(content, NeverExpires())
 			Expect(err).ToNot(HaveOccurred())
 		})
 		AfterEach(func() {
 			blob.Remove()
-			blobSecured.Remove()
+			blobsecure.Remove()
 		})
 		Context("PurgeAll", func() {
 			It("should remove all contents", func() {
-				err := securedCluster.PurgeAll()
+				err := secureCluster.PurgeAll()
 				Expect(err).ToNot(HaveOccurred())
-				contentObtained, err := blobSecured.Get()
+				contentObtained, err := blobsecure.Get()
 				Expect(content).ToNot(Equal(contentObtained))
 				Expect(err).To(HaveOccurred())
 			})
@@ -61,13 +61,13 @@ var _ = Describe("Tests", func() {
 		Context("PurgeCache", func() {
 			It("should remove all contents from memory", func() {
 				// we cannot really test that
-				// _, err := blobSecured.Get()
+				// _, err := blobsecure.Get()
 				// Expect(err).ToNot(HaveOccurred())
 
-				// err = securedCluster.PurgeCache()
+				// err = secureCluster.PurgeCache()
 				// Expect(err).ToNot(HaveOccurred())
 
-				// _, err = blobSecured.Get()
+				// _, err = blobsecure.Get()
 				// Expect(err).To(Equal(ErrAliasNotFound))
 			})
 		})

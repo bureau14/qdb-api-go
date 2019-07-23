@@ -32,8 +32,8 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
-		It("should not be able to setup an handle - secured URI with normal setup", func() {
-			_, err := SetupHandle(securedURI, time.Duration(120)*time.Second)
+		It("should not be able to setup an handle - secure URI with normal setup", func() {
+			_, err := SetupHandle(secureURI, time.Duration(120)*time.Second)
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not be able setup a handle - timeout set to zero", func() {
@@ -49,38 +49,38 @@ var _ = Describe("Tests", func() {
 				MustSetupHandle("", 0)
 			}).Should(Panic())
 		})
-		It("should setup a secured handle", func() {
-			handle, err := SetupSecuredHandle(securedURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
+		It("should setup a secure handle", func() {
+			handle, err := SetupsecureHandle(secureURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
-		It("should not be able setup a secured handle - unsecured cluster uri", func() {
-			_, err := SetupSecuredHandle(insecureURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
+		It("should not be able setup a secure handle - unsecure cluster uri", func() {
+			_, err := SetupsecureHandle(insecureURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
-		It("should not be able setup a secured handle - missing cluster key", func() {
-			_, err := SetupSecuredHandle(securedURI, "", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
+		It("should not be able setup a secure handle - missing cluster key", func() {
+			_, err := SetupsecureHandle(secureURI, "", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
-		It("should not be able setup a secured handle - missing user key", func() {
-			_, err := SetupSecuredHandle(securedURI, "cluster_public.key", "", time.Duration(120)*time.Second, EncryptNone)
+		It("should not be able setup a secure handle - missing user key", func() {
+			_, err := SetupsecureHandle(secureURI, "cluster_public.key", "", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
-		It("should not be able setup a secured handle - timeout set to zero", func() {
-			_, err := SetupSecuredHandle(securedURI, "cluster_public.key", "user_private.key", 0, EncryptNone)
+		It("should not be able setup a secure handle - timeout set to zero", func() {
+			_, err := SetupsecureHandle(secureURI, "cluster_public.key", "user_private.key", 0, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
-		It("should not be able setup a secured handle - encrypt has random value", func() {
-			_, err := SetupSecuredHandle(securedURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, 123)
+		It("should not be able setup a secure handle - encrypt has random value", func() {
+			_, err := SetupsecureHandle(secureURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, 123)
 			Expect(err).To(HaveOccurred())
 		})
-		It("must setup a secured handle", func() {
-			handle := MustSetupSecuredHandle(securedURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
+		It("must setup a secure handle", func() {
+			handle := MustSetupsecureHandle(secureURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			handle.Close()
 		})
-		It("must fail to setup a secured handle with invalid parameters", func() {
+		It("must fail to setup a secure handle with invalid parameters", func() {
 			Expect(func() {
-				MustSetupSecuredHandle(insecureURI, "", "", 0, 123)
+				MustSetupsecureHandle(insecureURI, "", "", 0, 123)
 			}).Should(Panic())
 		})
 		Context("With Handle", func() {
