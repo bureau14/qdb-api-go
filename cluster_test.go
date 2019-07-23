@@ -61,7 +61,7 @@ var _ = Describe("Tests", func() {
 		Context("PurgeCache", func() {
 			It("should remove all contents from memory", func() {
 				time.Sleep(5 * time.Second)
-				stats, err := handle.Statistics()
+				stats, err := secureHandle.Statistics()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(len(stats)).To(BeNumerically(">", 0))
 
@@ -75,7 +75,7 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				time.Sleep(5 * time.Second)
-				stats, err = handle.Statistics()
+				stats, err = secureHandle.Statistics()
 				Expect(len(stats)).To(BeNumerically(">", 0))
 				var memAfter int64
 				for _, stat := range stats {
