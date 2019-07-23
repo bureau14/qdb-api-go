@@ -11,7 +11,7 @@ func ExampleHandleType() {
 }
 
 func ExampleEntry_Alias() {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
+	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
 
 	blob1 := h.Blob("BLOB_1")
@@ -46,7 +46,7 @@ func ExampleEntry_Alias() {
 }
 
 func ExampleBlobEntry() {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
+	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
 
 	alias := "BlobAlias"
@@ -80,7 +80,7 @@ func ExampleBlobEntry() {
 }
 
 func ExampleIntegerEntry() {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
+	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
 
 	alias := "IntAlias"
@@ -110,7 +110,7 @@ func ExampleIntegerEntry() {
 }
 
 func ExampleTimeseriesEntry() {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
+	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
 	timeseries := h.Timeseries("alias")
 
@@ -549,10 +549,10 @@ func ExampleTsBulk_Push() {
 }
 
 func ExampleNode() {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
+	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
 
-	node := h.Node(clusterURI)
+	node := h.Node(insecureURI)
 
 	status, _ := node.Status()
 	fmt.Println("Status - Max sessions:", status.Network.Partitions.MaxSessions)
@@ -569,7 +569,7 @@ func ExampleNode() {
 }
 
 func ExampleQuery() {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
+	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
 
 	var aliases []string

@@ -6,7 +6,7 @@ import (
 )
 
 func MustCreateTimeseries(alias string) (*HandleType, *TimeseriesEntry) {
-	h := MustSetupHandle(clusterURI, 120*time.Second)
+	h := MustSetupHandle(insecureURI, 120*time.Second)
 	timeseries := h.Timeseries(alias)
 	return &h, &timeseries
 }

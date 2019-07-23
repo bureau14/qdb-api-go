@@ -15,7 +15,7 @@ var _ = Describe("Tests", func() {
 			testHandle HandleType
 		)
 		It("should not connect without creating handle", func() {
-			err := testHandle.Connect(clusterURI)
+			err := testHandle.Connect(insecureURI)
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not be able to open with random protocol", func() {
@@ -28,7 +28,7 @@ var _ = Describe("Tests", func() {
 			testHandle.Close()
 		})
 		It("should setup an handle", func() {
-			handle, err := SetupHandle(clusterURI, time.Duration(120)*time.Second)
+			handle, err := SetupHandle(insecureURI, time.Duration(120)*time.Second)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
@@ -37,11 +37,11 @@ var _ = Describe("Tests", func() {
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not be able setup a handle - timeout set to zero", func() {
-			_, err := SetupHandle(clusterURI, 0)
+			_, err := SetupHandle(insecureURI, 0)
 			Expect(err).To(HaveOccurred())
 		})
 		It("must setup an handle", func() {
-			handle := MustSetupHandle(clusterURI, time.Duration(120)*time.Second)
+			handle := MustSetupHandle(insecureURI, time.Duration(120)*time.Second)
 			handle.Close()
 		})
 		It("must fail to setup a handle with invalid parameters", func() {
@@ -55,7 +55,7 @@ var _ = Describe("Tests", func() {
 			handle.Close()
 		})
 		It("should not be able setup a secured handle - unsecured cluster uri", func() {
-			_, err := SetupSecuredHandle(clusterURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
+			_, err := SetupSecuredHandle(insecureURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not be able setup a secured handle - missing cluster key", func() {
@@ -80,7 +80,7 @@ var _ = Describe("Tests", func() {
 		})
 		It("must fail to setup a secured handle with invalid parameters", func() {
 			Expect(func() {
-				MustSetupSecuredHandle(clusterURI, "", "", 0, 123)
+				MustSetupSecuredHandle(insecureURI, "", "", 0, 123)
 			}).Should(Panic())
 		})
 		Context("With Handle", func() {
@@ -123,13 +123,13 @@ var _ = Describe("Tests", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("should connect", func() {
-				err := testHandle.Connect(clusterURI)
+				err := testHandle.Connect(insecureURI)
 				Expect(err).ToNot(HaveOccurred())
 				testHandle.Close()
 			})
 			Context("With Connection established", func() {
 				BeforeEach(func() {
-					testHandle.Connect(clusterURI)
+					testHandle.Connect(insecureURI)
 				})
 				AfterEach(func() {
 					testHandle.Close()

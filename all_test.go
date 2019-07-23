@@ -15,7 +15,7 @@ const (
 	userPrivateKeyFile   string = "user_private.key"
 	usersConfigFile      string = "users.cfg"
 
-	clusterURI string = "qdb://127.0.0.1:2836"
+	insecureURI string = "qdb://127.0.0.1:2836"
 	securedURI string = "qdb://127.0.0.1:2837"
 )
 
@@ -36,7 +36,7 @@ func TestAll(t *testing.T) {
 var _ = Describe("Tests", func() {
 	BeforeSuite(func() {
 		var err error
-		handle, err = SetupHandle(clusterURI, 120*time.Second)
+		handle, err = SetupHandle(insecureURI, 120*time.Second)
 		Expect(err).ToNot(HaveOccurred())
 
 		securedHandle, err = SetupSecuredHandle(securedURI, clusterPublicKeyFile, userPrivateKeyFile, 120*time.Second, EncryptNone)
