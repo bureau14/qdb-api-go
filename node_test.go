@@ -14,7 +14,7 @@ var _ = Describe("Tests", func() {
 	)
 
 	BeforeEach(func() {
-		handle, err = SetupHandle("qdb://127.0.0.1:2836", 120*time.Second)
+		handle, err = SetupHandle(insecureURI, 120*time.Second)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -33,7 +33,7 @@ var _ = Describe("Tests", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("should retrieve status with valid uri", func() {
-				status, err := handle.Node("qdb://127.0.0.1:2836").Status()
+				status, err := handle.Node(insecureURI).Status()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(status.Network.Partitions.MaxSessions).To(Equal(64))
 			})
@@ -49,7 +49,7 @@ var _ = Describe("Tests", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("should retrieve status with valid uri", func() {
-				config, err := handle.Node("qdb://127.0.0.1:2836").Config()
+				config, err := handle.Node(insecureURI).Config()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(config.Local.Depot.RocksDB.Root).To(Equal("insecure/db"))
 			})
@@ -65,7 +65,7 @@ var _ = Describe("Tests", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("should retrieve status with valid uri", func() {
-				topology, err := handle.Node("qdb://127.0.0.1:2836").Topology()
+				topology, err := handle.Node(insecureURI).Topology()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(topology.Successor.Endpoint).To(Equal(topology.Predecessor.Endpoint))
 			})
