@@ -2,9 +2,9 @@
 db/
 *.out
 *.DS_Store
-/thirdparty/quasardb/bin/
-/thirdparty/quasardb/examples/
-/thirdparty/quasardb/include/
-/thirdparty/quasardb/lib/
+/qdb/bin/
+/qdb/examples/
+/qdb/include/
+/qdb/lib/
 
 delete_all.sh
