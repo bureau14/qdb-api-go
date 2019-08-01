@@ -1,10 +1,7 @@
 .vscode*
-db/
 *.out
 *.DS_Store
 /qdb/bin/
 /qdb/examples/
 /qdb/include/
 /qdb/lib/
-
-delete_all.sh
