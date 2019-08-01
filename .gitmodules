@@ -1,0 +1,4 @@
+[submodule "scripts/tests/setup"]
+	path = scripts/tests/setup
+	url = https://github.com/bureau14/qdb-test-setup.git
+	branch = master
