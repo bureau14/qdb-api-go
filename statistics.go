@@ -64,7 +64,7 @@ type Statistics struct {
 	Startup int64 `json:"startup"`
 }
 
-func (h HandleType) getStatistics(prefix string, s interface{}) error {
+func (h DirectHandleType) getStatistics(prefix string, s interface{}) error {
 	sType := reflect.ValueOf(s).Type()
 	v := reflect.ValueOf(s)
 	if sType.Kind() == reflect.Ptr {
@@ -102,31 +102,72 @@ func (h HandleType) getStatistics(prefix string, s interface{}) error {
 }
 
 // NodeStatistics : Retrieve statistics for a specific node
+//
+// Deprecated: Statistics will be fetched directly from the node using the new
+// direct API
 func (h HandleType) NodeStatistics(nodeID string) (Statistics, error) {
-	prefix := "$qdb.statistics." + nodeID + "."
+	return Statistics{}, nil
+}
+
+func (h DirectHandleType) id() (string, error) {
+	var nodeID string
+
+	r := regexp.MustCompile(`\$qdb.statistics.([^\.]+)\..*`)
+	entries, err := h.PrefixGet("$qdb.statistics.", 1000)
+
+	if err != nil {
+		return nodeID, err
+	}
+
+	for _, entry := range entries {
+		matches := r.FindStringSubmatch(entry)
+		if len(matches) >= 2 {
+			nodeID = matches[1]
+			break
+		}
+	}
+
+	return nodeID, err
+}
+
+func (h DirectHandleType) nodeStatistics() (Statistics, error) {
 	stat := Statistics{}
-	err := h.getStatistics(prefix, &stat)
+	nodeID, err := h.id()
+
+	if err != nil {
+		return stat, err
+	}
+
+	prefix := "$qdb.statistics." + nodeID + "."
+	err = h.getStatistics(prefix, &stat)
 	return stat, err
 }
 
 // Statistics : Retrieve statistics for all nodes
 func (h HandleType) Statistics() (map[string]Statistics, error) {
-	r := regexp.MustCompile(`\$qdb.statistics.([^\.]+)\..*`)
-	entries, err := h.PrefixGet("$qdb.statistics.", 1000)
 	results := map[string]Statistics{}
-	for _, entry := range entries {
-		matches := r.FindStringSubmatch(entry)
-		if len(matches) < 2 {
-			return results, ErrInvalidRegex
+
+	endpoints, err := h.Cluster().Endpoints()
+
+	if err != nil {
+		return results, err
+	}
+
+	for _, endpoint := range endpoints {
+		uri := endpoint.URI()
+		dh, err := h.DirectConnect(uri)
+
+		if err != nil {
+			return results, err
 		}
-		nodeID := matches[1]
-		if _, ok := results[nodeID]; !ok {
-			stat, err := h.NodeStatistics(nodeID)
-			if err != nil {
-				return results, err
-			}
-			results[nodeID] = stat
+
+		stats, err := dh.nodeStatistics()
+
+		if err != nil {
+			return results, err
 		}
+
+		results[stats.NodeID] = stats
 	}
 	return results, err
 }
