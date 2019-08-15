@@ -26,6 +26,7 @@ func (n Node) Status() (NodeStatus, error) {
 	if err != nil {
 		return NodeStatus{}, err
 	}
+
 	var output NodeStatus
 	err = json.Unmarshal(data, &output)
 	return output, err
