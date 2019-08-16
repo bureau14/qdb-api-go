@@ -43,7 +43,7 @@ func (n Node) RawStatus() ([]byte, error) {
 	err := C.qdb_node_status(n.handle, uri, &content, &contentLength)
 	var output []byte
 	if err == 0 {
-		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
+		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
 	return output, makeErrorOrNil(err)
@@ -75,7 +75,7 @@ func (n Node) RawConfig() ([]byte, error) {
 	err := C.qdb_node_config(n.handle, uri, &content, &contentLength)
 	var output []byte
 	if err == 0 {
-		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
+		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
 	return output, makeErrorOrNil(err)
@@ -107,7 +107,7 @@ func (n Node) RawTopology() ([]byte, error) {
 	err := C.qdb_node_topology(n.handle, uri, &content, &contentLength)
 	var output []byte
 	if err == 0 {
-		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength-1))
+		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
 	return output, makeErrorOrNil(err)

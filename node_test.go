@@ -40,15 +40,15 @@ var _ = Describe("Tests", func() {
 		})
 
 		Context("Config", func() {
-			It("should not retrieve status with empty uri", func() {
+			It("should not retrieve config with empty uri", func() {
 				_, err = handle.Node("").Config()
 				Expect(err).To(HaveOccurred())
 			})
-			It("should not retrieve status with invalid uri", func() {
+			It("should not retrieve config with invalid uri", func() {
 				_, err = handle.Node("qdb://127.0.0.1:36321").Config()
 				Expect(err).To(HaveOccurred())
 			})
-			It("should retrieve status with valid uri", func() {
+			It("should retrieve config with valid uri", func() {
 				config, err := handle.Node(insecureURI).Config()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(config.Local.Depot.RocksDB.Root).To(Equal("insecure/db"))
@@ -56,15 +56,15 @@ var _ = Describe("Tests", func() {
 		})
 
 		Context("Topology", func() {
-			It("should not retrieve status with empty uri", func() {
+			It("should not retrieve topology with empty uri", func() {
 				_, err = handle.Node("").Topology()
 				Expect(err).To(HaveOccurred())
 			})
-			It("should not retrieve status with invalid uri", func() {
+			It("should not retrieve topology with invalid uri", func() {
 				_, err = handle.Node("qdb://127.0.0.1:36321").Topology()
 				Expect(err).To(HaveOccurred())
 			})
-			It("should retrieve status with valid uri", func() {
+			It("should retrieve topology with valid uri", func() {
 				topology, err := handle.Node(insecureURI).Topology()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(topology.Successor.Endpoint).To(Equal(topology.Predecessor.Endpoint))
