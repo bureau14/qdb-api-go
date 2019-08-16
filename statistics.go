@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
-	"regexp"
 )
 
 // Statistics : json adptable structure with node information
@@ -109,37 +108,10 @@ func (h HandleType) NodeStatistics(nodeID string) (Statistics, error) {
 	return Statistics{}, nil
 }
 
-func (h DirectHandleType) id() (string, error) {
-	var nodeID string
-
-	r := regexp.MustCompile(`\$qdb.statistics.([^\.]+)\..*`)
-	entries, err := h.PrefixGet("$qdb.statistics.", 1000)
-
-	if err != nil {
-		return nodeID, err
-	}
-
-	for _, entry := range entries {
-		matches := r.FindStringSubmatch(entry)
-		if len(matches) >= 2 {
-			nodeID = matches[1]
-			break
-		}
-	}
-
-	return nodeID, err
-}
-
 func (h DirectHandleType) nodeStatistics() (Statistics, error) {
 	stat := Statistics{}
-	nodeID, err := h.id()
-
-	if err != nil {
-		return stat, err
-	}
-
-	prefix := "$qdb.statistics." + nodeID + "."
-	err = h.getStatistics(prefix, &stat)
+	prefix := "$qdb.statistics."
+	err := h.getStatistics(prefix, &stat)
 	return stat, err
 }
 
