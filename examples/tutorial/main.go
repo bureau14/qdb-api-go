@@ -92,6 +92,14 @@ func createTable(handle *qdb.HandleType) error {
 
 	err := table.Create(shardSizeDuration, columnsInfo...)
 	// create-table-end
+	if err != nil {
+		return err
+	}
+	// tags-start
+
+	// Once you've created a table you can attach tags to it
+	err = table.AttachTag("nasdaq")
+	// tags-end
 	return err
 }
 
