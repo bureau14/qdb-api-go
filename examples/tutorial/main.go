@@ -15,31 +15,45 @@ func main() {
 
 	handle, err := connect()
 	if err != nil {
-		fmt.Printf("Failed to connect to QuasarDB")
+		fmt.Printf("Failed to connect to QuasarDB: %s", err.Error())
 		panic("Failed to connect to QuasarDB")
 	}
 
+	dropTable(handle)
+
 	err = createTable(handle)
 	if err != nil {
-		fmt.Printf("Failed to create table")
+		fmt.Printf("Failed to create table: %s", err.Error())
 		panic("Failed to create table")
 	}
 
 	err = batchInsert(handle)
 	if err != nil {
-		fmt.Printf("Failed to insert data")
+		fmt.Printf("Failed to insert data: %s", err.Error())
 		panic("Failed to insert data")
+	}
+
+	err = columnInsert(handle)
+	if err != nil {
+		fmt.Printf("Failed to column insert data: %s", err.Error())
+		panic("Failed to column insert data")
 	}
 
 	err = bulkRead(handle)
 	if err != nil {
-		fmt.Printf("Failed to buld read data: %s", err.Error())
-		panic("Failed to buld read data")
+		fmt.Printf("Failed to bulk read data: %s", err.Error())
+		panic("Failed to bulk read data")
+	}
+
+	err = columnRead(handle)
+	if err != nil {
+		fmt.Printf("Failed to column read data: %s", err.Error())
+		panic("Failed to column read data")
 	}
 
 	err = dropTable(handle)
 	if err != nil {
-		fmt.Printf("Failed to drop table")
+		fmt.Printf("Failed to drop table: %s", err.Error())
 		panic("Failed to drop table")
 	}
 }
@@ -167,6 +181,90 @@ func bulkRead(handle *qdb.HandleType) error {
 		fmt.Printf("timestamp: %s, open: %v, close: %v, volume: %v\n", timestamp, open, close, volume)
 	}
 	// bulk-read-end
+	return nil
+}
+
+func columnInsert(handle *qdb.HandleType) error {
+	// column-insert-start
+	table := handle.Timeseries("stocks")
+
+	openColumn := table.DoubleColumn("open")
+	closeColumn := table.DoubleColumn("close")
+	volumeColumn := table.Int64Column("volume")
+
+	t1 := time.Unix(1600000000, 0)
+	t2 := time.Unix(1610000000, 0)
+
+	openPoints := []qdb.TsDoublePoint{
+		qdb.NewTsDoublePoint(t1, 3.40),
+		qdb.NewTsDoublePoint(t2, 3.40),
+	}
+
+	closePoints := []qdb.TsDoublePoint{
+		qdb.NewTsDoublePoint(t1, 3.50),
+		qdb.NewTsDoublePoint(t2, 3.55),
+	}
+
+	volumePoints := []qdb.TsInt64Point{
+		qdb.NewTsInt64Point(t1, 10000),
+		qdb.NewTsInt64Point(t2, 7500),
+	}
+
+	err := openColumn.Insert(openPoints...)
+	if err != nil {
+		return err
+	}
+
+	err = closeColumn.Insert(closePoints...)
+	if err != nil {
+		return err
+	}
+
+	err = volumeColumn.Insert(volumePoints...)
+	if err != nil {
+		return err
+	}
+	// column-insert-end
+
+	return nil
+}
+
+func columnRead(handle *qdb.HandleType) error {
+	// column-get-start
+	table := handle.Timeseries("stocks")
+
+	openColumn := table.DoubleColumn("open")
+	closeColumn := table.DoubleColumn("close")
+	volumeColumn := table.Int64Column("volume")
+
+	timeRange := qdb.NewRange(time.Unix(1600000000, 0), time.Unix(1610000001, 0))
+
+	openResults, err := openColumn.GetRanges(timeRange)
+	if err != nil {
+		return err
+	}
+
+	closeResults, err := closeColumn.GetRanges(timeRange)
+	if err != nil {
+		return err
+	}
+
+	volumeResults, err := volumeColumn.GetRanges(timeRange)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < 2; i++ {
+		timestamp := openResults[i].Timestamp()
+		open := openResults[i].Content()
+		close := closeResults[i].Content()
+		volume := volumeResults[i].Content()
+
+		fmt.Printf("timestamp: %s, open: %v, close: %v, volume: %v\n", timestamp, open, close, volume)
+	}
+
+	// column-get-end
+
 	return nil
 }
 
