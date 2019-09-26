@@ -33,16 +33,22 @@ func main() {
 		panic("Failed to insert data")
 	}
 
-	err = columnInsert(handle)
-	if err != nil {
-		fmt.Printf("Failed to column insert data: %s", err.Error())
-		panic("Failed to column insert data")
-	}
-
 	err = bulkRead(handle)
 	if err != nil {
 		fmt.Printf("Failed to bulk read data: %s", err.Error())
 		panic("Failed to bulk read data")
+	}
+
+	err = query(handle)
+	if err != nil {
+		fmt.Printf("Failed to query data: %s", err.Error())
+		panic("Failed to query data")
+	}
+
+	err = columnInsert(handle)
+	if err != nil {
+		fmt.Printf("Failed to column insert data: %s", err.Error())
+		panic("Failed to column insert data")
 	}
 
 	err = columnRead(handle)
@@ -265,6 +271,27 @@ func columnRead(handle *qdb.HandleType) error {
 
 	// column-get-end
 
+	return nil
+}
+
+func query(handle *qdb.HandleType) error {
+	// query-start
+
+	query := handle.Query(fmt.Sprintf("SELECT SUM(volume) FROM stocks"))
+	result, err := query.Execute()
+	if err != nil {
+		return err
+	}
+
+	table := result.Tables()[0]
+	for _, row := range table.Rows() {
+		for _, col := range table.Columns(row) {
+			fmt.Printf("%v ", col.Get().Value())
+		}
+		fmt.Println()
+	}
+
+	// query-end
 	return nil
 }
 
