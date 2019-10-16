@@ -416,11 +416,11 @@ func (t *TsBulk) GetDouble() (float64, error) {
 // GetBlob : gets a blob in row
 func (t *TsBulk) GetBlob() ([]byte, error) {
 	var content unsafe.Pointer
-	defer t.h.Release(content)
 	var contentLength C.qdb_size_t
 	err := C.qdb_ts_row_get_blob(t.table, C.qdb_size_t(t.index), &content, &contentLength)
 
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+	t.h.Release(content)
 	t.index++
 	return output, makeErrorOrNil(err)
 }
