@@ -16,7 +16,7 @@ const (
 	usersConfigFile      string = "users.cfg"
 
 	insecureURI string = "qdb://127.0.0.1:2836"
-	secureURI   string = "qdb://127.0.0.1:2837"
+	secureURI   string = "qdb://127.0.0.1:2838"
 )
 
 var (
