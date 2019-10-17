@@ -70,52 +70,60 @@ var _ = Describe("Tests", func() {
 	})
 	Context("Query", func() {
 		It("should work", func() {
+			fmt.Fprintf(GinkgoWriter, "Meh %s", alias)
 			query := fmt.Sprintf("select * from %s in range(1970, +10d)", alias)
 			q := handle.Query(query)
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
-			for _, table := range result.Tables() {
-				for rowIdx, row := range table.Rows() {
-					columns := table.Columns(row)
-					// first column is the timestamps of the row, values begin at one
-					blobValue, err := columns[1].GetBlob()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(blobValue).To(Equal(blobPoints[rowIdx].Content()))
 
-					doubleValue, err := columns[2].GetDouble()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(doubleValue).To(Equal(doublePoints[rowIdx].Content()))
+			fmt.Fprintf(GinkgoWriter, "err: %v", err)
 
-					int64Value, err := columns[3].GetInt64()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(int64Value).To(Equal(int64Points[rowIdx].Content()))
+			for rowIdx, row := range result.Rows() {
+				columns := result.Columns(row)
+				// first column is the timestamps of the row
+				// second column is the table name
+				// values begin at 2
+				blobValue, err := columns[2].GetBlob()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(blobValue).To(Equal(blobPoints[rowIdx].Content()))
 
-					timestampValue, err := columns[4].GetTimestamp()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(timestampValue).To(Equal(timestampPoints[rowIdx].Content()))
+				doubleValue, err := columns[3].GetDouble()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(doubleValue).To(Equal(doublePoints[rowIdx].Content()))
 
-					for _, column := range table.Columns(row) {
-						// get values with universal getter
-						point := column.Get()
-						switch point.Type() {
-						case QueryResultBlob:
-							value := point.Value()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(blobPoints[rowIdx].Content()))
-						case QueryResultDouble:
-							value := point.Value()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(doublePoints[rowIdx].Content()))
-						case QueryResultInt64:
-							value := point.Value()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(int64Points[rowIdx].Content()))
-						case QueryResultTimestamp:
-							value := point.Value()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
-						}
+				int64Value, err := columns[4].GetInt64()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(int64Value).To(Equal(int64Points[rowIdx].Content()))
+
+				timestampValue, err := columns[5].GetTimestamp()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(timestampValue).To(Equal(timestampPoints[rowIdx].Content()))
+
+				for i, column := range result.Columns(row) {
+					if i == 1 {
+						// Skip $table
+						continue
+					}
+					// get values with universal getter
+					point := column.Get()
+					switch point.Type() {
+					case QueryResultBlob:
+						value := point.Value()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(value).To(Equal(blobPoints[rowIdx].Content()))
+					case QueryResultDouble:
+						value := point.Value()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(value).To(Equal(doublePoints[rowIdx].Content()))
+					case QueryResultInt64:
+						value := point.Value()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(value).To(Equal(int64Points[rowIdx].Content()))
+					case QueryResultTimestamp:
+						value := point.Value()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
 					}
 				}
 			}
@@ -126,18 +134,18 @@ var _ = Describe("Tests", func() {
 			_, err := q.Execute()
 			Expect(err).To(HaveOccurred())
 		})
+
 		It("should not work to do get the wrong type for a value", func() {
 			query := fmt.Sprintf("select * from %s in range(1970, +10d)", alias)
 			q := handle.Query(query)
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
-			for _, table := range result.Tables() {
-				for _, row := range table.Rows() {
-					columns := table.Columns(row)
-					_, err := columns[1].GetDouble()
-					Expect(err).To(HaveOccurred())
-				}
+
+			for _, row := range result.Rows() {
+				columns := result.Columns(row)
+				_, err := columns[1].GetDouble()
+				Expect(err).To(HaveOccurred())
 			}
 		})
 		It("should get no results", func() {
@@ -147,19 +155,20 @@ var _ = Describe("Tests", func() {
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.ScannedPoints()).To(Equal(int64(0)))
-			Expect(result.TablesCount()).To(Equal(int64(0)))
+			Expect(result.RowCount()).To(Equal(int64(0)))
 		})
-		It("create table should return 0 tables", func() {
+
+		It("create table should return 0 results", func() {
 			new_alias := generateAlias(16)
 			query := fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)
 			q := handle.Query(query)
 			result, err := q.Execute()
-			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result.TablesCount()).To(Equal(int64(0)))
+			Expect(result.RowCount()).To(Equal(int64(0)))
+			handle.Release(unsafe.Pointer(result))
 			handle.Query(fmt.Sprintf("drop table %s", new_alias)).Execute()
 		})
-		It("drop table should return 0 tables", func() {
+		It("drop table should return 0 results", func() {
 			new_alias := generateAlias(16)
 			handle.Query(fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)).Execute()
 			query := fmt.Sprintf("drop table %s", new_alias)
@@ -167,7 +176,7 @@ var _ = Describe("Tests", func() {
 			result, err := q.Execute()
 			defer handle.Release(unsafe.Pointer(result))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result.TablesCount()).To(Equal(int64(0)))
+			Expect(result.RowCount()).To(Equal(int64(0)))
 		})
 		Context("Tricky cases", func() {
 			var (
@@ -190,33 +199,32 @@ var _ = Describe("Tests", func() {
 				doubleColumn.Insert(newDoublePoints...)
 				blobColumn.Insert(newBlobPoints...)
 			})
+
 			It("should have a none value for each column", func() {
 				query := fmt.Sprintf("select * from %s in range(1971, +10d)", alias)
 				q := handle.Query(query)
 				result, err := q.Execute()
 				defer handle.Release(unsafe.Pointer(result))
 				Expect(err).ToNot(HaveOccurred())
-				Expect(result.TablesCount()).To(Equal(int64(1)))
-				for _, table := range result.Tables() {
-					for rowIdx, row := range table.Rows() {
-						columns := table.Columns(row)
-						if (rowIdx % 2) == 0 {
-							blobValue, err := columns[1].GetBlob()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(blobValue).To(Equal(newBlobPoints[rowIdx].Content()))
 
-							doubleValue := columns[2].Get()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(doubleValue.Type()).To(Equal(QueryResultNone))
-						} else {
-							blobValue := columns[1].Get()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(blobValue.Type()).To(Equal(QueryResultNone))
+				for rowIdx, row := range result.Rows() {
+					columns := result.Columns(row)
+					if (rowIdx % 2) == 0 {
+						blobValue, err := columns[2].GetBlob()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(blobValue).To(Equal(newBlobPoints[rowIdx].Content()))
 
-							doubleValue, err := columns[2].GetDouble()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(doubleValue).To(Equal(newDoublePoints[rowIdx].Content()))
-						}
+						doubleValue := columns[3].Get()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(doubleValue.Type()).To(Equal(QueryResultNone))
+					} else {
+						blobValue := columns[2].Get()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(blobValue.Type()).To(Equal(QueryResultNone))
+
+						doubleValue, err := columns[3].GetDouble()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(doubleValue).To(Equal(newDoublePoints[rowIdx].Content()))
 					}
 				}
 			})

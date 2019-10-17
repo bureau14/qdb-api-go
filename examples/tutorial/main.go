@@ -278,12 +278,11 @@ func query(handle *qdb.HandleType) error {
 	// query-start
 
 	query := handle.Query(fmt.Sprintf("SELECT SUM(volume) FROM stocks"))
-	result, err := query.Execute()
+	table, err := query.Execute()
 	if err != nil {
 		return err
 	}
 
-	table := result.Tables()[0]
 	for _, row := range table.Rows() {
 		for _, col := range table.Columns(row) {
 			fmt.Printf("%v ", col.Get().Value())

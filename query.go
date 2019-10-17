@@ -142,6 +142,8 @@ func (r *QueryPoint) GetCount() (int64, error) {
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
+// QueryPoint : a variadic structure holding the result type as well as the
+// result value
 type QueryPoint C.qdb_point_result_t
 
 // QueryRow : query result table row
@@ -150,34 +152,37 @@ type QueryRow []QueryPoint
 // QueryRows : query result table rows
 type QueryRows []*QueryPoint
 
-// QueryTable : query result table
-type QueryTable C.qdb_table_result_t
+// QueryResult : a query result
+type QueryResult struct {
+	result *C.qdb_query_result_t
+}
 
-// QueryTables : query result tables
-type QueryTables []QueryTable
+// ScannedPoints : number of points scanned
+//	The actual number of scanned points may be greater
+func (r QueryResult) ScannedPoints() int64 {
+	return int64(r.result.scanned_point_count)
+}
 
 // Columns : create columns from a row
-func (r QueryTable) Columns(row *QueryPoint) QueryRow {
-	count := int64(r.columns_count)
+func (r QueryResult) Columns(row *QueryPoint) QueryRow {
+	count := int64(r.result.column_count)
 	return (*[1 << 30]QueryPoint)(unsafe.Pointer(row))[:count:count]
 }
 
 // Rows : get rows of a query table result
-func (r QueryTable) Rows() QueryRows {
-	count := int64(r.rows_count)
-	return (*[1 << 30]*QueryPoint)(unsafe.Pointer(r.rows))[:count:count]
-}
-
-// Name : get table name
-func (r QueryTable) Name() string {
-	return C.GoString(r.table_name.data)
+func (r QueryResult) Rows() QueryRows {
+	count := int64(r.result.row_count)
+	if count == 0 {
+		return []*QueryPoint{}
+	}
+	return (*[1 << 30]*QueryPoint)(unsafe.Pointer(r.result.rows))[:count:count]
 }
 
 // ColumnsNames : get the number of columns names of each row
-func (r QueryTable) ColumnsNames() []string {
-	count := int64(r.columns_count)
+func (r QueryResult) ColumnsNames() []string {
+	count := int64(r.result.column_count)
 	result := make([]string, count)
-	rawNames := (*[1 << 30]C.qdb_string_t)(unsafe.Pointer(r.columns_names))[:count:count]
+	rawNames := (*[1 << 30]C.qdb_string_t)(unsafe.Pointer(r.result.column_names))[:count:count]
 	for i := range rawNames {
 		result[i] = C.GoString(rawNames[i].data)
 	}
@@ -185,35 +190,16 @@ func (r QueryTable) ColumnsNames() []string {
 }
 
 // ColumnsCount : get the number of columns of each row
-func (r QueryTable) ColumnsCount() int64 {
-	return int64(r.columns_count)
+func (r QueryResult) ColumnsCount() int64 {
+	return int64(r.result.column_count)
 }
 
-// QueryResult : a query result
-type QueryResult struct {
-	result *C.qdb_query_result_t
-}
-
-// Tables : get tables of a query result
-func (r QueryResult) Tables() QueryTables {
-	count := int64(r.result.tables_count)
-	tables := (*[1 << 30]QueryTable)(unsafe.Pointer(r.result.tables))[:count:count]
-	return tables
-}
-
-// TablesCount : get the number of tables of a query result
-func (r QueryResult) TablesCount() int64 {
-	result := r.result
-	if result != nil {
-		return int64(result.tables_count)
+// RowCount : the number of returned rows
+func (r QueryResult) RowCount() int64 {
+	if r.result == nil {
+		return 0
 	}
-	return int64(0)
-}
-
-// ScannedPoints : number of points scanned
-//	The actual number of scanned points may be greater
-func (r QueryResult) ScannedPoints() int64 {
-	return int64(r.result.scanned_point_count)
+	return int64(r.result.row_count)
 }
 
 // Query : query object

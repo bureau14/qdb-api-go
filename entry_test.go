@@ -196,6 +196,7 @@ var _ = Describe("Tests", func() {
 				BeforeEach(func() {
 					duration, _ = time.ParseDuration("2ms")
 				})
+				// TODO(Mike) - this test is flaky
 				It("should set expire at", func() {
 					err = integer.ExpiresAt(expiry)
 					Expect(err).ToNot(HaveOccurred())
