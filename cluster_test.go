@@ -58,6 +58,7 @@ var _ = Describe("Tests", func() {
 				Expect(content).To(Equal(contentObtained))
 			})
 		})
+
 		Context("PurgeCache", func() {
 			It("should remove all contents from memory", func() {
 				time.Sleep(5 * time.Second)
