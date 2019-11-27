@@ -192,24 +192,6 @@ var _ = Describe("Tests", func() {
 					Expect(err).ToNot(HaveOccurred())
 				})
 			})
-			Context("Ultra short future", func() {
-				BeforeEach(func() {
-					duration, _ = time.ParseDuration("2ms")
-				})
-				// TODO(Mike) - this test is flaky
-				It("should set expire at", func() {
-					err = integer.ExpiresAt(expiry)
-					Expect(err).ToNot(HaveOccurred())
-
-					meta, err := integer.GetMetadata()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
-				})
-				It("should set expire from now", func() {
-					err = integer.ExpiresFromNow(duration)
-					Expect(err).ToNot(HaveOccurred())
-				})
-			})
 			Context("Short past", func() {
 				BeforeEach(func() {
 					duration, _ = time.ParseDuration("-1h")
