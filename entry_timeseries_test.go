@@ -234,9 +234,9 @@ var _ = Describe("Tests", func() {
 					timestampColumn.Insert(timestampPoints...)
 				})
 				Context("Double", func() {
-					It("should not work to erase an empty range", func() {
+					It("should work to erase an empty range", func() {
 						erasedCount, err := doubleColumn.EraseRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect(uint64(0)).To(BeNumerically("==", erasedCount))
 					})
 					It("should work to erase a point", func() {
@@ -262,9 +262,9 @@ var _ = Describe("Tests", func() {
 					})
 				})
 				Context("Blob", func() {
-					It("should not work to erase an empty range", func() {
+					It("should work to erase an empty range", func() {
 						erasedCount, err := blobColumn.EraseRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect(uint64(0)).To(Equal(erasedCount))
 					})
 					It("should work to erase a point", func() {
@@ -290,9 +290,9 @@ var _ = Describe("Tests", func() {
 					})
 				})
 				Context("Int64", func() {
-					It("should not work to erase an empty range", func() {
+					It("should work to erase an empty range", func() {
 						erasedCount, err := int64Column.EraseRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect(uint64(0)).To(Equal(erasedCount))
 					})
 					It("should work to erase a point", func() {
@@ -318,9 +318,9 @@ var _ = Describe("Tests", func() {
 					})
 				})
 				Context("Timestamp", func() {
-					It("should not work to erase an empty range", func() {
+					It("should work to erase an empty range", func() {
 						erasedCount, err := timestampColumn.EraseRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect(uint64(0)).To(Equal(erasedCount))
 					})
 					It("should work to erase a point", func() {
