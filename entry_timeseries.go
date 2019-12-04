@@ -526,6 +526,11 @@ func (t *TsBatch) Push() error {
 	return makeErrorOrNil(C.qdb_ts_batch_push(t.table))
 }
 
+// PushFast : Fast, in-place batch push that is efficient when doing lots of small, incremental pushes.
+func (t *TsBatch) PushFast() error {
+	return makeErrorOrNil(C.qdb_ts_batch_push_fast(t.table))
+}
+
 // Release : release the memory of the batch table
 func (t *TsBatch) Release() {
 	t.h.Release(unsafe.Pointer(t.table))

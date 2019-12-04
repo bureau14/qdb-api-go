@@ -670,6 +670,7 @@ var _ = Describe("Tests", func() {
 						Expect(err).To(HaveOccurred())
 					})
 				})
+				
 				Context("Get", func() {
 					var (
 						r TsRange
@@ -836,6 +837,47 @@ var _ = Describe("Tests", func() {
 							})
 							It("should push", func() {
 								err = tsBatch.Push()
+								Expect(err).ToNot(HaveOccurred())
+
+								rg := NewRange(timestampValue, timestampValue.Add(5*time.Nanosecond))
+
+								blobs, err := blobColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(blobs)).To(Equal(1))
+								Expect(blobs[0].Content()).To(Equal(blobValue))
+
+								doubles, err := doubleColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(doubles)).To(Equal(1))
+								Expect(doubles[0].Content()).To(Equal(doubleValue))
+
+								int64s, err := int64Column.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(int64s)).To(Equal(1))
+								Expect(int64s[0].Content()).To(Equal(int64Value))
+
+								nTimestamps, err := timestampColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(nTimestamps)).To(Equal(1))
+								Expect(nTimestamps[0].Content().Equal(timestampValue)).To(BeTrue())
+							})
+						})
+
+						Context("Push Fast", func() {
+							JustBeforeEach(func() {
+								err = tsBatch.StartRow(timestampValue)
+								Expect(err).ToNot(HaveOccurred())
+								err := tsBatch.RowSetBlob(blobIndex, blobValue)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetDouble(doubleIndex, doubleValue)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetInt64(int64Index, int64Value)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetTimestamp(timestampIndex, timestampValue)
+								Expect(err).ToNot(HaveOccurred())
+							})
+							It("should push", func() {
+								err = tsBatch.PushFast()
 								Expect(err).ToNot(HaveOccurred())
 
 								rg := NewRange(timestampValue, timestampValue.Add(5*time.Nanosecond))
