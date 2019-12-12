@@ -16,7 +16,7 @@ type NodeStatus struct {
 	} `json:"memory"`
 	CPUTimes struct {
 		Idle   int64 `json:"idle"`
-		System int   `json:"system"`
+		System int64 `json:"system"`
 		User   int64 `json:"user"`
 	} `json:"cpu_times"`
 	DiskUsage struct {
