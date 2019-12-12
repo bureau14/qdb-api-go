@@ -6,6 +6,7 @@ package qdb
 */
 import "C"
 import (
+	"math"
 	"math/rand"
 	"time"
 	"unsafe"
@@ -71,4 +72,9 @@ func generateAlias(n int) string {
 	}
 
 	return string(b)
+}
+
+func charStarArrayToSlice(strings **C.char, length int) []*C.char {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.char)(nil))]*C.char)(unsafe.Pointer(strings))[:length:length]
 }

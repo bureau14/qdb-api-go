@@ -467,8 +467,8 @@ func (t *TsBulk) Release() {
 
 // ExtraColumns : Appends columns to the current batch table
 func (t *TsBatch) ExtraColumns(cols ...TsBatchColumnInfo) error {
-	columns := tsBtachColumnInfoArrayToC(cols...)
-	defer releaseTsBtachColumnInfoArray(columns, len(cols))
+	columns := tsBatchColumnInfoArrayToC(cols...)
+	defer releaseTsBatchColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_batch_table_extra_columns(t.table, columns, columnsCount)
 	return makeErrorOrNil(err)

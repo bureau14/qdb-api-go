@@ -670,7 +670,7 @@ var _ = Describe("Tests", func() {
 						Expect(err).To(HaveOccurred())
 					})
 				})
-				
+
 				Context("Get", func() {
 					var (
 						r TsRange

@@ -88,7 +88,7 @@ func (q Find) ExecuteString(query string) ([]string, error) {
 		output := make([]string, length)
 		if aliasCount > 0 {
 			defer q.Release(unsafe.Pointer(aliases))
-			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
+			tmpslice := charStarArrayToSlice(aliases, length)
 			for i, s := range tmpslice {
 				output[i] = C.GoString(s)
 			}

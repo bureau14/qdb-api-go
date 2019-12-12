@@ -10,8 +10,8 @@ import (
 
 // TsRange : timeseries range with begin and end timestamp
 type TsRange struct {
-	begin  time.Time
-	end    time.Time
+	begin time.Time
+	end   time.Time
 }
 
 // Begin : returns the start of the time range

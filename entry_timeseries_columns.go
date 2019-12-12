@@ -11,6 +11,7 @@ package qdb
 */
 import "C"
 import (
+	"math"
 	"unsafe"
 )
 
@@ -63,6 +64,11 @@ func (t C.qdb_ts_column_info_t) toStructG(entry TimeseriesEntry) tsColumn {
 	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}, entry}
 }
 
+func columnInfoArrayToSlice(columns *C.qdb_ts_column_info_t, length int) []C.qdb_ts_column_info_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_column_info_t{})]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+}
+
 func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) ([]TsDoubleColumn, []TsBlobColumn, []TsInt64Column, []TsTimestampColumn) {
 	length := int(columnsCount)
 	doubleColumns := []TsDoubleColumn{}
@@ -70,7 +76,7 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, col
 	int64Columns := []TsInt64Column{}
 	timestampColumns := []TsTimestampColumn{}
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		tmpslice := columnInfoArrayToSlice(columns, length)
 		for _, s := range tmpslice {
 			if s._type == C.qdb_ts_column_double {
 				doubleColumns = append(doubleColumns, TsDoubleColumn{s.toStructG(entry)})
@@ -113,8 +119,7 @@ func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
 
 // :: internals
 func (t TsColumnInfo) toStructC() C.qdb_ts_column_info_t {
-	// The [4]byte is some sort of padding necessary for Go : struct(char *, int, 4 byte of padding)
-	return C.qdb_ts_column_info_t{convertToCharStar(t.name), C.qdb_ts_column_type_t(t.kind), [4]byte{}}
+	return C.qdb_ts_column_info_t{name: convertToCharStar(t.name), _type: C.qdb_ts_column_type_t(t.kind)}
 }
 
 func (t C.qdb_ts_column_info_t) toStructInfoG() TsColumnInfo {
@@ -134,7 +139,7 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 
 func releaseColumnInfoArray(columns *C.qdb_ts_column_info_t, length int) {
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		tmpslice := columnInfoArrayToSlice(columns, length)
 		for _, s := range tmpslice {
 			releaseCharStar(s.name)
 		}
@@ -145,7 +150,7 @@ func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_siz
 	length := int(columnsCount)
 	columnsInfo := make([]TsColumnInfo, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		tmpslice := columnInfoArrayToSlice(columns, length)
 		for i, s := range tmpslice {
 			columnsInfo[i] = s.toStructInfoG()
 		}

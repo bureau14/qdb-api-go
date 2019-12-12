@@ -4,7 +4,10 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
-import "unsafe"
+import (
+	"math"
+	"unsafe"
+)
 
 // :: Start - Batch ::
 
@@ -31,7 +34,7 @@ func (t TsBatchColumnInfo) toStructC() C.qdb_ts_batch_column_info_t {
 func (t C.qdb_ts_batch_column_info_t) toStructInfoG() TsBatchColumnInfo {
 	return TsBatchColumnInfo{C.GoString(t.timeseries), C.GoString(t.column), int64(t.elements_count_hint)}
 }
-func tsBtachColumnInfoArrayToC(cols ...TsBatchColumnInfo) *C.qdb_ts_batch_column_info_t {
+func tsBatchColumnInfoArrayToC(cols ...TsBatchColumnInfo) *C.qdb_ts_batch_column_info_t {
 	if len(cols) == 0 {
 		return nil
 	}
@@ -42,9 +45,14 @@ func tsBtachColumnInfoArrayToC(cols ...TsBatchColumnInfo) *C.qdb_ts_batch_column
 	return &columns[0]
 }
 
-func releaseTsBtachColumnInfoArray(columns *C.qdb_ts_batch_column_info_t, length int) {
+func batchColumnInfoArrayToSlice(columns *C.qdb_ts_batch_column_info_t, length int) []C.qdb_ts_batch_column_info_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_batch_column_info_t{})]C.qdb_ts_batch_column_info_t)(unsafe.Pointer(columns))[:length:length]
+}
+
+func releaseTsBatchColumnInfoArray(columns *C.qdb_ts_batch_column_info_t, length int) {
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_batch_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		tmpslice := batchColumnInfoArrayToSlice(columns, length)
 		for _, s := range tmpslice {
 			releaseCharStar(s.timeseries)
 			releaseCharStar(s.column)
@@ -52,11 +60,11 @@ func releaseTsBtachColumnInfoArray(columns *C.qdb_ts_batch_column_info_t, length
 	}
 }
 
-func tsBtachColumnInfoArrayToGo(columns *C.qdb_ts_batch_column_info_t, columnsCount C.qdb_size_t) []TsBatchColumnInfo {
+func tsBatchColumnInfoArrayToGo(columns *C.qdb_ts_batch_column_info_t, columnsCount C.qdb_size_t) []TsBatchColumnInfo {
 	length := int(columnsCount)
 	columnsInfo := make([]TsBatchColumnInfo, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_batch_column_info_t)(unsafe.Pointer(columns))[:length:length]
+		tmpslice := batchColumnInfoArrayToSlice(columns, length)
 		for i, s := range tmpslice {
 			columnsInfo[i] = s.toStructInfoG()
 		}

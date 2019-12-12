@@ -32,6 +32,7 @@ package qdb
 */
 import "C"
 import (
+	"math"
 	"time"
 	"unsafe"
 )
@@ -163,10 +164,25 @@ func (r QueryResult) ScannedPoints() int64 {
 	return int64(r.result.scanned_point_count)
 }
 
+func queryPointArrayToSlice(row *QueryPoint, length int64) []QueryPoint {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(QueryPoint{})]QueryPoint)(unsafe.Pointer(row))[:length:length]
+}
+
+func qdbPointResultStarArrayToSlice(rows **C.qdb_point_result_t, length int64) []*QueryPoint {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.qdb_point_result_t)(nil))]*QueryPoint)(unsafe.Pointer(rows))[:length:length]
+}
+
+func qdbStringArrayToSlice(strings *C.qdb_string_t, length int64) []C.qdb_string_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_string_t{})]C.qdb_string_t)(unsafe.Pointer(strings))[:length:length]
+}
+
 // Columns : create columns from a row
 func (r QueryResult) Columns(row *QueryPoint) QueryRow {
 	count := int64(r.result.column_count)
-	return (*[1 << 30]QueryPoint)(unsafe.Pointer(row))[:count:count]
+	return queryPointArrayToSlice(row, count)
 }
 
 // Rows : get rows of a query table result
@@ -175,14 +191,14 @@ func (r QueryResult) Rows() QueryRows {
 	if count == 0 {
 		return []*QueryPoint{}
 	}
-	return (*[1 << 30]*QueryPoint)(unsafe.Pointer(r.result.rows))[:count:count]
+	return qdbPointResultStarArrayToSlice(r.result.rows, count)
 }
 
 // ColumnsNames : get the number of columns names of each row
 func (r QueryResult) ColumnsNames() []string {
 	count := int64(r.result.column_count)
 	result := make([]string, count)
-	rawNames := (*[1 << 30]C.qdb_string_t)(unsafe.Pointer(r.result.column_names))[:count:count]
+	rawNames := qdbStringArrayToSlice(r.result.column_names, count)
 	for i := range rawNames {
 		result[i] = C.GoString(rawNames[i].data)
 	}

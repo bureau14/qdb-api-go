@@ -7,6 +7,7 @@ package qdb
 import "C"
 import (
 	"fmt"
+	"math"
 	"time"
 	"unsafe"
 )
@@ -65,17 +66,14 @@ func (t Endpoint) URI() string {
 	return fmt.Sprintf("%s:%d", t.Address, t.Port)
 }
 
+func (t C.qdb_remote_node_t) toStructG() Endpoint {
+	return Endpoint{C.GoString(t.address), int64(t.port)}
+}
+
 // TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
 // solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
 func (t Endpoint) toStructC() C.qdb_remote_node_t {
-	address := convertToCharStar(string(t.Address))
-	port := C.ushort(t.Port)
-	// The [6]byte is some sort of padding necessary for Go : struct(char *, short, 6 byte of padding)
-	return C.qdb_remote_node_t{address, port, [6]byte{}}
-}
-
-func (t C.qdb_remote_node_t) toStructG() Endpoint {
-	return Endpoint{C.GoString(t.address), int64(t.port)}
+	return C.qdb_remote_node_t{address: convertToCharStar(string(t.Address)), port: C.ushort(t.Port)}
 }
 
 func endpointArrayToC(edpts ...Endpoint) *C.qdb_remote_node_t {
@@ -89,9 +87,14 @@ func endpointArrayToC(edpts ...Endpoint) *C.qdb_remote_node_t {
 	return &endpoints[0]
 }
 
+func endpointArrayToSlice(endpoints *C.qdb_remote_node_t, length int) []C.qdb_remote_node_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_remote_node_t{})]C.qdb_remote_node_t)(unsafe.Pointer(endpoints))[:length:length]
+}
+
 func releaseEndpointArray(endpoints *C.qdb_remote_node_t, length int) {
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_remote_node_t)(unsafe.Pointer(endpoints))[:length:length]
+		tmpslice := endpointArrayToSlice(endpoints, length)
 		for _, s := range tmpslice {
 			C.free(unsafe.Pointer(s.address))
 		}
@@ -102,7 +105,7 @@ func endpointArrayToGo(endpoints *C.qdb_remote_node_t, endpointsCount C.qdb_size
 	length := int(endpointsCount)
 	output := make([]Endpoint, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_remote_node_t)(unsafe.Pointer(endpoints))[:length:length]
+		tmpslice := endpointArrayToSlice(endpoints, length)
 		for i, s := range tmpslice {
 			output[i] = s.toStructG()
 		}

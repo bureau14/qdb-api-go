@@ -12,6 +12,7 @@ package qdb
 */
 import "C"
 import (
+	"math"
 	"time"
 	"unsafe"
 )
@@ -59,11 +60,31 @@ func doublePointArrayToC(pts ...TsDoublePoint) *C.qdb_ts_double_point {
 	return &points[0]
 }
 
+func blobPointArrayToSlice(points *C.qdb_ts_blob_point, length int) []C.qdb_ts_blob_point {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_blob_point{})]C.qdb_ts_blob_point)(unsafe.Pointer(points))[:length:length]
+}
+
+func doublePointArrayToSlice(points *C.qdb_ts_double_point, length int) []C.qdb_ts_double_point {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_double_point{})]C.qdb_ts_double_point)(unsafe.Pointer(points))[:length:length]
+}
+
+func int64PointArrayToSlice(points *C.qdb_ts_int64_point, length int) []C.qdb_ts_int64_point {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_int64_point{})]C.qdb_ts_int64_point)(unsafe.Pointer(points))[:length:length]
+}
+
+func timestampPointArrayToSlice(points *C.qdb_ts_timestamp_point, length int) []C.qdb_ts_timestamp_point {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_timestamp_point{})]C.qdb_ts_timestamp_point)(unsafe.Pointer(points))[:length:length]
+}
+
 func doublePointArrayToGo(points *C.qdb_ts_double_point, pointsCount C.qdb_size_t) []TsDoublePoint {
 	length := int(pointsCount)
 	output := make([]TsDoublePoint, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_double_point)(unsafe.Pointer(points))[:length:length]
+		tmpslice := doublePointArrayToSlice(points, length)
 		for i, s := range tmpslice {
 			output[i] = s.toStructG()
 		}
@@ -123,7 +144,7 @@ func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
 
 func releaseBlobPointArray(points *C.qdb_ts_blob_point, length int) {
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(points))[:length:length]
+		tmpslice := blobPointArrayToSlice(points, length)
 		for _, s := range tmpslice {
 			C.free(unsafe.Pointer(s.content))
 		}
@@ -134,7 +155,7 @@ func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) [
 	length := int(pointsCount)
 	output := make([]TsBlobPoint, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_blob_point)(unsafe.Pointer(points))[:length:length]
+		tmpslice := blobPointArrayToSlice(points, length)
 		for i, s := range tmpslice {
 			output[i] = s.toStructG()
 		}
@@ -191,7 +212,7 @@ func int64PointArrayToGo(points *C.qdb_ts_int64_point, pointsCount C.qdb_size_t)
 	length := int(pointsCount)
 	output := make([]TsInt64Point, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_int64_point)(unsafe.Pointer(points))[:length:length]
+		tmpslice := int64PointArrayToSlice(points, length)
 		for i, s := range tmpslice {
 			output[i] = s.toStructG()
 		}
@@ -248,7 +269,7 @@ func timestampPointArrayToGo(points *C.qdb_ts_timestamp_point, pointsCount C.qdb
 	length := int(pointsCount)
 	output := make([]TsTimestampPoint, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_timestamp_point)(unsafe.Pointer(points))[:length:length]
+		tmpslice := timestampPointArrayToSlice(points, length)
 		for i, s := range tmpslice {
 			output[i] = s.toStructG()
 		}

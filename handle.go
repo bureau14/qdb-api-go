@@ -222,7 +222,7 @@ func (h HandleType) GetTags(entryAlias string) ([]string, error) {
 		length := int(tagCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(tags))[:length:length]
+			tmpslice := charStarArrayToSlice(tags, length)
 			for i, s := range tmpslice {
 				output[i] = C.GoString(s)
 			}
@@ -248,7 +248,7 @@ func (h HandleType) GetTagged(tag string) ([]string, error) {
 		length := int(aliasCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(aliases))[:length:length]
+			tmpslice := charStarArrayToSlice(aliases, length)
 			for i, s := range tmpslice {
 				output[i] = C.GoString(s)
 			}
@@ -273,7 +273,7 @@ func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
 		length := int(entryCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(entries))[:length:length]
+			tmpslice := charStarArrayToSlice(entries, length)
 			for i, s := range tmpslice {
 				output[i] = C.GoString(s)
 			}
@@ -423,8 +423,8 @@ func (h HandleType) Query(query string) *Query {
 
 // TsBatch : create a batch object for the specified columns
 func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
-	columns := tsBtachColumnInfoArrayToC(cols...)
-	defer releaseTsBtachColumnInfoArray(columns, len(cols))
+	columns := tsBatchColumnInfoArrayToC(cols...)
+	defer releaseTsBatchColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	batch := &TsBatch{}
 	batch.h = h

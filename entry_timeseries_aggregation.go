@@ -11,6 +11,7 @@ package qdb
 */
 import "C"
 import (
+	"math"
 	"unsafe"
 )
 
@@ -107,11 +108,31 @@ func doubleAggregationArrayToC(ags ...*TsDoubleAggregation) *C.qdb_ts_double_agg
 	return &doubleAggregations[0]
 }
 
+func blobAggregationArrayToSlice(aggregations *C.qdb_ts_blob_aggregation_t, length int) []C.qdb_ts_blob_aggregation_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_blob_aggregation_t{})]C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+}
+
+func doubleAggregationArrayToSlice(aggregations *C.qdb_ts_double_aggregation_t, length int) []C.qdb_ts_double_aggregation_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_double_aggregation_t{})]C.qdb_ts_double_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+}
+
+func int64AggregationArrayToSlice(aggregations *C.qdb_ts_int64_aggregation_t, length int) []C.qdb_ts_int64_aggregation_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_int64_aggregation_t{})]C.qdb_ts_int64_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+}
+
+func timestampAggregationArrayToSlice(aggregations *C.qdb_ts_timestamp_aggregation_t, length int) []C.qdb_ts_timestamp_aggregation_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_timestamp_aggregation_t{})]C.qdb_ts_timestamp_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+}
+
 func doubleAggregationArrayToGo(aggregations *C.qdb_ts_double_aggregation_t, aggregationsCount C.qdb_size_t, aggs []*TsDoubleAggregation) []TsDoubleAggregation {
 	length := int(aggregationsCount)
 	output := make([]TsDoubleAggregation, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_double_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		tmpslice := doubleAggregationArrayToSlice(aggregations, length)
 		for i, s := range tmpslice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
@@ -191,7 +212,7 @@ func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggrega
 	length := int(aggregationsCount)
 	output := make([]TsBlobAggregation, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		tmpslice := blobAggregationArrayToSlice(aggregations, length)
 		for i, s := range tmpslice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
@@ -271,7 +292,7 @@ func int64AggregationArrayToGo(aggregations *C.qdb_ts_int64_aggregation_t, aggre
 	length := int(aggregationsCount)
 	output := make([]TsInt64Aggregation, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_int64_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		tmpslice := int64AggregationArrayToSlice(aggregations, length)
 		for i, s := range tmpslice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
@@ -351,7 +372,7 @@ func timestampAggregationArrayToGo(aggregations *C.qdb_ts_timestamp_aggregation_
 	length := int(aggregationsCount)
 	output := make([]TsTimestampAggregation, length)
 	if length > 0 {
-		tmpslice := (*[1 << 30]C.qdb_ts_timestamp_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
+		tmpslice := timestampAggregationArrayToSlice(aggregations, length)
 		for i, s := range tmpslice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()

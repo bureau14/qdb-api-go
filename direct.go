@@ -93,7 +93,7 @@ func (h DirectHandleType) PrefixGet(prefix string, limit int) ([]string, error) 
 		length := int(entryCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := (*[1 << 30]*C.char)(unsafe.Pointer(entries))[:length:length]
+			tmpslice := charStarArrayToSlice(entries, length)
 			for i, s := range tmpslice {
 				output[i] = C.GoString(s)
 			}
