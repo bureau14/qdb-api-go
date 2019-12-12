@@ -54,11 +54,11 @@ var _ = Describe("Tests", func() {
 			})
 
 			It("should get an existing entry", func() {
-				Skip("Waiting on implmentation of put")
+				Skip("Waiting for implementation of put")
 			})
 
 			It("should update an existing entry", func() {
-				Skip("Waiting on implmentation of put")
+				Skip("Waiting for implementation of put")
 			})
 		})
 
@@ -79,15 +79,15 @@ var _ = Describe("Tests", func() {
 			})
 
 			It("should get an existing entry", func() {
-				Skip("Waiting on implmentation of put")
+				Skip("Waiting for implementation of put")
 			})
 
 			It("should update an existing entry", func() {
-				Skip("Waiting on implmentation of put")
+				Skip("Waiting for implementation of put")
 			})
 
 			It("should add to an existing entry", func() {
-				Skip("Waiting on implmentation of put")
+				Skip("Waiting for implementation of put")
 			})
 		})
 	})
