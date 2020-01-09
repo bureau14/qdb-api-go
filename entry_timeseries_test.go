@@ -386,21 +386,21 @@ var _ = Describe("Tests", func() {
 						int64Points = []TsInt64Point{}
 						timestampPoints = []TsTimestampPoint{}
 					})
-					It("should not work to insert double points", func() {
+					It("should work to insert double points", func() {
 						err := doubleColumn.Insert(doublePoints...)
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 					})
-					It("should not work to insert blob points", func() {
+					It("should work to insert blob points", func() {
 						err := blobColumn.Insert(blobPoints...)
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 					})
-					It("should not work to insert int64 points", func() {
+					It("should work to insert int64 points", func() {
 						err := int64Column.Insert(int64Points...)
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 					})
-					It("should not work to insert timestamp points", func() {
+					It("should work to insert timestamp points", func() {
 						err := timestampColumn.Insert(timestampPoints...)
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 					})
 				})
 			})
@@ -478,24 +478,24 @@ var _ = Describe("Tests", func() {
 					Expect(results).To(ConsistOf(tsTimestampPoints))
 				})
 				Context("Empty", func() {
-					It("should not get double ranges", func() {
+					It("should get empty double points", func() {
 						results, err := doubleColumn.GetRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect([]TsDoublePoint{}).To(ConsistOf(results))
 					})
-					It("should not get blob ranges", func() {
+					It("should get empty blob points", func() {
 						results, err := blobColumn.GetRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect([]TsBlobPoint{}).To(ConsistOf(results))
 					})
-					It("should not get int64 ranges", func() {
+					It("should get empty int64 points", func() {
 						results, err := int64Column.GetRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect([]TsInt64Point{}).To(ConsistOf(results))
 					})
-					It("should not get timestamp ranges", func() {
+					It("should get empty timestamp points", func() {
 						results, err := timestampColumn.GetRanges()
-						Expect(err).To(HaveOccurred())
+						Expect(err).ToNot(HaveOccurred())
 						Expect([]TsTimestampPoint{}).To(ConsistOf(results))
 					})
 				})
