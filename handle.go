@@ -304,7 +304,7 @@ func NewHandle() (HandleType, error) {
 	return h, makeErrorOrNil(err)
 }
 
-// SetupHandle : Setup an handle, return error if needed
+// SetupHandle : Setup a handle, return error if needed
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
 func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
@@ -320,7 +320,7 @@ func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 	return h, err
 }
 
-// MustSetupHandle : Setup an handle, panic on error
+// MustSetupHandle : Setup a handle, panic on error
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
 //

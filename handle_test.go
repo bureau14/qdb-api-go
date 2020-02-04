@@ -30,12 +30,12 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			testHandle.Close()
 		})
-		It("should setup an handle", func() {
+		It("should setup a handle", func() {
 			handle, err := SetupHandle(insecureURI, time.Duration(120)*time.Second)
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
-		It("should not be able to setup an handle - secure URI with normal setup", func() {
+		It("should not be able to setup a handle - secure URI with normal setup", func() {
 			_, err := SetupHandle(secureURI, time.Duration(120)*time.Second)
 			Expect(err).To(HaveOccurred())
 		})
@@ -43,7 +43,7 @@ var _ = Describe("Tests", func() {
 			_, err := SetupHandle(insecureURI, 0)
 			Expect(err).To(HaveOccurred())
 		})
-		It("must setup an handle", func() {
+		It("must setup a handle", func() {
 			handle := MustSetupHandle(insecureURI, time.Duration(120)*time.Second)
 			handle.Close()
 		})
