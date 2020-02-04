@@ -431,3 +431,10 @@ func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
 	err := C.qdb_ts_batch_table_init(h.handle, columns, columnsCount, &batch.table)
 	return batch, makeErrorOrNil(err)
 }
+
+func (h HandleType) GetLastError() (string, error) {
+	var err C.qdb_error_t
+	var message C.qdb_string_t
+	C.qdb_get_last_error(&err, &message)
+	return C.GoString(message.data), makeErrorOrNil(err)
+}
