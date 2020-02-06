@@ -131,30 +131,35 @@ func ExampleTimeseriesEntry_Columns() {
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Columns")
 	defer h.Close()
 
-	doubleColumns, blobColumns, int64Columns, timestampColumns, err := timeseries.Columns()
+	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, err := timeseries.Columns()
 	if err != nil {
 		// handle error
-	}
-	for _, col := range doubleColumns {
-		fmt.Println("column:", col.Name())
-		// do something like Insert, GetRanges with a double column
 	}
 	for _, col := range blobColumns {
 		fmt.Println("column:", col.Name())
 		// do something like Insert, GetRanges with a blob column
 	}
+	for _, col := range doubleColumns {
+		fmt.Println("column:", col.Name())
+		// do something like Insert, GetRanges with a double column
+	}
 	for _, col := range int64Columns {
 		fmt.Println("column:", col.Name())
-		// do something like Insert, GetRanges with a blob column
+		// do something like Insert, GetRanges with a int64 column
+	}
+	for _, col := range stringColumns {
+		fmt.Println("column:", col.Name())
+		// do something like Insert, GetRanges with a string column
 	}
 	for _, col := range timestampColumns {
 		fmt.Println("column:", col.Name())
-		// do something like Insert, GetRanges with a blob column
+		// do something like Insert, GetRanges with a timestamp column
 	}
 	// Output:
-	// column: serie_column_double
 	// column: serie_column_blob
+	// column: serie_column_double
 	// column: serie_column_int64
+	// column: serie_column_string
 	// column: serie_column_timestamp
 }
 
@@ -173,6 +178,7 @@ func ExampleTimeseriesEntry_ColumnsInfo() {
 	// column: serie_column_blob
 	// column: serie_column_double
 	// column: serie_column_int64
+	// column: serie_column_string
 	// column: serie_column_timestamp
 }
 
@@ -195,6 +201,7 @@ func ExampleTimeseriesEntry_InsertColumns() {
 	// column: serie_column_blob
 	// column: serie_column_double
 	// column: serie_column_int64
+	// column: serie_column_string
 	// column: serie_column_timestamp
 	// column: serie_column_blob_2
 	// column: serie_column_double_2
