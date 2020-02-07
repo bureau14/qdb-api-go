@@ -7,3 +7,11 @@
 /qdb/lib/
 /qdb/
 /thirdparty/quasardb/
+
+# Test files
+/secure/
+/insecure/
+*.cfg
+*.key
+*.err.txt
+*.out.txt
