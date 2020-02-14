@@ -17,9 +17,6 @@ var _ = Describe("Tests", func() {
 		It("should not connect without creating handle", func() {
 			err := testHandle.Connect(insecureURI)
 			Expect(err).To(HaveOccurred())
-			message, last_err := testHandle.GetLastError()
-			Expect(err).To(Equal(last_err))
-			Expect(string("at qdb_connect: Got NULL handle")).To(Equal(message))
 		})
 		It("should not be able to open with random protocol", func() {
 			err := testHandle.Open(2)
@@ -94,6 +91,12 @@ var _ = Describe("Tests", func() {
 			})
 			AfterEach(func() {
 				testHandle.Close()
+			})
+			It("should get last error", func() {
+				err := testHandle.Connect("")
+				message, last_err := testHandle.GetLastError()
+				Expect(err).To(Equal(last_err))
+				Expect(string("at qdb_connect: Got NULL uri")).To(Equal(message))
 			})
 			It("should not add cluster public key with invalid filename", func() {
 				_, err := ClusterKeyFromFile("asd")
