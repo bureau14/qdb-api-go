@@ -110,8 +110,8 @@ var _ = Describe("Tests", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(obtainedAliases).To(Equal([]string(nil)))
 		})
-		It("should be able to execute a string quert with valid input", func() {
-			obtainedAliases, err := handle.Find().ExecuteString("find(tag=\"all\")")
+		It("should be able to execute a string query with valid input", func() {
+			obtainedAliases, err := handle.Find().ExecuteString("find(tag='all')")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(3))
 			Expect(obtainedAliases).To(ConsistOf(aliases))
