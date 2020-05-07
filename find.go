@@ -8,7 +8,6 @@ import "C"
 import (
 	"bytes"
 	"errors"
-	"strconv"
 	"unsafe"
 )
 
@@ -49,15 +48,17 @@ func (q Find) buildQuery() (string, error) {
 		if idx != 0 {
 			query.WriteString(" and ")
 		}
-		query.WriteString("tag=")
-		query.WriteString(strconv.Quote(t))
+		query.WriteString("tag='")
+		query.WriteString(t)
+		query.WriteString("'")
 	}
 	if query.Len() == len(string("find(")) {
 		return string(""), errors.New("query should have at least one valid tag")
 	}
 	for _, t := range q.tagsExcluded {
-		query.WriteString(" and not tag=")
-		query.WriteString(strconv.Quote(t))
+		query.WriteString(" and not tag='")
+		query.WriteString(t)
+		query.WriteString("'")
 	}
 	for _, t := range q.types {
 		query.WriteString(" and type=")
