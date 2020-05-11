@@ -10,59 +10,78 @@ import (
 )
 
 var _ = Describe("Tests", func() {
-	const (
-		count int64 = 8
-		start int64 = 0
-		end   int64 = count - 1
-	)
 	var (
-		alias      string
-		timeseries TimeseriesEntry
+		alias string
 
-		doubleColumn    TsDoubleColumn
+		timeseries      TimeseriesEntry
+
 		blobColumn      TsBlobColumn
+		doubleColumn    TsDoubleColumn
 		int64Column     TsInt64Column
+		stringColumn     TsStringColumn
 		timestampColumn TsTimestampColumn
 		columnsInfo     []TsColumnInfo
-
+		
 		timestamps      []time.Time
-		doublePoints    []TsDoublePoint
 		blobPoints      []TsBlobPoint
+		doublePoints    []TsDoublePoint
 		int64Points     []TsInt64Point
+		stringPoints    []TsStringPoint
 		timestampPoints []TsTimestampPoint
 	)
+	const (
+		count	int64 = 8
+		start	int64 = 0
+		end		int64 = count - 1
 
+		blobIndex		int64 = 0
+		doubleIndex		int64 = 1
+		int64Index		int64 = 2
+		stringIndex		int64 = 3
+		timestampIndex	int64 = 4
+
+		blobColName      string = "blob_col"
+		stringColName     string = "string_col"
+		doubleColName    string = "double_col"
+		int64ColName     string = "int64_col"
+		timestampColName string = "timestamp_col"
+	)
 	BeforeEach(func() {
 		alias = generateAlias(16)
-		columnsInfo = []TsColumnInfo{}
-		columnsInfo = append(columnsInfo, NewTsColumnInfo("blob_column", TsColumnBlob), NewTsColumnInfo("double_column", TsColumnDouble), NewTsColumnInfo("int64_column", TsColumnInt64), NewTsColumnInfo("timestamp_column", TsColumnTimestamp))
-	})
-	JustBeforeEach(func() {
-		timeseries = handle.Timeseries(alias)
 
+		columnsInfo = []TsColumnInfo{}
+		columnsInfo = append(columnsInfo, NewTsColumnInfo(blobColName, TsColumnBlob), NewTsColumnInfo(doubleColName, TsColumnDouble), NewTsColumnInfo(int64ColName, TsColumnInt64), NewTsColumnInfo(stringColName, TsColumnString), NewTsColumnInfo(timestampColName, TsColumnTimestamp))
+		
+		timeseries = handle.Timeseries(alias)
+		
 		timestamps = make([]time.Time, count)
 		blobPoints = make([]TsBlobPoint, count)
 		doublePoints = make([]TsDoublePoint, count)
 		int64Points = make([]TsInt64Point, count)
+		stringPoints = make([]TsStringPoint, count)
 		timestampPoints = make([]TsTimestampPoint, count)
 		for idx := int64(0); idx < count; idx++ {
 			timestamps[idx] = time.Unix((idx+1)*10, 0)
 			blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
 			doublePoints[idx] = NewTsDoublePoint(timestamps[idx], float64(idx))
 			int64Points[idx] = NewTsInt64Point(timestamps[idx], idx)
+			stringPoints[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 			timestampPoints[idx] = NewTsTimestampPoint(timestamps[idx], timestamps[idx])
 		}
 
+		
 		err := timeseries.Create(24*time.Hour, columnsInfo...)
 		Expect(err).ToNot(HaveOccurred())
-		blobColumn = timeseries.BlobColumn(columnsInfo[0].Name())
-		doubleColumn = timeseries.DoubleColumn(columnsInfo[1].Name())
-		int64Column = timeseries.Int64Column(columnsInfo[2].Name())
-		timestampColumn = timeseries.TimestampColumn(columnsInfo[3].Name())
-
-		doubleColumn.Insert(doublePoints...)
+		blobColumn = timeseries.BlobColumn(columnsInfo[blobIndex].Name())
+		doubleColumn = timeseries.DoubleColumn(columnsInfo[doubleIndex].Name())
+		int64Column = timeseries.Int64Column(columnsInfo[int64Index].Name())
+		stringColumn = timeseries.StringColumn(columnsInfo[stringIndex].Name())
+		timestampColumn = timeseries.TimestampColumn(columnsInfo[timestampIndex].Name())
+		
 		blobColumn.Insert(blobPoints...)
+		doubleColumn.Insert(doublePoints...)
 		int64Column.Insert(int64Points...)
+		stringColumn.Insert(stringPoints...)
 		timestampColumn.Insert(timestampPoints...)
 	})
 	AfterEach(func() {
@@ -84,19 +103,23 @@ var _ = Describe("Tests", func() {
 				// first column is the timestamps of the row
 				// second column is the table name
 				// values begin at 2
-				blobValue, err := columns[2].GetBlob()
+				blobValue, err := columns[blobIndex+2].GetBlob()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(blobValue).To(Equal(blobPoints[rowIdx].Content()))
 
-				doubleValue, err := columns[3].GetDouble()
+				doubleValue, err := columns[doubleIndex+2].GetDouble()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(doubleValue).To(Equal(doublePoints[rowIdx].Content()))
 
-				int64Value, err := columns[4].GetInt64()
+				int64Value, err := columns[int64Index+2].GetInt64()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(int64Value).To(Equal(int64Points[rowIdx].Content()))
 
-				timestampValue, err := columns[5].GetTimestamp()
+				stringValue, err := columns[stringIndex+2].GetString()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(stringValue).To(Equal(stringPoints[rowIdx].Content()))
+
+				timestampValue, err := columns[timestampIndex+2].GetTimestamp()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timestampValue).To(Equal(timestampPoints[rowIdx].Content()))
 
@@ -120,6 +143,10 @@ var _ = Describe("Tests", func() {
 						value := point.Value()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(value).To(Equal(int64Points[rowIdx].Content()))
+					case QueryResultString:
+						value := point.Value()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(value).To(Equal(stringPoints[rowIdx].Content()))
 					case QueryResultTimestamp:
 						value := point.Value()
 						Expect(err).ToNot(HaveOccurred())
@@ -144,7 +171,7 @@ var _ = Describe("Tests", func() {
 
 			for _, row := range result.Rows() {
 				columns := result.Columns(row)
-				_, err := columns[1].GetDouble()
+				_, err := columns[blobIndex].GetDouble()
 				Expect(err).To(HaveOccurred())
 			}
 		})
