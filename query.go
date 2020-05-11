@@ -24,6 +24,12 @@ package qdb
 		*length = result->payload.blob.content_length;
 	}
 
+	void get_string_from_payload(const qdb_point_result_t *result, const char ** content, qdb_size_t *length)
+	{
+		*content = result->payload.string.content;
+		*length = result->payload.string.content_length;
+	}
+
 
 	qdb_timespec_t get_timestamp_from_payload(const qdb_point_result_t * result)
 	{
@@ -44,6 +50,7 @@ type QueryResultValueType int64
 // QueryResultDouble : query result value double
 // QueryResultBlob : query result value blob
 // QueryResultInt64 : query result value int64
+// QueryResultString : query result value string
 // QueryResultTimestamp : query result value timestamp
 // QueryResultCount : query result value count
 const (
@@ -51,6 +58,7 @@ const (
 	QueryResultDouble    QueryResultValueType = C.qdb_query_result_double
 	QueryResultBlob      QueryResultValueType = C.qdb_query_result_blob
 	QueryResultInt64     QueryResultValueType = C.qdb_query_result_int64
+	QueryResultString QueryResultValueType = C.qdb_query_result_string
 	QueryResultTimestamp QueryResultValueType = C.qdb_query_result_timestamp
 	QueryResultCount     QueryResultValueType = C.qdb_query_result_count
 )
@@ -78,6 +86,13 @@ func getBlobUnsafe(result *C.qdb_point_result_t) []byte {
 	return C.GoBytes(content, C.int(contentLength))
 }
 
+func getStringUnsafe(result *C.qdb_point_result_t) string {
+	var content *C.char
+	var contentLength C.qdb_size_t
+	C.get_string_from_payload(result, &content, &contentLength)
+	return C.GoStringN(content, C.int(contentLength))
+}
+
 // Get : retrieve the raw interface
 func (r *QueryPoint) Get() QueryPointResult {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
@@ -90,6 +105,8 @@ func (r *QueryPoint) Get() QueryPointResult {
 		output.value = getBlobUnsafe(result)
 	case C.qdb_query_result_int64:
 		output.value = int64(C.get_int64_from_payload(result))
+	case C.qdb_query_result_string:
+		output.value = getStringUnsafe(result)
 	case C.qdb_query_result_timestamp:
 		output.value = C.get_timestamp_from_payload(result).toStructG()
 	case C.qdb_query_result_count:
@@ -123,6 +140,15 @@ func (r *QueryPoint) GetInt64() (int64, error) {
 		return int64(C.get_int64_from_payload(result)), nil
 	}
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
+}
+
+// GetString : retrieve a string from the interface
+func (r *QueryPoint) GetString() (string, error) {
+	if r._type == C.qdb_query_result_string {
+		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
+		return getStringUnsafe(result), nil
+	}
+	return "", makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
 // GetTimestamp : retrieve a timestamp from the interface
