@@ -58,7 +58,7 @@ const (
 	QueryResultDouble    QueryResultValueType = C.qdb_query_result_double
 	QueryResultBlob      QueryResultValueType = C.qdb_query_result_blob
 	QueryResultInt64     QueryResultValueType = C.qdb_query_result_int64
-	QueryResultString QueryResultValueType = C.qdb_query_result_string
+	QueryResultString	 QueryResultValueType = C.qdb_query_result_string
 	QueryResultTimestamp QueryResultValueType = C.qdb_query_result_timestamp
 	QueryResultCount     QueryResultValueType = C.qdb_query_result_count
 )
