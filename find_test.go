@@ -100,13 +100,13 @@ var _ = Describe("Tests", func() {
 			Expect(obtainedAliases).To(ConsistOf([]string{integer.Alias()}))
 		})
 		It("should not be able to retrieve anything", func() {
-			obtainedAliases, err := handle.Find().Tag("dsas").Execute()
+			obtainedAliases, err := handle.Find().Tag("unexisting").Execute()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(obtainedAliases)).To(Equal(0))
 			Expect(obtainedAliases).To(Equal([]string{}))
 		})
 		It("should not be able to use a bad type", func() {
-			obtainedAliases, err := handle.Find().Tag("all").Type("dsas").Execute()
+			obtainedAliases, err := handle.Find().Tag("all").Type("unexisting").Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(obtainedAliases).To(Equal([]string(nil)))
 		})

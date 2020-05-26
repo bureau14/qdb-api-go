@@ -13,7 +13,7 @@ func MustCreateTimeseries(alias string) (*HandleType, *TimeseriesEntry) {
 
 func MustCreateTimeseriesWithColumns(alias string) (*HandleType, *TimeseriesEntry) {
 	h, timeseries := MustCreateTimeseries(alias)
-	timeseries.Create(24*time.Hour, NewTsColumnInfo("serie_column_blob", TsColumnBlob), NewTsColumnInfo("serie_column_double", TsColumnDouble), NewTsColumnInfo("serie_column_int64", TsColumnInt64), NewTsColumnInfo("serie_column_string", TsColumnString), NewTsColumnInfo("serie_column_timestamp", TsColumnTimestamp))
+	timeseries.Create(24*time.Hour, NewTsColumnInfo("series_column_blob", TsColumnBlob), NewTsColumnInfo("series_column_double", TsColumnDouble), NewTsColumnInfo("series_column_int64", TsColumnInt64), NewTsColumnInfo("series_column_string", TsColumnString), NewTsColumnInfo("series_column_timestamp", TsColumnTimestamp))
 	return h, timeseries
 }
 

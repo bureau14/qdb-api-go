@@ -6,8 +6,8 @@ package qdb
 import "C"
 import (
 	"math"
-	"unsafe"
 	"time"
+	"unsafe"
 )
 
 // TsTimestampPoint : timestamped timestamp data point
@@ -60,8 +60,8 @@ func timestampPointArrayToGo(points *C.qdb_ts_timestamp_point, pointsCount C.qdb
 	length := int(pointsCount)
 	output := make([]TsTimestampPoint, length)
 	if length > 0 {
-		tmpslice := timestampPointArrayToSlice(points, length)
-		for i, s := range tmpslice {
+		slice := timestampPointArrayToSlice(points, length)
+		for i, s := range slice {
 			output[i] = s.toStructG()
 		}
 	}
@@ -195,8 +195,8 @@ func timestampAggregationArrayToGo(aggregations *C.qdb_ts_timestamp_aggregation_
 	length := int(aggregationsCount)
 	output := make([]TsTimestampAggregation, length)
 	if length > 0 {
-		tmpslice := timestampAggregationArrayToSlice(aggregations, length)
-		for i, s := range tmpslice {
+		slice := timestampAggregationArrayToSlice(aggregations, length)
+		for i, s := range slice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
 		}

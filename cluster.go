@@ -79,8 +79,8 @@ func endpointArrayToGo(endpoints *C.qdb_remote_node_t, endpointsCount C.qdb_size
 	length := int(endpointsCount)
 	output := make([]Endpoint, length)
 	if length > 0 {
-		tmpslice := endpointArrayToSlice(endpoints, length)
-		for i, s := range tmpslice {
+		slice := endpointArrayToSlice(endpoints, length)
+		for i, s := range slice {
 			output[i] = s.toStructG()
 		}
 	}

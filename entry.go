@@ -91,7 +91,7 @@ type RefID C.qdb_id_t
 type EntryType C.qdb_entry_type_t
 
 // EntryType Values
-// 	EntryUnitialized : Uninitialized value.
+// 	EntryUninitialized : Uninitialized value.
 // 	EntryBlob : A binary large object (blob).
 // 	EntryInteger : A signed 64-bit integer.
 // 	EntryHSet : A distributed hash set.
@@ -100,14 +100,14 @@ type EntryType C.qdb_entry_type_t
 // 	EntryTS : A distributed time series.
 // 	EntryStream : A distributed binary stream.
 const (
-	EntryUnitialized EntryType = C.qdb_entry_uninitialized
-	EntryBlob        EntryType = C.qdb_entry_blob
-	EntryInteger     EntryType = C.qdb_entry_integer
-	EntryHSet        EntryType = C.qdb_entry_hset
-	EntryTag         EntryType = C.qdb_entry_tag
-	EntryDeque       EntryType = C.qdb_entry_deque
-	EntryStream      EntryType = C.qdb_entry_stream
-	EntryTS          EntryType = C.qdb_entry_ts
+	EntryUninitialized EntryType = C.qdb_entry_uninitialized
+	EntryBlob          EntryType = C.qdb_entry_blob
+	EntryInteger       EntryType = C.qdb_entry_integer
+	EntryHSet          EntryType = C.qdb_entry_hset
+	EntryTag           EntryType = C.qdb_entry_tag
+	EntryDeque         EntryType = C.qdb_entry_deque
+	EntryStream        EntryType = C.qdb_entry_stream
+	EntryTS            EntryType = C.qdb_entry_ts
 )
 
 // Metadata : A structure representing the metadata of an entry in the database.
@@ -211,8 +211,8 @@ func (e Entry) GetTagged(tag string) ([]string, error) {
 		length := int(aliasCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := charStarArrayToSlice(aliases, length)
-			for i, s := range tmpslice {
+			slice := charStarArrayToSlice(aliases, length)
+			for i, s := range slice {
 				output[i] = C.GoString(s)
 			}
 		}
@@ -236,8 +236,8 @@ func (e Entry) GetTags() ([]string, error) {
 		length := int(tagCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := charStarArrayToSlice(tags, length)
-			for i, s := range tmpslice {
+			slice := charStarArrayToSlice(tags, length)
+			for i, s := range slice {
 				output[i] = C.GoString(s)
 			}
 		}

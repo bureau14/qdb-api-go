@@ -8,17 +8,17 @@ import (
 	"time"
 )
 
-func toQdbTimespec(time time.Time) C.qdb_timespec_t {
-	return C.qdb_timespec_t{C.qdb_time_t(time.Unix()), C.qdb_time_t(time.Nanosecond())}
+func toQdbTimespec(tp time.Time) C.qdb_timespec_t {
+	return C.qdb_timespec_t{C.qdb_time_t(tp.Unix()), C.qdb_time_t(tp.Nanosecond())}
 }
 
-func toQdbTime(t time.Time) C.qdb_time_t {
-	if t.Equal(PreserveExpiration()) {
+func toQdbTime(tp time.Time) C.qdb_time_t {
+	if tp.Equal(PreserveExpiration()) {
 		return C.qdb_preserve_expiration
 	}
-	return C.qdb_time_t(t.UnixNano() / int64(time.Millisecond))
+	return C.qdb_time_t(tp.UnixNano() / int64(time.Millisecond))
 }
 
-func (cval C.qdb_timespec_t) toStructG() time.Time {
-	return time.Unix(int64(cval.tv_sec), int64(cval.tv_nsec))
+func (tp C.qdb_timespec_t) toStructG() time.Time {
+	return time.Unix(int64(tp.tv_sec), int64(tp.tv_nsec))
 }

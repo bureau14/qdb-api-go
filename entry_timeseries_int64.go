@@ -6,8 +6,8 @@ package qdb
 import "C"
 import (
 	"math"
-	"unsafe"
 	"time"
+	"unsafe"
 )
 
 // TsInt64Point : timestamped int64 data point
@@ -60,8 +60,8 @@ func int64PointArrayToGo(points *C.qdb_ts_int64_point, pointsCount C.qdb_size_t)
 	length := int(pointsCount)
 	output := make([]TsInt64Point, length)
 	if length > 0 {
-		tmpslice := int64PointArrayToSlice(points, length)
-		for i, s := range tmpslice {
+		slice := int64PointArrayToSlice(points, length)
+		for i, s := range slice {
 			output[i] = s.toStructG()
 		}
 	}
@@ -195,8 +195,8 @@ func int64AggregationArrayToGo(aggregations *C.qdb_ts_int64_aggregation_t, aggre
 	length := int(aggregationsCount)
 	output := make([]TsInt64Aggregation, length)
 	if length > 0 {
-		tmpslice := int64AggregationArrayToSlice(aggregations, length)
-		for i, s := range tmpslice {
+		slice := int64AggregationArrayToSlice(aggregations, length)
+		for i, s := range slice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
 		}

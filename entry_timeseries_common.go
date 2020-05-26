@@ -24,7 +24,7 @@ const (
 	TsColumnBlob          TsColumnType = C.qdb_ts_column_blob
 	TsColumnDouble        TsColumnType = C.qdb_ts_column_double
 	TsColumnInt64         TsColumnType = C.qdb_ts_column_int64
-	TsColumnString          TsColumnType = C.qdb_ts_column_string
+	TsColumnString        TsColumnType = C.qdb_ts_column_string
 	TsColumnTimestamp     TsColumnType = C.qdb_ts_column_timestamp
 )
 
@@ -76,8 +76,8 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 
 func releaseColumnInfoArray(columns *C.qdb_ts_column_info_t, length int) {
 	if length > 0 {
-		tmpslice := columnInfoArrayToSlice(columns, length)
-		for _, s := range tmpslice {
+		slice := columnInfoArrayToSlice(columns, length)
+		for _, s := range slice {
 			releaseCharStar(s.name)
 		}
 	}
@@ -87,8 +87,8 @@ func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_siz
 	length := int(columnsCount)
 	columnsInfo := make([]TsColumnInfo, length)
 	if length > 0 {
-		tmpslice := columnInfoArrayToSlice(columns, length)
-		for i, s := range tmpslice {
+		slice := columnInfoArrayToSlice(columns, length)
+		for i, s := range slice {
 			columnsInfo[i] = s.toStructInfoG()
 		}
 	}
@@ -99,7 +99,6 @@ func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_siz
 type TimeseriesEntry struct {
 	Entry
 }
-
 
 // :: internals
 
@@ -120,8 +119,8 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, col
 	stringColumns := []TsStringColumn{}
 	timestampColumns := []TsTimestampColumn{}
 	if length > 0 {
-		tmpslice := columnInfoArrayToSlice(columns, length)
-		for _, s := range tmpslice {
+		slice := columnInfoArrayToSlice(columns, length)
+		for _, s := range slice {
 			if s._type == C.qdb_ts_column_blob {
 				blobColumns = append(blobColumns, TsBlobColumn{s.toStructG(entry)})
 			} else if s._type == C.qdb_ts_column_double {
@@ -194,7 +193,6 @@ func (entry TimeseriesEntry) InsertColumns(cols ...TsColumnInfo) error {
 	err := C.qdb_ts_insert_columns(entry.handle, alias, columns, columnsCount)
 	return makeErrorOrNil(err)
 }
-
 
 // TsRange : timeseries range with begin and end timestamp
 type TsRange struct {
@@ -405,8 +403,8 @@ func batchColumnInfoArrayToSlice(columns *C.qdb_ts_batch_column_info_t, length i
 
 func releaseTsBatchColumnInfoArray(columns *C.qdb_ts_batch_column_info_t, length int) {
 	if length > 0 {
-		tmpslice := batchColumnInfoArrayToSlice(columns, length)
-		for _, s := range tmpslice {
+		slice := batchColumnInfoArrayToSlice(columns, length)
+		for _, s := range slice {
 			releaseCharStar(s.timeseries)
 			releaseCharStar(s.column)
 		}
@@ -417,8 +415,8 @@ func tsBatchColumnInfoArrayToGo(columns *C.qdb_ts_batch_column_info_t, columnsCo
 	length := int(columnsCount)
 	columnsInfo := make([]TsBatchColumnInfo, length)
 	if length > 0 {
-		tmpslice := batchColumnInfoArrayToSlice(columns, length)
-		for i, s := range tmpslice {
+		slice := batchColumnInfoArrayToSlice(columns, length)
+		for i, s := range slice {
 			columnsInfo[i] = s.toStructInfoG()
 		}
 	}

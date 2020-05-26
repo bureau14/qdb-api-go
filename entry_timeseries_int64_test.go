@@ -15,7 +15,7 @@ var _ = Describe("Tests", func() {
 	BeforeEach(func() {
 		alias = generateAlias(16)
 	})
-	
+
 	// :: Timeseries tests ::
 	Context("Timeseries - Int64", func() {
 		var (
@@ -46,7 +46,7 @@ var _ = Describe("Tests", func() {
 			// aggs = []*TsInt64Aggregation{aggFirst, aggLast}
 			value = int64(1)
 			r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
-			
+
 			timeseries = handle.Timeseries(alias)
 			err := timeseries.Create(24*time.Hour, []TsColumnInfo{columnInfo}...)
 			Expect(err).ToNot(HaveOccurred())
@@ -98,36 +98,36 @@ var _ = Describe("Tests", func() {
 				Expect(results).To(ConsistOf([]TsInt64Point{}))
 			})
 			It("should create a int64 aggregation", func() {
-				Skip("Aggregation is not yet implement")
+				Skip("Aggregation is not yet implemented")
 				// agg := NewInt64Aggregation(AggMin, r)
 				// Expect(AggMin).To(Equal(agg.Type()))
 				// Expect(r).To(Equal(agg.Range()))
 			})
 			It("should not work with empty int64 aggregations", func() {
-				Skip("Aggregation is not yet implement")
+				Skip("Aggregation is not yet implemented")
 				// _, err := column.Aggregate()
 				// Expect(err).To(HaveOccurred())
 			})
 			It("should get first int64 with int64 aggregation", func() {
-				Skip("Aggregation is not yet implement")
+				Skip("Aggregation is not yet implemented")
 				// first := points[start]
 				// aggs, err := column.Aggregate(NewInt64Aggregation(AggFirst, r))
 				// Expect(err).ToNot(HaveOccurred())
 				// Expect(first).To(Equal(aggs[0].Result()))
 			})
 			It("should get first and last elements in timeseries with int64 aggregates", func() {
-				Skip("Aggregation is not yet implement")
+				Skip("Aggregation is not yet implemented")
 				// first := points[start]
 				// last := points[end]
 				// _, err := column.Aggregate(aggs...)
 				// Expect(err).ToNot(HaveOccurred())
-	
+
 				// Expect(1).To(BeNumerically("==", aggs[0].Count()))
 				// Expect(first).To(Equal(aggs[0].Result()))
-	
+
 				// Expect(1).To(BeNumerically("==", aggs[1].Count()))
 				// Expect(last).To(Equal(aggs[1].Result()))
-	
+
 				// if start != end {
 				// 	Expect(first).ToNot(Equal(aggs[1].Result()))
 				// }

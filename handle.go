@@ -222,8 +222,8 @@ func (h HandleType) GetTags(entryAlias string) ([]string, error) {
 		length := int(tagCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := charStarArrayToSlice(tags, length)
-			for i, s := range tmpslice {
+			slice := charStarArrayToSlice(tags, length)
+			for i, s := range slice {
 				output[i] = C.GoString(s)
 			}
 		}
@@ -248,8 +248,8 @@ func (h HandleType) GetTagged(tag string) ([]string, error) {
 		length := int(aliasCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := charStarArrayToSlice(aliases, length)
-			for i, s := range tmpslice {
+			slice := charStarArrayToSlice(aliases, length)
+			for i, s := range slice {
 				output[i] = C.GoString(s)
 			}
 		}
@@ -273,8 +273,8 @@ func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
 		length := int(entryCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := charStarArrayToSlice(entries, length)
-			for i, s := range tmpslice {
+			slice := charStarArrayToSlice(entries, length)
+			for i, s := range slice {
 				output[i] = C.GoString(s)
 			}
 		}

@@ -10,8 +10,7 @@ import (
 	"unsafe"
 )
 
-// Node : a structure giving access to various
-//	informations or actions on a node
+// Node : a structure giving access to various pieces of information or actions on a node
 type Node struct {
 	HandleType
 	uri string

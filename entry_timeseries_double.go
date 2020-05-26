@@ -6,8 +6,8 @@ package qdb
 import "C"
 import (
 	"math"
-	"unsafe"
 	"time"
+	"unsafe"
 )
 
 // TsDoublePoint : timestamped double data point
@@ -60,8 +60,8 @@ func doublePointArrayToGo(points *C.qdb_ts_double_point, pointsCount C.qdb_size_
 	length := int(pointsCount)
 	output := make([]TsDoublePoint, length)
 	if length > 0 {
-		tmpslice := doublePointArrayToSlice(points, length)
-		for i, s := range tmpslice {
+		slice := doublePointArrayToSlice(points, length)
+		for i, s := range slice {
 			output[i] = s.toStructG()
 		}
 	}
@@ -195,8 +195,8 @@ func doubleAggregationArrayToGo(aggregations *C.qdb_ts_double_aggregation_t, agg
 	length := int(aggregationsCount)
 	output := make([]TsDoubleAggregation, length)
 	if length > 0 {
-		tmpslice := doubleAggregationArrayToSlice(aggregations, length)
-		for i, s := range tmpslice {
+		slice := doubleAggregationArrayToSlice(aggregations, length)
+		for i, s := range slice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
 		}
@@ -243,4 +243,3 @@ func (t *TsBatch) RowSetDouble(index int64, value float64) error {
 	valueIndex := C.qdb_size_t(index)
 	return makeErrorOrNil(C.qdb_ts_batch_row_set_double(t.table, valueIndex, C.double(value)))
 }
-

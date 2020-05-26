@@ -75,7 +75,7 @@ func main() {
 ```
 
 The following tests samples are presuming you import as specified in the previous example.
-The error checking will be ommited for brevity.
+The error checking will be omitted for brevity.
 
 ## Setup a non secure connection
 ```

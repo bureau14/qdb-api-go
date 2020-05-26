@@ -7,8 +7,8 @@ package qdb
 import "C"
 import (
 	"math"
-	"unsafe"
 	"time"
+	"unsafe"
 )
 
 // TsStringPoint : timestamped data
@@ -56,8 +56,8 @@ func stringPointArrayToC(pts ...TsStringPoint) *C.qdb_ts_string_point {
 
 func releaseStringPointArray(points *C.qdb_ts_string_point, length int) {
 	if length > 0 {
-		tmpslice := stringPointArrayToSlice(points, length)
-		for _, s := range tmpslice {
+		slice := stringPointArrayToSlice(points, length)
+		for _, s := range slice {
 			C.free(unsafe.Pointer(s.content))
 		}
 	}
@@ -72,8 +72,8 @@ func stringPointArrayToGo(points *C.qdb_ts_string_point, pointsCount C.qdb_size_
 	length := int(pointsCount)
 	output := make([]TsStringPoint, length)
 	if length > 0 {
-		tmpslice := stringPointArrayToSlice(points, length)
-		for i, s := range tmpslice {
+		slice := stringPointArrayToSlice(points, length)
+		for i, s := range slice {
 			output[i] = s.toStructG()
 		}
 	}
@@ -208,8 +208,8 @@ func stringAggregationArrayToGo(aggregations *C.qdb_ts_string_aggregation_t, agg
 	length := int(aggregationsCount)
 	output := make([]TsStringAggregation, length)
 	if length > 0 {
-		tmpslice := stringAggregationArrayToSlice(aggregations, length)
-		for i, s := range tmpslice {
+		slice := stringAggregationArrayToSlice(aggregations, length)
+		for i, s := range slice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
 		}
@@ -252,7 +252,7 @@ func (t *TsBulk) GetString() (string, error) {
 	defer t.h.Release(unsafe.Pointer(content))
 	var contentLength C.qdb_size_t
 	err := C.qdb_ts_row_get_string(t.table, C.qdb_size_t(t.index), &content, &contentLength)
-	
+
 	t.index++
 	return C.GoStringN(content, C.int(contentLength)), makeErrorOrNil(err)
 }

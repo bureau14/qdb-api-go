@@ -7,8 +7,8 @@ package qdb
 import "C"
 import (
 	"math"
-	"unsafe"
 	"time"
+	"unsafe"
 )
 
 // TsBlobPoint : timestamped data
@@ -59,8 +59,8 @@ func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
 
 func releaseBlobPointArray(points *C.qdb_ts_blob_point, length int) {
 	if length > 0 {
-		tmpslice := blobPointArrayToSlice(points, length)
-		for _, s := range tmpslice {
+		slice := blobPointArrayToSlice(points, length)
+		for _, s := range slice {
 			C.free(unsafe.Pointer(s.content))
 		}
 	}
@@ -75,8 +75,8 @@ func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) [
 	length := int(pointsCount)
 	output := make([]TsBlobPoint, length)
 	if length > 0 {
-		tmpslice := blobPointArrayToSlice(points, length)
-		for i, s := range tmpslice {
+		slice := blobPointArrayToSlice(points, length)
+		for i, s := range slice {
 			output[i] = s.toStructG()
 		}
 	}
@@ -211,8 +211,8 @@ func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggrega
 	length := int(aggregationsCount)
 	output := make([]TsBlobAggregation, length)
 	if length > 0 {
-		tmpslice := blobAggregationArrayToSlice(aggregations, length)
-		for i, s := range tmpslice {
+		slice := blobAggregationArrayToSlice(aggregations, length)
+		for i, s := range slice {
 			*aggs[i] = s.toStructG()
 			output[i] = s.toStructG()
 		}

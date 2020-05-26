@@ -63,7 +63,7 @@ func (h DirectHandleType) Close() error {
 // Release frees API allocated buffers
 func (h DirectHandleType) Release(buffer unsafe.Pointer) {
 	// TODO(Mike): we are casting qdb_direct_handle_t to qdb_direct_t for
-	// release, but should probably have a seperate qdb_direct_release api call
+	// release, but should probably have a separate qdb_direct_release api call
 	unsafeHandle := (C.qdb_handle_t)(unsafe.Pointer(h.handle))
 	C.qdb_release(unsafeHandle, buffer)
 }
@@ -93,8 +93,8 @@ func (h DirectHandleType) PrefixGet(prefix string, limit int) ([]string, error) 
 		length := int(entryCount)
 		output := make([]string, length)
 		if length > 0 {
-			tmpslice := charStarArrayToSlice(entries, length)
-			for i, s := range tmpslice {
+			slice := charStarArrayToSlice(entries, length)
+			for i, s := range slice {
 				output[i] = C.GoString(s)
 			}
 		}

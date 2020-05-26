@@ -54,7 +54,7 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			handle.Close()
 		})
-		It("should not be able setup a secure handle - unsecure cluster uri", func() {
+		It("should not be able setup a secure handle - insecure cluster uri", func() {
 			_, err := SetupSecuredHandle(insecureURI, "cluster_public.key", "user_private.key", time.Duration(120)*time.Second, EncryptNone)
 			Expect(err).To(HaveOccurred())
 		})
