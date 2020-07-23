@@ -63,6 +63,13 @@ type ErrorType C.qdb_error_t
 // ErrColumnNotFound : Column was not found.
 // ErrQueryTooComplex : Find is too complex.
 // ErrInvalidCryptoKey : Security key is invalid.
+// ErrInvalidQuery : Query is invalid.
+// ErrInvalidRegex : Regular expression is invalid.
+// ErrUnknownUser : Unknown user.
+// ErrInterrupted : Operation has been interrupted.
+// ErrNetworkInbufTooSmall : Network input buffer is too small to complete the operation.
+// ErrNetworkError : Network error.
+// ErrDataCorruption : Data corruption has been detected.
 const (
 	Success                      ErrorType = C.qdb_e_ok
 	Created                      ErrorType = C.qdb_e_ok_created
@@ -121,6 +128,11 @@ const (
 	ErrInvalidCryptoKey          ErrorType = C.qdb_e_invalid_crypto_key
 	ErrInvalidQuery              ErrorType = C.qdb_e_invalid_query
 	ErrInvalidRegex              ErrorType = C.qdb_e_invalid_regex
+	ErrUnknownUser               ErrorType = C.qdb_e_unknown_user
+	ErrInterrupted               ErrorType = C.qdb_e_interrupted
+	ErrNetworkInbufTooSmall      ErrorType = C.qdb_e_network_inbuf_too_small
+	ErrNetworkError              ErrorType = C.qdb_e_network_error
+	ErrDataCorruption            ErrorType = C.qdb_e_data_corruption
 )
 
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
