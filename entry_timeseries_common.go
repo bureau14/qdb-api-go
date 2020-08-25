@@ -342,7 +342,7 @@ func (t *TsBulk) Push() (int, error) {
 func (t *TsBulk) GetRanges(rgs ...TsRange) error {
 	ranges := rangeArrayToC(rgs...)
 	rangesCount := C.qdb_size_t(len(rgs))
-	err := C.qdb_ts_table_get_ranges(t.table, ranges, rangesCount)
+	err := C.qdb_ts_table_stream_ranges(t.table, ranges, rangesCount)
 	t.rowCount = -1
 	t.index = 0
 	return makeErrorOrNil(err)
