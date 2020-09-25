@@ -83,7 +83,7 @@ var _ = Describe("Tests", func() {
 					memAfter = stat.Memory.BytesResident
 					break
 				}
-				Expect(memAfter).To(BeNumerically("<", memBefore))
+				Expect(memAfter).To(BeNumerically("<=", memBefore))
 			})
 		})
 		Context("TrimAll", func() {
