@@ -27,7 +27,7 @@ func (t TsBlobPoint) Content() []byte {
 	return t.content
 }
 
-// NewTsBlobPoint : Create new timeseries double point
+// NewTsBlobPoint : Create new timeseries blob point
 func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
 	return TsBlobPoint{timestamp, value}
 }

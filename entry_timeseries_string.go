@@ -27,7 +27,7 @@ func (t TsStringPoint) Content() string {
 	return t.content
 }
 
-// NewTsStringPoint : Create new timeseries double point
+// NewTsStringPoint : Create new timeseries string point
 func NewTsStringPoint(timestamp time.Time, value string) TsStringPoint {
 	return TsStringPoint{timestamp, value}
 }
