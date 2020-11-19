@@ -87,7 +87,7 @@ type TsSymbolColumn struct {
 
 // SymbolColumn : create a column object (the symbol table name is not set)
 func (entry TimeseriesEntry) SymbolColumn(columnName string, symtableName string) TsSymbolColumn {
-	return TsSymbolColumn{tsColumn{TsColumnInfo{columnName, TsColumnSymbol, symtableName}, entry}}
+	return TsSymbolColumn{tsColumn{NewSymbolColumnInfo(columnName, symtableName), entry}}
 }
 
 // Insert symbol points into a timeseries

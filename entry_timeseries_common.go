@@ -60,7 +60,10 @@ func (t TsColumnInfo) Symtable() string {
 
 // NewTsColumnInfo : create a column info structure
 func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
-	return TsColumnInfo{columnName, columnType}
+	return TsColumnInfo{columnName, columnType, ""}
+}
+func NewSymbolColumnInfo(columnName string, symtableName string) TsColumnInfo {
+	return TsColumnInfo{columnName, TsColumnSymbol, symtableName}
 }
 
 // :: internals
@@ -83,12 +86,32 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_ex_t {
 	return &columns[0]
 }
 
+func oldColumnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
+	if len(cols) == 0 {
+		return nil
+	}
+	columns := make([]C.qdb_ts_column_info_ex_t, len(cols))
+	for idx, col := range cols {
+		columns[idx] = C.qdb_ts_column_info_ex_t{name: convertToCharStar(col.name), _type: C.qdb_ts_column_type_t(col.kind)}
+	}
+	return &columns[0]
+}
+
 func releaseColumnInfoArray(columns *C.qdb_ts_column_info_ex_t, length int) {
 	if length > 0 {
 		slice := columnInfoArrayToSlice(columns, length)
 		for _, s := range slice {
 			releaseCharStar(s.name)
 			releaseCharStar(s.symtable)
+		}
+	}
+}
+
+func releaseOldColumnInfoArray(columns *C.qdb_ts_column_info_t, length int) {
+	if length > 0 {
+		slice := columnInfoArrayToSlice(columns, length)
+		for _, s := range slice {
+			releaseCharStar(s.name)
 		}
 	}
 }
@@ -301,8 +324,8 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	}
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
-	columns := columnInfoArrayToC(cols...)
-	defer releaseColumnInfoArray(columns, len(cols))
+	columns := oldColumnInfoArrayToC(cols...)
+	defer releaseOldColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	bulk := &TsBulk{}
 	bulk.h = entry.HandleType

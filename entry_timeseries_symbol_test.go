@@ -35,7 +35,7 @@ var _ = Describe("Tests", func() {
 			end            int64 = count - 1
 		)
 		BeforeEach(func() {
-			columnInfo = NewTsColumnInfo("column", TsColumnSymbol)
+			columnInfo = NewSymbolColumnInfo("column", "my_symtable")
 			timestamps = make([]time.Time, count)
 			points = make([]TsSymbolPoint, count)
 			for idx := int64(0); idx < count; idx++ {

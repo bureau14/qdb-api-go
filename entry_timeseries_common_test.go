@@ -53,7 +53,7 @@ var _ = Describe("Tests", func() {
 		)
 		BeforeEach(func() {
 			columnsInfo = []TsColumnInfo{}
-			columnsInfo = append(columnsInfo, NewTsColumnInfo(blobColName, TsColumnBlob), NewTsColumnInfo(doubleColName, TsColumnDouble), NewTsColumnInfo(int64ColName, TsColumnInt64), NewTsColumnInfo(stringColName, TsColumnString), NewTsColumnInfo(timestampColName, TsColumnTimestamp), NewTsColumnInfo(symbolColName, TsColumnSymbol, symtableName))
+			columnsInfo = append(columnsInfo, NewTsColumnInfo(blobColName, TsColumnBlob), NewTsColumnInfo(doubleColName, TsColumnDouble), NewTsColumnInfo(int64ColName, TsColumnInt64), NewTsColumnInfo(stringColName, TsColumnString), NewTsColumnInfo(timestampColName, TsColumnTimestamp), TsColumnInfo{symbolColName, TsColumnSymbol, symtableName})
 		})
 		JustBeforeEach(func() {
 			timeseries = handle.Timeseries(alias)
