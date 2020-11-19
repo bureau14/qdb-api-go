@@ -109,7 +109,7 @@ func releaseColumnInfoArray(columns *C.qdb_ts_column_info_ex_t, length int) {
 
 func releaseOldColumnInfoArray(columns *C.qdb_ts_column_info_t, length int) {
 	if length > 0 {
-		slice := columnInfoArrayToSlice(columns, length)
+		slice := oldColumnInfoArrayToSlice(columns, length)
 		for _, s := range slice {
 			releaseCharStar(s.name)
 		}
