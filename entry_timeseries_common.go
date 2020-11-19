@@ -90,9 +90,9 @@ func oldColumnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
 	if len(cols) == 0 {
 		return nil
 	}
-	columns := make([]C.qdb_ts_column_info_ex_t, len(cols))
+	columns := make([]C.qdb_ts_column_info_t, len(cols))
 	for idx, col := range cols {
-		columns[idx] = C.qdb_ts_column_info_ex_t{name: convertToCharStar(col.name), _type: C.qdb_ts_column_type_t(col.kind)}
+		columns[idx] = C.qdb_ts_column_info_t{name: convertToCharStar(col.name), _type: C.qdb_ts_column_type_t(col.kind)}
 	}
 	return &columns[0]
 }
@@ -142,6 +142,11 @@ func (t C.qdb_ts_column_info_ex_t) toStructG(entry TimeseriesEntry) tsColumn {
 func columnInfoArrayToSlice(columns *C.qdb_ts_column_info_ex_t, length int) []C.qdb_ts_column_info_ex_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_column_info_ex_t{})]C.qdb_ts_column_info_ex_t)(unsafe.Pointer(columns))[:length:length]
+}
+
+func oldColumnInfoArrayToSlice(columns *C.qdb_ts_column_info_t, length int) []C.qdb_ts_column_info_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_column_info_t{})]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
 }
 
 func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn, []TsSymbolColumn) {

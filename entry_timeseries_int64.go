@@ -75,7 +75,7 @@ type TsInt64Column struct {
 
 // Int64Column : create a column object
 func (entry TimeseriesEntry) Int64Column(columnName string) TsInt64Column {
-	return TsInt64Column{tsColumn{TsColumnInfo{columnName, TsColumnInt64}, entry}}
+	return TsInt64Column{tsColumn{NewTsColumnInfo(columnName, TsColumnInt64), entry}}
 }
 
 // Insert int64 points into a timeseries

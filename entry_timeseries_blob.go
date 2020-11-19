@@ -90,7 +90,7 @@ type TsBlobColumn struct {
 
 // BlobColumn : create a column object
 func (entry TimeseriesEntry) BlobColumn(columnName string) TsBlobColumn {
-	return TsBlobColumn{tsColumn{TsColumnInfo{columnName, TsColumnBlob}, entry}}
+	return TsBlobColumn{tsColumn{NewTsColumnInfo(columnName, TsColumnBlob), entry}}
 }
 
 // Insert blob points into a timeseries
