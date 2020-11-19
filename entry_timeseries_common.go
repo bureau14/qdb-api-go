@@ -38,9 +38,9 @@ type tsColumn struct {
 
 // TsColumnInfo : column information in timeseries
 type TsColumnInfo struct {
-	name string
-	kind TsColumnType
-	name symtable
+	name     string
+	kind     TsColumnType
+	symtable string
 }
 
 // Name : return column name
