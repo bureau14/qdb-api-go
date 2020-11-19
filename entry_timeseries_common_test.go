@@ -130,10 +130,10 @@ var _ = Describe("Tests", func() {
 				int64Column = timeseries.Int64Column(columnsInfo[int64Index].Name())
 				stringColumn = timeseries.StringColumn(columnsInfo[stringIndex].Name())
 				timestampColumn = timeseries.TimestampColumn(columnsInfo[timestampIndex].Name())
-				symbolColumn = timeseries.SymbolColumn(columnsInfo[symbolIndex].Name())
+				symbolColumn = timeseries.SymbolColumn(columnsInfo[symbolIndex].Name(), symtableName)
 			})
 			It("should have one column of each type", func() {
-				blobCols, doubleCols, int64Cols, stringCols, timestampCols, err := timeseries.Columns()
+				blobCols, doubleCols, int64Cols, stringCols, timestampCols, symbolCols, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(1).To(Equal(len(doubleCols)))
 				Expect(1).To(Equal(len(blobCols)))
@@ -150,7 +150,7 @@ var _ = Describe("Tests", func() {
 			})
 			Context("Insert Columns", func() {
 				It("should work to insert new columns", func() {
-					newColumns := []TsColumnInfo{NewTsColumnInfo(fmt.Sprintf("new_%s", blobColName), TsColumnBlob), NewTsColumnInfo(fmt.Sprintf("new_%s", doubleColName), TsColumnDouble), NewTsColumnInfo(fmt.Sprintf("new_%s", int64ColName), TsColumnInt64), NewTsColumnInfo(fmt.Sprintf("new_%s", stringColName), TsColumnString), NewTsColumnInfo(fmt.Sprintf("new_%s", timestampColName), TsColumnTimestamp), NewTsColumnInfo(fmt.Sprintf("new_%s", symbolColName), TsColumnSymbol, symtableName)}
+					newColumns := []TsColumnInfo{NewTsColumnInfo(fmt.Sprintf("new_%s", blobColName), TsColumnBlob), NewTsColumnInfo(fmt.Sprintf("new_%s", doubleColName), TsColumnDouble), NewTsColumnInfo(fmt.Sprintf("new_%s", int64ColName), TsColumnInt64), NewTsColumnInfo(fmt.Sprintf("new_%s", stringColName), TsColumnString), NewTsColumnInfo(fmt.Sprintf("new_%s", timestampColName), TsColumnTimestamp), NewSymbolColumnInfo(fmt.Sprintf("new_%s", symbolColName), symtableName)}
 					allColumns := append(columnsInfo, newColumns...)
 
 					err := timeseries.InsertColumns(newColumns...)

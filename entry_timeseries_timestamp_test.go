@@ -56,13 +56,13 @@ var _ = Describe("Tests", func() {
 			timeseries.Remove()
 		})
 		It("should have one timestamp column", func() {
-			_, _, _, _, cols, err := timeseries.Columns()
+			_, _, _, _, cols, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(TsColumnTimestamp).To(Equal(cols[0].Type()))
 		})
 		It("should retrieve one timestamp column", func() {
-			_, _, _, _, cols, err := timeseries.Columns()
+			_, _, _, _, cols, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(column.Type()).To(Equal(cols[0].Type()))

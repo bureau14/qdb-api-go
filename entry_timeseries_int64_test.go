@@ -56,13 +56,13 @@ var _ = Describe("Tests", func() {
 			timeseries.Remove()
 		})
 		It("should have one int64 column", func() {
-			_, _, cols, _, _, err := timeseries.Columns()
+			_, _, cols, _, _, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(TsColumnInt64).To(Equal(cols[0].Type()))
 		})
 		It("should retrieve one int64 column", func() {
-			_, _, cols, _, _, err := timeseries.Columns()
+			_, _, cols, _, _, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(column.Type()).To(Equal(cols[0].Type()))

@@ -57,13 +57,13 @@ var _ = Describe("Tests", func() {
 			timeseries.Remove()
 		})
 		It("should have one blob column", func() {
-			cols, _, _, _, _, err := timeseries.Columns()
+			cols, _, _, _, _, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(TsColumnBlob).To(Equal(cols[0].Type()))
 		})
 		It("should retrieve one blob column", func() {
-			cols, _, _, _, _, err := timeseries.Columns()
+			cols, _, _, _, _, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(column.Type()).To(Equal(cols[0].Type()))
