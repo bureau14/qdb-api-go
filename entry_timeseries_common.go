@@ -162,7 +162,7 @@ func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsIn
 	var int64Columns []TsInt64Column
 	var stringColumns []TsStringColumn
 	var timestampColumns []TsTimestampColumn
-	var symbolColumns := []TsSymbolColumn{}
+	var symbolColumns []TsSymbolColumn
 	if err == 0 {
 		blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, symbolColumns = columnArrayToGo(entry, columns, columnsCount)
 	}
