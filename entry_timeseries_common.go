@@ -19,6 +19,8 @@ type TsColumnType C.qdb_ts_column_type_t
 //	TsColumnBlob : column is a blob point
 //	TsColumnInt64 : column is a int64 point
 //	TsColumnTimestamp : column is a timestamp point
+//	TsColumnString : column is a string point
+//	TsColumnSymbol : column is a symbol point
 const (
 	TsColumnUninitialized TsColumnType = C.qdb_ts_column_uninitialized
 	TsColumnBlob          TsColumnType = C.qdb_ts_column_blob
@@ -26,6 +28,7 @@ const (
 	TsColumnInt64         TsColumnType = C.qdb_ts_column_int64
 	TsColumnString        TsColumnType = C.qdb_ts_column_string
 	TsColumnTimestamp     TsColumnType = C.qdb_ts_column_timestamp
+	TsColumnSymbol        TsColumnType = C.qdb_ts_column_symbol
 )
 
 type tsColumn struct {
@@ -37,6 +40,7 @@ type tsColumn struct {
 type TsColumnInfo struct {
 	name string
 	kind TsColumnType
+	name symtable
 }
 
 // Name : return column name
@@ -49,41 +53,47 @@ func (t TsColumnInfo) Type() TsColumnType {
 	return t.kind
 }
 
+// Symtable : return column symbol table name
+func (t TsColumnInfo) Symtable() string {
+	return t.symtable
+}
+
 // NewTsColumnInfo : create a column info structure
 func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
 	return TsColumnInfo{columnName, columnType}
 }
 
 // :: internals
-func (t TsColumnInfo) toStructC() C.qdb_ts_column_info_t {
-	return C.qdb_ts_column_info_t{name: convertToCharStar(t.name), _type: C.qdb_ts_column_type_t(t.kind)}
+func (t TsColumnInfo) toStructC() C.qdb_ts_column_info_ex_t {
+	return C.qdb_ts_column_info_ex_t{name: convertToCharStar(t.name), _type: C.qdb_ts_column_type_t(t.kind), symtable: convertToCharStar(t.symtable)}
 }
 
-func (t C.qdb_ts_column_info_t) toStructInfoG() TsColumnInfo {
-	return TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}
+func (t C.qdb_ts_column_info_ex_t) toStructInfoG() TsColumnInfo {
+	return TsColumnInfo{C.GoString(t.name), TsColumnType(t._type), C.GoString(t.symtable)}
 }
 
-func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
+func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_ex_t {
 	if len(cols) == 0 {
 		return nil
 	}
-	columns := make([]C.qdb_ts_column_info_t, len(cols))
+	columns := make([]C.qdb_ts_column_info_ex_t, len(cols))
 	for idx, col := range cols {
 		columns[idx] = col.toStructC()
 	}
 	return &columns[0]
 }
 
-func releaseColumnInfoArray(columns *C.qdb_ts_column_info_t, length int) {
+func releaseColumnInfoArray(columns *C.qdb_ts_column_info_ex_t, length int) {
 	if length > 0 {
 		slice := columnInfoArrayToSlice(columns, length)
 		for _, s := range slice {
 			releaseCharStar(s.name)
+			releaseCharStar(s.symtable)
 		}
 	}
 }
 
-func columnInfoArrayToGo(columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) []TsColumnInfo {
+func columnInfoArrayToGo(columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) []TsColumnInfo {
 	length := int(columnsCount)
 	columnsInfo := make([]TsColumnInfo, length)
 	if length > 0 {
@@ -102,16 +112,16 @@ type TimeseriesEntry struct {
 
 // :: internals
 
-func (t C.qdb_ts_column_info_t) toStructG(entry TimeseriesEntry) tsColumn {
-	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type)}, entry}
+func (t C.qdb_ts_column_info_ex_t) toStructG(entry TimeseriesEntry) tsColumn {
+	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type), C.GoString(t.symtable)}, entry}
 }
 
-func columnInfoArrayToSlice(columns *C.qdb_ts_column_info_t, length int) []C.qdb_ts_column_info_t {
+func columnInfoArrayToSlice(columns *C.qdb_ts_column_info_ex_t, length int) []C.qdb_ts_column_info_ex_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_column_info_t{})]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_column_info_ex_t{})]C.qdb_ts_column_info_ex_t)(unsafe.Pointer(columns))[:length:length]
 }
 
-func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
+func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
 	length := int(columnsCount)
 	blobColumns := []TsBlobColumn{}
 	doubleColumns := []TsDoubleColumn{}
@@ -141,9 +151,9 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_t, col
 func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn, error) {
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
-	var columns *C.qdb_ts_column_info_t
+	var columns *C.qdb_ts_column_info_ex_t
 	var columnsCount C.qdb_size_t
-	err := C.qdb_ts_list_columns(entry.handle, alias, &columns, &columnsCount)
+	err := C.qdb_ts_list_columns_ex(entry.handle, alias, &columns, &columnsCount)
 	var blobColumns []TsBlobColumn
 	var doubleColumns []TsDoubleColumn
 	var int64Columns []TsInt64Column
@@ -159,9 +169,9 @@ func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsIn
 func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
-	var columns *C.qdb_ts_column_info_t
+	var columns *C.qdb_ts_column_info_ex_t
 	var columnsCount C.qdb_size_t
-	err := C.qdb_ts_list_columns(entry.handle, alias, &columns, &columnsCount)
+	err := C.qdb_ts_list_columns_ex(entry.handle, alias, &columns, &columnsCount)
 	var columnsInfo []TsColumnInfo
 	if err == 0 {
 		columnsInfo = columnInfoArrayToGo(columns, columnsCount)
@@ -179,7 +189,7 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 	columns := columnInfoArrayToC(cols...)
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
-	err := C.qdb_ts_create(entry.handle, alias, duration, columns, columnsCount)
+	err := C.qdb_ts_create_ex(entry.handle, alias, duration, columns, columnsCount)
 	return makeErrorOrNil(err)
 }
 
@@ -190,7 +200,7 @@ func (entry TimeseriesEntry) InsertColumns(cols ...TsColumnInfo) error {
 	columns := columnInfoArrayToC(cols...)
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
-	err := C.qdb_ts_insert_columns(entry.handle, alias, columns, columnsCount)
+	err := C.qdb_ts_insert_columns_ex(entry.handle, alias, columns, columnsCount)
 	return makeErrorOrNil(err)
 }
 
