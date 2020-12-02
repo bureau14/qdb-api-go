@@ -79,7 +79,7 @@ func initLogger(filePath string) {
 func swapCallback() {
 	initLogger(gLogFilePath)
 	err := C.qdb_log_remove_callback(gCallbackID)
-	if err != 0 {
+	if err != 0 && err != C.qdb_e_invalid_argument {
 		gLogger.Printf("unable to remove previous callback: %s (%#x)\n", C.GoString(C.qdb_error(err)), err)
 	}
 

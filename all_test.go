@@ -42,6 +42,8 @@ var _ = Describe("Tests", func() {
 		secureHandle, err = SetupSecuredHandle(secureURI, clusterPublicKeyFile, userPrivateKeyFile, 120*time.Second, EncryptNone)
 		Expect(err).ToNot(HaveOccurred())
 
+		SetLogFile("qdb_api.log")
+
 		// stupid thing to boast about having 100% test coverage
 		Expect(string(fmt.Errorf("error: %s", ErrorType(2)).Error())).To(Equal("error: An unknown error occurred."))
 	})
