@@ -80,6 +80,7 @@ func swapCallback() {
 	initLogger(gLogFilePath)
 	err := C.qdb_log_remove_callback(gCallbackID)
 	if err != 0 {
+		gLogger.Printf("unable to remove previous callback: %s (%#x)\n", C.GoString(C.qdb_error(err)), err)
 	}
 
 	// C.log_add_callback(C.qdb_log_callback(C.go_callback_log))
