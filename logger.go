@@ -56,7 +56,7 @@ func go_callback_log(log_level C.qdb_log_level_t, d *C.ulong, pid C.ulong, tid C
 	msg := C.GoStringN(message_buffer, C.int(message_size))
 	gLoggerMutex.Lock()
 	defer gLoggerMutex.Unlock()
-	gLogger.Printf("%d-%02d-%02dT%d:%d:%d %-10s %d\t%d\t%s\n", date[0], date[1], date[2], date[3], date[4], date[5], getLogLevel(log_level), pid, tid, msg)
+	gLogger.Printf("%d-%02d-%02dT%02d:%02d:%02d\t%d\t%d\t%-10s\t%s\n", date[0], date[1], date[2], date[3], date[4], date[5], pid, tid, getLogLevel(log_level), msg)
 }
 
 func initLogger(filePath string) {
