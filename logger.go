@@ -64,7 +64,7 @@ func initLogger(filePath string) {
 	defer gLoggerMutex.Unlock()
 	gLogFilePath = filePath
 	if gLogger == nil {
-		gLogger = log.New(os.Stdout, "[qdb api] ", 0)
+		gLogger = log.New(os.Stdout, "[API] ", 0)
 	}
 	if gLogFilePath != "" {
 		f, err := os.OpenFile(gLogFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
