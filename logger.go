@@ -41,9 +41,8 @@ func getLogLevel(log_level C.qdb_log_level_t) string {
 
 func convertDate(d *C.ulong, length int) []C.ulong {
 	date := make([]C.ulong, 6)
-	var temp C.ulong
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-	slice := (*[math.MaxInt32 - 1/unsafe.Sizeof(temp)]C.ulong)(unsafe.Pointer(d))[:length:length]
+	slice := (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.ulong(0))]C.ulong)(unsafe.Pointer(d))[:length:length]
 	for i, s := range slice {
 		date[i] = s
 	}
