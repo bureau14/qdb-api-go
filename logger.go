@@ -10,11 +10,13 @@ import (
 	"log"
 	"math"
 	"os"
+	"sync"
 	"unsafe"
 )
 
 var (
 	gCallbackID  C.qdb_log_callback_id
+	gLoggerMutex sync.Mutex
 	gLogger      *log.Logger = nil
 	gLogFilePath string      = ""
 )
@@ -52,17 +54,22 @@ func convertDate(d *C.ulong, length int) []C.ulong {
 func go_callback_log(log_level C.qdb_log_level_t, d *C.ulong, pid C.ulong, tid C.ulong, message_buffer *C.char, message_size C.size_t) {
 	date := convertDate(d, 6)
 	msg := C.GoStringN(message_buffer, C.int(message_size))
+	gLoggerMutex.Lock()
+	defer gLoggerMutex.Unlock()
 	gLogger.Printf("%d-%02d-%02dT%d:%d:%d %-10s %d\t%d\t%s\n", date[0], date[1], date[2], date[3], date[4], date[5], getLogLevel(log_level), pid, tid, msg)
 }
 
-func initLogger() {
+func initLogger(filePath string) {
+	gLoggerMutex.Lock()
+	defer gLoggerMutex.Unlock()
+	gLogFilePath = filePath
 	if gLogger == nil {
-		gLogger = log.New(os.Stdout, "", 0)
+		gLogger = log.New(os.Stdout, "[qdb api] ", 0)
 	}
 	if gLogFilePath != "" {
 		f, err := os.OpenFile(gLogFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		if err != nil {
-			gLogger.Println("Warning: cannot create log file at location '%s', logging to console.", gLogFilePath)
+			gLogger.Printf("Warning: cannot create log file at location '%s', logging to console.\n", gLogFilePath)
 		} else {
 			gLogger.SetOutput(f)
 		}
@@ -70,7 +77,7 @@ func initLogger() {
 }
 
 func swapCallback() {
-	initLogger()
+	initLogger(gLogFilePath)
 	err := C.qdb_log_remove_callback(gCallbackID)
 	if err != 0 {
 	}
@@ -85,6 +92,5 @@ func swapCallback() {
 // SetLogFile
 // set the log file to use
 func SetLogFile(filePath string) {
-	gLogFilePath = filePath
-	initLogger()
+	initLogger(filePath)
 }
