@@ -75,7 +75,7 @@ type TsTimestampColumn struct {
 
 // TimestampColumn : create a column object
 func (entry TimeseriesEntry) TimestampColumn(columnName string) TsTimestampColumn {
-	return TsTimestampColumn{tsColumn{TsColumnInfo{columnName, TsColumnTimestamp}, entry}}
+	return TsTimestampColumn{tsColumn{NewTsColumnInfo(columnName, TsColumnTimestamp), entry}}
 }
 
 // Insert timestamp points into a timeseries
