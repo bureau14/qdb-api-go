@@ -75,7 +75,7 @@ type TsDoubleColumn struct {
 
 // DoubleColumn : create a column object
 func (entry TimeseriesEntry) DoubleColumn(columnName string) TsDoubleColumn {
-	return TsDoubleColumn{tsColumn{TsColumnInfo{columnName, TsColumnDouble}, entry}}
+	return TsDoubleColumn{tsColumn{NewTsColumnInfo(columnName, TsColumnDouble), entry}}
 }
 
 // Insert double points into a timeseries

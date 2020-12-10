@@ -27,7 +27,7 @@ func (t TsStringPoint) Content() string {
 	return t.content
 }
 
-// NewTsStringPoint : Create new timeseries double point
+// NewTsStringPoint : Create new timeseries string point
 func NewTsStringPoint(timestamp time.Time, value string) TsStringPoint {
 	return TsStringPoint{timestamp, value}
 }
@@ -87,7 +87,7 @@ type TsStringColumn struct {
 
 // StringColumn : create a column object
 func (entry TimeseriesEntry) StringColumn(columnName string) TsStringColumn {
-	return TsStringColumn{tsColumn{TsColumnInfo{columnName, TsColumnString}, entry}}
+	return TsStringColumn{tsColumn{NewTsColumnInfo(columnName, TsColumnString), entry}}
 }
 
 // Insert string points into a timeseries

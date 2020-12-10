@@ -25,8 +25,9 @@ var _ = Describe("Tests", func() {
 			blobColumn      TsBlobColumn
 			doubleColumn    TsDoubleColumn
 			int64Column     TsInt64Column
-			stringColumn     TsStringColumn
+			stringColumn    TsStringColumn
 			timestampColumn TsTimestampColumn
+			symbolColumn    TsSymbolColumn
 			columnsInfo     []TsColumnInfo
 		)
 		const (
@@ -39,16 +40,20 @@ var _ = Describe("Tests", func() {
 			int64Index		int64 = 2
 			stringIndex		int64 = 3
 			timestampIndex	int64 = 4
+			symbolIndex		int64 = 5
 
 			blobColName      string = "blob_col"
-			stringColName     string = "string_col"
+			stringColName    string = "string_col"
 			doubleColName    string = "double_col"
 			int64ColName     string = "int64_col"
 			timestampColName string = "timestamp_col"
+			symbolColName    string = "symbol_col"
+
+			symtableName     string = "my_symtable"
 		)
 		BeforeEach(func() {
 			columnsInfo = []TsColumnInfo{}
-			columnsInfo = append(columnsInfo, NewTsColumnInfo(blobColName, TsColumnBlob), NewTsColumnInfo(doubleColName, TsColumnDouble), NewTsColumnInfo(int64ColName, TsColumnInt64), NewTsColumnInfo(stringColName, TsColumnString), NewTsColumnInfo(timestampColName, TsColumnTimestamp))
+			columnsInfo = append(columnsInfo, NewTsColumnInfo(blobColName, TsColumnBlob), NewTsColumnInfo(doubleColName, TsColumnDouble), NewTsColumnInfo(int64ColName, TsColumnInt64), NewTsColumnInfo(stringColName, TsColumnString), NewTsColumnInfo(timestampColName, TsColumnTimestamp), TsColumnInfo{symbolColName, TsColumnSymbol, symtableName})
 		})
 		JustBeforeEach(func() {
 			timeseries = handle.Timeseries(alias)
@@ -65,19 +70,20 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should not work to get columns before creating the time series", func() {
-				_, _, _, _, _, err := timeseries.Columns()
+				_, _, _, _, _, _, err := timeseries.Columns()
 				Expect(err).To(HaveOccurred())
 			})
 			It("should work with zero columns", func() {
 				err := timeseries.Create(24*time.Hour, columnsInfo...)
 				Expect(err).ToNot(HaveOccurred())
-				blobCols, doubleCols, int64Cols, stringCols, timestampCols, err := timeseries.Columns()
+				blobCols, doubleCols, int64Cols, stringCols, timestampCols, symbolCols, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(0).To(Equal(len(blobCols)))
 				Expect(0).To(Equal(len(doubleCols)))
 				Expect(0).To(Equal(len(int64Cols)))
 				Expect(0).To(Equal(len(stringCols)))
 				Expect(0).To(Equal(len(timestampCols)))
+				Expect(0).To(Equal(len(symbolCols)))
 			})
 			It("should work with a shard size of 1ms", func() {
 				err := timeseries.Create(1*time.Millisecond, columnsInfo...)
@@ -96,6 +102,7 @@ var _ = Describe("Tests", func() {
 				int64Points     []TsInt64Point
 				stringPoints    []TsStringPoint
 				timestampPoints []TsTimestampPoint
+				symbolPoints    []TsSymbolPoint
 			)
 			BeforeEach(func() {
 				timestamps = make([]time.Time, count)
@@ -104,6 +111,7 @@ var _ = Describe("Tests", func() {
 				int64Points = make([]TsInt64Point, count)
 				stringPoints = make([]TsStringPoint, count)
 				timestampPoints = make([]TsTimestampPoint, count)
+				symbolPoints = make([]TsSymbolPoint, count)
 				for idx := int64(0); idx < count; idx++ {
 					timestamps[idx] = time.Unix((idx+1)*10, 0)
 					blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
@@ -111,6 +119,7 @@ var _ = Describe("Tests", func() {
 					int64Points[idx] = NewTsInt64Point(timestamps[idx], idx)
 					stringPoints[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 					timestampPoints[idx] = NewTsTimestampPoint(timestamps[idx], timestamps[idx])
+					symbolPoints[idx] = NewTsSymbolPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 				}
 			})
 			JustBeforeEach(func() {
@@ -121,24 +130,27 @@ var _ = Describe("Tests", func() {
 				int64Column = timeseries.Int64Column(columnsInfo[int64Index].Name())
 				stringColumn = timeseries.StringColumn(columnsInfo[stringIndex].Name())
 				timestampColumn = timeseries.TimestampColumn(columnsInfo[timestampIndex].Name())
+				symbolColumn = timeseries.SymbolColumn(columnsInfo[symbolIndex].Name(), symtableName)
 			})
 			It("should have one column of each type", func() {
-				blobCols, doubleCols, int64Cols, stringCols, timestampCols, err := timeseries.Columns()
+				blobCols, doubleCols, int64Cols, stringCols, timestampCols, symbolCols, err := timeseries.Columns()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(1).To(Equal(len(doubleCols)))
 				Expect(1).To(Equal(len(blobCols)))
 				Expect(1).To(Equal(len(int64Cols)))
 				Expect(1).To(Equal(len(stringCols)))
 				Expect(1).To(Equal(len(timestampCols)))
+				Expect(1).To(Equal(len(symbolCols)))
 				Expect(TsColumnDouble).To(Equal(doubleCols[0].Type()))
 				Expect(TsColumnBlob).To(Equal(blobCols[0].Type()))
 				Expect(TsColumnInt64).To(Equal(int64Cols[0].Type()))
 				Expect(TsColumnString).To(Equal(stringCols[0].Type()))
 				Expect(TsColumnTimestamp).To(Equal(timestampCols[0].Type()))
+				Expect(TsColumnSymbol).To(Equal(symbolCols[0].Type()))
 			})
 			Context("Insert Columns", func() {
 				It("should work to insert new columns", func() {
-					newColumns := []TsColumnInfo{NewTsColumnInfo(fmt.Sprintf("new_%s", blobColName), TsColumnBlob), NewTsColumnInfo(fmt.Sprintf("new_%s", doubleColName), TsColumnDouble), NewTsColumnInfo(fmt.Sprintf("new_%s", int64ColName), TsColumnInt64), NewTsColumnInfo(fmt.Sprintf("new_%s", stringColName), TsColumnString), NewTsColumnInfo(fmt.Sprintf("new_%s", timestampColName), TsColumnTimestamp)}
+					newColumns := []TsColumnInfo{NewTsColumnInfo(fmt.Sprintf("new_%s", blobColName), TsColumnBlob), NewTsColumnInfo(fmt.Sprintf("new_%s", doubleColName), TsColumnDouble), NewTsColumnInfo(fmt.Sprintf("new_%s", int64ColName), TsColumnInt64), NewTsColumnInfo(fmt.Sprintf("new_%s", stringColName), TsColumnString), NewTsColumnInfo(fmt.Sprintf("new_%s", timestampColName), TsColumnTimestamp), NewSymbolColumnInfo(fmt.Sprintf("new_%s", symbolColName), symtableName)}
 					allColumns := append(columnsInfo, newColumns...)
 
 					err := timeseries.InsertColumns(newColumns...)
@@ -172,12 +184,13 @@ var _ = Describe("Tests", func() {
 						int64Value     int64     = 2
 						stringValue    string    = "content"
 						timestampValue time.Time = time.Now()
+						symbolValue    string    = "symbol"
 					)
 					It("should append all columns", func() {
 						bulk, err := timeseries.Bulk()
 						Expect(err).ToNot(HaveOccurred())
 						for i := int64(0); i < count; i++ {
-							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).String(stringValue).Timestamp(timestampValue).Append()
+							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).String(stringValue).Timestamp(timestampValue).Symbol(symbolValue).Append()
 							Expect(err).ToNot(HaveOccurred())
 						}
 						_, err = bulk.Push()
@@ -188,7 +201,7 @@ var _ = Describe("Tests", func() {
 						bulk, err := timeseries.Bulk(columnsInfo...)
 						Expect(err).ToNot(HaveOccurred())
 						for i := int64(0); i < count; i++ {
-							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).String(stringValue).Timestamp(timestampValue).Append()
+							err := bulk.Row(time.Now()).Blob(blobValue).Double(doubleValue).Int64(int64Value).String(stringValue).Timestamp(timestampValue).Symbol(symbolValue).Append()
 							Expect(err).ToNot(HaveOccurred())
 						}
 						_, err = bulk.Push()
@@ -250,6 +263,7 @@ var _ = Describe("Tests", func() {
 						int64Column.Insert(int64Points...)
 						stringColumn.Insert(stringPoints...)
 						timestampColumn.Insert(timestampPoints...)
+						symbolColumn.Insert(symbolPoints...)
 					})
 					It("Should work to get all values", func() {
 						bulk, err := timeseries.Bulk()
@@ -283,6 +297,10 @@ var _ = Describe("Tests", func() {
 							timestampValue, err := bulk.GetTimestamp()
 							Expect(err).ToNot(HaveOccurred())
 							Expect(timestampPoints[bulk.RowCount()].Content()).To(Equal(timestampValue))
+
+							symbolValue, err := bulk.GetSymbol()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(symbolPoints[bulk.RowCount()].Content()).To(Equal(symbolValue))
 						}
 						Expect(err).To(Equal(ErrIteratorEnd))
 						bulk.Release()
@@ -352,6 +370,7 @@ var _ = Describe("Tests", func() {
 							int64Value     int64     = 2
 							stringValue    string    = "content"
 							timestampValue time.Time = time.Now()
+							symbolValue    string    = "symbol"
 						)
 						It("should append all columns", func() {
 							err = tsBatch.StartRow(timestampValue)
@@ -365,6 +384,8 @@ var _ = Describe("Tests", func() {
 							err = tsBatch.RowSetString(stringIndex, stringValue)
 							Expect(err).ToNot(HaveOccurred())
 							err = tsBatch.RowSetTimestamp(timestampIndex, timestampValue)
+							Expect(err).ToNot(HaveOccurred())
+							err = tsBatch.RowSetSymbol(symbolIndex, symbolValue)
 							Expect(err).ToNot(HaveOccurred())
 						})
 						It("should append columns and ignore fields", func() {
@@ -403,6 +424,8 @@ var _ = Describe("Tests", func() {
 								Expect(err).ToNot(HaveOccurred())
 								err = tsBatch.RowSetTimestamp(timestampIndex, timestampValue)
 								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetSymbol(symbolIndex, symbolValue)
+								Expect(err).ToNot(HaveOccurred())
 							})
 							It("should push", func() {
 								err = tsBatch.Push()
@@ -434,6 +457,11 @@ var _ = Describe("Tests", func() {
 								Expect(err).ToNot(HaveOccurred())
 								Expect(len(nTimestamps)).To(Equal(1))
 								Expect(nTimestamps[0].Content().Equal(timestampValue)).To(BeTrue())
+
+								symbols, err := symbolColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(symbols)).To(Equal(1))
+								Expect(symbols[0].Content()).To(Equal(symbolValue))
 							})
 						})
 
@@ -450,6 +478,8 @@ var _ = Describe("Tests", func() {
 								err = tsBatch.RowSetString(stringIndex, stringValue)
 								Expect(err).ToNot(HaveOccurred())
 								err = tsBatch.RowSetTimestamp(timestampIndex, timestampValue)
+								Expect(err).ToNot(HaveOccurred())
+								err = tsBatch.RowSetSymbol(symbolIndex, symbolValue)
 								Expect(err).ToNot(HaveOccurred())
 							})
 							It("should push", func() {
@@ -482,6 +512,11 @@ var _ = Describe("Tests", func() {
 								Expect(err).ToNot(HaveOccurred())
 								Expect(len(nTimestamps)).To(Equal(1))
 								Expect(nTimestamps[0].Content().Equal(timestampValue)).To(BeTrue())
+
+								symbols, err := symbolColumn.GetRanges(rg)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(len(symbols)).To(Equal(1))
+								Expect(symbols[0].Content()).To(Equal(symbolValue))
 							})
 						})
 					})
