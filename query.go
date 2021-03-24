@@ -244,6 +244,11 @@ func (r QueryResult) RowCount() int64 {
 	return int64(r.result.row_count)
 }
 
+// ErrorMessage : the error message in case of failure
+func (r QueryResult) ErrorMessage() string {
+	return C.GoStringN(r.result.error_message.data, C.int(r.result.error_message.length))
+}
+
 // Query : query object
 type Query struct {
 	HandleType
