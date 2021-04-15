@@ -11,10 +11,12 @@ import (
 var _ = Describe("Tests", func() {
 	var (
 		alias string
+		symtable string
 	)
 
 	BeforeEach(func() {
 		alias = generateAlias(16)
+		symtable = generateAlias(16)
 	})
 	
 	// :: Timeseries tests ::
@@ -35,7 +37,7 @@ var _ = Describe("Tests", func() {
 			end            int64 = count - 1
 		)
 		BeforeEach(func() {
-			columnInfo = NewSymbolColumnInfo("column", "my_symtable")
+			columnInfo = NewSymbolColumnInfo("column", symtable)
 			timestamps = make([]time.Time, count)
 			points = make([]TsSymbolPoint, count)
 			for idx := int64(0); idx < count; idx++ {
@@ -51,7 +53,7 @@ var _ = Describe("Tests", func() {
 			timeseries = handle.Timeseries(alias)
 			err := timeseries.Create(24*time.Hour, []TsColumnInfo{columnInfo}...)
 			Expect(err).ToNot(HaveOccurred())
-			column = timeseries.SymbolColumn(columnInfo.Name(), "my_symtable")
+			column = timeseries.SymbolColumn(columnInfo.Name(), symtable)
 		})
 		AfterEach(func() {
 			timeseries.Remove()
