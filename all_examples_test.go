@@ -43,7 +43,7 @@ func ExampleEntry_Alias() {
 	// Alias blob 2: BLOB_2
 	// Tagged with 'tag blob 1': [BLOB_1]
 	// Tagged with 'tag blob 2': [BLOB_2]
-	// Tagged with 'tag both blob': [BLOB_2 BLOB_1]
+	// Tagged with 'tag both blob': [BLOB_1 BLOB_2]
 }
 
 func ExampleBlobEntry() {
