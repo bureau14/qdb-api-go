@@ -1,4 +1,4 @@
-module github.com/bureau14/qdb-api-go
+module github.com/bureau14/qdb-api-go/v3
 
 go 1.17
 
