@@ -52,10 +52,10 @@ var _ = Describe("Tests", func() {
 			})
 			It("should be unable to remove all contents", func() {
 				err := cluster.PurgeAll()
-				Expect(err).To(HaveOccurred())
-				contentObtained, err := blob.Get()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(content).To(Equal(contentObtained))
+				contentObtained, err := blobsecure.Get()
+				Expect(content).ToNot(Equal(contentObtained))
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
