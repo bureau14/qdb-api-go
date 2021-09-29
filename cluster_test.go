@@ -50,13 +50,6 @@ var _ = Describe("Tests", func() {
 				Expect(content).ToNot(Equal(contentObtained))
 				Expect(err).To(HaveOccurred())
 			})
-			It("should be unable to remove all contents", func() {
-				err := cluster.PurgeAll()
-				Expect(err).ToNot(HaveOccurred())
-				contentObtained, err := blobsecure.Get()
-				Expect(content).ToNot(Equal(contentObtained))
-				Expect(err).To(HaveOccurred())
-			})
 		})
 
 		Context("PurgeCache", func() {
