@@ -35,7 +35,7 @@ var _ = Describe("Tests", func() {
 			It("should retrieve status with valid uri", func() {
 				status, err := handle.Node(insecureURI).Status()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(status.Network.Partitions.MaxSessions).To(Equal(512))
+				Expect(status.Network.ListeningEndpoint).To(Equal("127.0.0.1:2836"))
 			})
 		})
 

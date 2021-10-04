@@ -599,7 +599,7 @@ func ExampleNode() {
 	node := h.Node(insecureURI)
 
 	status, _ := node.Status()
-	fmt.Println("Status - Max sessions:", status.Network.Partitions.MaxSessions)
+	fmt.Println("Status - Network.ListeningEndpoint:", status.Network.ListeningEndpoint)
 
 	config, _ := node.Config()
 	fmt.Println("Config - Listen On:", config.Local.Network.ListenOn)
@@ -607,7 +607,7 @@ func ExampleNode() {
 	topology, _ := node.Topology()
 	fmt.Println("Topology - Successor is same as predecessor:", topology.Successor.Endpoint == topology.Predecessor.Endpoint)
 	// Output:
-	// Status - Max sessions: 512
+	// Status - Network.ListeningEndpoint: 127.0.0.1:2836
 	// Config - Listen On: 127.0.0.1:2836
 	// Topology - Successor is same as predecessor: true
 }
