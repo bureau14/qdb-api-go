@@ -90,6 +90,11 @@ func (entry TimeseriesEntry) StringColumn(columnName string) TsStringColumn {
 	return TsStringColumn{tsColumn{NewTsColumnInfo(columnName, TsColumnString), entry}}
 }
 
+// SymbolColumn : create a column object (the symbol table name is not set)
+func (entry TimeseriesEntry) SymbolColumn(columnName string, symtableName string) TsStringColumn {
+	return TsStringColumn{tsColumn{NewSymbolColumnInfo(columnName, symtableName), entry}}
+}
+
 // Insert string points into a timeseries
 func (column TsStringColumn) Insert(points ...TsStringPoint) error {
 	alias := convertToCharStar(column.parent.alias)

@@ -56,13 +56,13 @@ var _ = Describe("Tests", func() {
 			timeseries.Remove()
 		})
 		It("should have one double column", func() {
-			_, cols, _, _, _, _, err := timeseries.Columns()
+			_, cols, _, _, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(TsColumnDouble).To(Equal(cols[0].Type()))
 		})
 		It("should retrieve one double column", func() {
-			_, cols, _, _, _, _, err := timeseries.Columns()
+			_, cols, _, _, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(column.Type()).To(Equal(cols[0].Type()))
