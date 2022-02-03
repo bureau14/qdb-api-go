@@ -149,14 +149,13 @@ func oldColumnInfoArrayToSlice(columns *C.qdb_ts_column_info_t, length int) []C.
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_column_info_t{})]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
 }
 
-func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn, []TsSymbolColumn) {
+func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
 	length := int(columnsCount)
 	blobColumns := []TsBlobColumn{}
 	doubleColumns := []TsDoubleColumn{}
 	int64Columns := []TsInt64Column{}
 	stringColumns := []TsStringColumn{}
 	timestampColumns := []TsTimestampColumn{}
-	symbolColumns := []TsSymbolColumn{}
 	if length > 0 {
 		slice := columnInfoArrayToSlice(columns, length)
 		for _, s := range slice {
@@ -166,20 +165,18 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, 
 				doubleColumns = append(doubleColumns, TsDoubleColumn{s.toStructG(entry)})
 			} else if s._type == C.qdb_ts_column_int64 {
 				int64Columns = append(int64Columns, TsInt64Column{s.toStructG(entry)})
-			} else if s._type == C.qdb_ts_column_string {
+			} else if s._type == C.qdb_ts_column_string || s._type == C.qdb_ts_column_symbol {
 				stringColumns = append(stringColumns, TsStringColumn{s.toStructG(entry)})
 			} else if s._type == C.qdb_ts_column_timestamp {
 				timestampColumns = append(timestampColumns, TsTimestampColumn{s.toStructG(entry)})
-			} else if s._type == C.qdb_ts_column_symbol {
-				symbolColumns = append(symbolColumns, TsSymbolColumn{s.toStructG(entry)})
 			}
 		}
 	}
-	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, symbolColumns
+	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns
 }
 
 // Columns : return the current columns
-func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn, []TsSymbolColumn, error) {
+func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn, error) {
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
 	var columns *C.qdb_ts_column_info_ex_t
@@ -190,11 +187,10 @@ func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsIn
 	var int64Columns []TsInt64Column
 	var stringColumns []TsStringColumn
 	var timestampColumns []TsTimestampColumn
-	var symbolColumns []TsSymbolColumn
 	if err == 0 {
-		blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, symbolColumns = columnArrayToGo(entry, columns, columnsCount)
+		blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns = columnArrayToGo(entry, columns, columnsCount)
 	}
-	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, symbolColumns, makeErrorOrNil(err)
+	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, makeErrorOrNil(err)
 }
 
 // ColumnsInfo : return the current columns information
