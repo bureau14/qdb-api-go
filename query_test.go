@@ -20,7 +20,7 @@ var _ = Describe("Tests", func() {
 		int64Column     TsInt64Column
 		stringColumn    TsStringColumn
 		timestampColumn TsTimestampColumn
-		symbolColumn    TsSymbolColumn
+		symbolColumn    TsStringColumn
 		columnsInfo     []TsColumnInfo
 
 		timestamps      []time.Time
@@ -29,7 +29,7 @@ var _ = Describe("Tests", func() {
 		int64Points     []TsInt64Point
 		stringPoints    []TsStringPoint
 		timestampPoints []TsTimestampPoint
-		symbolPoints    []TsSymbolPoint
+		symbolPoints    []TsStringPoint
 	)
 	const (
 		count int64 = 8
@@ -66,7 +66,7 @@ var _ = Describe("Tests", func() {
 		int64Points = make([]TsInt64Point, count)
 		stringPoints = make([]TsStringPoint, count)
 		timestampPoints = make([]TsTimestampPoint, count)
-		symbolPoints = make([]TsSymbolPoint, count)
+		symbolPoints = make([]TsStringPoint, count)
 		for idx := int64(0); idx < count; idx++ {
 			timestamps[idx] = time.Unix((idx+1)*10, 0)
 			blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
@@ -74,7 +74,7 @@ var _ = Describe("Tests", func() {
 			int64Points[idx] = NewTsInt64Point(timestamps[idx], idx)
 			stringPoints[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 			timestampPoints[idx] = NewTsTimestampPoint(timestamps[idx], timestamps[idx])
-			symbolPoints[idx] = NewTsSymbolPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
+			symbolPoints[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 		}
 
 		err := timeseries.Create(24*time.Hour, columnsInfo...)
@@ -132,7 +132,7 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(timestampValue).To(Equal(timestampPoints[rowIdx].Content()))
 
-				symbolValue, err := columns[symbolIndex+2].GetSymbol()
+				symbolValue, err := columns[symbolIndex+2].GetString()
 				Expect(err).ToNot(HaveOccurred())
 				Expect(symbolValue).To(Equal(symbolPoints[rowIdx].Content()))
 
@@ -164,10 +164,6 @@ var _ = Describe("Tests", func() {
 						value := point.Value()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
-					case QueryResultSymbol:
-						value := point.Value()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(value).To(Equal(symbolPoints[rowIdx].Content()))
 					}
 				}
 			}

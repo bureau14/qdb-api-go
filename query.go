@@ -30,12 +30,6 @@ package qdb
 		*length = result->payload.string.content_length;
 	}
 
-	void get_symbol_from_payload(const qdb_point_result_t *result, const char ** content, qdb_size_t *length)
-	{
-		*content = result->payload.symbol.content;
-		*length = result->payload.symbol.content_length;
-	}
-
 
 	qdb_timespec_t get_timestamp_from_payload(const qdb_point_result_t * result)
 	{
@@ -66,7 +60,6 @@ const (
 	QueryResultBlob      QueryResultValueType = C.qdb_query_result_blob
 	QueryResultInt64     QueryResultValueType = C.qdb_query_result_int64
 	QueryResultString    QueryResultValueType = C.qdb_query_result_string
-	QueryResultSymbol    QueryResultValueType = C.qdb_query_result_symbol
 	QueryResultTimestamp QueryResultValueType = C.qdb_query_result_timestamp
 	QueryResultCount     QueryResultValueType = C.qdb_query_result_count
 )
@@ -101,13 +94,6 @@ func getStringUnsafe(result *C.qdb_point_result_t) string {
 	return C.GoStringN(content, C.int(contentLength))
 }
 
-func getSymbolUnsafe(result *C.qdb_point_result_t) string {
-	var content *C.char
-	var contentLength C.qdb_size_t
-	C.get_symbol_from_payload(result, &content, &contentLength)
-	return C.GoStringN(content, C.int(contentLength))
-}
-
 // Get : retrieve the raw interface
 func (r *QueryPoint) Get() QueryPointResult {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
@@ -122,8 +108,6 @@ func (r *QueryPoint) Get() QueryPointResult {
 		output.value = int64(C.get_int64_from_payload(result))
 	case C.qdb_query_result_string:
 		output.value = getStringUnsafe(result)
-	case C.qdb_query_result_symbol:
-		output.value = getSymbolUnsafe(result)
 	case C.qdb_query_result_timestamp:
 		output.value = C.get_timestamp_from_payload(result).toStructG()
 	case C.qdb_query_result_count:
@@ -164,15 +148,6 @@ func (r *QueryPoint) GetString() (string, error) {
 	if r._type == C.qdb_query_result_string {
 		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
 		return getStringUnsafe(result), nil
-	}
-	return "", makeErrorOrNil(C.qdb_e_operation_not_permitted)
-}
-
-// GetSymbol : retrieve a symbol from the interface
-func (r *QueryPoint) GetSymbol() (string, error) {
-	if r._type == C.qdb_query_result_symbol {
-		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
-		return getSymbolUnsafe(result), nil
 	}
 	return "", makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }

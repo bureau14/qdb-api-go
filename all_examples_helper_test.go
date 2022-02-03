@@ -19,7 +19,7 @@ func MustCreateTimeseriesWithColumns(alias string) (*HandleType, *TimeseriesEntr
 
 func MustCreateTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) {
 	h, timeseries := MustCreateTimeseriesWithColumns(alias)
-	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, symbolColumns, err := timeseries.Columns()
+	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, err := timeseries.Columns()
 	if err != nil {
 		panic(err)
 	}
@@ -31,7 +31,6 @@ func MustCreateTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) 
 	int64Points := make([]TsInt64Point, count)
 	stringPoints := make([]TsStringPoint, count)
 	timestampPoints := make([]TsTimestampPoint, count)
-	symbolPoints := make([]TsSymbolPoint, count)
 	for idx := int64(0); idx < count; idx++ {
 		timestamps[idx] = time.Unix((idx+1)*10, 0)
 		blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
@@ -39,7 +38,6 @@ func MustCreateTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) 
 		int64Points[idx] = NewTsInt64Point(timestamps[idx], idx)
 		stringPoints[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 		timestampPoints[idx] = NewTsTimestampPoint(timestamps[idx], timestamps[idx])
-		symbolPoints[idx] = NewTsSymbolPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 	}
 	err = blobColumns[0].Insert(blobPoints...)
 	if err != nil {
@@ -61,7 +59,7 @@ func MustCreateTimeseriesWithData(alias string) (*HandleType, *TimeseriesEntry) 
 	if err != nil {
 		panic(err)
 	}
-	err = symbolColumns[0].Insert(symbolPoints...)
+	err = stringColumns[1].Insert(stringPoints...)
 	if err != nil {
 		panic(err)
 	}

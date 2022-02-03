@@ -138,7 +138,7 @@ func ExampleTimeseriesEntry_Columns() {
 	defer h.Close()
 	SetLogFile("qdb_api.examples.log")
 
-	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, symbolColumns, err := timeseries.Columns()
+	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, err := timeseries.Columns()
 	if err != nil {
 		// handle error
 	}
@@ -162,17 +162,13 @@ func ExampleTimeseriesEntry_Columns() {
 		fmt.Println("column:", col.Name())
 		// do something like Insert, GetRanges with a timestamp column
 	}
-	for _, col := range symbolColumns {
-		fmt.Println("column:", col.Name())
-		// do something like Insert, GetRanges with a symbol column
-	}
 	// Output:
 	// column: series_column_blob
 	// column: series_column_double
 	// column: series_column_int64
 	// column: series_column_string
-	// column: series_column_timestamp
 	// column: series_column_symbol
+	// column: series_column_timestamp
 }
 
 func ExampleTimeseriesEntry_ColumnsInfo() {

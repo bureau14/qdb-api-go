@@ -23,12 +23,12 @@ var _ = Describe("Tests", func() {
 	Context("Timeseries - Symbol", func() {
 		var (
 			timeseries  TimeseriesEntry
-			column      TsSymbolColumn
+			column      TsStringColumn
 			columnInfo	TsColumnInfo
 			timestamps  []time.Time
-			points      []TsSymbolPoint
+			points      []TsStringPoint
 			r           TsRange
-			aggs		[]*TsSymbolAggregation
+			aggs		[]*TsStringAggregation
 			value       string
 		)
 		const (
@@ -39,14 +39,14 @@ var _ = Describe("Tests", func() {
 		BeforeEach(func() {
 			columnInfo = NewSymbolColumnInfo("column", symtable)
 			timestamps = make([]time.Time, count)
-			points = make([]TsSymbolPoint, count)
+			points = make([]TsStringPoint, count)
 			for idx := int64(0); idx < count; idx++ {
 				timestamps[idx] = time.Unix((idx+1)*10, 0)
-				points[idx] = NewTsSymbolPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
+				points[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
 			}
-			aggFirst := NewSymbolAggregation(AggFirst, r)
-			aggLast := NewSymbolAggregation(AggLast, r)
-			aggs = []*TsSymbolAggregation{aggFirst, aggLast}
+			aggFirst := NewStringAggregation(AggFirst, r)
+			aggLast := NewStringAggregation(AggLast, r)
+			aggs = []*TsStringAggregation{aggFirst, aggLast}
 			value = "content"
 			r = NewRange(timestamps[start], timestamps[end].Add(5*time.Nanosecond))
 			
@@ -59,13 +59,13 @@ var _ = Describe("Tests", func() {
 			timeseries.Remove()
 		})
 		It("should have one symbol column", func() {
-			_, _, _, _, _, cols, err := timeseries.Columns()
+			_, _, _, cols, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(TsColumnSymbol).To(Equal(cols[0].Type()))
 		})
 		It("should retrieve one symbol column", func() {
-			_, _, _, _, _, cols, err := timeseries.Columns()
+			_, _, _, cols, _, err := timeseries.Columns()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(1).To(Equal(len(cols)))
 			Expect(column.Type()).To(Equal(cols[0].Type()))
@@ -74,7 +74,7 @@ var _ = Describe("Tests", func() {
 			column.Insert(points...)
 		})
 		It("should not return an error when attempting to insert empty array of symbol points", func() {
-			err := column.Insert([]TsSymbolPoint{}...)
+			err := column.Insert([]TsStringPoint{}...)
 			Expect(err).ToNot(HaveOccurred())
 		})
 		Context("with points inserted", func() {
@@ -90,7 +90,7 @@ var _ = Describe("Tests", func() {
 			It("should get the first and last symbol points", func() {
 				r1 := NewRange(timestamps[start].Truncate(5*time.Nanosecond), timestamps[start].Add(5*time.Nanosecond))
 				r2 := NewRange(timestamps[end].Truncate(5*time.Nanosecond), timestamps[end].Add(5*time.Nanosecond))
-				pts := []TsSymbolPoint{points[start], points[end]}
+				pts := []TsStringPoint{points[start], points[end]}
 				results, err := column.GetRanges(r1, r2)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(results).To(ConsistOf(pts))
@@ -98,10 +98,10 @@ var _ = Describe("Tests", func() {
 			It("should get empty symbol points with empty range array", func() {
 				results, err := column.GetRanges()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(results).To(ConsistOf([]TsSymbolPoint{}))
+				Expect(results).To(ConsistOf([]TsStringPoint{}))
 			})
 			It("should create a symbol aggregation", func() {
-				agg := NewSymbolAggregation(AggMin, r)
+				agg := NewStringAggregation(AggMin, r)
 				Expect(AggMin).To(Equal(agg.Type()))
 				Expect(r).To(Equal(agg.Range()))
 			})
@@ -111,7 +111,7 @@ var _ = Describe("Tests", func() {
 			})
 			It("should get first symbol with symbol aggregation", func() {
 				first := points[start]
-				aggs, err := column.Aggregate(NewSymbolAggregation(AggFirst, r))
+				aggs, err := column.Aggregate(NewStringAggregation(AggFirst, r))
 				Expect(err).ToNot(HaveOccurred())
 				Expect(first).To(Equal(aggs[0].Result()))
 			})
@@ -163,7 +163,7 @@ var _ = Describe("Tests", func() {
 				bulk, err := timeseries.Bulk()
 				Expect(err).ToNot(HaveOccurred())
 				for i := int64(0); i < count; i++ {
-					err := bulk.Row(time.Now()).Symbol(value).Append()
+					err := bulk.Row(time.Now()).String(value).Append()
 					Expect(err).ToNot(HaveOccurred())
 				}
 				_, err = bulk.Push()
@@ -199,7 +199,7 @@ var _ = Describe("Tests", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(timestamps[bulk.RowCount()]).To(Equal(timestamp))
 
-					value, err := bulk.GetSymbol()
+					value, err := bulk.GetString()
 					Expect(err).ToNot(HaveOccurred())
 					Expect(points[bulk.RowCount()].Content()).To(Equal(value))
 
@@ -230,7 +230,7 @@ var _ = Describe("Tests", func() {
 			It("should append symbol column", func() {
 				err = tsBatch.StartRow(timestamp)
 				Expect(err).ToNot(HaveOccurred())
-				err = tsBatch.RowSetSymbol(0, value)
+				err = tsBatch.RowSetString(0, value)
 				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should fail to append any other columns type than symbol", func() {
@@ -247,7 +247,7 @@ var _ = Describe("Tests", func() {
 				JustBeforeEach(func() {
 					err = tsBatch.StartRow(timestamp)
 					Expect(err).ToNot(HaveOccurred())
-					err := tsBatch.RowSetSymbol(0, value)
+					err := tsBatch.RowSetString(0, value)
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should push", func() {
@@ -264,7 +264,7 @@ var _ = Describe("Tests", func() {
 				JustBeforeEach(func() {
 					err = tsBatch.StartRow(timestamp)
 					Expect(err).ToNot(HaveOccurred())
-					err := tsBatch.RowSetSymbol(0, value)
+					err := tsBatch.RowSetString(0, value)
 					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should push fast", func() {
