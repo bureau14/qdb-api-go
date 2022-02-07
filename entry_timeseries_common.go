@@ -352,30 +352,6 @@ func (t *TsBulk) Ignore() *TsBulk {
 	return t
 }
 
-// Append : Adds the append to the list to be pushed
-func (t *TsBulk) Append() error {
-	if t.err != nil {
-		return t.err
-	}
-	rowIndex := C.qdb_size_t(0)
-	timespec := toQdbTimespec(t.timestamp)
-	err := C.qdb_ts_table_row_append(t.table, &timespec, &rowIndex)
-	if err == 0 {
-		t.rowCount = int(rowIndex) + 1
-	}
-	t.timestamp = time.Unix(0, 0)
-	return makeErrorOrNil(err)
-}
-
-// Push : push the list of appended rows
-// returns the number of rows added
-func (t *TsBulk) Push() (int, error) {
-	err := C.qdb_ts_push(t.table)
-	rowCount := t.rowCount
-	t.rowCount = 0
-	return rowCount, makeErrorOrNil(err)
-}
-
 // GetRanges : create a range bulk query
 func (t *TsBulk) GetRanges(rgs ...TsRange) error {
 	ranges := rangeArrayToC(rgs...)

@@ -239,18 +239,6 @@ func (column TsStringColumn) Aggregate(aggs ...*TsStringAggregation) ([]TsString
 	return output, makeErrorOrNil(err)
 }
 
-// String : adds a string in row transaction
-func (t *TsBulk) String(content string) *TsBulk {
-	contentSize := C.qdb_size_t(len(content))
-	contentPtr := convertToCharStar(content)
-	defer releaseCharStar(contentPtr)
-	if t.err == nil {
-		t.err = makeErrorOrNil(C.qdb_ts_row_set_string(t.table, C.qdb_size_t(t.index), contentPtr, contentSize))
-	}
-	t.index++
-	return t
-}
-
 // GetString : gets a string in row
 func (t *TsBulk) GetString() (string, error) {
 	var content *C.char

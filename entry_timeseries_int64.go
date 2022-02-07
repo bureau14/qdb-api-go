@@ -212,15 +212,6 @@ func (column TsInt64Column) Aggregate(aggs ...*TsInt64Aggregation) ([]TsInt64Agg
 	return nil, ErrNotImplemented
 }
 
-// Int64 : adds an int64 in row transaction
-func (t *TsBulk) Int64(value int64) *TsBulk {
-	if t.err == nil {
-		t.err = makeErrorOrNil(C.qdb_ts_row_set_int64(t.table, C.qdb_size_t(t.index), C.qdb_int_t(value)))
-	}
-	t.index++
-	return t
-}
-
 // GetInt64 : gets an int64 in row
 func (t *TsBulk) GetInt64() (int64, error) {
 	var content C.qdb_int_t

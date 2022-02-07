@@ -563,30 +563,6 @@ func ExampleTimeseriesEntry_Bulk() {
 	// RowCount: 0
 }
 
-func ExampleTsBulk_Push() {
-	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsBulk_Push")
-	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
-
-	bulk, err := timeseries.Bulk(NewTsColumnInfo("series_column_blob", TsColumnBlob), NewTsColumnInfo("series_column_double", TsColumnDouble))
-	if err != nil {
-		// handle error
-		return
-	}
-	// Don't forget to release
-	defer bulk.Release()
-
-	bulk.Row(time.Now()).Blob([]byte("content")).Double(3.2).Append()
-	bulk.Row(time.Now()).Blob([]byte("content 2")).Double(4.8).Append()
-	rowCount, err := bulk.Push()
-	if err != nil {
-		// handle error
-	}
-	fmt.Println("RowCount:", rowCount)
-	// Output:
-	// RowCount: 2
-}
-
 func ExampleNode() {
 	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
