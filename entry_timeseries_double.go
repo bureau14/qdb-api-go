@@ -221,15 +221,6 @@ func (column TsDoubleColumn) Aggregate(aggs ...*TsDoubleAggregation) ([]TsDouble
 	return output, makeErrorOrNil(err)
 }
 
-// Double : adds a double in row transaction
-func (t *TsBulk) Double(value float64) *TsBulk {
-	if t.err == nil {
-		t.err = makeErrorOrNil(C.qdb_ts_row_set_double(t.table, C.qdb_size_t(t.index), C.double(value)))
-	}
-	t.index++
-	return t
-}
-
 // GetDouble : gets a double in row
 func (t *TsBulk) GetDouble() (float64, error) {
 	var content C.double

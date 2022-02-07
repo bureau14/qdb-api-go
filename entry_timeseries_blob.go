@@ -237,20 +237,6 @@ func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggreg
 	return output, makeErrorOrNil(err)
 }
 
-// Blob : adds a blob in row transaction
-func (t *TsBulk) Blob(content []byte) *TsBulk {
-	contentSize := C.qdb_size_t(len(content))
-	contentPtr := unsafe.Pointer(nil)
-	if contentSize != 0 {
-		contentPtr = unsafe.Pointer(&content[0])
-	}
-	if t.err == nil {
-		t.err = makeErrorOrNil(C.qdb_ts_row_set_blob(t.table, C.qdb_size_t(t.index), contentPtr, contentSize))
-	}
-	t.index++
-	return t
-}
-
 // GetBlob : gets a blob in row
 func (t *TsBulk) GetBlob() ([]byte, error) {
 	var content unsafe.Pointer

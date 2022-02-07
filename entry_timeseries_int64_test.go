@@ -160,28 +160,6 @@ var _ = Describe("Tests", func() {
 			})
 		})
 		Context("Bulk", func() {
-			It("should append int64 column", func() {
-				bulk, err := timeseries.Bulk()
-				Expect(err).ToNot(HaveOccurred())
-				for i := int64(0); i < count; i++ {
-					err := bulk.Row(time.Now()).Int64(value).Append()
-					Expect(err).ToNot(HaveOccurred())
-				}
-				_, err = bulk.Push()
-				Expect(err).ToNot(HaveOccurred())
-				bulk.Release()
-			})
-			It("should ignore int64 field", func() {
-				bulk, err := timeseries.Bulk([]TsColumnInfo{columnInfo}...)
-				Expect(err).ToNot(HaveOccurred())
-				for i := int64(0); i < count; i++ {
-					err := bulk.Row(time.Now()).Ignore().Append()
-					Expect(err).ToNot(HaveOccurred())
-				}
-				_, err = bulk.Push()
-				Expect(err).ToNot(HaveOccurred())
-				bulk.Release()
-			})
 			It("should fail to append columns additional int64 column that does not exist", func() {
 				columnsInfo := []TsColumnInfo{columnInfo, NewTsColumnInfo("asd", TsColumnInt64)}
 				_, err := timeseries.Bulk(columnsInfo...)

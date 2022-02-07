@@ -156,28 +156,6 @@ var _ = Describe("Tests", func() {
 			})
 		})
 		Context("Bulk", func() {
-			It("should append double column", func() {
-				bulk, err := timeseries.Bulk()
-				Expect(err).ToNot(HaveOccurred())
-				for i := int64(0); i < count; i++ {
-					err := bulk.Row(time.Now()).Double(value).Append()
-					Expect(err).ToNot(HaveOccurred())
-				}
-				_, err = bulk.Push()
-				Expect(err).ToNot(HaveOccurred())
-				bulk.Release()
-			})
-			It("should ignore double field", func() {
-				bulk, err := timeseries.Bulk([]TsColumnInfo{columnInfo}...)
-				Expect(err).ToNot(HaveOccurred())
-				for i := int64(0); i < count; i++ {
-					err := bulk.Row(time.Now()).Ignore().Append()
-					Expect(err).ToNot(HaveOccurred())
-				}
-				_, err = bulk.Push()
-				Expect(err).ToNot(HaveOccurred())
-				bulk.Release()
-			})
 			It("should fail to append columns additional double column that does not exist", func() {
 				columnsInfo := []TsColumnInfo{columnInfo, NewTsColumnInfo("asd", TsColumnDouble)}
 				_, err := timeseries.Bulk(columnsInfo...)

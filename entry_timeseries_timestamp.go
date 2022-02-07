@@ -212,16 +212,6 @@ func (column TsTimestampColumn) Aggregate(aggs ...*TsTimestampAggregation) ([]Ts
 	return nil, ErrNotImplemented
 }
 
-// Timestamp : adds a timestamp in row transaction
-func (t *TsBulk) Timestamp(value time.Time) *TsBulk {
-	if t.err == nil {
-		cValue := toQdbTimespec(value)
-		t.err = makeErrorOrNil(C.qdb_ts_row_set_timestamp(t.table, C.qdb_size_t(t.index), &cValue))
-	}
-	t.index++
-	return t
-}
-
 // GetTimestamp : gets a timestamp in row
 func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	var content C.qdb_timespec_t
