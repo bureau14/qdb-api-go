@@ -173,6 +173,19 @@ func (h HandleType) GetClusterMaxInBufSize() (uint, error) {
 	return uint(bufSize), makeErrorOrNil(err)
 }
 
+// GetClientMaxParallelism : Gets the maximum parallelism option of the client.
+func (h HandleType) GetClientMaxParallelism() (uint, error) {
+	var threadCount C.size_t
+	err := C.qdb_option_get_client_max_parallelism(h.handle, &threadCount)
+	return uint(threadCount), makeErrorOrNil(err)
+}
+
+// SetClientMaxParallelism : Gets the maximum parallelism option of the client.
+func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
+	err := C.qdb_option_set_client_max_parallelism(h.handle, C.size_t(threadCount))
+	return makeErrorOrNil(err)
+}
+
 // Connect : connect a previously opened handle
 //	Binds the client instance to a quasardb cluster and connect to at least one node within.
 //	Quasardb URI are in the form qdb://<address>:<port> where <address> is either an IPv4 or IPv6 (surrounded with square brackets), or a domain name. It is recommended to specify multiple addresses should the designated node be unavailable.
