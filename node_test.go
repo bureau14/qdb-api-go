@@ -51,7 +51,7 @@ var _ = Describe("Tests", func() {
 			It("should retrieve config with valid uri", func() {
 				config, err := handle.Node(insecureURI).Config()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(config.Local.Depot.RocksDB.Root).To(Equal("insecure/db"))
+				Expect(config.Local.Depot.RocksDB.Root).To(Equal("insecure/db/0-0-0-1"))
 			})
 		})
 
