@@ -218,56 +218,5 @@ var _ = Describe("Tests", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RowCount()).To(Equal(int64(0)))
 		})
-		Context("Tricky cases", func() {
-			var (
-				newTimestamps   []time.Time
-				newBlobPoints   []TsBlobPoint
-				newDoublePoints []TsDoublePoint
-			)
-			JustBeforeEach(func() {
-				newTimestamps = make([]time.Time, count)
-				newBlobPoints = make([]TsBlobPoint, count)
-				newDoublePoints = make([]TsDoublePoint, count)
-				for idx := 0; idx < int(count); idx++ {
-					newTimestamps[idx] = time.Date(1971, 1, 1, 0, 0, (idx+1)*10, 0, time.UTC)
-					if (idx % 2) == 0 {
-						newBlobPoints[idx] = NewTsBlobPoint(newTimestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
-					} else {
-						newDoublePoints[idx] = NewTsDoublePoint(newTimestamps[idx], float64(idx))
-					}
-				}
-				doubleColumn.Insert(newDoublePoints...)
-				blobColumn.Insert(newBlobPoints...)
-			})
-
-			It("should have a none value for each column", func() {
-				query := fmt.Sprintf("select * from %s in range(1971, +10d)", alias)
-				q := handle.Query(query)
-				result, err := q.Execute()
-				defer handle.Release(unsafe.Pointer(result))
-				Expect(err).ToNot(HaveOccurred())
-
-				for rowIdx, row := range result.Rows() {
-					columns := result.Columns(row)
-					if (rowIdx % 2) == 0 {
-						blobValue, err := columns[2].GetBlob()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(blobValue).To(Equal(newBlobPoints[rowIdx].Content()))
-
-						doubleValue := columns[3].Get()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(doubleValue.Type()).To(Equal(QueryResultNone))
-					} else {
-						blobValue := columns[2].Get()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(blobValue.Type()).To(Equal(QueryResultNone))
-
-						doubleValue, err := columns[3].GetDouble()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(doubleValue).To(Equal(newDoublePoints[rowIdx].Content()))
-					}
-				}
-			})
-		})
 	})
 })
