@@ -262,5 +262,8 @@ func (q Query) Execute() (*QueryResult, error) {
 	defer releaseCharStar(query)
 	var r QueryResult
 	err := C.qdb_query(q.handle, query, &r.result)
+	if r.result == nil {
+		return nil, makeErrorOrNil(err)
+	}
 	return &r, makeErrorOrNil(err)
 }
