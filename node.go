@@ -50,17 +50,12 @@ func (n Node) RawStatus() ([]byte, error) {
 }
 
 // Config :
-//	Returns the configuration of a node.
+//	Returns the configuration as a byte array of a json object, you can use a method of your choice to unmarshall it.
+//	An example is available using the gabs library
 //
 //	The configuration is a JSON object, as described in the documentation.
-func (n Node) Config() (NodeConfig, error) {
-	data, err := n.RawConfig()
-	if err != nil {
-		return NodeConfig{}, err
-	}
-	var output NodeConfig
-	err = json.Unmarshal(data, &output)
-	return output, err
+func (n Node) Config() ([]byte, error) {
+	return n.RawConfig()
 }
 
 // RawConfig :

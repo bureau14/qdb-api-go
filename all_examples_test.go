@@ -3,6 +3,8 @@ package qdb
 import (
 	"fmt"
 	"time"
+
+	"github.com/Jeffail/gabs/v2"
 )
 
 func ExampleHandleType() {
@@ -573,8 +575,9 @@ func ExampleNode() {
 	status, _ := node.Status()
 	fmt.Println("Status - Network.ListeningEndpoint:", status.Network.ListeningEndpoint)
 
-	config, _ := node.Config()
-	fmt.Println("Config - Listen On:", config.Local.Network.ListenOn)
+	config_bytes, _ := node.Config()
+	config, _ := gabs.ParseJSON(config_bytes)
+	fmt.Println("Config - Listen On:", config.Path("local.network.listen_on").Data().(string))
 
 	topology, _ := node.Topology()
 	fmt.Println("Topology - Successor is same as predecessor:", topology.Successor.Endpoint == topology.Predecessor.Endpoint)
