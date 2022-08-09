@@ -3,6 +3,7 @@ package qdb
 import (
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -49,9 +50,11 @@ var _ = Describe("Tests", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("should retrieve config with valid uri", func() {
-				config, err := handle.Node(insecureURI).Config()
+				config_bytes, err := handle.Node(insecureURI).Config()
 				Expect(err).ToNot(HaveOccurred())
-				Expect(config.Local.Depot.RocksDB.Root).To(Equal("insecure/db"))
+				config, err := gabs.ParseJSON(config_bytes)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(config.Path("local.depot.rocksdb.root").Data().(string)).To(Equal("insecure/db"))
 			})
 		})
 
