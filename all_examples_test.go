@@ -7,15 +7,19 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
+var (
+	ExamplesLogFilePath string = "qdb_api.examples.log"
+)
+
 func ExampleHandleType() {
 	var h HandleType
 	h.Open(ProtocolTCP)
 }
 
 func ExampleEntry_Alias() {
+	SetLogFile(ExamplesLogFilePath)
 	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	blob1 := h.Blob("BLOB_1")
 	blob1.Put([]byte("blob 1 content"), NeverExpires())
@@ -49,9 +53,9 @@ func ExampleEntry_Alias() {
 }
 
 func ExampleBlobEntry() {
+	SetLogFile(ExamplesLogFilePath)
 	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	alias := "BlobAlias"
 	blob := h.Blob(alias)
@@ -84,9 +88,9 @@ func ExampleBlobEntry() {
 }
 
 func ExampleIntegerEntry() {
+	SetLogFile(ExamplesLogFilePath)
 	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	alias := "IntAlias"
 	integer := h.Integer(alias)
@@ -115,9 +119,9 @@ func ExampleIntegerEntry() {
 }
 
 func ExampleTimeseriesEntry() {
+	SetLogFile(ExamplesLogFilePath)
 	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	timeseries := h.Timeseries("alias")
 
@@ -127,18 +131,18 @@ func ExampleTimeseriesEntry() {
 }
 
 func ExampleTimeseriesEntry_Create() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseries("ExampleTimeseriesEntry_Create")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	// duration, columns...
 	timeseries.Create(24*time.Hour, NewTsColumnInfo("series_column_blob", TsColumnBlob), NewTsColumnInfo("series_column_double", TsColumnDouble))
 }
 
 func ExampleTimeseriesEntry_Columns() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Columns")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, err := timeseries.Columns()
 	if err != nil {
@@ -174,9 +178,9 @@ func ExampleTimeseriesEntry_Columns() {
 }
 
 func ExampleTimeseriesEntry_ColumnsInfo() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_ColumnsInfo")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	columns, err := timeseries.ColumnsInfo()
 	if err != nil {
@@ -195,9 +199,9 @@ func ExampleTimeseriesEntry_ColumnsInfo() {
 }
 
 func ExampleTimeseriesEntry_InsertColumns() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_InsertColumns")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	err := timeseries.InsertColumns(NewTsColumnInfo("series_column_blob_2", TsColumnBlob), NewTsColumnInfo("series_column_double_2", TsColumnDouble))
 	if err != nil {
@@ -222,9 +226,9 @@ func ExampleTimeseriesEntry_InsertColumns() {
 }
 
 func ExampleTimeseriesEntry_DoubleColumn() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_DoubleColumn")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.DoubleColumn("series_column_double")
 	fmt.Println("column:", column.Name())
@@ -233,9 +237,9 @@ func ExampleTimeseriesEntry_DoubleColumn() {
 }
 
 func ExampleTsDoubleColumn_Insert() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsDoubleColumn_Insert")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.DoubleColumn("series_column_double")
 
@@ -254,9 +258,9 @@ func ExampleTsDoubleColumn_Insert() {
 }
 
 func ExampleTsDoubleColumn_GetRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsDoubleColumn_GetRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.DoubleColumn("series_column_double")
 
@@ -276,9 +280,9 @@ func ExampleTsDoubleColumn_GetRanges() {
 }
 
 func ExampleTsDoubleColumn_EraseRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsDoubleColumn_EraseRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.DoubleColumn("series_column_double")
 
@@ -293,9 +297,9 @@ func ExampleTsDoubleColumn_EraseRanges() {
 }
 
 func ExampleTsDoubleColumn_Aggregate() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsDoubleColumn_Aggregate")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.DoubleColumn("series_column_double")
 
@@ -316,9 +320,9 @@ func ExampleTsDoubleColumn_Aggregate() {
 }
 
 func ExampleTimeseriesEntry_BlobColumn() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTimeseriesEntry_BlobColumn")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.BlobColumn("series_column_blob")
 	fmt.Println("column:", column.Name())
@@ -327,9 +331,9 @@ func ExampleTimeseriesEntry_BlobColumn() {
 }
 
 func ExampleTsBlobColumn_Insert() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsBlobColumn_Insert")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.BlobColumn("series_column_blob")
 
@@ -348,9 +352,9 @@ func ExampleTsBlobColumn_Insert() {
 }
 
 func ExampleTsBlobColumn_GetRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsBlobColumn_GetRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.BlobColumn("series_column_blob")
 
@@ -370,9 +374,9 @@ func ExampleTsBlobColumn_GetRanges() {
 }
 
 func ExampleTsBlobColumn_EraseRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsBlobColumn_EraseRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.BlobColumn("series_column_blob")
 
@@ -387,9 +391,9 @@ func ExampleTsBlobColumn_EraseRanges() {
 }
 
 func ExampleTsBlobColumn_Aggregate() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsBlobColumn_Aggregate")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.BlobColumn("series_column_blob")
 
@@ -405,9 +409,9 @@ func ExampleTsBlobColumn_Aggregate() {
 }
 
 func ExampleTimeseriesEntry_Int64Column() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Int64Column")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.Int64Column("series_column_int64")
 	fmt.Println("column:", column.Name())
@@ -416,9 +420,9 @@ func ExampleTimeseriesEntry_Int64Column() {
 }
 
 func ExampleTsInt64Column_Insert() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsInt64Column_Insert")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.Int64Column("series_column_int64")
 
@@ -437,9 +441,9 @@ func ExampleTsInt64Column_Insert() {
 }
 
 func ExampleTsInt64Column_GetRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsInt64Column_GetRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.Int64Column("series_column_int64")
 
@@ -459,9 +463,9 @@ func ExampleTsInt64Column_GetRanges() {
 }
 
 func ExampleTsInt64Column_EraseRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsInt64Column_EraseRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.Int64Column("series_column_int64")
 
@@ -476,9 +480,9 @@ func ExampleTsInt64Column_EraseRanges() {
 }
 
 func ExampleTimeseriesEntry_TimestampColumn() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_TimestampColumn")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.TimestampColumn("series_column_timestamp")
 	fmt.Println("column:", column.Name())
@@ -487,9 +491,9 @@ func ExampleTimeseriesEntry_TimestampColumn() {
 }
 
 func ExampleTsTimestampColumn_Insert() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTsTimestampColumn_Insert")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.TimestampColumn("series_column_timestamp")
 
@@ -508,9 +512,9 @@ func ExampleTsTimestampColumn_Insert() {
 }
 
 func ExampleTsTimestampColumn_GetRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsTimestampColumn_GetRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.TimestampColumn("series_column_timestamp")
 
@@ -530,9 +534,9 @@ func ExampleTsTimestampColumn_GetRanges() {
 }
 
 func ExampleTsTimestampColumn_EraseRanges() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithData("ExampleTsTimestampColumn_EraseRanges")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	column := timeseries.TimestampColumn("series_column_timestamp")
 
@@ -547,9 +551,9 @@ func ExampleTsTimestampColumn_EraseRanges() {
 }
 
 func ExampleTimeseriesEntry_Bulk() {
+	SetLogFile(ExamplesLogFilePath)
 	h, timeseries := MustCreateTimeseriesWithColumns("ExampleTimeseriesEntry_Bulk")
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	bulk, err := timeseries.Bulk(NewTsColumnInfo("series_column_blob", TsColumnBlob), NewTsColumnInfo("series_column_double", TsColumnDouble))
 	if err != nil {
@@ -566,9 +570,9 @@ func ExampleTimeseriesEntry_Bulk() {
 }
 
 func ExampleNode() {
+	SetLogFile(ExamplesLogFilePath)
 	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	node := h.Node(insecureURI)
 
@@ -588,9 +592,9 @@ func ExampleNode() {
 }
 
 func ExampleQuery() {
+	SetLogFile(ExamplesLogFilePath)
 	h := MustSetupHandle(insecureURI, 120*time.Second)
 	defer h.Close()
-	SetLogFile("qdb_api.examples.log")
 
 	var aliases []string
 	aliases = append(aliases, generateAlias(16))
