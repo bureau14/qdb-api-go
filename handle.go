@@ -471,7 +471,7 @@ func (h HandleType) GetLastError() (string, error) {
 	var err C.qdb_error_t
 	var message *C.qdb_string_t = nil
 	C.qdb_get_last_error(h.handle, &err, &message)
-	var lastError string = nil
+	lastError := ""
 	if message != nil {
 		lastError = C.GoString(message.data)
 	}
