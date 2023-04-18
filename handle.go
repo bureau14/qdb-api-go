@@ -153,7 +153,7 @@ func (h HandleType) SetCompression(compressionLevel Compression) error {
 }
 
 // SetClientMaxInBufSize : Set the Sets the maximum incoming buffer size for all network operations of the client.
-// Only modify this setting if you expect to receive very large answers from the server.
+//	Only modify this setting if you expect to receive very large answers from the server.
 func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
 	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
 	return makeErrorOrNil(err)
