@@ -25,7 +25,6 @@ type HandleType struct {
 type Protocol C.qdb_protocol_t
 
 // Protocol values:
-//
 //	ProtocolTCP : Uses TCP/IP to communicate with the cluster. This is currently the only supported network protocol.
 const (
 	ProtocolTCP Protocol = C.qdb_p_tcp
@@ -35,7 +34,6 @@ const (
 type Compression C.qdb_compression_t
 
 // Compression values:
-//
 //	CompNone : No compression.
 //	CompFast : Maximum compression speed, potentially minimum compression ratio. This is currently the default.
 //	CompBest : Maximum compression ratio, potentially minimum compression speed. This is currently not implemented.
@@ -60,7 +58,6 @@ func (h HandleType) APIBuild() string {
 }
 
 // Open : Creates a handle.
-//
 //	No connection will be established.
 //	Not needed if you created your handle with NewHandle.
 func (h HandleType) Open(protocol Protocol) error {
@@ -69,7 +66,6 @@ func (h HandleType) Open(protocol Protocol) error {
 }
 
 // SetTimeout : Sets the timeout of all network operations.
-//
 //	The lower the timeout, the higher the risk of having timeout errors.
 //	Keep in mind that the server-side timeout might be shorter.
 func (h HandleType) SetTimeout(timeout time.Duration) error {
@@ -81,7 +77,6 @@ func (h HandleType) SetTimeout(timeout time.Duration) error {
 type Encryption C.qdb_encryption_t
 
 // Encryption values:
-//
 //	EncryptNone : No encryption.
 //	EncryptAES : Uses aes gcm 256 encryption.
 const (
@@ -90,7 +85,6 @@ const (
 )
 
 // SetEncryption : Creates a handle.
-//
 //	No connection will be established.
 //	Not needed if you created your handle with NewHandle.
 func (h HandleType) SetEncryption(encryption Encryption) error {
@@ -145,7 +139,6 @@ func (h HandleType) AddClusterPublicKey(secret string) error {
 }
 
 // SetMaxCardinality : Sets the maximum allowed cardinality of a quasardb query.
-//
 //	The default value is 10,007. The minimum allowed values is 100.
 func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
 	err := C.qdb_option_set_max_cardinality(h.handle, C.qdb_uint_t(maxCardinality))
@@ -153,7 +146,6 @@ func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
 }
 
 // SetCompression : Set the compression level for all future messages emitted by the specified handle.
-//
 //	Regardless of this parameter, the API will be able to read whatever compression the server uses.
 func (h HandleType) SetCompression(compressionLevel Compression) error {
 	err := C.qdb_option_set_compression(h.handle, C.qdb_compression_t(compressionLevel))
@@ -161,8 +153,7 @@ func (h HandleType) SetCompression(compressionLevel Compression) error {
 }
 
 // SetClientMaxInBufSize : Set the Sets the maximum incoming buffer size for all network operations of the client.
-//
-//	Only modify this setting if you expect to receive very large answers from the server.
+// Only modify this setting if you expect to receive very large answers from the server.
 func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
 	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
 	return makeErrorOrNil(err)
@@ -196,7 +187,6 @@ func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
 }
 
 // Connect : connect a previously opened handle
-//
 //	Binds the client instance to a quasardb cluster and connect to at least one node within.
 //	Quasardb URI are in the form qdb://<address>:<port> where <address> is either an IPv4 or IPv6 (surrounded with square brackets), or a domain name. It is recommended to specify multiple addresses should the designated node be unavailable.
 //
@@ -213,7 +203,6 @@ func (h HandleType) Connect(clusterURI string) error {
 }
 
 // Close : Closes the handle previously opened.
-//
 //	This results in terminating all connections and releasing all internal buffers,
 //	including buffers which may have been allocated as or a result of batch operations or get operations.
 func (h HandleType) Close() error {
@@ -222,7 +211,6 @@ func (h HandleType) Close() error {
 }
 
 // Release : Releases an API-allocated buffer.
-//
 //	Failure to properly call this function may result in excessive memory usage.
 //	Most operations that return a content (e.g. batch operations, qdb_blob_get, qdb_blob_get_and_update, qdb_blob_compare_and_swap...)
 //	will allocate a buffer for the content and will not release the allocated buffer until you either call this function or close the handle.
@@ -233,7 +221,6 @@ func (h HandleType) Release(buffer unsafe.Pointer) {
 }
 
 // GetTags : Retrieves all the tags of an entry.
-//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 func (h HandleType) GetTags(entryAlias string) ([]string, error) {
@@ -259,7 +246,6 @@ func (h HandleType) GetTags(entryAlias string) ([]string, error) {
 }
 
 // GetTagged : Retrieves all entries that have the specified tag.
-//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The tag must exist.
 //	The complexity of this function is constant.
@@ -286,7 +272,6 @@ func (h HandleType) GetTagged(tag string) ([]string, error) {
 }
 
 // PrefixGet : Retrieves the list of all entries matching the provided prefix.
-//
 //	A prefix-based search will enable you to find all entries matching a provided prefix.
 //	This function returns the list of aliases. It’s up to the user to query the content associated with every entry, if needed.
 func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
@@ -312,7 +297,6 @@ func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
 }
 
 // PrefixCount : Retrieves the count of all entries matching the provided prefix.
-//
 //	A prefix-based count counts all entries matching a provided prefix.
 func (h HandleType) PrefixCount(prefix string) (uint64, error) {
 	cPrefix := convertToCharStar(prefix)
@@ -326,7 +310,6 @@ func (h HandleType) PrefixCount(prefix string) (uint64, error) {
 // Handles Creators
 
 // NewHandle : Create a new handle, return error if needed
-//
 //	The handle is already opened (not connected) with tcp protocol
 func NewHandle() (HandleType, error) {
 	var h HandleType
@@ -336,7 +319,6 @@ func NewHandle() (HandleType, error) {
 }
 
 // SetupHandle : Setup a handle, return error if needed
-//
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
 func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
@@ -353,7 +335,6 @@ func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 }
 
 // MustSetupHandle : Setup a handle, panic on error
-//
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
 //
@@ -367,7 +348,6 @@ func MustSetupHandle(clusterURI string, timeout time.Duration) HandleType {
 }
 
 // SetupSecuredHandle : Setup a secured handle, return error if needed
-//
 //	The handle is already opened with tcp protocol
 //	The handle is already secured with the cluster public key and the user credential files provided
 //	(Note: the filenames are needed, not the content of the files)
@@ -406,7 +386,6 @@ func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile str
 }
 
 // MustSetupSecuredHandle : Setup a secured handle, panic on error
-//
 //	The handle is already opened with tcp protocol
 //	The handle is already secured with the cluster public key and the user credential files provided
 //	(Note: the filenames are needed, not the content of the files)
