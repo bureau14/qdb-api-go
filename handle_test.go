@@ -140,6 +140,11 @@ var _ = Describe("Tests", func() {
 				AfterEach(func() {
 					testHandle.Close()
 				})
+				It("should return empty string message and nil error", func() {
+					message, last_err := testHandle.GetLastError()
+					Expect(message).To(BeEmpty())
+					Expect(last_err).ToNot(HaveOccurred())
+				})
 				It("should not return an empty version", func() {
 					apiVersion := testHandle.APIVersion()
 					Expect("").ToNot(Equal(apiVersion))
