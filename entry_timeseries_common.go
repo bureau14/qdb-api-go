@@ -217,7 +217,7 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 	columns := columnInfoArrayToC(cols...)
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
-	err := C.qdb_ts_create_ex(entry.handle, alias, duration, columns, columnsCount)
+	err := C.qdb_ts_create_ex(entry.handle, alias, duration, columns, columnsCount, C.qdb_never_expires)
 	return makeErrorOrNil(err)
 }
 
