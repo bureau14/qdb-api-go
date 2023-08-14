@@ -44,7 +44,7 @@ func (c Cluster) PurgeCache() error {
 //	This function will request each nodes to trim all entries, release unused memory and compact files on disk.
 //	Because this operation is I/O and CPU intensive it is not recommended to run it when the cluster is heavily used.
 func (c Cluster) TrimAll() error {
-	err := C.qdb_trim_all(c.handle, 60*60*1000)
+	err := C.qdb_trim_all(c.handle, 0, 60*60*1000)
 	return makeErrorOrNil(err)
 }
 
