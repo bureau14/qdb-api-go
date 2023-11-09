@@ -119,10 +119,10 @@ var _ = Describe("Tests", func() {
 				_, err := column.Aggregate(aggs...)
 				Expect(err).ToNot(HaveOccurred())
 	
-				Expect(1).To(BeNumerically("==", aggs[0].Count()))
+				Expect(count).To(BeNumerically("==", aggs[0].Count()))
 				Expect(first).To(Equal(aggs[0].Result()))
 	
-				Expect(1).To(BeNumerically("==", aggs[1].Count()))
+				Expect(count).To(BeNumerically("==", aggs[1].Count()))
 				Expect(last).To(Equal(aggs[1].Result()))
 	
 				if start != end {
