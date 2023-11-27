@@ -15,13 +15,13 @@
     </requirements>
     <build-triggers />
     <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_FreeBSD_X8664Haswell_Default" cleanDestination="false">
+      <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_FreeBSD_X8664Haswell_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="qdb-*-c-api.tar.gz!**/* =&gt; qdb&#xA;qdb-*-utils.tar.gz!**/* =&gt; qdb&#xA;qdb-*-server.tar.gz!**/* =&gt; qdb" />
       </dependency>
     </artifact-dependencies>
     <dependencies>
-      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_FreeBSD_X8664Haswell_Default">
+      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_FreeBSD_X8664Haswell_Composite">
         <options>
           <option name="take-started-build-with-same-revisions" value="true" />
           <option name="take-successful-builds-only" value="true" />
