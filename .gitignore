@@ -15,3 +15,5 @@
 *.key
 *.err.txt
 *.out.txt
+
+/test-coverage.out
