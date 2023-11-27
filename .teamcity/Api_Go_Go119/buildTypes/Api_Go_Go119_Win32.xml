@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<build-type xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
+  <name>Win32</name>
+  <description />
+  <settings ref="Api_Go_Build">
+    <disabled-settings>
+      <setting-ref ref="RQ_157" />
+    </disabled-settings>
+    <parameters>
+      <param name="artifact.ext" value="zip" />
+      <param name="echo.on" value="@echo on" />
+      <param name="env.GOROOT" value="%system.go1.19-32.goroot%" />
+      <param name="env_path.sep" value=";" />
+      <param name="path.sep" value="\" spec="text display='hidden' validationMode='any'" />
+      <param name="platform" value="windows-32bit" />
+      <param name="select.gcc" value="%system.gcc-32.select%" />
+      <param name="update.library.path" value="set &quot;PATH=%teamcity.build.checkoutDir%\%QDB_API_PATH%\bin;%%PATH%%&quot;" spec="text validationMode='any'" />
+    </parameters>
+    <build-runners order="RUNNER_286, RUNNER_111, RUNNER_26, RUNNER_106, RUNNER_117, RUNNER_266, RUNNER_114, RUNNER_164">
+      <runner id="RUNNER_286" name="Add antivirus exclusions" type="jetbrains_powershell">
+        <parameters>
+          <param name="jetbrains_powershell_execution" value="PS1" />
+          <param name="jetbrains_powershell_noprofile" value="true" />
+          <param name="jetbrains_powershell_script_code"><![CDATA[# Fixes the problem:
+# go tool cover: fork/exec C:\Go-1.15-32\pkg\tool\windows_386\cover.exe: Operation did not complete successfully because the file contains a virus or potentially unwanted software.
+# See: https://golang.org/doc/faq#virus
+Add-MpPreference -ExclusionPath "C:\Go-1.15-32\pkg\tool\windows_386\"]]></param>
+          <param name="jetbrains_powershell_script_mode" value="CODE" />
+          <param name="teamcity.step.mode" value="default" />
+        </parameters>
+      </runner>
+    </build-runners>
+    <vcs-settings />
+    <requirements>
+      <contains id="RQ_24" name="teamcity.agent.jvm.os.name" value="Windows" />
+      <ver-no-less-than id="RQ_169" name="system.gcc-32.version" value="4" />
+      <contains id="RQ_261" name="teamcity.agent.name" value="default" />
+      <exists id="RQ_8" name="system.go1.19-32.goroot" />
+    </requirements>
+    <build-triggers />
+    <artifact-dependencies>
+      <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_Windows_X86Haswell" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="qdb-*-c-api.zip!**/* =&gt; qdb&#xA;qdb-*-utils.zip!**/* =&gt; qdb&#xA;qdb-*-server.zip!**/* =&gt; qdb" />
+      </dependency>
+    </artifact-dependencies>
+    <dependencies>
+      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_Windows_X86Haswell">
+        <options>
+          <option name="take-started-build-with-same-revisions" value="true" />
+          <option name="take-successful-builds-only" value="true" />
+        </options>
+      </depend-on>
+    </dependencies>
+    <cleanup />
+  </settings>
+</build-type>
+

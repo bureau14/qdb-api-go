@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<build-type xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
+  <name>Linux AArch64</name>
+  <description />
+  <settings ref="Api_Go_Build">
+    <parameters>
+      <param name="env_path.sep" value=":" />
+      <param name="platform" value="linux-64bit-aarch64" />
+      <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
+    </parameters>
+    <build-runners order="RUNNER_111, RUNNER_26, RUNNER_106, RUNNER_117, RUNNER_266, RUNNER_61, RUNNER_114, RUNNER_164">
+      <runner id="RUNNER_61" name="Generate documentation" type="simpleRunner">
+        <parameters>
+          <param name="script.content"><![CDATA[go get -v golang.org/x/tools/cmd/godoc
+
+rm -rf ./doc/*.html
+
+godoc -http=localhost:6060 &
+DOC_PID=$!
+
+sleep 5
+
+curl -o doc/index.html http://localhost:6060/pkg/github.com/bureau14/qdb-api-go/
+
+kill -9 $DOC_PID
+
+tar -czvf doc.tar.gz doc/*]]></param>
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="true" />
+        </parameters>
+      </runner>
+    </build-runners>
+    <vcs-settings />
+    <requirements>
+      <equals id="RQ_1" name="teamcity.agent.jvm.os.name" value="Linux" />
+      <equals id="RQ_2" name="teamcity.agent.jvm.os.arch" value="aarch64" />
+    </requirements>
+    <build-triggers />
+    <artifact-dependencies>
+      <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_Linux_AArch64_Default" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="qdb-*-c-api.tar.gz!**/* =&gt; qdb&#xA;qdb-*-utils.tar.gz!**/* =&gt; qdb&#xA;qdb-*-server.tar.gz!**/* =&gt; qdb" />
+      </dependency>
+    </artifact-dependencies>
+    <dependencies>
+      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_Linux_AArch64_Default">
+        <options>
+          <option name="take-started-build-with-same-revisions" value="true" />
+          <option name="take-successful-builds-only" value="true" />
+        </options>
+      </depend-on>
+    </dependencies>
+    <cleanup />
+  </settings>
+</build-type>
+

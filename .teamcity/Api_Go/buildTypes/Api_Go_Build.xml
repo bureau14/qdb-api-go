@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<template xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
+  <name>Build</name>
+  <settings>
+    <options>
+      <option name="artifactRules" value="*coverage*&#xA;qdbd_log_*&#xA;*.log" />
+      <option name="checkoutDirectory" value="%teamcity.build.default.checkoutDir%/src/github.com/bureau14/qdb-api-go" />
+      <option name="cleanBuild" value="true" />
+      <option name="showDependenciesChanges" value="true" />
+    </options>
+    <disabled-settings>
+      <setting-ref ref="RUNNER_115" />
+    </disabled-settings>
+    <parameters>
+      <param name="QDB_API_PATH" value="qdb" spec="text validationMode='any' readOnly='true'" />
+      <param name="echo.on" value="" />
+      <param name="env.GOPATH" value="%teamcity.agent.work.dir%%path.sep%%teamcity.build.default.checkoutDir%" />
+      <param name="env.PATH" value="%env.GOPATH%%path.sep%bin%env_path.sep%%env.GOROOT%%path.sep%bin%env_path.sep%%env.PATH%" />
+      <param name="package.root" value="src%path.sep%github.com%path.sep%bureau14%path.sep%qdb-api-go" spec="text validationMode='any' readOnly='true'" />
+      <param name="path.sep" value="/" spec="text display='hidden' validationMode='any'" />
+      <param name="select.gcc" value="" />
+      <param name="update.library.path" value="" spec="text validationMode='any'" />
+    </parameters>
+    <build-runners>
+      <runner id="RUNNER_115" name="Install" type="simpleRunner">
+        <parameters>
+          <param name="script.content"><![CDATA[%echo.on%
+go get github.com/onsi/ginkgo
+go get github.com/onsi/gomega]]></param>
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="true" />
+        </parameters>
+      </runner>
+      <runner id="RUNNER_111" name="Build" type="simpleRunner">
+        <parameters>
+          <param name="script.content"><![CDATA[%echo.on%
+%select.gcc%
+go build -v -x]]></param>
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="true" />
+        </parameters>
+      </runner>
+      <runner id="RUNNER_26" name="Start services" type="simpleRunner">
+        <parameters>
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/tests/setup/start-services.sh" />
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="" />
+        </parameters>
+      </runner>
+      <runner id="RUNNER_106" name="Test" type="simpleRunner">
+        <parameters>
+          <param name="script.content"><![CDATA[%echo.on%
+%select.gcc%
+%update.library.path%
+go test -v -test.run "Test*" -coverprofile=test-coverage.out]]></param>
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="true" />
+        </parameters>
+      </runner>
+      <runner id="RUNNER_117" name="Examples" type="simpleRunner">
+        <parameters>
+          <param name="script.content"><![CDATA[%echo.on%
+%select.gcc%
+%update.library.path%
+go test -v -test.run "Example*"]]></param>
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="true" />
+        </parameters>
+      </runner>
+      <runner id="RUNNER_266" name="Documentation Examples" type="simpleRunner">
+        <parameters>
+          <param name="script.content"><![CDATA[%echo.on%
+%select.gcc%
+%update.library.path%
+go run examples/tutorial/main.go]]></param>
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="true" />
+        </parameters>
+      </runner>
+      <runner id="RUNNER_114" name="Coverage" type="simpleRunner">
+        <parameters>
+          <param name="script.content"><![CDATA[%echo.on%
+%select.gcc%
+go tool cover -html=test-coverage.out -o coverage.html]]></param>
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="true" />
+        </parameters>
+      </runner>
+      <runner id="RUNNER_164" name="Stop services" type="simpleRunner">
+        <parameters>
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/tests/setup/stop-services.sh" />
+          <param name="teamcity.step.mode" value="execute_always" />
+          <param name="use.custom.script" value="" />
+        </parameters>
+      </runner>
+    </build-runners>
+    <vcs-settings>
+      <vcs-entry-ref root-id="Api_Go_QdbApiGo" />
+    </vcs-settings>
+    <requirements />
+    <build-triggers />
+    <build-extensions>
+      <extension id="BUILD_EXT_24" type="BuildFailureOnMessage">
+        <parameters>
+          <param name="buildFailureOnMessage.conditionType" value="contains" />
+          <param name="buildFailureOnMessage.messagePattern" value="[Fail]" />
+          <param name="buildFailureOnMessage.outputText" value="Test failure" />
+          <param name="buildFailureOnMessage.reverse" value="false" />
+        </parameters>
+      </extension>
+      <extension id="BUILD_EXT_25" type="BuildFailureOnMessage">
+        <parameters>
+          <param name="buildFailureOnMessage.conditionType" value="contains" />
+          <param name="buildFailureOnMessage.messagePattern" value="--- FAIL:" />
+          <param name="buildFailureOnMessage.reverse" value="false" />
+        </parameters>
+      </extension>
+    </build-extensions>
+    <cleanup />
+  </settings>
+</template>
+
