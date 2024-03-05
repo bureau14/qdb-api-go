@@ -54,7 +54,7 @@ var _ = Describe("Tests", func() {
 				Expect(err).ToNot(HaveOccurred())
 				config, err := gabs.ParseJSON(config_bytes)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(config.Path("local.depot.rocksdb.root").Data().(string)).To(Equal("insecure/db"))
+				Expect(config.Path("local.depot.rocksdb.root").Data().(string)).To(Equal("insecure/db/0-0-0-1"))
 			})
 		})
 
