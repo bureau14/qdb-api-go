@@ -169,9 +169,9 @@ var _ = Describe("Tests", func() {
 					err := testHandle.SetMaxCardinality(99)
 					Expect(err).To(HaveOccurred())
 				})
-				It("should be able to 'set compression' to fast", func() {
+				It("should not be able to 'set compression' to fast", func() {
 					err := testHandle.SetCompression(CompFast)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(err).To(HaveOccurred())
 				})
 				It("should not be able to call 'set compression' with random value", func() {
 					err := testHandle.SetCompression(5)
