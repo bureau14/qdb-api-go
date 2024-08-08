@@ -200,7 +200,7 @@ var _ = Describe("Tests", func() {
 				It("should be able to get client max parallelism", func() {
 					result, err := testHandle.GetClientMaxParallelism()
 					Expect(err).ToNot(HaveOccurred())
-					Expect(uint(result)).To(GreaterOrEqual(uint(1)))
+					Expect(uint(result)).To(Not(Equal(0)))
 				})
 				Context("with an entry added", func() {
 					var (
