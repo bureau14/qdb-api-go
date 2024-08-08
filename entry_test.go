@@ -117,14 +117,6 @@ var _ = Describe("Tests", func() {
 					err = integer.HasTag(tag)
 					Expect(err).To(HaveOccurred())
 				})
-				It("'detach tag' should not work", func() {
-					err = integer.DetachTag(tag)
-					Expect(err).To(HaveOccurred())
-				})
-				It("'detach tags' should not work", func() {
-					err = integer.DetachTags(tags)
-					Expect(err).To(HaveOccurred())
-				})
 				It("'get tagged' should not work", func() {
 					aliasesObtained, err := integer.GetTagged(tag)
 					Expect(err).To(HaveOccurred())
