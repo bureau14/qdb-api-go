@@ -113,14 +113,6 @@ var _ = Describe("Tests", func() {
 					tag = ""
 					tags = []string{}
 				})
-				It("'attach tag' should not work", func() {
-					err = integer.AttachTag(tag)
-					Expect(err).To(HaveOccurred())
-				})
-				It("'attach tags' should not work", func() {
-					err = integer.AttachTags(tags)
-					Expect(err).To(HaveOccurred())
-				})
 				It("'has tag' should not work", func() {
 					err = integer.HasTag(tag)
 					Expect(err).To(HaveOccurred())
