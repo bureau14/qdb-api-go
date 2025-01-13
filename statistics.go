@@ -12,55 +12,42 @@ import (
 
 // Statistics : json adptable structure with node information
 type Statistics struct {
-	CPU struct {
-		Idle   int64 `json:"idle"`
-		System int64 `json:"system"`
-		User   int64 `json:"user"`
-	} `json:"cpu"`
-	Disk struct {
-		BytesFree  int64  `json:"bytes_free"`
-		BytesTotal int64  `json:"bytes_total"`
-		Path       string `json:"path"`
-	} `json:"disk"`
 	EngineBuildDate     string `json:"engine_build_date"`
 	EngineVersion       string `json:"engine_version"`
-	HardwareConcurrency int64  `json:"hardware_concurrency"`
+	HardwareConcurrency int64  `json:"hardware_concurrency_count"`
 	Memory              struct {
-		BytesResident int64 `json:"bytes_resident_size"`
+		BytesResident int64 `json:"resident_bytes"`
 		ResidentCount int64 `json:"resident_count"`
 		Physmem       struct {
-			Used  int64 `json:"bytes_used"`
-			Total int64 `json:"bytes_total"`
+			Used  int64 `json:"used_bytes"`
+			Total int64 `json:"total_bytes"`
 		} `json:"physmem"`
 		VM struct {
-			Used  int64 `json:"bytes_used"`
-			Total int64 `json:"bytes_total"`
+			Used  int64 `json:"used_bytes"`
+			Total int64 `json:"total_bytes"`
 		} `json:"vm"`
 	} `json:"memory"`
 	Network struct {
 		CurrentUsersCount int64 `json:"current_users_count"`
+		PartitionsCount int64  `json:"partitions_count"`
 		Sessions          struct {
 			AvailableCount   int64 `json:"available_count"`
 			UnavailableCount int64 `json:"unavailable_count"`
 			MaxCount         int64 `json:"max_count"`
 		} `json:"sessions"`
 	} `json:"network"`
-	PartitionsCount int64  `json:"partitions_count"`
-	NodeID          string `json:"node_id"`
+	NodeID          string `json:"chord.node_id"`
 	OperatingSystem string `json:"operating_system"`
 	Persistence     struct {
-		BytesCapacity int64 `json:"bytes_capacity"`
-		BytesRead     int64 `json:"bytes_read"`
-		BytesUtilized int64 `json:"bytes_utilized"`
-		BytesWritten  int64 `json:"bytes_written"`
-		EntriesCount  int64 `json:"entries_count"`
+		BytesRead     int64 `json:"read_bytes"`
+		BytesWritten  int64 `json:"written_bytes"`
 	} `json:"persistence"`
 	Requests struct {
-		BytesOut       int64 `json:"bytes_out"`
+		BytesOut       int64 `json:"out_bytes"`
 		SuccessesCount int64 `json:"successes_count"`
 		TotalCount     int64 `json:"total_count"`
 	} `json:"requests"`
-	Startup int64 `json:"startup"`
+	Startup int64 `json:"startup_epoch"`
 }
 
 func (h DirectHandleType) getStatistics(prefix string, s interface{}) error {
