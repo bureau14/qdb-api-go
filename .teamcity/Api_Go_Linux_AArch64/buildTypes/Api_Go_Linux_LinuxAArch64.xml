@@ -4,6 +4,7 @@
   <description />
   <settings ref="Api_Go_Build">
     <parameters>
+      <param name="env.GOPATH" value="%teamcity.agent.work.dir%%path.sep%%teamcity.build.default.checkoutDir%" />
       <param name="env_path.sep" value=":" />
       <param name="platform" value="linux-64bit-aarch64" />
       <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
