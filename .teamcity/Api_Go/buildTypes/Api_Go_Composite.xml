@@ -27,6 +27,10 @@
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*=&gt;Windows" />
       </dependency>
+      <dependency id="ARTIFACT_DEPENDENCY_4809" sourceBuildTypeId="Api_Go_MacOS_Composite" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="*=&gt;macOS" />
+      </dependency>
     </artifact-dependencies>
     <dependencies>
       <depend-on sourceBuildTypeId="Api_Go_FreeBSD_Composite">
