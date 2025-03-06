@@ -12,6 +12,12 @@
     <vcs-settings />
     <requirements />
     <build-triggers />
+    <artifact-dependencies>
+      <dependency id="ARTIFACT_DEPENDENCY_4799" sourceBuildTypeId="Api_Go_Linux_LinuxAArch64" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="*" />
+      </dependency>
+    </artifact-dependencies>
     <dependencies>
       <depend-on sourceBuildTypeId="Api_Go_Linux_LinuxAArch64">
         <options>
