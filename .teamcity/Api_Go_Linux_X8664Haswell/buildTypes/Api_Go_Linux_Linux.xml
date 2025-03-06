@@ -7,6 +7,7 @@
       <option name="artifactRules" value="*coverage*&#xA;qdbd_log_*&#xA;*.log&#xA;doc.tar.gz" />
     </options>
     <parameters>
+      <param name="env.GOROOT" value="%system.go1.19-64.goroot%" />
       <param name="env_path.sep" value=":" />
       <param name="platform" value="linux-64bit" />
       <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
