@@ -14,12 +14,6 @@
     </vcs-settings>
     <requirements />
     <build-triggers />
-    <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Api_Go_Go119_Composite" cleanDestination="false">
-        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="* =&gt; ." />
-      </dependency>
-    </artifact-dependencies>
     <cleanup />
   </settings>
 </build-type>
