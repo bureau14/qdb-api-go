@@ -13,6 +13,10 @@
     <requirements />
     <build-triggers />
     <artifact-dependencies>
+      <dependency id="ARTIFACT_DEPENDENCY_4801" sourceBuildTypeId="Api_Go_Linux_AArch64_Composite" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="*=&gt;aarch64" />
+      </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4800" sourceBuildTypeId="Api_Go_Linux_X8664Haswell_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*=&gt;x86_64_hasswell" />
