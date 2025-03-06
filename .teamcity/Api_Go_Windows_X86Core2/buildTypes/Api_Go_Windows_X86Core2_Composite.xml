@@ -13,7 +13,7 @@
     <requirements />
     <build-triggers />
     <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_4794" sourceBuildTypeId="Api_Go_Windows_X86Core2_Composite" cleanDestination="false">
+      <dependency id="ARTIFACT_DEPENDENCY_4794" sourceBuildTypeId="Api_Go_Windows_X86Core2_Win32" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*" />
       </dependency>
