@@ -9,7 +9,7 @@
     <parameters>
       <param name="artifact.ext" value="zip" />
       <param name="echo.on" value="@echo on" />
-      <param name="env.GOROOT" value="%system.go1.23-32.goroot%" />
+      <param name="env.GOROOT" value="%system.go1.24-32.goroot%" />
       <param name="env_path.sep" value=";" />
       <param name="path.sep" value="\" spec="text display='hidden' validationMode='any'" />
       <param name="platform" value="windows-32bit" />
