@@ -12,6 +12,12 @@
     <vcs-settings />
     <requirements />
     <build-triggers />
+    <artifact-dependencies>
+      <dependency id="ARTIFACT_DEPENDENCY_4802" sourceBuildTypeId="Api_Go_FreeBSD_X8664Haswell_Go119" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="*" />
+      </dependency>
+    </artifact-dependencies>
     <dependencies>
       <depend-on sourceBuildTypeId="Api_Go_FreeBSD_X8664Haswell_Go119">
         <options>
