@@ -9,6 +9,7 @@
     <parameters>
       <param name="env.GOPATH" value="%teamcity.agent.work.dir%%path.sep%%teamcity.build.default.checkoutDir%" />
       <param name="env.GOROOT" value="%system.go1.19-64.goroot%" />
+      <param name="env.PATH" value="%env.GOPATH%%path.sep%bin%env_path.sep%%env.GOROOT%%path.sep%bin%env_path.sep%%env.PATH%" />
       <param name="env_path.sep" value=":" />
       <param name="platform" value="linux-64bit" />
       <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
