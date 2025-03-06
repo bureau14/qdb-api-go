@@ -19,6 +19,10 @@
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*=&gt;FreeBSD" />
       </dependency>
+      <dependency id="ARTIFACT_DEPENDENCY_4807" sourceBuildTypeId="Api_Go_Linux_Composite" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="*=&gt;Linux" />
+      </dependency>
     </artifact-dependencies>
     <dependencies>
       <depend-on sourceBuildTypeId="Api_Go_FreeBSD_Composite">
