@@ -20,15 +20,6 @@
         <artifact sourcePath="* =&gt; ." />
       </dependency>
     </artifact-dependencies>
-    <dependencies>
-      <depend-on sourceBuildTypeId="Api_Go_Go119_Composite">
-        <options>
-          <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
-          <option name="take-started-build-with-same-revisions" value="true" />
-          <option name="take-successful-builds-only" value="true" />
-        </options>
-      </depend-on>
-    </dependencies>
     <cleanup />
   </settings>
 </build-type>
