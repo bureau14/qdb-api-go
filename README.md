@@ -8,15 +8,29 @@ Quasardb Go API
 
 **Warning:** Go1.9.0 is not supported. If you encounter a compilation problem with time.go please upgrade.
 
-Go API for [quasardb](https://www.quasardb.net/).
+Go API for [quasardb](https://www.quasar.ai/).
 
 
 ### Requirements
 
 1. [Go compiler and tools](https://golang.org/)
-1. [quasardb daemon](https://www.quasardb.net/download/index.html)
-1. [quasardb C API](https://www.quasardb.net/download/index.html) version corresponding to the OS you use
+1. [Gcc compiler and tool](https://gcc.gnu.org/)
+1. [quasardb daemon](https://download.quasar.ai/quasardb/nightly/server/)
+1. [quasardb C API](https://download.quasar.ai/quasardb/nightly/api/c/) version corresponding to the OS you use
 1. The version of the quasardb C API *must match* the current git branch, the master branch corresponds to the nightly C API
+
+#### Check your system
+1. ```go version ``` -> should not lower thatn 1.19
+1. ```gcc  --version``` -> should be not lower than 11
+
+
+```
+#Example of downloading server binaries
+
+curl -s -L http://download.quasar.ai/quasardb/nightly/server/qdb-3.15.0.dev0-linux-64bit-server.tar.gz | tar -xzvf - 
+curl -s -L http://download.quasar.ai/quasardb/nightly/api/c/qdb-3.15.0.dev0-linux-64bit-c-api.tar.gz | tar -xzvf -
+curl -s -L http://download.quasar.ai/quasardb/nightly/utils/qdb-3.15.0.dev0-linux-64bit-utils.tar.gz | tar -xzvf -
+```
 
 ### Build instructions:
 1. `go get -d github.com/bureau14/qdb-api-go`
