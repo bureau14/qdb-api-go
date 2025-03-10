@@ -18,3 +18,11 @@
 
 /test-coverage.out
 /.idea/.gitignore
+/share/doc/qdb/CHANGES.rst
+/share/doc/qdb/LICENSE.txt
+/.idea/modules.xml
+/.idea/qdb-api-go.iml
+/qdb-api-go.iml
+/qdb_api.examples.log
+/share/doc/qdb/README.md
+/.idea/vcs.xml
