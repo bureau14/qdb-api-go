@@ -18,25 +18,28 @@ type Cluster struct {
 }
 
 // PurgeAll : Removes irremediably all data from all the nodes of the cluster.
-// 	This function is useful when quasardb is used as a cache and is not the golden source.
-// 	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
-// 	By default cluster does not allow this operation and the function returns a qdb_e_operation_disabled error.
+//
+//	This function is useful when quasardb is used as a cache and is not the golden source.
+//	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
+//	By default cluster does not allow this operation and the function returns a qdb_e_operation_disabled error.
 func (c Cluster) PurgeAll() error {
 	err := C.qdb_purge_all(c.handle, 60*1000)
 	return makeErrorOrNil(err)
 }
 
 // PurgeCache : Removes all cached data from all the nodes of the cluster.
+//
 //	This function is disabled on a transient cluster.
 //	Prefer purge_all in this case.
 //
-// 	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
+//	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
 func (c Cluster) PurgeCache() error {
 	err := C.qdb_purge_cache(c.handle, 60*1000)
 	return makeErrorOrNil(err)
 }
 
 // TrimAll : Trims all data on all the nodes of the cluster.
+//
 //	Quasardb uses Multi-Version Concurrency Control (MVCC) as a foundation of its transaction engine. It will automatically clean up old versions as entries are accessed.
 //	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
 //	Entries that are not accessed may not be cleaned up, resulting in increasing disk usage.
@@ -49,6 +52,7 @@ func (c Cluster) TrimAll() error {
 }
 
 // WaitForStabilization : Wait for all nodes of the cluster to be stabilized.
+//
 //	Takes a timeout value, in milliseconds.
 func (c Cluster) WaitForStabilization(timeout time.Duration) error {
 	err := C.qdb_wait_for_stabilization(c.handle, C.int(timeout/time.Millisecond))
@@ -66,7 +70,7 @@ func (t Endpoint) URI() string {
 	return fmt.Sprintf("%s:%d", t.Address, t.Port)
 }
 
-func (t C.qdb_remote_node_t) toStructG() Endpoint {
+func RemoteNodeToStructG(t C.qdb_remote_node_t) Endpoint {
 	return Endpoint{C.GoString(t.address), int64(t.port)}
 }
 
@@ -81,7 +85,7 @@ func endpointArrayToGo(endpoints *C.qdb_remote_node_t, endpointsCount C.qdb_size
 	if length > 0 {
 		slice := endpointArrayToSlice(endpoints, length)
 		for i, s := range slice {
-			output[i] = s.toStructG()
+			output[i] = RemoteNodeToStructG(s)
 		}
 	}
 	return output

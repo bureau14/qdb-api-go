@@ -15,6 +15,7 @@ import (
 type TsColumnType C.qdb_ts_column_type_t
 
 // Values
+//
 //	TsColumnDouble : column is a double point
 //	TsColumnBlob : column is a blob point
 //	TsColumnInt64 : column is a int64 point
@@ -71,7 +72,7 @@ func (t TsColumnInfo) toStructC() C.qdb_ts_column_info_ex_t {
 	return C.qdb_ts_column_info_ex_t{name: convertToCharStar(t.name), _type: C.qdb_ts_column_type_t(t.kind), symtable: convertToCharStar(t.symtable)}
 }
 
-func (t C.qdb_ts_column_info_ex_t) toStructInfoG() TsColumnInfo {
+func TsColumnInfoExToStructInfoG(t C.qdb_ts_column_info_ex_t) TsColumnInfo {
 	return TsColumnInfo{C.GoString(t.name), TsColumnType(t._type), C.GoString(t.symtable)}
 }
 
@@ -122,7 +123,7 @@ func columnInfoArrayToGo(columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_
 	if length > 0 {
 		slice := columnInfoArrayToSlice(columns, length)
 		for i, s := range slice {
-			columnsInfo[i] = s.toStructInfoG()
+			columnsInfo[i] = TsColumnInfoExToStructInfoG(s)
 		}
 	}
 	return columnsInfo
@@ -135,7 +136,7 @@ type TimeseriesEntry struct {
 
 // :: internals
 
-func (t C.qdb_ts_column_info_ex_t) toStructG(entry TimeseriesEntry) tsColumn {
+func TsColumnInfoExToStructG(t C.qdb_ts_column_info_ex_t, entry TimeseriesEntry) tsColumn {
 	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type), C.GoString(t.symtable)}, entry}
 }
 
@@ -160,15 +161,15 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, 
 		slice := columnInfoArrayToSlice(columns, length)
 		for _, s := range slice {
 			if s._type == C.qdb_ts_column_blob {
-				blobColumns = append(blobColumns, TsBlobColumn{s.toStructG(entry)})
+				blobColumns = append(blobColumns, TsBlobColumn{TsColumnInfoExToStructG(s, entry)})
 			} else if s._type == C.qdb_ts_column_double {
-				doubleColumns = append(doubleColumns, TsDoubleColumn{s.toStructG(entry)})
+				doubleColumns = append(doubleColumns, TsDoubleColumn{TsColumnInfoExToStructG(s, entry)})
 			} else if s._type == C.qdb_ts_column_int64 {
-				int64Columns = append(int64Columns, TsInt64Column{s.toStructG(entry)})
+				int64Columns = append(int64Columns, TsInt64Column{TsColumnInfoExToStructG(s, entry)})
 			} else if s._type == C.qdb_ts_column_string || s._type == C.qdb_ts_column_symbol {
-				stringColumns = append(stringColumns, TsStringColumn{s.toStructG(entry)})
+				stringColumns = append(stringColumns, TsStringColumn{TsColumnInfoExToStructG(s, entry)})
 			} else if s._type == C.qdb_ts_column_timestamp {
-				timestampColumns = append(timestampColumns, TsTimestampColumn{s.toStructG(entry)})
+				timestampColumns = append(timestampColumns, TsTimestampColumn{TsColumnInfoExToStructG(s, entry)})
 			}
 		}
 	}
@@ -208,6 +209,7 @@ func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 }
 
 // Create : create a new timeseries
+//
 //	First parameter is the duration limit to organize a shard
 //	Ex: shardSize := 24 * time.Hour
 func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInfo) error {
@@ -259,8 +261,8 @@ func (t TsRange) toStructC() C.qdb_ts_range_t {
 	return r
 }
 
-func (t C.qdb_ts_range_t) toStructG() TsRange {
-	r := NewRange(t.begin.toStructG(), t.end.toStructG())
+func TsRangeToStructG(t C.qdb_ts_range_t) TsRange {
+	r := NewRange(TimespecToStructG(t.begin), TimespecToStructG(t.end))
 	return r
 }
 
@@ -314,6 +316,7 @@ type TsBulk struct {
 }
 
 // Bulk : create a bulk object for the specified columns
+//
 //	If no columns are specified it gets the server side registered columns
 func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	if len(cols) == 0 {
@@ -368,7 +371,7 @@ func (t *TsBulk) NextRow() (time.Time, error) {
 	err := C.qdb_ts_table_next_row(t.table, &timestamp)
 	t.rowCount++
 	t.index = 0
-	return timestamp.toStructG(), makeErrorOrNil(err)
+	return TimespecToStructG(timestamp), makeErrorOrNil(err)
 }
 
 // Release : release the memory of the local table
@@ -396,7 +399,7 @@ func (t TsBatchColumnInfo) toStructC() C.qdb_ts_batch_column_info_t {
 	return C.qdb_ts_batch_column_info_t{convertToCharStar(t.Timeseries), convertToCharStar(t.Column), C.qdb_size_t(t.ElementCountHint)}
 }
 
-func (t C.qdb_ts_batch_column_info_t) toStructInfoG() TsBatchColumnInfo {
+func TsBatchColumnInfoToStructInfoG(t C.qdb_ts_batch_column_info_t) TsBatchColumnInfo {
 	return TsBatchColumnInfo{C.GoString(t.timeseries), C.GoString(t.column), int64(t.elements_count_hint)}
 }
 func tsBatchColumnInfoArrayToC(cols ...TsBatchColumnInfo) *C.qdb_ts_batch_column_info_t {
@@ -431,7 +434,7 @@ func tsBatchColumnInfoArrayToGo(columns *C.qdb_ts_batch_column_info_t, columnsCo
 	if length > 0 {
 		slice := batchColumnInfoArrayToSlice(columns, length)
 		for i, s := range slice {
-			columnsInfo[i] = s.toStructInfoG()
+			columnsInfo[i] = TsBatchColumnInfoToStructInfoG(s)
 		}
 	}
 	return columnsInfo
