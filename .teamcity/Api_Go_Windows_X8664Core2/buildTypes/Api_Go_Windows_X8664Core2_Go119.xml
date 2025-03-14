@@ -6,6 +6,7 @@
     <disabled-settings>
       <setting-ref ref="RQ_157" />
       <setting-ref ref="RQ_169" />
+      <setting-ref ref="RUNNER_111" />
     </disabled-settings>
     <parameters>
       <param name="artifact.ext" value="zip" />
