@@ -9,7 +9,7 @@
       <param name="platform" value="linux-64bit-aarch64" />
       <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
     </parameters>
-    <build-runners order="RUNNER_111, RUNNER_26, RUNNER_106, RUNNER_117, RUNNER_266, RUNNER_61, RUNNER_114, RUNNER_164">
+    <build-runners order="RUNNER_26, buildWithoutDocker, RUNNER_106, RUNNER_117, RUNNER_266, RUNNER_61, RUNNER_114, RUNNER_164">
       <runner id="RUNNER_61" name="Generate documentation" type="simpleRunner">
         <parameters>
           <param name="script.content"><![CDATA[go get -v golang.org/x/tools/cmd/godoc

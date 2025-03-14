@@ -29,9 +29,6 @@
         </parameters>
       </runner>
       <runner id="buildWithoutDocker" name="Build" type="simpleRunner">
-        <conditions>
-          <does-not-equal name="teamcity.agent.jvm.os.name" value="Linux" />
-        </conditions>
         <parameters>
           <param name="plugin.docker.imageId" value="bureau14/builder:%teamcity.agent.jvm.os.arch%" />
           <param name="plugin.docker.imagePlatform" value="linux" />
