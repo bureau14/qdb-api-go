@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<template xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
+<template xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" uuid="" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
   <name>Build</name>
   <settings>
     <options>
@@ -31,6 +31,14 @@ go get github.com/onsi/gomega]]></param>
           <param name="use.custom.script" value="true" />
         </parameters>
       </runner>
+      <runner id="RUNNER_26" name="Start services" type="simpleRunner">
+        <parameters>
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/tests/setup/start-services.sh" />
+          <param name="teamcity.step.mode" value="default" />
+          <param name="use.custom.script" value="" />
+        </parameters>
+      </runner>
       <runner id="RUNNER_111" name="Build" type="simpleRunner">
         <parameters>
           <param name="script.content"><![CDATA[%echo.on%
@@ -38,14 +46,6 @@ go get github.com/onsi/gomega]]></param>
 go build -v -x]]></param>
           <param name="teamcity.step.mode" value="default" />
           <param name="use.custom.script" value="true" />
-        </parameters>
-      </runner>
-      <runner id="RUNNER_26" name="Start services" type="simpleRunner">
-        <parameters>
-          <param name="command.executable" value="bash" />
-          <param name="command.parameters" value="scripts/tests/setup/start-services.sh" />
-          <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="" />
         </parameters>
       </runner>
       <runner id="RUNNER_106" name="Test" type="simpleRunner">
