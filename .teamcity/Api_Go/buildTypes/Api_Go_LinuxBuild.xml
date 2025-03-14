@@ -70,11 +70,13 @@
       </runner>
       <runner id="RUNNER_114" name="Coverage" type="simpleRunner">
         <parameters>
-          <param name="script.content"><![CDATA[%echo.on%
-%select.gcc%
-go tool cover -html=test-coverage.out -o coverage.html]]></param>
+          <param name="command.executable" value="%goroot%/bin/go" />
+          <param name="command.parameters" value="tool cover -html=test-coverage.out -o coverage.html" />
+          <param name="plugin.docker.imageId" value="bureau14/builder:%teamcity.agent.jvm.os.arch%" />
+          <param name="plugin.docker.imagePlatform" value="linux" />
+          <param name="plugin.docker.pull.enabled" value="true" />
+          <param name="script.content" value="go" />
           <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="true" />
         </parameters>
       </runner>
       <runner id="RUNNER_164" name="Stop services" type="simpleRunner">
