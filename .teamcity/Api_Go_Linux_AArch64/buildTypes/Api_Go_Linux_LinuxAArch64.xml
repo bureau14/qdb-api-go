@@ -5,7 +5,6 @@
   <settings ref="Api_Go_LinuxBuild">
     <parameters>
       <param name="goroot" value="%system.go1.19-64.goroot%" />
-      <param name="platform" value="linux-64bit-aarch64" />
     </parameters>
     <build-runners>
       <runner id="RUNNER_61" name="Generate documentation" type="simpleRunner">
