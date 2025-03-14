@@ -33,6 +33,9 @@
           <does-not-equal name="teamcity.agent.jvm.os.name" value="Linux" />
         </conditions>
         <parameters>
+          <param name="plugin.docker.imageId" value="bureau14/builder:%teamcity.agent.jvm.os.arch%" />
+          <param name="plugin.docker.imagePlatform" value="linux" />
+          <param name="plugin.docker.pull.enabled" value="true" />
           <param name="script.content"><![CDATA[%echo.on%
 %select.gcc%
 go build -v -x]]></param>
