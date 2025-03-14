@@ -27,7 +27,7 @@
           <param name="use.custom.script" value="" />
         </parameters>
       </runner>
-      <runner id="buildWithoutDocker" name="Build without docker" type="simpleRunner">
+      <runner id="buildWithoutDocker" name="Build" type="simpleRunner">
         <conditions>
           <does-not-equal name="teamcity.agent.jvm.os.name" value="Linux" />
         </conditions>
