@@ -109,6 +109,12 @@
           <param name="buildFailureOnMessage.reverse" value="false" />
         </parameters>
       </extension>
+      <extension id="DockerSupport" type="DockerSupport">
+        <parameters>
+          <param name="login2registry" value="PROJECT_EXT_11" />
+          <param name="loginCheckbox" value="on" />
+        </parameters>
+      </extension>
     </build-extensions>
     <cleanup />
   </settings>
