@@ -15,7 +15,6 @@
       <param name="env.PATH" value="%gopath%/bin/:%goroot%/bin/:%env.PATH%" />
       <param name="gopath" value="%teamcity.agent.work.dir%/%teamcity.build.default.checkoutDir%" />
       <param name="package.root" value="src/github.com/bureau14/qdb-api-go" spec="text display='normal' readOnly='true' validationMode='any'" />
-      <param name="update.library.path" value="" spec="text validationMode='any'" />
     </parameters>
     <build-runners>
       <runner id="RUNNER_26" name="Start services" type="simpleRunner">
