@@ -8,9 +8,6 @@
       <option name="cleanBuild" value="true" />
       <option name="showDependenciesChanges" value="true" />
     </options>
-    <disabled-settings>
-      <setting-ref ref="RUNNER_115" />
-    </disabled-settings>
     <parameters>
       <param name="QDB_API_PATH" value="qdb" spec="text validationMode='any' readOnly='true'" />
       <param name="echo.on" value="" />
@@ -22,15 +19,6 @@
       <param name="update.library.path" value="" spec="text validationMode='any'" />
     </parameters>
     <build-runners>
-      <runner id="RUNNER_115" name="Install" type="simpleRunner">
-        <parameters>
-          <param name="script.content"><![CDATA[%echo.on%
-go get github.com/onsi/ginkgo
-go get github.com/onsi/gomega]]></param>
-          <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="true" />
-        </parameters>
-      </runner>
       <runner id="RUNNER_26" name="Start services" type="simpleRunner">
         <parameters>
           <param name="command.executable" value="bash" />
