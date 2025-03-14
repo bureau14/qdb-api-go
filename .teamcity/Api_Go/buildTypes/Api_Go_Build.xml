@@ -39,7 +39,7 @@ go get github.com/onsi/gomega]]></param>
           <param name="use.custom.script" value="" />
         </parameters>
       </runner>
-      <runner id="RUNNER_111" name="Build in Docker" type="simpleRunner">
+      <runner id="RUNNER_111" name="Build with Docker" type="simpleRunner">
         <conditions>
           <equals name="teamcity.agent.jvm.os.name" value="Linux" />
         </conditions>
