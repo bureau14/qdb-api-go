@@ -6,7 +6,6 @@
     <parameters>
       <param name="goroot" value="%system.go1.19-64.goroot%" />
       <param name="platform" value="linux-64bit-aarch64" />
-      <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
     </parameters>
     <build-runners>
       <runner id="RUNNER_61" name="Generate documentation" type="simpleRunner">
