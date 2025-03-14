@@ -122,6 +122,9 @@
           <param name="swabra.verbose" value="true" />
         </parameters>
       </extension>
+      <extension id="perfmon" type="perfmon">
+        <parameters />
+      </extension>
     </build-extensions>
     <cleanup />
   </settings>
