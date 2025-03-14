@@ -115,6 +115,13 @@
           <param name="loginCheckbox" value="on" />
         </parameters>
       </extension>
+      <extension id="swabra" type="swabra">
+        <parameters>
+          <param name="swabra.enabled" value="swabra.after.build" />
+          <param name="swabra.processes" value="kill" />
+          <param name="swabra.verbose" value="true" />
+        </parameters>
+      </extension>
     </build-extensions>
     <cleanup />
   </settings>
