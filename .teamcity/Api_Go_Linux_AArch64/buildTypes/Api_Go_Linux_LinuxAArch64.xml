@@ -4,7 +4,6 @@
   <description />
   <settings ref="Api_Go_LinuxBuild">
     <parameters>
-      <param name="env_path.sep" value=":" />
       <param name="goroot" value="%system.go1.19-64.goroot%" />
       <param name="platform" value="linux-64bit-aarch64" />
       <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
