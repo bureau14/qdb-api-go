@@ -12,7 +12,6 @@
     <parameters>
       <param name="QDB_API_PATH" value="qdb" spec="text validationMode='any' readOnly='true'" />
       <param name="echo.on" value="" />
-      <param name="env.GOPATH" value="%teamcity.agent.work.dir%%path.sep%%teamcity.build.default.checkoutDir%" />
       <param name="env.PATH" value="%gopath%%path.sep%bin%env_path.sep%%goroot%%path.sep%bin%env_path.sep%%env.PATH%" />
       <param name="gopath" value="%teamcity.agent.work.dir%%path.sep%%teamcity.build.default.checkoutDir%" />
       <param name="goroot" value="" />
