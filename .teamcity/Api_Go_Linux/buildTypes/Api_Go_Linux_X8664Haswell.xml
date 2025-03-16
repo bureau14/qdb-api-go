@@ -29,7 +29,7 @@ tar -czvf doc.tar.gz doc/*]]></param>
     <vcs-settings />
     <requirements>
       <equals id="RQ_1" name="teamcity.agent.jvm.os.name" value="Linux" />
-      <equals id="RQ_2" name="teamcity.agent.jvm.os.arch" value="aarch64" />
+      <equals id="RQ_2" name="teamcity.agent.jvm.os.arch" value="amd64" />
     </requirements>
     <build-triggers />
     <build-extensions>
