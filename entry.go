@@ -23,6 +23,7 @@ func (e Entry) Alias() string {
 }
 
 // Remove : Removes an entry from the cluster, regardless of its type.
+//
 //	This call will remove the entry, whether it is a blob, integer, deque, stream.
 //	It will properly untag the entry.
 //	If the entry spawns on multiple entries or nodes (deques and streams) all blocks will be properly removed.
@@ -38,6 +39,7 @@ func (e Entry) Remove() error {
 // ::: EXPIRY RELATED FUNCTIONS :::
 
 // ExpiresAt : Sets the absolute expiration time of an entry.
+//
 //	Blobs and integers can have an expiration time and will be automatically removed by the cluster when they expire.
 //
 //	The absolute expiration time is the Unix epoch, that is, the number of milliseconds since 1 January 1970, 00:00::00 UTC.
@@ -53,6 +55,7 @@ func (e Entry) ExpiresAt(expiry time.Time) error {
 }
 
 // ExpiresFromNow : Sets the expiration time of an entry, relative to the current time of the client.
+//
 //	Blobs and integers can have an expiration time and will automatically be removed by the cluster when they expire.
 //
 //	The expiration is relative to the current time of the machine.
@@ -73,6 +76,7 @@ type NodeLocation struct {
 }
 
 // GetLocation : Returns the primary node of an entry.
+//
 //	The exact location of an entry should be assumed random and users should not bother about its location as the API will transparently locate the best node for the requested operation.
 //	This function is intended for higher level APIs that need to optimize transfers and potentially push computation close to the data.
 func (e Entry) GetLocation() (NodeLocation, error) {
@@ -91,14 +95,15 @@ type RefID C.qdb_id_t
 type EntryType C.qdb_entry_type_t
 
 // EntryType Values
-// 	EntryUninitialized : Uninitialized value.
-// 	EntryBlob : A binary large object (blob).
-// 	EntryInteger : A signed 64-bit integer.
-// 	EntryHSet : A distributed hash set.
-// 	EntryTag : A tag.
-// 	EntryDeque : A distributed double-entry queue (deque).
-// 	EntryTS : A distributed time series.
-// 	EntryStream : A distributed binary stream.
+//
+//	EntryUninitialized : Uninitialized value.
+//	EntryBlob : A binary large object (blob).
+//	EntryInteger : A signed 64-bit integer.
+//	EntryHSet : A distributed hash set.
+//	EntryTag : A tag.
+//	EntryDeque : A distributed double-entry queue (deque).
+//	EntryTS : A distributed time series.
+//	EntryStream : A distributed binary stream.
 const (
 	EntryUninitialized EntryType = C.qdb_entry_uninitialized
 	EntryBlob          EntryType = C.qdb_entry_blob
@@ -125,12 +130,13 @@ func (e Entry) GetMetadata() (Metadata, error) {
 	defer releaseCharStar(alias)
 	var m C.qdb_entry_metadata_t
 	err := C.qdb_get_metadata(e.handle, alias, &m)
-	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), m.modification_time.toStructG(), m.expiry_time.toStructG()}, makeErrorOrNil(err)
+	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), TimespecToStructG(m.modification_time), TimespecToStructG(m.expiry_time)}, makeErrorOrNil(err)
 }
 
 // ::: TAGS RELATED FUNCTIONS :::
 
 // AttachTag : Adds a tag entry.
+//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 //	The tag may or may not exist.
@@ -144,6 +150,7 @@ func (e Entry) AttachTag(tag string) error {
 }
 
 // AttachTags : Adds a collection of tags to a single entry.
+//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The function will ignore existing tags.
 //	The entry must exist.
@@ -158,6 +165,7 @@ func (e Entry) AttachTags(tags []string) error {
 }
 
 // HasTag : Tests if an entry has the request tag.
+//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 func (e Entry) HasTag(tag string) error {
@@ -170,6 +178,7 @@ func (e Entry) HasTag(tag string) error {
 }
 
 // DetachTag : Removes a tag from an entry.
+//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 //	The tag must exist.
@@ -183,6 +192,7 @@ func (e Entry) DetachTag(tag string) error {
 }
 
 // DetachTags : Removes a collection of tags from a single entry.
+//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 //	The tags must exist.
@@ -196,6 +206,7 @@ func (e Entry) DetachTags(tags []string) error {
 }
 
 // GetTagged : Retrieves all entries that have the specified tag.
+//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The tag must exist.
 //	The complexity of this function is constant.
@@ -222,6 +233,7 @@ func (e Entry) GetTagged(tag string) ([]string, error) {
 }
 
 // GetTags : Retrieves all the tags of an entry.
+//
 //	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
 //	The entry must exist.
 func (e Entry) GetTags() ([]string, error) {

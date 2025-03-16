@@ -36,8 +36,8 @@ func (t TsInt64Point) toStructC() C.qdb_ts_int64_point {
 	return C.qdb_ts_int64_point{toQdbTimespec(t.timestamp), C.qdb_int_t(t.content)}
 }
 
-func (t C.qdb_ts_int64_point) toStructG() TsInt64Point {
-	return TsInt64Point{t.timestamp.toStructG(), int64(t.value)}
+func TsInt64PointToStructG(t C.qdb_ts_int64_point) TsInt64Point {
+	return TsInt64Point{TimespecToStructG(t.timestamp), int64(t.value)}
 }
 
 func int64PointArrayToC(pts ...TsInt64Point) *C.qdb_ts_int64_point {
@@ -62,7 +62,7 @@ func int64PointArrayToGo(points *C.qdb_ts_int64_point, pointsCount C.qdb_size_t)
 	if length > 0 {
 		slice := int64PointArrayToSlice(points, length)
 		for i, s := range slice {
-			output[i] = s.toStructG()
+			output[i] = TsInt64PointToStructG(s)
 		}
 	}
 	return output
@@ -104,6 +104,7 @@ func (column TsInt64Column) EraseRanges(rgs ...TsRange) (uint64, error) {
 }
 
 // GetRanges : Retrieves int64s in the specified range of the time series column.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsInt64Column) GetRanges(rgs ...TsRange) ([]TsInt64Point, error) {
 	alias := convertToCharStar(column.parent.alias)
@@ -166,12 +167,12 @@ func (t TsInt64Aggregation) toStructC() C.qdb_ts_int64_aggregation_t {
 	return cAgg
 }
 
-func (t C.qdb_ts_int64_aggregation_t) toStructG() TsInt64Aggregation {
+func TsInt64AggregationToStructG(t C.qdb_ts_int64_aggregation_t) TsInt64Aggregation {
 	var gAgg TsInt64Aggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t._range.toStructG()
+	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
-	gAgg.point = t.result.toStructG()
+	gAgg.point = TsInt64PointToStructG(t.result)
 	return gAgg
 }
 
@@ -197,8 +198,8 @@ func int64AggregationArrayToGo(aggregations *C.qdb_ts_int64_aggregation_t, aggre
 	if length > 0 {
 		slice := int64AggregationArrayToSlice(aggregations, length)
 		for i, s := range slice {
-			*aggs[i] = s.toStructG()
-			output[i] = s.toStructG()
+			*aggs[i] = TsInt64AggregationToStructG(s)
+			output[i] = TsInt64AggregationToStructG(s)
 		}
 	}
 	return output
@@ -207,6 +208,7 @@ func int64AggregationArrayToGo(aggregations *C.qdb_ts_int64_aggregation_t, aggre
 // TODO(Vianney): Implement aggregate
 
 // Aggregate : Aggregate a sub-part of a timeseries from the specified aggregations.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsInt64Column) Aggregate(aggs ...*TsInt64Aggregation) ([]TsInt64Aggregation, error) {
 	return nil, ErrNotImplemented
