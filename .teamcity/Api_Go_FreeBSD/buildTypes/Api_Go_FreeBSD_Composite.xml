@@ -13,7 +13,7 @@
     <requirements />
     <build-triggers />
     <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_4803" sourceBuildTypeId="Api_Go_FreeBSD_X8664Haswell_Composite" cleanDestination="false">
+      <dependency id="ARTIFACT_DEPENDENCY_4803" sourceBuildTypeId="Api_Go_FreeBSD_X8664Haswell" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*=&gt;x86_64_haswell" />
       </dependency>
