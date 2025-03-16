@@ -3,11 +3,20 @@
 set -eu
 
 ##
-# Define default commands
+# Define default commands/variables
 REALPATH=$(command -v realpath)
+SCRIPT_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
+BASE_DIR=$(${REALPATH} "${SCRIPT_DIR}/../../")
+QDB_API_DIR=$(${REALPATH} "${BASE_DIR}/qdb/")
+QDB_LIB_DIR=$(${REALPATH} "${QDB_API_DIR}/lib/")
+
+echo "SCRIPT_DIR: ${SCRIPT_DIR}"
+echo "BASE_DIR: ${BASE_DIR}"
+echo "QDB_API_DIR: ${QDB_API_DIR}"
+echo "QDB_LIB_DIR: ${QDB_LIB_DIR}"
 
 ##
-# Expect the GOROOT and GOPATH to be provided
+# Validation of the GOROOT and GOPATH env vars
 
 GOROOT=${GOROOT:-}
 GOPATH=${GOPATH:-}
@@ -24,6 +33,36 @@ then
     exit 1
 fi
 
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}
+DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}
+
+##
+# Add QuasarDB's library path to LD_LIBRARY_PATH since we dynamically
+# link libqdb_api.so/dylib
+
+case $(uname) in
+    Linux | FreeBSD )
+        export LD_LIBRARY_PATH="${QDB_LIB_DIR}:${LD_LIBRARY_PATH}"
+        echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+        ;;
+
+    Darwin )
+        export DYLD_LIBRARY_PATH="${QDB_LIB_DIR}:${DYLD_LIBRARY_PATH}"
+        echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
+       ;;
+
+    MINGW* )
+        echo "Nothing to do here (yet)"
+        ;;
+
+    * )
+        echo "Unable to probe environment"
+        exit -1
+        ;;
+esac
+
+##
+# Validate installation of qdb/ base directory
 GO=$(${REALPATH} "${GOROOT}/bin/go")
 
 if [[ ! -x "${GO}" ]]
