@@ -40,9 +40,6 @@
         <parameters>
           <param name="command.executable" value="bash" />
           <param name="command.parameters" value="scripts/teamcity/20.test.sh" />
-          <param name="plugin.docker.imageId" value="bureau14/builder:%teamcity.agent.jvm.os.arch%" />
-          <param name="plugin.docker.imagePlatform" value="linux" />
-          <param name="plugin.docker.pull.enabled" value="true" />
           <param name="script.content" value="go" />
           <param name="teamcity.step.mode" value="default" />
         </parameters>
