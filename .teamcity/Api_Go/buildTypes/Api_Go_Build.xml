@@ -57,11 +57,9 @@
       </runner>
       <runner id="RUNNER_114" name="Coverage" type="simpleRunner">
         <parameters>
-          <param name="script.content"><![CDATA[%echo.on%
-%select.gcc%
-go tool cover -html=test-coverage.out -o coverage.html]]></param>
+          <param name="command.executable" value="%goroot/bin/go" />
+          <param name="command.parameters" value="tool cover -html=test-coverage.out -o coverage.html" />
           <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="true" />
         </parameters>
       </runner>
       <runner id="RUNNER_164" name="Stop services" type="simpleRunner">
