@@ -35,6 +35,8 @@ fi
 
 LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}
 DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}
+CGO_CFLAGS=${CGO_CFLAGS:-}
+CGO_LDFLAGS=${CGO_LDFLAGS:-}
 
 ##
 # Add QuasarDB's library path to LD_LIBRARY_PATH since we dynamically
