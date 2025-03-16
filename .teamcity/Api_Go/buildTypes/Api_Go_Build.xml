@@ -14,7 +14,6 @@
       <param name="env.GOROOT" value="%goroot%" />
       <param name="package.root" value="src%path.sep%github.com%path.sep%bureau14%path.sep%qdb-api-go" spec="text validationMode='any' readOnly='true'" />
       <param name="path.sep" value="/" spec="text display='hidden' validationMode='any'" />
-      <param name="update.library.path" value="" spec="text validationMode='any'" />
     </parameters>
     <build-runners>
       <runner id="RUNNER_26" name="Start services" type="simpleRunner">
