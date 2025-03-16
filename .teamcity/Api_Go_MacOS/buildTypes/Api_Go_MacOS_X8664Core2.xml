@@ -9,7 +9,6 @@
       <param name="platform" value="darwin-64bit" />
       <param name="update.cgo_cflags" value="export CGO_CFLAGS=&quot;$CGO_CFLAGS -I%QDB_API_PATH%/include&quot;" />
       <param name="update.cgo_ldflags" value="export CGO_LDFLAGS=&quot;$CGO_LDFLAGS -L`pwd`/%QDB_API_PATH%/lib -Wl,-rpath -Wl,`pwd`/%QDB_API_PATH%/lib&quot;" />
-      <param name="update.library.path" value="export DYLD_LIBRARY_PATH=%QDB_API_PATH%/lib" spec="text validationMode='any'" />
     </parameters>
     <build-runners order="RUNNER_111, RUNNER_26, RUNNER_106, RUNNER_117, RUNNER_266, RUNNER_114, RUNNER_164">
       <runner id="RUNNER_106" name="Test" type="simpleRunner">
