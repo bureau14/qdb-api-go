@@ -38,8 +38,8 @@
       </runner>
       <runner id="RUNNER_106" name="Test" type="simpleRunner">
         <parameters>
-          <param name="command.executable" value="%goroot%/bin/go" />
-          <param name="command.parameters" value="test -v -test.run &quot;Test*&quot; -coverprofile=test-coverage.out" />
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/teamcity/20.test.sh" />
           <param name="plugin.docker.imageId" value="bureau14/builder:%teamcity.agent.jvm.os.arch%" />
           <param name="plugin.docker.imagePlatform" value="linux" />
           <param name="plugin.docker.pull.enabled" value="true" />
