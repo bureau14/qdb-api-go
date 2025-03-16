@@ -48,7 +48,11 @@ case $(uname) in
 
     Darwin )
         export DYLD_LIBRARY_PATH="${QDB_LIB_DIR}:${DYLD_LIBRARY_PATH}"
+        export CGO_CFLAGS="$CGO_CFLAGS -I${QDB_API_DIR}/include"
+        export CGO_LDFLAGS="$CGO_LDFLAGS -L${QDB_LIB_DIR} -Wl,-rpath -Wl,${QDB_LIB_DIR}"
         echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}"
+        echo "CGO_CFLAGS=${CGO_CFLAGS}"
+        echo "CGO_LDFLAGS=${CGO_LDFLAGS}"
        ;;
 
     MINGW* )
