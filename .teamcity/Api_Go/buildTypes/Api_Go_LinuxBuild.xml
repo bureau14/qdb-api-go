@@ -27,8 +27,8 @@
       </runner>
       <runner id="buildWithoutDocker" name="Build" type="simpleRunner">
         <parameters>
-          <param name="command.executable" value="%goroot%/bin/go" />
-          <param name="command.parameters" value="build -v -x" />
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/teamcity/10.build.sh" />
           <param name="plugin.docker.imageId" value="bureau14/builder:%teamcity.agent.jvm.os.arch%" />
           <param name="plugin.docker.imagePlatform" value="linux" />
           <param name="plugin.docker.pull.enabled" value="true" />
