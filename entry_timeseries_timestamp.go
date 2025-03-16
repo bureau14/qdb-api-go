@@ -36,8 +36,8 @@ func (t TsTimestampPoint) toStructC() C.qdb_ts_timestamp_point {
 	return C.qdb_ts_timestamp_point{toQdbTimespec(t.timestamp), toQdbTimespec(t.content)}
 }
 
-func (t C.qdb_ts_timestamp_point) toStructG() TsTimestampPoint {
-	return TsTimestampPoint{t.timestamp.toStructG(), t.value.toStructG()}
+func TsTimestampPointToStructG(t C.qdb_ts_timestamp_point) TsTimestampPoint {
+	return TsTimestampPoint{TimespecToStructG(t.timestamp), TimespecToStructG(t.value)}
 }
 
 func timestampPointArrayToC(pts ...TsTimestampPoint) *C.qdb_ts_timestamp_point {
@@ -62,7 +62,7 @@ func timestampPointArrayToGo(points *C.qdb_ts_timestamp_point, pointsCount C.qdb
 	if length > 0 {
 		slice := timestampPointArrayToSlice(points, length)
 		for i, s := range slice {
-			output[i] = s.toStructG()
+			output[i] = TsTimestampPointToStructG(s)
 		}
 	}
 	return output
@@ -104,6 +104,7 @@ func (column TsTimestampColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 }
 
 // GetRanges : Retrieves timestamps in the specified range of the time series column.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsTimestampColumn) GetRanges(rgs ...TsRange) ([]TsTimestampPoint, error) {
 	alias := convertToCharStar(column.parent.alias)
@@ -166,12 +167,12 @@ func (t TsTimestampAggregation) toStructC() C.qdb_ts_timestamp_aggregation_t {
 	return cAgg
 }
 
-func (t C.qdb_ts_timestamp_aggregation_t) toStructG() TsTimestampAggregation {
+func TsTimestampAggregationToStructG(t C.qdb_ts_timestamp_aggregation_t) TsTimestampAggregation {
 	var gAgg TsTimestampAggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t._range.toStructG()
+	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
-	gAgg.point = t.result.toStructG()
+	gAgg.point = TsTimestampPointToStructG(t.result)
 	return gAgg
 }
 
@@ -197,8 +198,8 @@ func timestampAggregationArrayToGo(aggregations *C.qdb_ts_timestamp_aggregation_
 	if length > 0 {
 		slice := timestampAggregationArrayToSlice(aggregations, length)
 		for i, s := range slice {
-			*aggs[i] = s.toStructG()
-			output[i] = s.toStructG()
+			*aggs[i] = TsTimestampAggregationToStructG(s)
+			output[i] = TsTimestampAggregationToStructG(s)
 		}
 	}
 	return output
@@ -207,6 +208,7 @@ func timestampAggregationArrayToGo(aggregations *C.qdb_ts_timestamp_aggregation_
 // TODO(Vianney): Implement aggregate
 
 // Aggregate : Aggregate a sub-part of a timeseries from the specified aggregations.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsTimestampColumn) Aggregate(aggs ...*TsTimestampAggregation) ([]TsTimestampAggregation, error) {
 	return nil, ErrNotImplemented
@@ -217,7 +219,7 @@ func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	var content C.qdb_timespec_t
 	err := C.qdb_ts_row_get_timestamp(t.table, C.qdb_size_t(t.index), &content)
 	t.index++
-	return content.toStructG(), makeErrorOrNil(err)
+	return TimespecToStructG(content), makeErrorOrNil(err)
 }
 
 // RowSetTimestamp : Add a timestamp to current row

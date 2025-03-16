@@ -42,8 +42,8 @@ func (t TsBlobPoint) toStructC() C.qdb_ts_blob_point {
 	return C.qdb_ts_blob_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
-func (t C.qdb_ts_blob_point) toStructG() TsBlobPoint {
-	return TsBlobPoint{t.timestamp.toStructG(), C.GoBytes(t.content, C.int(t.content_length))}
+func TsBlobPointToStructG(t C.qdb_ts_blob_point) TsBlobPoint {
+	return TsBlobPoint{TimespecToStructG(t.timestamp), C.GoBytes(t.content, C.int(t.content_length))}
 }
 
 func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
@@ -77,7 +77,7 @@ func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) [
 	if length > 0 {
 		slice := blobPointArrayToSlice(points, length)
 		for i, s := range slice {
-			output[i] = s.toStructG()
+			output[i] = TsBlobPointToStructG(s)
 		}
 	}
 	return output
@@ -120,6 +120,7 @@ func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 }
 
 // GetRanges : Retrieves blobs in the specified range of the time series column.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 	alias := convertToCharStar(column.parent.alias)
@@ -182,12 +183,12 @@ func (t TsBlobAggregation) toStructC() C.qdb_ts_blob_aggregation_t {
 	return cAgg
 }
 
-func (t C.qdb_ts_blob_aggregation_t) toStructG() TsBlobAggregation {
+func TsBlobAggregationToStructG(t C.qdb_ts_blob_aggregation_t) TsBlobAggregation {
 	var gAgg TsBlobAggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t._range.toStructG()
+	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
-	gAgg.point = t.result.toStructG()
+	gAgg.point = TsBlobPointToStructG(t.result)
 	return gAgg
 }
 
@@ -213,14 +214,15 @@ func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggrega
 	if length > 0 {
 		slice := blobAggregationArrayToSlice(aggregations, length)
 		for i, s := range slice {
-			*aggs[i] = s.toStructG()
-			output[i] = s.toStructG()
+			*aggs[i] = TsBlobAggregationToStructG(s)
+			output[i] = TsBlobAggregationToStructG(s)
 		}
 	}
 	return output
 }
 
 // Aggregate : Aggregate a sub-part of the time series.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggregation, error) {
 	alias := convertToCharStar(column.parent.alias)

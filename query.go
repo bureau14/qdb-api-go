@@ -109,7 +109,7 @@ func (r *QueryPoint) Get() QueryPointResult {
 	case C.qdb_query_result_string:
 		output.value = getStringUnsafe(result)
 	case C.qdb_query_result_timestamp:
-		output.value = C.get_timestamp_from_payload(result).toStructG()
+		output.value = TimespecToStructG(C.get_timestamp_from_payload(result))
 	case C.qdb_query_result_count:
 		output.value = int64(C.get_count_from_payload(result))
 	}
@@ -156,7 +156,7 @@ func (r *QueryPoint) GetString() (string, error) {
 func (r *QueryPoint) GetTimestamp() (time.Time, error) {
 	result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
 	if result._type == C.qdb_query_result_timestamp {
-		return C.get_timestamp_from_payload(result).toStructG(), nil
+		return TimespecToStructG(C.get_timestamp_from_payload(result)), nil
 	}
 	return time.Unix(-1, -1), makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
@@ -186,6 +186,7 @@ type QueryResult struct {
 }
 
 // ScannedPoints : number of points scanned
+//
 //	The actual number of scanned points may be greater
 func (r QueryResult) ScannedPoints() int64 {
 	return int64(r.result.scanned_point_count)

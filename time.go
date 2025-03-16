@@ -19,6 +19,6 @@ func toQdbTime(tp time.Time) C.qdb_time_t {
 	return C.qdb_time_t(tp.UnixNano() / int64(time.Millisecond))
 }
 
-func (tp C.qdb_timespec_t) toStructG() time.Time {
+func TimespecToStructG(tp C.qdb_timespec_t) time.Time {
 	return time.Unix(int64(tp.tv_sec), int64(tp.tv_nsec))
 }
