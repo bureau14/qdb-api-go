@@ -32,6 +32,16 @@ tar -czvf doc.tar.gz doc/*]]></param>
       <equals id="RQ_2" name="teamcity.agent.jvm.os.arch" value="aarch64" />
     </requirements>
     <build-triggers />
+    <build-extensions>
+      <extension id="matrix" type="matrix">
+        <parameters>
+          <param name="matrix.param.goroot.1" value="goroot" />
+          <param name="matrix.value.goroot.1" value="%system.go1.19-64.goroot%" />
+          <param name="matrix.value.goroot.2" value="%system.go1.23-64.goroot%" />
+          <param name="matrix.value.goroot.3" value="%system.go1.24-64.goroot%" />
+        </parameters>
+      </extension>
+    </build-extensions>
     <artifact-dependencies>
       <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_Linux_AArch64_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
