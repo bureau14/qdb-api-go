@@ -3,9 +3,7 @@
   <name>AArch64</name>
   <description />
   <settings ref="Api_Go_LinuxBuild">
-    <parameters>
-      <param name="goroot" value="%system.go1.19-64.goroot%" />
-    </parameters>
+    <parameters />
     <build-runners>
       <runner id="RUNNER_61" name="Generate documentation" type="simpleRunner">
         <parameters>
