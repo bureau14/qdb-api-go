@@ -3,5 +3,6 @@
   <name>Linux</name>
   <parameters />
   <cleanup />
+  <buildTypesOrder order="Api_Go_Linux_Composite,Api_Go_Linux_AArch64,Api_Go_Linux_X8664Haswell" />
 </project>
 
