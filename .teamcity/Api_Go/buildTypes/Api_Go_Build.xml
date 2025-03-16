@@ -52,7 +52,7 @@
       </runner>
       <runner id="RUNNER_114" name="Coverage" type="simpleRunner">
         <parameters>
-          <param name="command.executable" value="%goroot/bin/go" />
+          <param name="command.executable" value="%goroot%/bin/go" />
           <param name="command.parameters" value="tool cover -html=test-coverage.out -o coverage.html" />
           <param name="teamcity.step.mode" value="default" />
         </parameters>
