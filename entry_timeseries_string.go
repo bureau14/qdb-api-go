@@ -39,8 +39,8 @@ func (t TsStringPoint) toStructC() C.qdb_ts_string_point {
 	return C.qdb_ts_string_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
-func (t C.qdb_ts_string_point) toStructG() TsStringPoint {
-	return TsStringPoint{t.timestamp.toStructG(), C.GoStringN(t.content, C.int(t.content_length))}
+func TsStringPointToStructG(t C.qdb_ts_string_point) TsStringPoint {
+	return TsStringPoint{TimespecToStructG(t.timestamp), C.GoStringN(t.content, C.int(t.content_length))}
 }
 
 func stringPointArrayToC(pts ...TsStringPoint) *C.qdb_ts_string_point {
@@ -74,7 +74,7 @@ func stringPointArrayToGo(points *C.qdb_ts_string_point, pointsCount C.qdb_size_
 	if length > 0 {
 		slice := stringPointArrayToSlice(points, length)
 		for i, s := range slice {
-			output[i] = s.toStructG()
+			output[i] = TsStringPointToStructG(s)
 		}
 	}
 	return output
@@ -122,6 +122,7 @@ func (column TsStringColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 }
 
 // GetRanges : Retrieves strings in the specified range of the time series column.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsStringColumn) GetRanges(rgs ...TsRange) ([]TsStringPoint, error) {
 	alias := convertToCharStar(column.parent.alias)
@@ -184,12 +185,12 @@ func (t TsStringAggregation) toStructC() C.qdb_ts_string_aggregation_t {
 	return cAgg
 }
 
-func (t C.qdb_ts_string_aggregation_t) toStructG() TsStringAggregation {
+func TsStringAggregationToStructG(t C.qdb_ts_string_aggregation_t) TsStringAggregation {
 	var gAgg TsStringAggregation
 	gAgg.kind = TsAggregationType(t._type)
-	gAgg.rng = t._range.toStructG()
+	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
-	gAgg.point = t.result.toStructG()
+	gAgg.point = TsStringPointToStructG(t.result)
 	return gAgg
 }
 
@@ -215,14 +216,15 @@ func stringAggregationArrayToGo(aggregations *C.qdb_ts_string_aggregation_t, agg
 	if length > 0 {
 		slice := stringAggregationArrayToSlice(aggregations, length)
 		for i, s := range slice {
-			*aggs[i] = s.toStructG()
-			output[i] = s.toStructG()
+			*aggs[i] = TsStringAggregationToStructG(s)
+			output[i] = TsStringAggregationToStructG(s)
 		}
 	}
 	return output
 }
 
 // Aggregate : Aggregate a sub-part of the time series.
+//
 //	It is an error to call this function on a non existing time-series.
 func (column TsStringColumn) Aggregate(aggs ...*TsStringAggregation) ([]TsStringAggregation, error) {
 	alias := convertToCharStar(column.parent.alias)
