@@ -3,9 +3,7 @@
   <name>x86_64 Haswell</name>
   <description />
   <settings ref="Api_Go_Build">
-    <parameters>
-      <param name="platform" value="freebsd-64bit" />
-    </parameters>
+    <parameters />
     <build-runners />
     <vcs-settings />
     <requirements>
