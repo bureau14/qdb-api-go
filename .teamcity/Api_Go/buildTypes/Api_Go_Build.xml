@@ -24,8 +24,8 @@
       </runner>
       <runner id="buildWithoutDocker" name="Build" type="simpleRunner">
         <parameters>
-          <param name="command.executable" value="scripts/teamcity/10.build.sh" />
-          <param name="teamcity.build.workingDir" value="bash" />
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/teamcity/10.build.sh" />
           <param name="teamcity.step.mode" value="default" />
         </parameters>
       </runner>
