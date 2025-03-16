@@ -11,7 +11,6 @@
     </options>
     <parameters>
       <param name="QDB_API_PATH" value="qdb" spec="text validationMode='any' readOnly='true'" />
-      <param name="env.PATH" value="%gopath%/bin/:%goroot%/bin/:%env.PATH%" />
       <param name="gopath" value="%teamcity.agent.work.dir%/%teamcity.build.default.checkoutDir%" />
       <param name="package.root" value="src/github.com/bureau14/qdb-api-go" spec="text display='normal' readOnly='true' validationMode='any'" />
     </parameters>
