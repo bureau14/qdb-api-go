@@ -50,12 +50,9 @@
       </runner>
       <runner id="RUNNER_266" name="Documentation Examples" type="simpleRunner">
         <parameters>
-          <param name="script.content"><![CDATA[%echo.on%
-%select.gcc%
-%update.library.path%
-go run examples/tutorial/main.go]]></param>
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/teamcity/40.documentation-examples.sh" />
           <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="true" />
         </parameters>
       </runner>
       <runner id="RUNNER_114" name="Coverage" type="simpleRunner">
