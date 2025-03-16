@@ -36,12 +36,9 @@
       </runner>
       <runner id="RUNNER_106" name="Test" type="simpleRunner">
         <parameters>
-          <param name="script.content"><![CDATA[%echo.on%
-%select.gcc%
-%update.library.path%
-go test -v -test.run "Test*" -coverprofile=test-coverage.out]]></param>
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/teamcity/20.test.sh" />
           <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="true" />
         </parameters>
       </runner>
       <runner id="RUNNER_117" name="Examples" type="simpleRunner">
