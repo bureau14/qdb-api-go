@@ -11,6 +11,7 @@
     <parameters>
       <param name="QDB_API_PATH" value="qdb" spec="text validationMode='any' readOnly='true'" />
       <param name="env.GOPATH" value="%gopath%" />
+      <param name="env.GOROOT" value="%goroot%" />
       <param name="package.root" value="src%path.sep%github.com%path.sep%bureau14%path.sep%qdb-api-go" spec="text validationMode='any' readOnly='true'" />
       <param name="path.sep" value="/" spec="text display='hidden' validationMode='any'" />
       <param name="select.gcc" value="" />
