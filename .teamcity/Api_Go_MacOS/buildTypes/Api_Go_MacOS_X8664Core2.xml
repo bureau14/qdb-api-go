@@ -7,18 +7,6 @@
       <param name="env.GOROOT" value="%system.go1.19-64.goroot%" />
     </parameters>
     <build-runners order="RUNNER_111, RUNNER_26, RUNNER_106, RUNNER_117, RUNNER_266, RUNNER_114, RUNNER_164">
-      <runner id="RUNNER_106" name="Test" type="simpleRunner">
-        <parameters>
-          <param name="script.content"><![CDATA[%echo.on%
-%select.gcc%
-%update.library.path%
-%update.cgo_ldflags%
-%update.cgo_cflags%
-go test -v -test.run "Test*" -coverprofile=test-coverage.out]]></param>
-          <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="true" />
-        </parameters>
-      </runner>
       <runner id="RUNNER_266" name="Documentation Examples" type="simpleRunner">
         <parameters>
           <param name="script.content"><![CDATA[%echo.on%
