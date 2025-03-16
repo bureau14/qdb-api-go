@@ -17,9 +17,9 @@
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*=&gt;aarch64" />
       </dependency>
-      <dependency id="ARTIFACT_DEPENDENCY_4800" sourceBuildTypeId="Api_Go_Linux_X8664Haswell_Composite" cleanDestination="false">
+      <dependency id="ARTIFACT_DEPENDENCY_4800" sourceBuildTypeId="Api_Go_Linux_X8664Haswell" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="*=&gt;x86_64_hasswell" />
+        <artifact sourcePath="*=&gt;x86_64_haswell" />
       </dependency>
     </artifact-dependencies>
     <dependencies>
