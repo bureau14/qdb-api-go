@@ -32,11 +32,9 @@
           <does-not-equal name="teamcity.agent.jvm.os.name" value="Linux" />
         </conditions>
         <parameters>
-          <param name="script.content"><![CDATA[%echo.on%
-%select.gcc%
-go build -v -x]]></param>
+          <param name="command.executable" value="scripts/teamcity/10.build.sh" />
+          <param name="teamcity.build.workingDir" value="bash" />
           <param name="teamcity.step.mode" value="default" />
-          <param name="use.custom.script" value="true" />
         </parameters>
       </runner>
       <runner id="RUNNER_106" name="Test" type="simpleRunner">
