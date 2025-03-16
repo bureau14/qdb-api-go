@@ -13,7 +13,6 @@
       <param name="env.GOPATH" value="%gopath%" />
       <param name="env.GOROOT" value="%goroot%" />
       <param name="gopath" value="%teamcity.agent.work.dir%/%teamcity.build.default.checkoutDir%" />
-      <param name="path.sep" value="/" spec="text display='hidden' validationMode='any'" />
     </parameters>
     <build-runners>
       <runner id="RUNNER_26" name="Start services" type="simpleRunner">
