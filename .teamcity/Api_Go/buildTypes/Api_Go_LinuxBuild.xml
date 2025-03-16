@@ -54,11 +54,8 @@
       </runner>
       <runner id="RUNNER_266" name="Documentation Examples" type="simpleRunner">
         <parameters>
-          <param name="command.executable" value="%goroot%/bin/go" />
-          <param name="command.parameters" value="run examples/tutorial/main.go" />
-          <param name="plugin.docker.imageId" value="bureau14/builder:%teamcity.agent.jvm.os.arch%" />
-          <param name="plugin.docker.imagePlatform" value="linux" />
-          <param name="plugin.docker.pull.enabled" value="true" />
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/teamcity/40.documentation-examples.sh" />
           <param name="script.content" value="go" />
           <param name="teamcity.step.mode" value="default" />
         </parameters>
