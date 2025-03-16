@@ -4,7 +4,6 @@
   <description />
   <settings ref="Api_Go_Build">
     <parameters>
-      <param name="env_path.sep" value=":" />
       <param name="platform" value="freebsd-64bit" />
       <param name="update.library.path" value="export LD_LIBRARY_PATH=`pwd`/%QDB_API_PATH%/lib" spec="text validationMode='any'" />
     </parameters>
