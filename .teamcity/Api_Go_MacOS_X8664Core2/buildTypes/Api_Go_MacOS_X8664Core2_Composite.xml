@@ -13,13 +13,13 @@
     <requirements />
     <build-triggers />
     <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_4804" sourceBuildTypeId="Api_Go_MacOS_X8664Core2_Go119" cleanDestination="false">
+      <dependency id="ARTIFACT_DEPENDENCY_4804" sourceBuildTypeId="Api_Go_MacOS_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*" />
       </dependency>
     </artifact-dependencies>
     <dependencies>
-      <depend-on sourceBuildTypeId="Api_Go_MacOS_X8664Core2_Go119">
+      <depend-on sourceBuildTypeId="Api_Go_MacOS_X8664Core2">
         <options>
           <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
           <option name="take-started-build-with-same-revisions" value="true" />
