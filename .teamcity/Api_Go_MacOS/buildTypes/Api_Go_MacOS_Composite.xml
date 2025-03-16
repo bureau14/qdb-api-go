@@ -13,7 +13,7 @@
     <requirements />
     <build-triggers />
     <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_4805" sourceBuildTypeId="Api_Go_MacOS_X8664Core2_Composite" cleanDestination="false">
+      <dependency id="ARTIFACT_DEPENDENCY_4805" sourceBuildTypeId="Api_Go_MacOS_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="*=&gt;x86_64_core2" />
       </dependency>
