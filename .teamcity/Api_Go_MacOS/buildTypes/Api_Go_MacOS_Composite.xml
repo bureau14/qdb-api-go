@@ -13,6 +13,10 @@
     <requirements />
     <build-triggers />
     <artifact-dependencies>
+      <dependency id="ARTIFACT_DEPENDENCY_9060" sourceBuildTypeId="Api_Go_MacOS_AArch64" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="** =&gt; aarch64/" />
+      </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4805" sourceBuildTypeId="Api_Go_MacOS_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="** =&gt; x86_64-core2/" />
