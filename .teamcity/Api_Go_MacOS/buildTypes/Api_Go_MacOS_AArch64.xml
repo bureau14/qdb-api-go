@@ -10,7 +10,7 @@
     <vcs-settings />
     <requirements>
       <equals id="RQ_1" name="teamcity.agent.jvm.os.name" value="Mac OS X" />
-      <contains id="RQ_19" name="teamcity.agent.jvm.os.arch" value="x86_64" />
+      <equals id="RQ_19" name="teamcity.agent.jvm.os.arch" value="aarch64" />
     </requirements>
     <build-triggers />
     <artifact-dependencies>
