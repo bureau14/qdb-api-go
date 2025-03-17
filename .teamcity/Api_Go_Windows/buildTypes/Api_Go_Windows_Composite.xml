@@ -15,7 +15,7 @@
     <artifact-dependencies>
       <dependency id="ARTIFACT_DEPENDENCY_4796" sourceBuildTypeId="Api_Go_Windows_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="*=&gt;x86_64_core2" />
+        <artifact sourcePath="* =&gt; win64-core2/" />
       </dependency>
     </artifact-dependencies>
     <dependencies>
