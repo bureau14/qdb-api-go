@@ -3,5 +3,6 @@
   <name>macOS</name>
   <parameters />
   <cleanup />
+  <buildTypesOrder order="Api_Go_MacOS_Composite,Api_Go_MacOS_AArch64,Api_Go_MacOS_X8664Core2" />
 </project>
 
