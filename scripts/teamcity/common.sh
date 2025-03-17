@@ -58,7 +58,10 @@ case $(uname) in
        ;;
 
     MINGW* )
-        echo "Nothing to do here"
+
+        echo "Adding GCC to path"
+        export PATH="/mingw64/bin:$PATH"
+        echo "PATH: $PATH"
         ;;
 
     * )
