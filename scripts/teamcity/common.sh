@@ -60,7 +60,9 @@ case $(uname) in
     MINGW* )
 
         echo "Adding GCC to path"
-        export PATH="/c/mingw64/bin:$PATH"
+        export PATH="/c/mingw64/bin:${PATH}"
+        export PATH="${QDB_LIB_DIR}:$PATH"
+        export PATH="${QDB_API_DIR}/bin:$PATH"
         echo "PATH: $PATH"
         ;;
 
