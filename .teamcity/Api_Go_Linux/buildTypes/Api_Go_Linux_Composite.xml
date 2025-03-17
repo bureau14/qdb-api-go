@@ -19,7 +19,7 @@
       </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4800" sourceBuildTypeId="Api_Go_Linux_X8664Haswell" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="*=&gt;x86_64-haswell/" />
+        <artifact sourcePath="** =&gt; x86_64-haswell/" />
       </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_9023" sourceBuildTypeId="Api_Go_Linux_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
