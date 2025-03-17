@@ -65,12 +65,12 @@ case $(uname) in
         if [[ "${WINDOWS_TARGET_ARCH}" == "win64" ]]
         then
             echo "Enabling 64-bit GCC"
-            export PATH="$PATH:C:\\mingw64\\bin"
+            export PATH="/mingw64/bin:$PATH"
             echo "PATH: $PATH"
         elif [[ "${WINDOWS_TARGET_ARCH}" == "win32" ]]
         then
             echo "Enabling 32-bit GCC"
-            export PATH="$PATH:C:\\mingw32\\bin"
+            export PATH="/mingw32/bin:$PATH"
             echo "PATH: $PATH"
         else
             echo "Unrecognized windows target arch"
