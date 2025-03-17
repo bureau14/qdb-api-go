@@ -29,7 +29,7 @@
       </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4809" sourceBuildTypeId="Api_Go_MacOS_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="*=&gt;macOS" />
+        <artifact sourcePath="** =&gt; macos/" />
       </dependency>
     </artifact-dependencies>
     <dependencies>
