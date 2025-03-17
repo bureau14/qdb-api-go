@@ -37,7 +37,7 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}
 DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}
 CGO_CFLAGS=${CGO_CFLAGS:-}
 CGO_LDFLAGS=${CGO_LDFLAGS:-}
-WINDOWS_TARGET_ARCH=${WINDOWS_TARGET_ARCH:-64bit}
+WINDOWS_TARGET_ARCH=${WINDOWS_TARGET_ARCH:-win64}
 
 ##
 # Add QuasarDB's library path to LD_LIBRARY_PATH since we dynamically
@@ -62,12 +62,12 @@ case $(uname) in
 
         echo "WINDOWS_TARGET_ARCH=${WINDOWS_TARGET_ARCH}"
 
-        if [[ "${WINDOWS_TARGET_ARCH}" == "64bit" ]]
+        if [[ "${WINDOWS_TARGET_ARCH}" == "win64" ]]
         then
             echo "Enabling 64-bit GCC"
             export PATH="$PATH:C:\\mingw64\\bin"
             echo "PATH: $PATH"
-        elif [[ "${WINDOWS_TARGET_ARCH}" == "32bit" ]]
+        elif [[ "${WINDOWS_TARGET_ARCH}" == "win32" ]]
         then
             echo "Enabling 32-bit GCC"
             export PATH="$PATH:C:\\mingw32\\bin"
