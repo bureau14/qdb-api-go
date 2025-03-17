@@ -25,7 +25,7 @@
       </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4808" sourceBuildTypeId="Api_Go_Windows_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="*=&gt;Windows" />
+        <artifact sourcePath="** =&gt; windows/" />
       </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4809" sourceBuildTypeId="Api_Go_MacOS_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
