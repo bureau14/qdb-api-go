@@ -61,9 +61,9 @@ case $(uname) in
 
         echo "Adding GCC to path"
         export PATH="/c/mingw64/bin:${PATH}"
-        export PATH="${QDB_LIB_DIR}:$PATH"
-        export PATH="${QDB_API_DIR}/bin:$PATH"
-        echo "PATH: $PATH"
+        export PATH="${QDB_LIB_DIR}:${PATH}"
+        export PATH="${QDB_API_DIR}/bin:${PATH}"
+        echo "PATH: ${PATH}"
         ;;
 
     * )
