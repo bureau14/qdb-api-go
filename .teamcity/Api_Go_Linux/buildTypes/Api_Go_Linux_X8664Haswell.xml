@@ -49,7 +49,7 @@ tar -czvf doc.tar.gz doc/*]]></param>
       </dependency>
     </artifact-dependencies>
     <dependencies>
-      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_Linux_X8664Core2_Composite">
+      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_Linux_X8664Haswell_Composite">
         <options>
           <option name="take-started-build-with-same-revisions" value="true" />
           <option name="take-successful-builds-only" value="true" />
