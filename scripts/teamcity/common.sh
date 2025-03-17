@@ -62,23 +62,22 @@ case $(uname) in
 
         echo "WINDOWS_TARGET_ARCH=${WINDOWS_TARGET_ARCH}"
 
-        case ${WINDOWS_TARGET_ARCH} in
-            64bit )
-                echo "Enabling 64-bit GCC"
-                export PATH="$PATH:C:\\mingw64\\bin"
-                echo "PATH: $PATH"
-                ;;
+        if [[ "${WINDOWS_TARGET_ARCH}" == "64bit" ]]
+        then
+            echo "Enabling 64-bit GCC"
+            export PATH="$PATH:C:\\mingw64\\bin"
+            echo "PATH: $PATH"
+        elif [[ "${WINDOWS_TARGET_ARCH}" == "32bit" ]]
+        then
+            echo "Enabling 32-bit GCC"
+            export PATH="$PATH:C:\\mingw32\\bin"
+            echo "PATH: $PATH"
+        else
+            echo "Unrecognized windows target arch"
+            exit 1
+        fi
 
-            32bit )
-                echo "Enabling 32-bit GCC"
-                export PATH="$PATH:C:\\mingw32\\bin"
-                echo "PATH: $PATH"
-                ;;
-            * )
-                echo "Unrecognized windows target arch"
-                exit -1
-                ;;
-        esac
+        ;;
 
     * )
         echo "Unable to probe environment"
