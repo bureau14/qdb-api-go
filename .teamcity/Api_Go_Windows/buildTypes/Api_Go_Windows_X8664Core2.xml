@@ -6,9 +6,7 @@
     <disabled-settings>
       <setting-ref ref="RQ_157" />
     </disabled-settings>
-    <parameters>
-      <param name="env.WINDOWS_TARGET_ARCH" value="%target_arch%" />
-    </parameters>
+    <parameters />
     <build-runners order="RUNNER_286, RUNNER_111, RUNNER_26, RUNNER_106, RUNNER_117, RUNNER_266, RUNNER_114, RUNNER_164" />
     <vcs-settings />
     <requirements>
