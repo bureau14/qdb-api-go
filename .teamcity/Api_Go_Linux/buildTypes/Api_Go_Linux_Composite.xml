@@ -15,7 +15,7 @@
     <artifact-dependencies>
       <dependency id="ARTIFACT_DEPENDENCY_4801" sourceBuildTypeId="Api_Go_Linux_AArch64" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="*=&gt;aarch64/" />
+        <artifact sourcePath="** =&gt; aarch64/" />
       </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4800" sourceBuildTypeId="Api_Go_Linux_X8664Haswell" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
