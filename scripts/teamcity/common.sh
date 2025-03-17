@@ -37,6 +37,7 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}
 DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}
 CGO_CFLAGS=${CGO_CFLAGS:-}
 CGO_LDFLAGS=${CGO_LDFLAGS:-}
+WINDOWS_TARGET_ARCH=${WINDOWS_TARGET_ARCH:-64bit}
 
 ##
 # Add QuasarDB's library path to LD_LIBRARY_PATH since we dynamically
@@ -58,8 +59,26 @@ case $(uname) in
        ;;
 
     MINGW* )
-        echo "Nothing to do here (yet)"
-        ;;
+
+        echo "WINDOWS_TARGET_ARCH=${WINDOWS_TARGET_ARCH}"
+
+        case ${WINDOWS_TARGET_ARCH} in
+            64bit )
+                echo "Enabling 64-bit GCC"
+                export PATH="$PATH:C:\\mingw64\\bin"
+                echo "PATH: $PATH"
+                ;;
+
+            32bit )
+                echo "Enabling 32-bit GCC"
+                export PATH="$PATH:C:\\mingw32\\bin"
+                echo "PATH: $PATH"
+                ;;
+            * )
+                echo "Unrecognized windows target arch"
+                exit -1
+                ;;
+        esac
 
     * )
         echo "Unable to probe environment"
