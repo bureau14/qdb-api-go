@@ -13,7 +13,6 @@
       <contains id="RQ_24" name="teamcity.agent.jvm.os.name" value="Windows" />
       <ver-no-less-than id="RQ_169" name="system.gcc-32.version" value="4" />
       <contains id="RQ_261" name="teamcity.agent.name" value="default" />
-      <exists id="RQ_8" name="system.go1.19-32.goroot" />
     </requirements>
     <build-triggers />
     <artifact-dependencies>
