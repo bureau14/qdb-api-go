@@ -15,7 +15,7 @@
     </requirements>
     <build-triggers />
     <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_Windows_X86Haswell" cleanDestination="false">
+      <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_Windows_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="qdb-*-c-api.tar.zst!**/* =&gt; qdb&#xD;&#xA;qdb-*-utils.tar.zst!**/* =&gt; qdb&#xD;&#xA;qdb-*-server.tar.zst!**/* =&gt; qdb" />
       </dependency>
