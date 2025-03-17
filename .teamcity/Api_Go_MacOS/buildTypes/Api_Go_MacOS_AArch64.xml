@@ -20,8 +20,9 @@
       </dependency>
     </artifact-dependencies>
     <dependencies>
-      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_MacOS_X8664Core2_Composite">
+      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_MacOS_AArch64_Composite">
         <options>
+          <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
           <option name="take-started-build-with-same-revisions" value="true" />
           <option name="take-successful-builds-only" value="true" />
         </options>
