@@ -60,7 +60,7 @@ case $(uname) in
     MINGW* )
 
         echo "Adding GCC to path"
-        export PATH="/mingw64/bin:$PATH"
+        export PATH="/c/mingw64/bin:$PATH"
         echo "PATH: $PATH"
         ;;
 
