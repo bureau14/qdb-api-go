@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<template xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" uuid="f730022f-ef9c-4a84-8d3b-b844f70020cb" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
+<template xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" uuid="f730022f-ef9c-4a84-8d3b-b844f70020cb" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2025.3/project-config.xsd">
   <name>LinuxBuild</name>
   <description>Linux build uses Docker containers to ensure proper glibc compatibility</description>
   <settings>
@@ -27,7 +27,7 @@
         <parameters>
           <param name="command.executable" value="bash" />
           <param name="command.parameters" value="scripts/teamcity/10.build.sh" />
-          <param name="plugin.docker.imageId" value="bureau14/builder:rhel7" />
+          <param name="plugin.docker.imageId" value="%docker_builder%" />
           <param name="plugin.docker.imagePlatform" value="linux" />
           <param name="plugin.docker.pull.enabled" value="true" />
           <param name="script.content" value="%goroot/go build -v -x" />
@@ -81,8 +81,6 @@
     <vcs-settings>
       <vcs-entry-ref root-id="Api_Go_QdbApiGo" />
     </vcs-settings>
-    <requirements />
-    <build-triggers />
     <build-extensions>
       <extension id="BUILD_EXT_24" type="BuildFailureOnMessage">
         <parameters>
@@ -112,9 +110,7 @@
           <param name="swabra.verbose" value="true" />
         </parameters>
       </extension>
-      <extension id="perfmon" type="perfmon">
-        <parameters />
-      </extension>
+      <extension id="perfmon" type="perfmon" />
       <extension id="matrix" type="matrix">
         <parameters>
           <param name="matrix.param.goroot.1" value="goroot" />
@@ -124,7 +120,6 @@
         </parameters>
       </extension>
     </build-extensions>
-    <cleanup />
   </settings>
 </template>
 
