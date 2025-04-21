@@ -8,6 +8,10 @@
       <option name="showDependenciesChanges" value="true" />
     </options>
     <artifact-dependencies>
+      <dependency id="ARTIFACT_DEPENDENCY_20286" sourceBuildTypeId="Api_Go_Windows_X86Haswell" cleanDestination="false">
+        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
+        <artifact sourcePath="* =&gt; win32-haswell/" />
+      </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4796" sourceBuildTypeId="Api_Go_Windows_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="* =&gt; win64-core2/" />
