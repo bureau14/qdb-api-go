@@ -28,7 +28,7 @@
       </dependency>
     </artifact-dependencies>
     <dependencies>
-      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_Windows_X8664Core2">
+      <depend-on sourceBuildTypeId="Quasardb_Artifacts_Release_Windows_X86Haswell">
         <options>
           <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
           <option name="take-started-build-with-same-revisions" value="true" />
