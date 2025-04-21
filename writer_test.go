@@ -6,7 +6,9 @@ import (
 
 func TestCanCreateNewWriterTable(t *testing.T) {
 	tableName := generateAlias(16)
-	_, err := NewWriterTable(tableName)
+	columnNames := generateColumnNames(4)
+
+	_, err := NewWriterTable(tableName, columnNames)
 
 	if err != nil {
 		t.Fatal(err)
@@ -15,9 +17,18 @@ func TestCanCreateNewWriterTable(t *testing.T) {
 
 func TestWriterTableCanSetIndex(t *testing.T) {
 	tableName := generateAlias(16)
+	columnNames := generateColumnNames(4)
 
-	_, err := NewWriterTable(tableName)
+	table, err := NewWriterTable(tableName, columnNames)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	idx := generateIndex(1024)
+	err := table.SetIndex(idx)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
 }

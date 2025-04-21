@@ -9,8 +9,7 @@ import "C"
 
 // Single table to be provided to the batch writer
 type WriterTable struct {
-
-	TableName string;
+	TableName string
 
 	// All arrays are guaranteed to be of size `len`
 	row_len int
@@ -21,7 +20,6 @@ type WriterTable struct {
 func NewWriterTable(t string, cols []string) (*WriterTable, error) {
 	return &WriterTable{t, -1, nil}, nil
 }
-
 
 func (t WriterTable) SetIndex(idx []C.qdb_timespec_t) error {
 	t.idx = idx

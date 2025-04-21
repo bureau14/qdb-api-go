@@ -74,7 +74,37 @@ func generateAlias(n int) string {
 	return string(b)
 }
 
+func generateColumnName() string {
+	return generateAlias(16)
+}
+
+// Generates names for exactly `n` column names
+func generateColumnNames(n int) []string {
+	var ret []string = make([]string, n)
+
+	for i, _ := range ret {
+		ret[i] = generateColumnName()
+	}
+
+	return ret
+}
+
+func generateIndex(n int, step time.Duration) []time.Time {
+	var ret []time.Time = make([]time.Time, n)
+
+	var start = time.Unix(1744512728, 0)
+
+	for i, _ := range ret {
+		nsec := step.Nanoseconds() * int64(i)
+		ret[i] = start.Add(time.Duration(nsec))
+	}
+
+	return ret
+}
+
 func charStarArrayToSlice(strings **C.char, length int) []*C.char {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.char)(nil))]*C.char)(unsafe.Pointer(strings))[:length:length]
 }
+
+func TimeSliceToQdb
