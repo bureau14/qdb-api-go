@@ -66,6 +66,9 @@ case $(uname) in
         ;;
 
     Darwin )
+        DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}
+        CGO_CFLAGS=${CGO_CFLAGS:-}
+        CGO_LDLAGS=${CGO_LDLAGS:-}
         export DYLD_LIBRARY_PATH="${QDB_LIB_DIR}:${DYLD_LIBRARY_PATH}"
         export CGO_CFLAGS="$CGO_CFLAGS -I${QDB_API_DIR}/include"
         export CGO_LDFLAGS="$CGO_LDFLAGS -L${QDB_LIB_DIR} -Wl,-rpath -Wl,${QDB_LIB_DIR}"
