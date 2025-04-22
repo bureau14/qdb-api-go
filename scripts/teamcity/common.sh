@@ -21,12 +21,6 @@ echo "QDB_LIB_DIR: ${QDB_LIB_DIR}"
 GOROOT=${GOROOT:-}
 GOPATH=${GOPATH:-}
 
-if [[ -z "${GOROOT}" ]]
-then
-    echo "GOROOT environment variable is expect to be set"
-    exit 1
-fi
-
 if [[ -z "${GOPATH}" ]]
 then
     echo "GOPATH environment variable is expect to be set"
@@ -74,7 +68,17 @@ esac
 
 ##
 # Validate installation of qdb/ base directory
-GO=$(${REALPATH} "${GOROOT}/bin/go")
+
+GO=""
+
+if [[ -z "${GOROOT}" ]]
+then
+    echo "GOROOT is not set, using go from path"
+    GO=$(command -v go)
+else
+    echo "GOROOT is set, using go from GOROOT: ${GOROOT}/bin/go"
+    GO=$(${REALPATH} "${GOROOT}/bin/go")
+fi
 
 if [[ ! -x "${GO}" ]]
 then
