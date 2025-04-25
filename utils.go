@@ -89,10 +89,9 @@ func generateColumnNames(n int) []string {
 	return ret
 }
 
-func generateIndex(n int, step time.Duration) []time.Time {
+// Generates an time index
+func generateIndex(n int, start time.Time, step time.Duration) []time.Time {
 	var ret []time.Time = make([]time.Time, n)
-
-	var start = time.Unix(1744512728, 0)
 
 	for i, _ := range ret {
 		nsec := step.Nanoseconds() * int64(i)
@@ -102,9 +101,35 @@ func generateIndex(n int, step time.Duration) []time.Time {
 	return ret
 }
 
+// Generates an index with a default start date and step
+func generateDefaultIndex(n int) []time.Time {
+
+	var start time.Time = time.Unix(1745514000, 0) // 2025-04-25
+	var duration time.Duration = 100 * 1000 * 1000 // 100ms
+
+	return generateIndex(n, start, duration)
+}
+
 func charStarArrayToSlice(strings **C.char, length int) []*C.char {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.char)(nil))]*C.char)(unsafe.Pointer(strings))[:length:length]
 }
 
-func TimeSliceToQdb
+// Converts a single time.Time value to a native C qdb_timespec_t value
+func timeToQdbTimespec(t time.Time) C.qdb_timespec_t {
+	nsec := C.qdb_time_t(t.Nanosecond())
+	sec := C.qdb_time_t(t.Unix())
+
+	return C.qdb_timespec_t{sec, nsec}
+}
+
+// Converts a slice of `time.Time` values to a slice of native C qdb_timespec_t values
+func timeSliceToQdbTimespec(xs []time.Time) []C.qdb_timespec_t {
+	ret := make([]C.qdb_timespec_t, len(xs))
+
+	for i := range xs {
+		ret[i] = timeToQdbTimespec(xs[i])
+	}
+
+	return ret
+}

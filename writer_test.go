@@ -24,8 +24,8 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx := generateIndex(1024)
-	err := table.SetIndex(idx)
+	idx := generateDefaultIndex(1024)
+	err = table.SetIndex(idx)
 
 	if err != nil {
 		t.Fatal(err)

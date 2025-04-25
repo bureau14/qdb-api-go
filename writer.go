@@ -7,6 +7,10 @@ package qdb
 */
 import "C"
 
+import (
+	"time"
+)
+
 // Single table to be provided to the batch writer
 type WriterTable struct {
 	TableName string
@@ -21,8 +25,8 @@ func NewWriterTable(t string, cols []string) (*WriterTable, error) {
 	return &WriterTable{t, -1, nil}, nil
 }
 
-func (t WriterTable) SetIndex(idx []C.qdb_timespec_t) error {
-	t.idx = idx
+func (t WriterTable) SetIndex(idx []time.Time) error {
+	t.idx = timeSliceToQdbTimespec(idx)
 
 	return nil
 }
