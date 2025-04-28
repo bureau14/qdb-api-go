@@ -132,8 +132,33 @@ func (t WriterTable) GetIndex() []C.qdb_timespec_t {
 	return t.idx
 }
 
+// Sets data for a single column
 func (t WriterTable) SetData(offset int, xs WriterData) error {
+	if len(t.columnInfoByOffset) <= offset {
+		return errors.New(fmt.Sprintf("Column offset out of range: %v", offset))
+	}
+
+	col := t.columnInfoByOffset[offset]
+	if col.ColumnType.AsValueType() != xs.ValueType {
+		return errors.New(fmt.Sprintf("Column's expected value type does not match provided value type: column type (%v)'s value type %v != %v", col.ColumnType, col.ColumnType.AsValueType(), xs.ValueType))
+	}
+
 	t.data[offset] = xs
 
 	return nil
+}
+
+// Sets all all column data for a single table into the writer, assumes offsets of provided
+// data are aligned with the table.
+func (t WriterTable) SetDatas(xs []WriterData) error {
+	for i, x := range xs {
+		err := t.SetData(i, x)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+
 }
