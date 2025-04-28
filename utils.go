@@ -78,6 +78,11 @@ func generateAlias(n int) string {
 	return string(b)
 }
 
+// Returns a default-size alias (16 characters
+func generateDefaultAlias() string {
+	return generateAlias(16)
+}
+
 func generateColumnName() string {
 	return generateAlias(16)
 }

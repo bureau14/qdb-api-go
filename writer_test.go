@@ -5,7 +5,7 @@ import (
 )
 
 func TestCanCreateNewWriterTable(t *testing.T) {
-	tableName := generateAlias(16)
+	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(1)
 
 	_, err := NewWriterTable(tableName, columns)
@@ -16,7 +16,7 @@ func TestCanCreateNewWriterTable(t *testing.T) {
 }
 
 func TestWriterTableCanSetIndex(t *testing.T) {
-	tableName := generateAlias(16)
+	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(1)
 
 	table, err := NewWriterTable(tableName, columns)
@@ -32,8 +32,8 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	}
 }
 
-func TestWriterTableCanSetDataInt64(t *testing.T) {
-	tableName := generateAlias(16)
+func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
+	tableName := generateDefaultAlias()
 	columns := generateWriterColumnsOfAllTypes()
 
 	table, err := NewWriterTable(tableName, columns)
