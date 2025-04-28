@@ -81,6 +81,8 @@ func (v TsColumnType) AsValueType() TsValueType {
 		return TsValueDouble
 	case TsColumnInt64:
 		return TsValueInt64
+	case TsColumnTimestamp:
+		return TsValueTimestamp
 	}
 
 	panic(fmt.Sprintf("Unrecognized column type: %v", v))
