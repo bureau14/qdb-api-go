@@ -6,6 +6,7 @@ package qdb
 */
 import "C"
 import (
+	"fmt"
 	"math"
 	"time"
 	"unsafe"
@@ -31,6 +32,59 @@ const (
 	TsColumnTimestamp     TsColumnType = C.qdb_ts_column_timestamp
 	TsColumnSymbol        TsColumnType = C.qdb_ts_column_symbol
 )
+
+// TsValueType : Timeseries value types
+//
+// Values we're able to represent inside a database, as some values are represented
+// differently as columns. A good example are Symbol columns, where the user interacts
+// with the values as strings, but on-disk are stored as an indexed integer.
+type TsValueType int
+
+const (
+	TsValueNull TsValueType = iota
+
+	TsValueDouble
+	TsValueInt64
+	TsValueTimestamp
+	TsValueBlob
+	TsValueString
+)
+
+func (v TsValueType) AsColumnType() TsColumnType {
+	switch v {
+	case TsValueBlob:
+		return TsColumnBlob
+	case TsValueString:
+		// Can be either String or Symbol, but we'll default to Symbols. This mostly affects
+		// "magic" table creation.
+		return TsColumnString
+	case TsValueDouble:
+		return TsColumnDouble
+	case TsValueInt64:
+		return TsColumnInt64
+	case TsValueNull:
+		break
+	}
+
+	panic(fmt.Sprintf("Unrecognized value type: %v", v))
+}
+
+func (v TsColumnType) AsValueType() TsValueType {
+	switch v {
+	case TsColumnBlob:
+		return TsValueBlob
+	case TsColumnString:
+	case TsColumnSymbol:
+		// Both strings and symbols are represented as string values
+		return TsValueString
+	case TsColumnDouble:
+		return TsValueDouble
+	case TsColumnInt64:
+		return TsValueInt64
+	}
+
+	panic(fmt.Sprintf("Unrecognized column type: %v", v))
+}
 
 type tsColumn struct {
 	TsColumnInfo

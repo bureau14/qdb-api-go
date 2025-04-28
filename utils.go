@@ -6,11 +6,15 @@ package qdb
 */
 import "C"
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
 	"unsafe"
 )
+
+// All available columns we support
+var columnTypes = [...]TsColumnType{TsColumnInt64, TsColumnDouble, TsColumnTimestamp}
 
 func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	var v *C.char
@@ -78,12 +82,120 @@ func generateColumnName() string {
 	return generateAlias(16)
 }
 
+// Returns a random column type
+func randomColumnType() TsColumnType {
+	n := rand.Intn(len(columnTypes))
+
+	return columnTypes[n]
+
+}
+
 // Generates names for exactly `n` column names
 func generateColumnNames(n int) []string {
 	var ret []string = make([]string, n)
 
 	for i, _ := range ret {
 		ret[i] = generateColumnName()
+	}
+
+	return ret
+}
+
+// Generate writer column info for exactly `n` columns.
+func generateWriterColumns(n int) []WriterColumn {
+
+	var ret []WriterColumn = make([]WriterColumn, n)
+
+	for i, _ := range ret {
+		cname := generateColumnName()
+		ctype := randomColumnType()
+		ret[i] = WriterColumn{cname, ctype}
+	}
+
+	return ret
+}
+
+func generateWriterColumnsOfAllTypes() []WriterColumn {
+	// Generate column information for each available column type.
+	var ret []WriterColumn = make([]WriterColumn, len(columnTypes))
+
+	for i, ctype := range columnTypes {
+		cname := generateColumnName()
+		ret[i] = WriterColumn{cname, ctype}
+	}
+
+	return ret
+}
+
+// Similar to `generateWriterColumns`, but ensures all columns are of the specified
+// type.
+func generateWriterColumnsOfType(n int, ctype TsColumnType) []WriterColumn {
+
+	// Lazy approach: just generate using random column types, then overwrite
+	ret := generateWriterColumns(n)
+
+	for i, _ := range ret {
+		ret[i].ColumnType = ctype
+	}
+
+	return ret
+}
+
+func generateWriterDataInt64(n int) WriterData {
+	xs := make([]int64, n)
+
+	for i, _ := range xs {
+		xs[i] = rand.Int63()
+	}
+
+	return NewWriterDataInt64(xs)
+}
+
+func generateWriterDataDouble(n int) WriterData {
+	xs := make([]float64, n)
+
+	for i, _ := range xs {
+		xs[i] = rand.NormFloat64()
+	}
+
+	return NewWriterDataDouble(xs)
+}
+
+func generateWriterDataTimestamp(n int) WriterData {
+	// XXX(leon): should be improved to be more random, instead
+	//            we're reusing the code that generates the index here.
+
+	xs := make([]C.qdb_timespec_t, n)
+
+	idx := generateDefaultIndex(n)
+
+	for i, _ := range xs {
+		xs[i] = TimeToQdbTimespec(idx[i])
+	}
+
+	return NewWriterDataTimestamp(xs)
+}
+
+// Generates artifical writer data for a single column
+func generateWriterData(n int, column WriterColumn) WriterData {
+	switch column.ColumnType {
+	case TsColumnInt64:
+		return generateWriterDataInt64(n)
+	case TsColumnDouble:
+		return generateWriterDataDouble(n)
+	case TsColumnTimestamp:
+		return generateWriterDataTimestamp(n)
+	}
+
+	panic(fmt.Sprintf("Unrecognized column type: %v", column.ColumnType))
+}
+
+// Generates artificial data to be inserted for each column.
+func generateWriterDatas(n int, columns []WriterColumn) []WriterData {
+	var ret []WriterData = make([]WriterData, len(columns))
+
+	for i, column := range columns {
+		ret[i] = generateWriterData(n, column)
 	}
 
 	return ret
@@ -113,23 +225,4 @@ func generateDefaultIndex(n int) []time.Time {
 func charStarArrayToSlice(strings **C.char, length int) []*C.char {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.char)(nil))]*C.char)(unsafe.Pointer(strings))[:length:length]
-}
-
-// Converts a single time.Time value to a native C qdb_timespec_t value
-func timeToQdbTimespec(t time.Time) C.qdb_timespec_t {
-	nsec := C.qdb_time_t(t.Nanosecond())
-	sec := C.qdb_time_t(t.Unix())
-
-	return C.qdb_timespec_t{sec, nsec}
-}
-
-// Converts a slice of `time.Time` values to a slice of native C qdb_timespec_t values
-func timeSliceToQdbTimespec(xs []time.Time) []C.qdb_timespec_t {
-	ret := make([]C.qdb_timespec_t, len(xs))
-
-	for i := range xs {
-		ret[i] = timeToQdbTimespec(xs[i])
-	}
-
-	return ret
 }

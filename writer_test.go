@@ -6,9 +6,9 @@ import (
 
 func TestCanCreateNewWriterTable(t *testing.T) {
 	tableName := generateAlias(16)
-	columnNames := generateColumnNames(4)
+	columns := generateWriterColumns(1)
 
-	_, err := NewWriterTable(tableName, columnNames)
+	_, err := NewWriterTable(tableName, columns)
 
 	if err != nil {
 		t.Fatal(err)
@@ -17,18 +17,45 @@ func TestCanCreateNewWriterTable(t *testing.T) {
 
 func TestWriterTableCanSetIndex(t *testing.T) {
 	tableName := generateAlias(16)
-	columnNames := generateColumnNames(4)
+	columns := generateWriterColumns(1)
 
-	table, err := NewWriterTable(tableName, columnNames)
+	table, err := NewWriterTable(tableName, columns)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	idx := generateDefaultIndex(1024)
-	err = table.SetIndex(idx)
+	err = table.SetIndex(TimeSliceToQdbTimespec(idx))
 
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWriterTableCanSetDataInt64(t *testing.T) {
+	tableName := generateAlias(16)
+	columns := generateWriterColumnsOfAllTypes()
+
+	table, err := NewWriterTable(tableName, columns)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idx := generateDefaultIndex(1024)
+	err = table.SetIndex(TimeSliceToQdbTimespec(idx))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	datas := generateWriterDatas(len(idx), columns)
+
+	for i, data := range datas {
+		err = table.SetData(i, data)
+
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 }
