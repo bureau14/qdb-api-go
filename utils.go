@@ -153,7 +153,7 @@ func generateWriterDataInt64(n int) WriterData {
 		xs[i] = rand.Int63()
 	}
 
-	return NewWriterDataInt64(xs)
+	return NewWriterDataInt64(&xs)
 }
 
 func generateWriterDataDouble(n int) WriterData {
@@ -163,7 +163,7 @@ func generateWriterDataDouble(n int) WriterData {
 		xs[i] = rand.NormFloat64()
 	}
 
-	return NewWriterDataDouble(xs)
+	return NewWriterDataDouble(&xs)
 }
 
 func generateWriterDataTimestamp(n int) WriterData {
@@ -174,11 +174,11 @@ func generateWriterDataTimestamp(n int) WriterData {
 
 	idx := generateDefaultIndex(n)
 
-	for i, _ := range xs {
-		xs[i] = TimeToQdbTimespec(idx[i])
+	for i, t := range *idx {
+		xs[i] = TimeToQdbTimespec(t)
 	}
 
-	return NewWriterDataTimestamp(xs)
+	return NewWriterDataTimestamp(&xs)
 }
 
 // Generates artifical writer data for a single column
@@ -207,7 +207,7 @@ func generateWriterDatas(n int, columns []WriterColumn) []WriterData {
 }
 
 // Generates an time index
-func generateIndex(n int, start time.Time, step time.Duration) []time.Time {
+func generateIndex(n int, start time.Time, step time.Duration) *[]time.Time {
 	var ret []time.Time = make([]time.Time, n)
 
 	for i, _ := range ret {
@@ -215,11 +215,11 @@ func generateIndex(n int, start time.Time, step time.Duration) []time.Time {
 		ret[i] = start.Add(time.Duration(nsec))
 	}
 
-	return ret
+	return &ret
 }
 
 // Generates an index with a default start date and step
-func generateDefaultIndex(n int) []time.Time {
+func generateDefaultIndex(n int) *[]time.Time {
 
 	var start time.Time = time.Unix(1745514000, 0) // 2025-04-25
 	var duration time.Duration = 100 * 1000 * 1000 // 100ms

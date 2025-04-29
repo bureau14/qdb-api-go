@@ -38,12 +38,12 @@ func TimeToQdbTimespec(t time.Time) C.qdb_timespec_t {
 }
 
 // Converts a slice of `time.Time` values to a slice of native C qdb_timespec_t values
-func TimeSliceToQdbTimespec(xs []time.Time) []C.qdb_timespec_t {
-	ret := make([]C.qdb_timespec_t, len(xs))
+func TimeSliceToQdbTimespec(xs *[]time.Time) *[]C.qdb_timespec_t {
+	ret := make([]C.qdb_timespec_t, len(*xs))
 
-	for i := range xs {
-		ret[i] = TimeToQdbTimespec(xs[i])
+	for i, x := range *xs {
+		ret[i] = TimeToQdbTimespec(x)
 	}
 
-	return ret
+	return &ret
 }

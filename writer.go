@@ -24,58 +24,68 @@ func New(text string) error {
 	return &writerError{text}
 }
 
-// A single slice of data within a WriterTable, representing values to be inserted as a single column into QuasarDB
+// A single column's data within a WriterTable, representing values to be inserted as a single column into QuasarDB.
+// These objects are relatively cheap to copy, as all internal arrays are pointers.
 type WriterData struct {
 	ValueType TsValueType
 
 	// int64 value array. Only set if ValueType is Int64
-	Int64Array []int64
+	Int64Array *[]int64
 
 	// double value array. Only set if ValueType is Double
-	DoubleArray []float64
+	DoubleArray *[]float64
 
 	// timestamp value array. Only set if ValueType is Timestamp
-	TimestampArray []C.qdb_timespec_t
+	TimestampArray *[]C.qdb_timespec_t
 
 	// blob value array. Only set if ValueType is Blob
-	BlobArray [][]byte
+	BlobArray *[][]byte
 
 	// string value array. Only set if ValueType is String
-	StringArray []string
+	StringArray *[]string
 }
 
 // Constructor for in64 data array
-func NewWriterDataInt64(xs []int64) WriterData {
+func NewWriterDataInt64(xs *[]int64) WriterData {
 	return WriterData{ValueType: TsValueInt64, Int64Array: xs}
 }
 
 // Constructor for double data array
-func NewWriterDataDouble(xs []float64) WriterData {
+func NewWriterDataDouble(xs *[]float64) WriterData {
 	return WriterData{ValueType: TsValueDouble, DoubleArray: xs}
 }
 
 // Constructor for timestamp data array
-func NewWriterDataTimestamp(xs []C.qdb_timespec_t) WriterData {
+func NewWriterDataTimestamp(xs *[]C.qdb_timespec_t) WriterData {
 	return WriterData{ValueType: TsValueTimestamp, TimestampArray: xs}
 }
 
 // Constructor for blob data array
-func NewWriterDataBlob(xs [][]byte) WriterData {
+func NewWriterDataBlob(xs *[][]byte) WriterData {
 	return WriterData{ValueType: TsValueBlob, BlobArray: xs}
 }
 
 // Constructor for string data array
-func NewWriterDataString(xs []string) WriterData {
+func NewWriterDataString(xs *[]string) WriterData {
 	return WriterData{ValueType: TsValueString, StringArray: xs}
 }
 
-func (t WriterData) GetInt64Array() ([]int64, error) {
+func (t WriterData) GetInt64Array() (*[]int64, error) {
 	// This would be an internal error
-	if t.ValueType != TsValueString {
+	if t.ValueType != TsValueInt64 {
 		return nil, errors.New(fmt.Sprintf("Not an int64 column type: %v", t.ValueType))
 	}
 
 	return t.Int64Array, nil
+}
+
+func (t WriterData) GetDoubleArray() (*[]float64, error) {
+	// This would be an internal error
+	if t.ValueType != TsValueDouble {
+		return nil, errors.New(fmt.Sprintf("Not a float64  column type: %v", t.ValueType))
+	}
+
+	return t.DoubleArray, nil
 }
 
 // Metadata we need to represent a single column.
@@ -98,7 +108,7 @@ type WriterTable struct {
 	columnOffsetByName map[string]int
 
 	// The index, can not contain null values
-	idx []C.qdb_timespec_t
+	idx *[]C.qdb_timespec_t
 
 	// Value arrays to write for each column.
 	data []WriterData
@@ -121,14 +131,20 @@ func NewWriterTable(t string, cols []WriterColumn) (*WriterTable, error) {
 	return &WriterTable{t, -1, columnInfoByOffset, columnOffsetByName, nil, data}, nil
 }
 
-func (t WriterTable) SetIndex(idx []C.qdb_timespec_t) error {
+func (t WriterTable) GetName() string {
+	return t.TableName
+}
+
+// Batch writer. Accepts options and data
+
+func (t WriterTable) SetIndex(idx *[]C.qdb_timespec_t) error {
 	t.idx = idx
-	t.rowCount = len(idx)
+	t.rowCount = len(*idx)
 
 	return nil
 }
 
-func (t WriterTable) GetIndex() []C.qdb_timespec_t {
+func (t WriterTable) GetIndex() *[]C.qdb_timespec_t {
 	return t.idx
 }
 
@@ -146,6 +162,14 @@ func (t WriterTable) SetData(offset int, xs WriterData) error {
 	t.data[offset] = xs
 
 	return nil
+}
+
+func (t WriterTable) GetData(offset int) (WriterData, error) {
+	if offset >= len(t.data) {
+		return WriterData{}, errors.New(fmt.Sprintf("Column offset out of range: %v", offset))
+	}
+
+	return t.data[offset], nil
 }
 
 // Sets all all column data for a single table into the writer, assumes offsets of provided

@@ -2,59 +2,60 @@ package qdb
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestCanCreateNewWriterTable(t *testing.T) {
+func TestWriterTableCreateNew(t *testing.T) {
+	assert := assert.New(t)
+
 	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(1)
 
-	_, err := NewWriterTable(tableName, columns)
+	writerTable, err := NewWriterTable(tableName, columns)
 
-	if err != nil {
-		t.Fatal(err)
+	if assert.Nil(err) && assert.NotNil(writerTable) {
+		assert.Equal(tableName, writerTable.GetName(), "table names should be equal")
 	}
 }
 
 func TestWriterTableCanSetIndex(t *testing.T) {
+	assert := assert.New(t)
+
 	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(1)
 
 	table, err := NewWriterTable(tableName, columns)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(err)
 
 	idx := generateDefaultIndex(1024)
 	err = table.SetIndex(TimeSliceToQdbTimespec(idx))
-
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(err)
 }
 
 func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
+	assert := assert.New(t)
+
 	tableName := generateDefaultAlias()
 	columns := generateWriterColumnsOfAllTypes()
 
 	table, err := NewWriterTable(tableName, columns)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(err)
 
 	idx := generateDefaultIndex(1024)
 	err = table.SetIndex(TimeSliceToQdbTimespec(idx))
+	assert.Nil(err)
 
-	if err != nil {
-		t.Fatal(err)
-	}
+	datas := generateWriterDatas(len(*idx), columns)
+	err = table.SetDatas(datas)
 
-	datas := generateWriterDatas(len(idx), columns)
+	if assert.Nil(err) {
+		for i, inData := range datas {
+			outData, err := table.GetData(i)
+			if assert.Nil(err) {
+				assert.Equal(inData, outData, "expect data arrays to be identical")
+			}
 
-	for i, data := range datas {
-		err = table.SetData(i, data)
-
-		if err != nil {
-			t.Fatal(err)
 		}
 	}
 
