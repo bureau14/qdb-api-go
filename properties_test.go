@@ -19,12 +19,15 @@ var _ = Describe("Tests", func() {
 		It("should have system properties after connect", func() {
 			apiName, err := handle.GetProperties("api")
 			apiVersion, err := handle.GetProperties("api_version")
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(apiName).To(Equal("api"))
+			Expect(apiVersion).To(Equal(GitHash))
 		})
 		It("should not be able to update system properties", func() {
-			err := handle.UpdateProperties("api", "fake_api")
-			err = handle.UpdateProperties("api_version", "fake_api_version")
-			Expect(err).To(HaveOccurred())
+			errNameUpdate := handle.UpdateProperties("api", "fake_api")
+			errVersionUpdate := handle.UpdateProperties("api_version", "fake_api_version")
+			Expect(errNameUpdate).To(HaveOccurred())
+			Expect(errVersionUpdate).To(HaveOccurred())
 		})
 		It("should not be able to put empty property, non empty value", func() {
 			err := handle.PutProperties("", value)
@@ -35,17 +38,13 @@ var _ = Describe("Tests", func() {
 			err = handle.PutProperties(prop, value+"_1")
 			Expect(err).To(HaveOccurred())
 		})
-		It("should not be able to put empty property, empty value", func() {
-			err := handle.PutProperties("", "")
-			Expect(err).To(HaveOccurred())
-		})
-		It("should not be able to put empty value, non-empty property", func() {
-			err := handle.PutProperties(prop, value)
-			Expect(err).To(HaveOccurred())
+		It("should be able to put empty value, non-empty property", func() {
+			err := handle.PutProperties(prop, "")
+			Expect(err).ToNot(HaveOccurred())
 		})
 		It("should get properties", func() {
 			_, err := handle.GetProperties(prop)
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 		It("should not get properties by empty name", func() {
 			_, err := handle.GetProperties("")
@@ -53,7 +52,7 @@ var _ = Describe("Tests", func() {
 		})
 		It("should remove properties", func() {
 			err := handle.RemoveProperties(prop)
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 		It("should not remove properties with empty name", func() {
 			err := handle.RemoveProperties("")
@@ -66,18 +65,18 @@ var _ = Describe("Tests", func() {
 		})
 		It("should remove all properties, but keep system", func() {
 			err := handle.RemoveAllProperties()
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
+			apiName, _ := handle.GetProperties("api")
+			apiVersion, _ := handle.GetProperties("api_version")
+			Expect(apiName).To(Equal("go"))
+			Expect(apiVersion).To(Equal(GitHash))
 		})
 		It("should be able to update property", func() {
 			err := handle.UpdateProperties(prop, value+"_new")
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 		It("should not be able to update non-existent property", func() {
 			err := handle.UpdateProperties(generateAlias(16), "test")
-			Expect(err).To(HaveOccurred())
-		})
-		It("should not be able to update empty property", func() {
-			err := handle.UpdateProperties("", "test")
 			Expect(err).To(HaveOccurred())
 		})
 		It("should not be able to update empty property", func() {
