@@ -11,16 +11,6 @@
       <contains id="RQ_24" name="teamcity.agent.jvm.os.name" value="Windows" />
       <contains id="RQ_261" name="teamcity.agent.name" value="default" />
     </requirements>
-    <build-extensions>
-      <extension id="matrix" type="matrix">
-        <parameters>
-          <param name="matrix.param.goroot.1" value="goroot" />
-          <param name="matrix.value.goroot.1" value="%system.go1.19-32.goroot%" />
-          <param name="matrix.value.goroot.2" value="%system.go1.23-32.goroot%" />
-          <param name="matrix.value.goroot.3" value="%system.go1.24-32.goroot%" />
-        </parameters>
-      </extension>
-    </build-extensions>
     <artifact-dependencies>
       <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_Windows_X86Haswell" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
