@@ -4,7 +4,7 @@
   <description />
   <settings ref="Api_Go_LinuxBuild">
     <parameters>
-      <param name="goroot" value="env.GOROOT" />
+      <param name="goroot" value="%goroot%" />
     </parameters>
     <build-runners>
       <runner id="RUNNER_61" name="Generate documentation" type="simpleRunner">
