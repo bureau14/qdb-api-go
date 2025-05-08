@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<template xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" uuid="" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
+<template xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" uuid="" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2025.3/project-config.xsd">
   <name>Build</name>
   <settings>
     <options>
@@ -69,8 +69,6 @@
     <vcs-settings>
       <vcs-entry-ref root-id="Api_Go_QdbApiGo" />
     </vcs-settings>
-    <requirements />
-    <build-triggers />
     <build-extensions>
       <extension id="BUILD_EXT_24" type="BuildFailureOnMessage">
         <parameters>
@@ -94,19 +92,15 @@
           <param name="swabra.verbose" value="true" />
         </parameters>
       </extension>
-      <extension id="perfmon" type="perfmon">
-        <parameters />
-      </extension>
+      <extension id="perfmon" type="perfmon" />
       <extension id="matrix" type="matrix">
         <parameters>
           <param name="matrix.param.goroot.1" value="goroot" />
-          <param name="matrix.value.goroot.1" value="%system.go1.19-64.goroot%" />
-          <param name="matrix.value.goroot.2" value="%system.go1.23-64.goroot%" />
-          <param name="matrix.value.goroot.3" value="%system.go1.24-64.goroot%" />
+          <param name="matrix.value.goroot.1" value="%system.go1.23-64.goroot%" />
+          <param name="matrix.value.goroot.2" value="%system.go1.24-64.goroot%" />
         </parameters>
       </extension>
     </build-extensions>
-    <cleanup />
   </settings>
 </template>
 
