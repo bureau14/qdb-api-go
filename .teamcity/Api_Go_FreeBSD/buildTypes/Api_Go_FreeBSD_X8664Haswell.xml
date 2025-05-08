@@ -6,6 +6,15 @@
     <requirements>
       <equals id="RQ_1" name="teamcity.agent.jvm.os.name" value="FreeBSD" />
     </requirements>
+    <build-extensions>
+      <extension id="matrix" type="matrix">
+        <parameters>
+          <param name="matrix.param.goroot.1" value="goroot" />
+          <param name="matrix.value.goroot.1" value="%system.go1.24-64.goroot%" />
+          <param name="matrix.value.goroot.2" value="%system.go1.23-64.goroot%" />
+        </parameters>
+      </extension>
+    </build-extensions>
     <artifact-dependencies>
       <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_FreeBSD_X8664Haswell_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
