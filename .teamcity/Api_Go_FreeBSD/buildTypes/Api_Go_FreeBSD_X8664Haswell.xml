@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<build-type xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" uuid="b9a7a30d-a8e3-40f1-98c5-ea21712d4a1a" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2021.1/project-config.xsd">
+<build-type xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" uuid="b9a7a30d-a8e3-40f1-98c5-ea21712d4a1a" xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2025.3/project-config.xsd">
   <name>x86_64 Haswell</name>
   <description />
   <settings ref="Api_Go_Build">
-    <parameters />
-    <build-runners />
-    <vcs-settings />
     <requirements>
       <equals id="RQ_1" name="teamcity.agent.jvm.os.name" value="FreeBSD" />
     </requirements>
-    <build-triggers />
+    <build-extensions>
+      <extension id="matrix" type="matrix">
+        <parameters>
+          <param name="matrix.param.goroot.1" value="goroot" />
+          <param name="matrix.value.goroot.1" value="%system.go1.23-64.goroot%" />
+          <param name="matrix.value.goroot.2" value="%system.go1.24-64.goroot%" />
+        </parameters>
+      </extension>
+    </build-extensions>
     <artifact-dependencies>
       <dependency id="ARTIFACT_DEPENDENCY_1" sourceBuildTypeId="Quasardb_Artifacts_Release_FreeBSD_X8664Haswell_Composite" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
@@ -24,7 +29,6 @@
         </options>
       </depend-on>
     </dependencies>
-    <cleanup />
   </settings>
 </build-type>
 
