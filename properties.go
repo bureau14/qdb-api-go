@@ -2,6 +2,7 @@ package qdb
 
 /*
 	#include <qdb/properties.h>
+	#include <stdlib.h>
 */
 import "C"
 import (
@@ -19,7 +20,7 @@ func (h HandleType) PutProperties(prop string, value string) error {
 		return normalizeError
 	}
 	err := C.qdb_user_properties_put(h.handle, C.CString(normalizedProperty), C.CString(value))
-	return ErrorType(err)
+	return makeErrorOrNil(err)
 }
 
 func (h HandleType) UpdateProperties(prop string, value string) error {
@@ -29,7 +30,7 @@ func (h HandleType) UpdateProperties(prop string, value string) error {
 	}
 	if normalizedProperty != systemApiPropertyName && normalizedProperty != systemApiVersionPropertyName {
 		err := C.qdb_user_properties_update(h.handle, C.CString(normalizedProperty), C.CString(value))
-		return ErrorType(err)
+		return makeErrorOrNil(err)
 	}
 	return errors.New("could not overwrite system property")
 }
@@ -42,7 +43,7 @@ func (h HandleType) GetProperties(prop string) (string, error) {
 	var value *C.char
 	defer releaseCharStar(value)
 	err := C.qdb_user_properties_get(h.handle, C.CString(normalizedProperty), &value)
-	return C.GoString(value), ErrorType(err)
+	return C.GoString(value), makeErrorOrNil(err)
 }
 
 func (h HandleType) RemoveProperties(prop string) error {
@@ -52,7 +53,7 @@ func (h HandleType) RemoveProperties(prop string) error {
 	}
 	if normalizedProperty != systemApiPropertyName && normalizedProperty != systemApiVersionPropertyName {
 		err := C.qdb_user_properties_remove(h.handle, C.CString(prop))
-		return ErrorType(err)
+		return makeErrorOrNil(err)
 	}
 	return errors.New("could not remove system property")
 }
@@ -65,7 +66,7 @@ func (h HandleType) RemoveAllProperties() error {
 		return propErr
 	}
 
-	return ErrorType(err)
+	return makeErrorOrNil(err)
 }
 
 func normalizeProperty(prop string) (string, error) {
