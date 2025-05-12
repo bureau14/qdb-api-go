@@ -73,9 +73,10 @@ func (v TsColumnType) AsValueType() TsValueType {
 	switch v {
 	case TsColumnBlob:
 		return TsValueBlob
-	case TsColumnString:
 	case TsColumnSymbol:
-		// Both strings and symbols are represented as string values
+		// Both strings and symbols are represented as string values client-side
+		fallthrough
+	case TsColumnString:
 		return TsValueString
 	case TsColumnDouble:
 		return TsValueDouble
