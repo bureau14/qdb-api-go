@@ -114,7 +114,7 @@ type WriterTable struct {
 	data []WriterData
 }
 
-func NewWriterTable(t string, cols []WriterColumn) (*WriterTable, error) {
+func NewWriterTable(t string, cols []WriterColumn) *WriterTable {
 	// Pre-allocate our data array, which has exactly 1 entry for every column we intend to write.
 	data := make([]WriterData, len(cols))
 
@@ -128,7 +128,7 @@ func NewWriterTable(t string, cols []WriterColumn) (*WriterTable, error) {
 	}
 
 	// An index of column offset to name
-	return &WriterTable{t, -1, columnInfoByOffset, columnOffsetByName, nil, data}, nil
+	return &WriterTable{t, -1, columnInfoByOffset, columnOffsetByName, nil, data}
 }
 
 func (t WriterTable) GetName() string {
@@ -137,7 +137,7 @@ func (t WriterTable) GetName() string {
 
 // Batch writer. Accepts options and data
 
-func (t WriterTable) SetIndex(idx *[]C.qdb_timespec_t) error {
+func (t *WriterTable) SetIndex(idx *[]C.qdb_timespec_t) error {
 	t.idx = idx
 	t.rowCount = len(*idx)
 
@@ -149,7 +149,7 @@ func (t WriterTable) GetIndex() *[]C.qdb_timespec_t {
 }
 
 // Sets data for a single column
-func (t WriterTable) SetData(offset int, xs WriterData) error {
+func (t *WriterTable) SetData(offset int, xs WriterData) error {
 	if len(t.columnInfoByOffset) <= offset {
 		return errors.New(fmt.Sprintf("Column offset out of range: %v", offset))
 	}
@@ -174,7 +174,7 @@ func (t WriterTable) GetData(offset int) (WriterData, error) {
 
 // Sets all all column data for a single table into the writer, assumes offsets of provided
 // data are aligned with the table.
-func (t WriterTable) SetDatas(xs []WriterData) error {
+func (t *WriterTable) SetDatas(xs []WriterData) error {
 	for i, x := range xs {
 		err := t.SetData(i, x)
 
