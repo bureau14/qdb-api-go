@@ -48,6 +48,7 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
 	require.Nil(err, fmt.Sprintf("%v", err))
+	defer handle.Close()
 
 	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
 	require.Nil(err, fmt.Sprintf("%v", err))
