@@ -39,7 +39,7 @@ func TimeToQdbTimespec(t time.Time) C.qdb_timespec_t {
 
 // Converts a single native C qdb_timespec_t to a time.Time
 func QdbTimespecToTime(t C.qdb_timespec_t) time.Time {
-	return time.Unix(int64(t.tv_sec), int64(t.tv_nsec))
+	return time.Unix(int64(t.tv_sec), int64(t.tv_nsec)).UTC()
 }
 
 // Converts a slice of `time.Time` values to a slice of native C qdb_timespec_t values
