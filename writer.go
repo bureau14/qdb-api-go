@@ -45,6 +45,51 @@ type WriterData struct {
 	StringArray *[]string
 }
 
+// Metadata we need to represent a single column.
+type WriterColumn struct {
+	ColumnName string
+	ColumnType TsColumnType
+}
+
+// Single table to be provided to the batch writer
+type WriterTable struct {
+	TableName string
+
+	// All arrays are guaranteed to be of size `len`
+	rowCount int
+
+	// An index that enables looking up of a column's name by its offset within the table.
+	columnInfoByOffset []WriterColumn
+
+	// An index that enables looking up of a column's offset within the table by its name.
+	columnOffsetByName map[string]int
+
+	// The index, can not contain null values
+	idx *[]C.qdb_timespec_t
+
+	// Value arrays to write for each column.
+	data []WriterData
+}
+
+type WriterPushMode C.qdb_exp_batch_push_mode_t
+
+const (
+	WriterPushModeTransactional WriterPushMode = C.qdb_exp_batch_push_transactional
+	WriterPushModeFast          WriterPushMode = C.qdb_exp_batch_push_fast
+	WriterPushModeAsync         WriterPushMode = C.qdb_exp_batch_push_async
+)
+
+type WriterOptions struct {
+	pushMode             WriterPushMode
+	dropDuplicates       bool
+	dropDuplicateColumns []string
+}
+
+type Writer struct {
+	options WriterOptions
+	tables  map[string]WriterTable
+}
+
 // Constructor for in64 data array
 func NewWriterDataInt64(xs *[]int64) WriterData {
 	return WriterData{ValueType: TsValueInt64, Int64Array: xs}
@@ -86,32 +131,6 @@ func (t WriterData) GetDoubleArray() (*[]float64, error) {
 	}
 
 	return t.DoubleArray, nil
-}
-
-// Metadata we need to represent a single column.
-type WriterColumn struct {
-	ColumnName string
-	ColumnType TsColumnType
-}
-
-// Single table to be provided to the batch writer
-type WriterTable struct {
-	TableName string
-
-	// All arrays are guaranteed to be of size `len`
-	rowCount int
-
-	// An index that enables looking up of a column's name by its offset within the table.
-	columnInfoByOffset []WriterColumn
-
-	// An index that enables looking up of a column's offset within the table by its name.
-	columnOffsetByName map[string]int
-
-	// The index, can not contain null values
-	idx *[]C.qdb_timespec_t
-
-	// Value arrays to write for each column.
-	data []WriterData
 }
 
 func NewWriterTable(t string, cols []WriterColumn) *WriterTable {
@@ -185,4 +204,46 @@ func (t *WriterTable) SetDatas(xs []WriterData) error {
 
 	return nil
 
+}
+
+// Returns new WriterOptions struct with default options set.
+func NewWriterOptions() WriterOptions {
+	return WriterOptions{WriterPushModeTransactional, false, []string{}}
+}
+
+// Returns the currently set push mode
+func (options WriterOptions) GetPushMode() WriterPushMode {
+	return options.pushMode
+}
+
+// Returns true if deduplication is enabled
+func (options WriterOptions) IsDropDuplicatesEnabled() bool {
+	return options.dropDuplicates
+}
+
+// Returns the columns to be deduplicated on. If empty, deduplicates based on
+// equality of all columns.
+func (options WriterOptions) GetDropDuplicateColumns() []string {
+	return options.dropDuplicateColumns
+}
+
+// Sets the push mode to the desired push mode
+func (options WriterOptions) WithPushMode(mode WriterPushMode) WriterOptions {
+	options.pushMode = mode
+	return options
+}
+
+// Shortcut for `WithPushMode(WriterPushModeAsync)`
+func (options WriterOptions) WithAsyncPush() WriterOptions {
+	return options.WithPushMode(WriterPushModeAsync)
+}
+
+// Shortcut for `WithPushMode(WriterPushModeAsync)`
+func (options WriterOptions) WithFastPush() WriterOptions {
+	return options.WithPushMode(WriterPushModeFast)
+}
+
+// Shortcut for `WithPushMode(WriterPushModeAsync)`
+func (options WriterOptions) WithTransactionalPush() WriterOptions {
+	return options.WithPushMode(WriterPushModeTransactional)
 }

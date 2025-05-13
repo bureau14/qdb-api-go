@@ -71,5 +71,20 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 			}
 		}
 	}
+}
 
+func TestWriterOptionsCanCreateNew(t *testing.T) {
+	// Validate some default assumptions
+	assert := assert.New(t)
+	options := NewWriterOptions()
+
+	// Transactional push by default
+	assert.Equal(options.GetPushMode(), WriterPushModeTransactional)
+
+	// By default deduplication is disabled
+	if assert.False(options.IsDropDuplicatesEnabled()) {
+		// And then we also expect an empty array of to-deduplicate columns
+		cols := options.GetDropDuplicateColumns()
+		assert.Empty(cols)
+	}
 }
