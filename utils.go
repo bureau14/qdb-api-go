@@ -300,8 +300,8 @@ func generateIndex(n int, start time.Time, step time.Duration) *[]time.Time {
 // Generates an index with a default start date and step
 func generateDefaultIndex(n int) *[]time.Time {
 
-	var start time.Time = time.Unix(1745514000, 0) // 2025-04-25
-	var duration time.Duration = 100 * 1000 * 1000 // 100ms
+	var start time.Time = time.Unix(1745514000, 0).UTC() // 2025-04-25
+	var duration time.Duration = 100 * 1000 * 1000       // 100ms
 
 	return generateIndex(n, start, duration)
 }
