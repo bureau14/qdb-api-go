@@ -145,6 +145,45 @@ func generateWriterColumnsOfType(n int, ctype TsColumnType) []WriterColumn {
 	return ret
 }
 
+// Takes an array of WriterColumns and converts it to TsColumnInfo, which can then be
+// used to e.g. create a table.
+func convertWriterColumnsToColumnInfo(xs []WriterColumn) []TsColumnInfo {
+	ret := make([]TsColumnInfo, len(xs))
+
+	for i, _ := range xs {
+		if xs[i].ColumnType == TsColumnSymbol {
+			// We just generate a random alias for the symbol table name
+			ret[i] = NewSymbolColumnInfo(xs[i].ColumnName, generateDefaultAlias())
+		} else {
+			ret[i] = NewTsColumnInfo(xs[i].ColumnName, xs[i].ColumnType)
+		}
+	}
+
+	return ret
+}
+
+// Takes writer columns and a creates a table that matches the format. Returns the table
+// object that was created.
+func createTableOfWriterColumns(handle HandleType, columns []WriterColumn, shardSize time.Duration) (TimeseriesEntry, error) {
+	tableName := generateDefaultAlias()
+
+	columnInfos := convertWriterColumnsToColumnInfo(columns)
+
+	table := handle.Timeseries(tableName)
+	err := table.Create(shardSize, columnInfos...)
+
+	if err != nil {
+		return TimeseriesEntry{}, err
+	}
+
+	return table, nil
+}
+
+func createTableOfWriterColumnsAndDefaultShardSize(handle HandleType, columns []WriterColumn) (TimeseriesEntry, error) {
+	var duration time.Duration = 86400 * 1000 * 1000 * 1000 // 1 day
+	return createTableOfWriterColumns(handle, columns, duration)
+}
+
 func generateWriterDataInt64(n int) WriterData {
 	xs := make([]int64, n)
 
