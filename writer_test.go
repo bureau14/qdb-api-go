@@ -1,9 +1,12 @@
 package qdb
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWriterTableCreateNew(t *testing.T) {
@@ -12,50 +15,59 @@ func TestWriterTableCreateNew(t *testing.T) {
 	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(1)
 
-	writerTable, err := NewWriterTable(tableName, columns)
+	writerTable := NewWriterTable(tableName, columns)
 
-	if assert.Nil(err) && assert.NotNil(writerTable) {
+	if assert.NotNil(writerTable) {
 		assert.Equal(tableName, writerTable.GetName(), "table names should be equal")
 	}
 }
 
 func TestWriterTableCanSetIndex(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
 	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(1)
 
-	table, err := NewWriterTable(tableName, columns)
-	assert.Nil(err)
+	writerTable := NewWriterTable(tableName, columns)
+	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	err = table.SetIndex(TimeSliceToQdbTimespec(idx))
-	assert.Nil(err)
+	err := writerTable.SetIndex(TimeSliceToQdbTimespec(idx))
+
+	if assert.Nil(err) {
+		assert.Equal(QdbTimespecSliceToTime(writerTable.GetIndex()), idx)
+	}
 }
 
 func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
-	tableName := generateDefaultAlias()
 	columns := generateWriterColumnsOfAllTypes()
 
-	table, err := NewWriterTable(tableName, columns)
-	assert.Nil(err)
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.Nil(err, fmt.Sprintf("%v", err))
+
+	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
+	require.Nil(err, fmt.Sprintf("%v", err))
+
+	writerTable := NewWriterTable(table.alias, columns)
+	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	err = table.SetIndex(TimeSliceToQdbTimespec(idx))
-	assert.Nil(err)
+	err = writerTable.SetIndex(TimeSliceToQdbTimespec(idx))
+	require.Nil(err)
 
 	datas := generateWriterDatas(len(*idx), columns)
-	err = table.SetDatas(datas)
+	err = writerTable.SetDatas(datas)
 
 	if assert.Nil(err) {
 		for i, inData := range datas {
-			outData, err := table.GetData(i)
+			outData, err := writerTable.GetData(i)
 			if assert.Nil(err) {
 				assert.Equal(inData, outData, "expect data arrays to be identical")
 			}
-
 		}
 	}
 
