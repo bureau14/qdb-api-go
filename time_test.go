@@ -26,7 +26,10 @@ func TestTimeCanConvertToQdbTimespec(t *testing.T) {
 		// Generate a random set of times
 		input := genTimes.Draw(t, "times")
 
-		// Convert to qdb_timespec_t and back to time
+		// Assert that every generated time is in UTC
+		for _, tm := range input {
+			assert.Equal(time.UTC, tm.Location(), "generated time should be in UTC")
+		}
 		output := QdbTimespecSliceToTime(TimeSliceToQdbTimespec(&input))
 
 		assert.Equal(input, *output)
