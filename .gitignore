@@ -27,3 +27,4 @@
 /qdb_api.examples.log
 /share/doc/qdb/README.md
 /.idea/vcs.xml
+.aider*
