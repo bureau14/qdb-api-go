@@ -24,11 +24,10 @@ func New(text string) error {
 	return &writerError{text}
 }
 
- // A single column's data within a WriterTable, representing values to be inserted as a single column into QuasarDB.
- // These objects are relatively cheap to copy, as all internal arrays are pointers.
- // Note: TsValueType is provided by the ts submodule.
- type WriterData struct {
- 	ValueType TsValueType
+// A single column's data within a WriterTable, representing values to be inserted as a single column into QuasarDB.
+// These objects are relatively cheap to copy, as all internal arrays are pointers.
+type WriterData struct {
+	ValueType TsValueType
 
 	// int64 value array. Only set if ValueType is Int64
 	Int64Array *[]int64
