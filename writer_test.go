@@ -88,3 +88,82 @@ func TestWriterOptionsCanCreateNew(t *testing.T) {
 		assert.Empty(cols)
 	}
 }
+
+func TestWriterOptionsCanSetProperties(t *testing.T) {
+	// Validates that we can adjust properties for the writer.
+	//
+	// Currently validates that:
+	// - we can adjust the push mode
+	// - enable deduplication, either on all columns or based on specific columns.
+	//
+	// When new options are introduced, test cases should be added here.
+	assert := assert.New(t)
+
+	// Create options with fast push mode
+	options := NewWriterOptions().WithPushMode(WriterPushModeFast)
+	assert.Equal(options.GetPushMode(), WriterPushModeFast)
+
+	// Create options with deduplication based on all columns
+	options = NewWriterOptions().EnableDropDuplicates()
+	if assert.Equal(options.IsDropDuplicatesEnabled(), true) {
+		// And then we also expect an empty array of to-deduplicate columns
+		cols := options.GetDropDuplicateColumns()
+		assert.Empty(cols)
+	}
+
+	// Create options with deduplication based on specific columns
+	cols := []string{"col1", "col2"}
+	options = NewWriterOptions().EnableDropDuplicatesOn(cols)
+	if assert.Equal(options.IsDropDuplicatesEnabled(), true) {
+		// And then we also expect an empty array of to-deduplicate columns
+		cols_ := options.GetDropDuplicateColumns()
+		assert.Equal(cols_, cols)
+	}
+}
+
+func TestWriterCanCreateNew(t *testing.T) {
+	assert := assert.New(t)
+
+	// Create a new writer
+	writer := NewWriterWithDefaultOptions()
+
+	// Validate that the writer is not nil
+	assert.NotNil(writer)
+}
+
+func TestWriterCanCreateWithOptions(t *testing.T) {
+	assert := assert.New(t)
+
+	// Create a new writer with options
+	writer := NewWriter(NewWriterOptions())
+
+	// Validate that the writer is not nil
+	assert.NotNil(writer)
+}
+
+// Tests successful addition of a table to the writer
+func TestWriterCanAddTable(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	// Create a new writer
+	writer := NewWriterWithDefaultOptions()
+	require.NotNil(writer)
+
+	// Create a new table
+	tableName := generateDefaultAlias()
+	columns := generateWriterColumns(1)
+	writerTable := NewWriterTable(tableName, columns)
+
+	// Add the table to the writer
+	err := writer.SetTable(writerTable)
+	if assert.Nil(err) {
+		assert.Equal(len(writer.tables), 1, "expect one table in the writer")
+
+		writerTable_, err := writer.GetTable(tableName)
+
+		if assert.Nil(err) {
+			assert.Equal(writerTable, writerTable_, "expect tables to be identical")
+		}
+	}
+}
