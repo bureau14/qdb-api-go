@@ -152,13 +152,13 @@ func TestWriterCanAddTable(t *testing.T) {
 
 	// Create a new table
 	tableName := generateDefaultAlias()
-	columns := generateWriterColumns(1)
+	columns := generateWriterColumns(8)
 	writerTable := NewWriterTable(tableName, columns)
 
 	// Add the table to the writer
 	err := writer.SetTable(writerTable)
 	if assert.Nil(err) {
-		assert.Equal(len(writer.tables), 1, "expect one table in the writer")
+		assert.Equal(writer.Length(), 1, "expect one table in the writer")
 
 		writerTable_, err := writer.GetTable(tableName)
 
@@ -166,4 +166,70 @@ func TestWriterCanAddTable(t *testing.T) {
 			assert.Equal(writerTable, writerTable_, "expect tables to be identical")
 		}
 	}
+}
+
+// Tests that adding a table with the same name twice returns an error
+func TestWriterCannotAddTableTwice(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	// Create a new writer
+	writer := NewWriterWithDefaultOptions()
+	require.NotNil(writer)
+
+	// Create a new table
+	tableName := generateDefaultAlias()
+	writerTable := NewWriterTable(tableName, generateWriterColumns(8))
+
+	// Add the table to the writer
+	err := writer.SetTable(writerTable)
+	if assert.Nil(err) {
+		assert.Equal(writer.Length(), 1, "expect one table in the writer")
+
+		err = writer.SetTable(writerTable)
+		assert.NotNil(err, "expect error when adding the same table twice")
+	}
+}
+
+// Tests that adding a table with the same name twice returns an error
+func TestWriterReturnsErrorIfTableNotFound(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	// Create a new writer
+	writer := NewWriterWithDefaultOptions()
+	require.NotNil(writer)
+
+	// Create a new table
+	tableName := generateDefaultAlias()
+	_, err := writer.GetTable(tableName)
+	assert.NotNil(err, "expect error when getting a non-existing table")
+}
+
+func TestWriterCanAddMultipleTables(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	// Create a new writer
+	writer := NewWriterWithDefaultOptions()
+	require.NotNil(writer)
+
+	// Create a new table
+	tableName1 := generateDefaultAlias()
+	tableName2 := generateDefaultAlias()
+
+	columns1 := generateWriterColumns(8)
+	columns2 := generateWriterColumns(8)
+
+	writerTable1 := NewWriterTable(tableName1, columns1)
+	writerTable2 := NewWriterTable(tableName2, columns2)
+
+	// Add the first table to the writer
+	err := writer.SetTable(writerTable1)
+	require.Nil(err)
+
+	err = writer.SetTable(writerTable2)
+	require.Nil(err)
+
+	assert.Equal(writer.Length(), 2, "expect two tables in the writer")
 }
