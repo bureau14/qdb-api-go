@@ -108,3 +108,4 @@ esac
 export GOROOT="${GOROOT}"
 export GOPATH="${GOPATH}"
 export GO="${GO}"
+export GIT_HASH=`git rev-parse HEAD || "NONE"`
