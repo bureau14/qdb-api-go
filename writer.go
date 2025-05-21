@@ -299,6 +299,11 @@ func (w *Writer) GetTable(name string) (WriterTable, error) {
 	return t, nil
 }
 
+// Returns the number of tables the writer currently holds.
+func (w *Writer) Length() int {
+	return len(w.tables)
+}
+
 // Pushes all tables to the server according to PushOptions.
 func (w *Writer) Push() error {
 	return nil
