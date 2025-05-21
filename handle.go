@@ -45,10 +45,6 @@ const (
 	CompBest Compression = C.qdb_comp_best
 )
 
-var (
-	propertiesEnabled = false
-)
-
 // APIVersion : Returns a string describing the API version.
 func (h HandleType) APIVersion() string {
 	version := C.qdb_version()
@@ -75,14 +71,12 @@ func (h HandleType) Open(protocol Protocol) error {
 // EnableUserProperties : enables user properties for that handle.
 func (h HandleType) EnableUserProperties() error {
 	err := C.qdb_option_enable_user_properties(h.handle)
-	propertiesEnabled = true
 	return makeErrorOrNil(err)
 }
 
 // DisableUserProperties : enables user properties for that handle.
 func (h HandleType) DisableUserProperties() error {
 	err := C.qdb_option_disable_user_properties(h.handle)
-	propertiesEnabled = false
 	return makeErrorOrNil(err)
 }
 
@@ -227,12 +221,6 @@ func (h HandleType) Connect(clusterURI string) error {
 	uri := convertToCharStar(clusterURI)
 	defer releaseCharStar(uri)
 	err := C.qdb_connect(h.handle, uri)
-	if propertiesEnabled {
-		propErr := h.putSystemProperties()
-		if propErr != nil {
-			return propErr
-		}
-	}
 	return makeErrorOrNil(err)
 }
 
@@ -377,6 +365,10 @@ func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 		return h, err
 	}
 	err = h.Connect(clusterURI)
+	if err != nil {
+		return h, err
+	}
+	err = h.putSystemProperties()
 	return h, err
 }
 
@@ -434,6 +426,10 @@ func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile str
 		return h, err
 	}
 	err = h.Connect(clusterURI)
+	if err != nil {
+		return h, err
+	}
+	err = h.putSystemProperties()
 	return h, err
 }
 

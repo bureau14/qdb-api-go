@@ -20,7 +20,7 @@ var _ = Describe("Tests", func() {
 			apiName, err := handle.GetProperties("api")
 			apiVersion, err := handle.GetProperties("api_version")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(apiName).To(Equal("api"))
+			Expect(apiName).To(Equal("go"))
 			Expect(apiVersion).To(Equal(GitHash))
 		})
 		It("should not be able to update system properties", func() {
@@ -38,20 +38,27 @@ var _ = Describe("Tests", func() {
 			err = handle.PutProperties(prop, value+"_1")
 			Expect(err).To(HaveOccurred())
 		})
-		It("should be able to put empty value, non-empty property", func() {
+		It("should not be able to put empty value, non-empty property", func() {
 			err := handle.PutProperties(prop, "")
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(ErrInvalidArgument))
 		})
 		It("should get properties", func() {
-			_, err := handle.GetProperties(prop)
+			putErr := handle.PutProperties(prop, value)
+			Expect(putErr).ToNot(HaveOccurred())
+			returnedValue, err := handle.GetProperties(prop)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedValue).To(Equal(value))
 		})
 		It("should not get properties by empty name", func() {
 			_, err := handle.GetProperties("")
 			Expect(err).To(HaveOccurred())
 		})
 		It("should remove properties", func() {
-			err := handle.RemoveProperties(prop)
+			propName := generateAlias(16)
+			putErr := handle.PutProperties(propName, value)
+			Expect(putErr).ToNot(HaveOccurred())
+			err := handle.RemoveProperties(propName)
 			Expect(err).ToNot(HaveOccurred())
 		})
 		It("should not remove properties with empty name", func() {
@@ -75,9 +82,9 @@ var _ = Describe("Tests", func() {
 			err := handle.UpdateProperties(prop, value+"_new")
 			Expect(err).ToNot(HaveOccurred())
 		})
-		It("should not be able to update non-existent property", func() {
+		It("should be able to update non-existent property", func() {
 			err := handle.UpdateProperties(generateAlias(16), "test")
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 		It("should not be able to update empty property", func() {
 			err := handle.UpdateProperties("", "test")
