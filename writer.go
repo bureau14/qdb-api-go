@@ -51,7 +51,7 @@ type WriterColumn struct {
 	ColumnType TsColumnType
 }
 
-// Single table to be provided to the batch writer
+// Single table to be provided to the batch writer.
 type WriterTable struct {
 	TableName string
 
@@ -133,7 +133,7 @@ func (t WriterData) GetDoubleArray() (*[]float64, error) {
 	return t.DoubleArray, nil
 }
 
-func NewWriterTable(t string, cols []WriterColumn) *WriterTable {
+func NewWriterTable(t string, cols []WriterColumn) WriterTable {
 	// Pre-allocate our data array, which has exactly 1 entry for every column we intend to write.
 	data := make([]WriterData, len(cols))
 
@@ -147,7 +147,7 @@ func NewWriterTable(t string, cols []WriterColumn) *WriterTable {
 	}
 
 	// An index of column offset to name
-	return &WriterTable{t, -1, columnInfoByOffset, columnOffsetByName, nil, data}
+	return WriterTable{t, -1, columnInfoByOffset, columnOffsetByName, nil, data}
 }
 
 func (t WriterTable) GetName() string {
@@ -221,6 +221,19 @@ func (options WriterOptions) IsDropDuplicatesEnabled() bool {
 	return options.dropDuplicates
 }
 
+// Enables deduplication based on all columns
+func (options WriterOptions) EnableDropDuplicates() WriterOptions {
+	options.dropDuplicates = true
+	return options
+}
+
+// Enables deduplicates based on the provided columns
+func (options WriterOptions) EnableDropDuplicatesOn(columns []string) WriterOptions {
+	options.dropDuplicates = true
+	options.dropDuplicateColumns = columns
+	return options
+}
+
 // Returns the columns to be deduplicated on. If empty, deduplicates based on
 // equality of all columns.
 func (options WriterOptions) GetDropDuplicateColumns() []string {
@@ -246,4 +259,41 @@ func (options WriterOptions) WithFastPush() WriterOptions {
 // Shortcut for `WithPushMode(WriterPushModeAsync)`
 func (options WriterOptions) WithTransactionalPush() WriterOptions {
 	return options.WithPushMode(WriterPushModeTransactional)
+}
+
+// Creates a new Writer with the provided options
+func NewWriter(options WriterOptions) Writer {
+	return Writer{options: options, tables: make(map[string]WriterTable)}
+}
+
+// Creates a new Writer with default options
+func NewWriterWithDefaultOptions() Writer {
+	return NewWriter(NewWriterOptions())
+}
+
+// Returns the writer's options
+func (w Writer) GetOptions() WriterOptions {
+	return w.options
+}
+
+// Sets the data of a table
+func (w *Writer) SetTable(t WriterTable) error {
+	w.tables[t.TableName] = t
+
+	return nil
+}
+
+// Returns the table with the provided name
+func (w *Writer) GetTable(name string) (WriterTable, error) {
+	t, ok := w.tables[name]
+	if !ok {
+		return WriterTable{}, errors.New(fmt.Sprintf("Table not found: %s", name))
+	}
+
+	return t, nil
+}
+
+// Pushes all tables to the server according to PushOptions.
+func (w *Writer) Push() error {
+	return nil
 }
