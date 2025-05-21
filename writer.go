@@ -276,8 +276,14 @@ func (w Writer) GetOptions() WriterOptions {
 	return w.options
 }
 
-// Sets the data of a table
+// Sets the data of a table. Returns error if table already exists.
 func (w *Writer) SetTable(t WriterTable) error {
+	// Check if the table already exists
+	_, exists := w.tables[t.TableName]
+	if exists {
+		return fmt.Errorf("table %q already exists", t.TableName)
+	}
+
 	w.tables[t.TableName] = t
 
 	return nil
