@@ -60,7 +60,7 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	err = writerTable.SetIndex(TimeSliceToQdbTimespec(idx))
 	require.Nil(err)
 
-	datas := generateWriterDatas(len(*idx), columns)
+	datas := generateWriterDatas(len(idx), columns)
 	err = writerTable.SetDatas(datas)
 
 	if assert.Nil(err) {
@@ -232,4 +232,18 @@ func TestWriterCanAddMultipleTables(t *testing.T) {
 	require.Nil(err)
 
 	assert.Equal(writer.Length(), 2, "expect two tables in the writer")
+}
+
+// Tests that the writer returns an error when invoking Push() without adding any tables
+func TestWriterReturnsErrorIfNoTables(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	// Create a new writer
+	writer := NewWriterWithDefaultOptions()
+	require.NotNil(writer)
+
+	// Push the writer
+	err := writer.Push()
+	assert.NotNil(err, "expect error when pushing an empty writer")
 }

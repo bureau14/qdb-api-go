@@ -191,7 +191,7 @@ func generateWriterDataInt64(n int) WriterData {
 		xs[i] = rand.Int63()
 	}
 
-	return NewWriterDataInt64(&xs)
+	return NewWriterDataInt64(xs)
 }
 
 func generateWriterDataDouble(n int) WriterData {
@@ -201,22 +201,15 @@ func generateWriterDataDouble(n int) WriterData {
 		xs[i] = rand.NormFloat64()
 	}
 
-	return NewWriterDataDouble(&xs)
+	return NewWriterDataDouble(xs)
 }
 
 func generateWriterDataTimestamp(n int) WriterData {
 	// XXX(leon): should be improved to be more random, instead
 	//            we're reusing the code that generates the index here.
-
-	xs := make([]C.qdb_timespec_t, n)
-
 	idx := generateDefaultIndex(n)
 
-	for i, t := range *idx {
-		xs[i] = TimeToQdbTimespec(t)
-	}
-
-	return NewWriterDataTimestamp(&xs)
+	return NewWriterDataTimestampFromTimeSlice(idx)
 }
 
 func generateWriterDataBlob(n int) WriterData {
@@ -238,7 +231,7 @@ func generateWriterDataBlob(n int) WriterData {
 		xs[i] = x
 	}
 
-	return NewWriterDataBlob(&xs)
+	return NewWriterDataBlob(xs)
 }
 
 func generateWriterDataString(n int) WriterData {
@@ -250,7 +243,7 @@ func generateWriterDataString(n int) WriterData {
 		xs[i] = generateAlias(16)
 	}
 
-	return NewWriterDataString(&xs)
+	return NewWriterDataString(xs)
 }
 
 // Generates artifical writer data for a single column
@@ -286,7 +279,7 @@ func generateWriterDatas(n int, columns []WriterColumn) []WriterData {
 }
 
 // Generates an time index
-func generateIndex(n int, start time.Time, step time.Duration) *[]time.Time {
+func generateIndex(n int, start time.Time, step time.Duration) []time.Time {
 	var ret []time.Time = make([]time.Time, n)
 
 	for i, _ := range ret {
@@ -294,11 +287,11 @@ func generateIndex(n int, start time.Time, step time.Duration) *[]time.Time {
 		ret[i] = start.Add(time.Duration(nsec))
 	}
 
-	return &ret
+	return ret
 }
 
 // Generates an index with a default start date and step
-func generateDefaultIndex(n int) *[]time.Time {
+func generateDefaultIndex(n int) []time.Time {
 
 	var start time.Time = time.Unix(1745514000, 0).UTC() // 2025-04-25
 	var duration time.Duration = 100 * 1000 * 1000       // 100ms

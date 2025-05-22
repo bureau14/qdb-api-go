@@ -32,8 +32,8 @@ func TestTimeCanConvertToQdbTimespec(t *testing.T) {
 		}
 
 		// Convert to qdb_timespec_t and back to time, doing the reconversion
-		output := QdbTimespecSliceToTime(TimeSliceToQdbTimespec(&input))
+		output := QdbTimespecSliceToTime(TimeSliceToQdbTimespec(input))
 
-		assert.Equal(input, *output)
+		assert.Equal(input, output)
 	})
 }
