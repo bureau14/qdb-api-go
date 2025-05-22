@@ -30,11 +30,9 @@ func TimespecToStructG(tp C.qdb_timespec_t) time.Time {
 }
 
 // Converts a single time.Time value to a native C qdb_timespec_t value
-func TimeToQdbTimespec(t time.Time) C.qdb_timespec_t {
-	nsec := C.qdb_time_t(t.Nanosecond())
-	sec := C.qdb_time_t(t.Unix())
-
-	return C.qdb_timespec_t{sec, nsec}
+func TimeToQdbTimespec(t time.Time, out *C.qdb_timespec_t) {
+	out.tv_nsec = C.qdb_time_t(t.Nanosecond())
+	out.tv_sec = C.qdb_time_t(t.Unix())
 }
 
 // Converts a single native C qdb_timespec_t to a time.Time
@@ -47,7 +45,7 @@ func TimeSliceToQdbTimespec(xs []time.Time) []C.qdb_timespec_t {
 	ret := make([]C.qdb_timespec_t, len(xs))
 
 	for i, x := range xs {
-		ret[i] = TimeToQdbTimespec(x)
+		TimeToQdbTimespec(x, &ret[i])
 	}
 
 	return ret
