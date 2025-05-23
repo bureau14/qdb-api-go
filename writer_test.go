@@ -33,10 +33,10 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	err := writerTable.SetIndex(TimeSliceToQdbTimespec(idx))
+	err := writerTable.SetIndex(idx)
 
 	if assert.Nil(err) {
-		assert.Equal(QdbTimespecSliceToTime(writerTable.GetIndex()), idx)
+		assert.Equal(writerTable.GetIndex(), idx)
 	}
 }
 
@@ -57,7 +57,7 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	err = writerTable.SetIndex(TimeSliceToQdbTimespec(idx))
+	err = writerTable.SetIndex(idx)
 	require.Nil(err)
 
 	datas := generateWriterDatas(len(idx), columns)

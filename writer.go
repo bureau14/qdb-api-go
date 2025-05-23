@@ -28,6 +28,9 @@ func New(text string) error {
 type WriterData interface {
 	// Possibly some methods, but often empty
 	valueType() TsValueType
+
+	// Convert to native C type
+	toNative(out *C.qdb_exp_batch_push_column_t) error
 }
 
 // Int64
@@ -39,13 +42,45 @@ func (wd WriterDataInt64) valueType() TsValueType {
 	return TsValueInt64
 }
 
+func (wd WriterDataInt64) toNative(out *C.qdb_exp_batch_push_column_t) error {
+	out.data_type = C.qdb_ts_column_int64
+
+	// out.data is a union that are all pointers, so we can safely cast
+	// to the generic pointer type.
+	ptr := (*unsafe.Pointer)(unsafe.Pointer(&out.data[0]))
+
+	if len(wd.Values) == 0 {
+		return fmt.Errorf("Int64 data is empty")
+	}
+
+	*ptr = unsafe.Pointer(&wd.Values[0])
+
+	return nil
+}
+
 // Double
 type WriterDataDouble struct {
 	Values []float64
 }
 
-func (cd WriterDataDouble) valueType() TsValueType {
+func (wd WriterDataDouble) valueType() TsValueType {
 	return TsValueDouble
+}
+
+func (wd WriterDataDouble) toNative(out *C.qdb_exp_batch_push_column_t) error {
+	out.data_type = C.qdb_ts_column_double
+
+	// out.data is a union that are all pointers, so we can safely cast
+	// to the generic pointer type.
+	ptr := (*unsafe.Pointer)(unsafe.Pointer(&out.data[0]))
+
+	if len(wd.Values) == 0 {
+		return fmt.Errorf("Double data is empty")
+	}
+
+	*ptr = unsafe.Pointer(&wd.Values[0])
+
+	return nil
 }
 
 // Timestamp
@@ -57,6 +92,22 @@ func (cd WriterDataTimestamp) valueType() TsValueType {
 	return TsValueTimestamp
 }
 
+func (wd WriterDataTimestamp) toNative(out *C.qdb_exp_batch_push_column_t) error {
+	out.data_type = C.qdb_ts_column_timestamp
+
+	// out.data is a union that are all pointers, so we can safely cast
+	// to the generic pointer type.
+	ptr := (*unsafe.Pointer)(unsafe.Pointer(&out.data[0]))
+
+	if len(wd.Values) == 0 {
+		return fmt.Errorf("Timestamp data is empty")
+	}
+
+	*ptr = unsafe.Pointer(&wd.Values[0])
+
+	return nil
+}
+
 // Blob
 type WriterDataBlob struct {
 	Values [][]byte
@@ -66,6 +117,28 @@ func (cd WriterDataBlob) valueType() TsValueType {
 	return TsValueBlob
 }
 
+func (wd WriterDataBlob) toNative(out *C.qdb_exp_batch_push_column_t) error {
+	out.data_type = C.qdb_ts_column_blob
+
+	n := len(wd.Values)
+
+	if n == 0 {
+		return fmt.Errorf("Timestamp data is empty")
+	}
+
+	// Use native C allocation so that we can pass the pointer to the C API,
+	// and release it after the entrie push is done.
+	//
+	// This is *important*, otherwise we risk leaking memory, but it's also
+	// the only way we can pass the contents of the blob to the C API without
+	// copies.
+	_ = C.size_t(n) * C.size_t(unsafe.Sizeof(C.qdb_blob_t{}))
+
+	// todo: complete
+
+	return nil
+}
+
 // String
 type WriterDataString struct {
 	Values []string
@@ -73,6 +146,28 @@ type WriterDataString struct {
 
 func (cd WriterDataString) valueType() TsValueType {
 	return TsValueString
+}
+
+func (wd WriterDataString) toNative(out *C.qdb_exp_batch_push_column_t) error {
+	out.data_type = C.qdb_ts_column_blob
+
+	n := len(wd.Values)
+
+	if n == 0 {
+		return fmt.Errorf("String data is empty")
+	}
+
+	// Use native C allocation so that we can pass the pointer to the C API,
+	// and release it after the entrie push is done.
+	//
+	// This is *important*, otherwise we risk leaking memory, but it's also
+	// the only way we can pass the contents of the blob to the C API without
+	// copies.
+	_ = C.size_t(n) * C.size_t(unsafe.Sizeof(C.qdb_string_t{}))
+
+	// todo: complete
+
+	return nil
 }
 
 // Metadata we need to represent a single column.
@@ -131,13 +226,13 @@ func NewWriterDataDouble(xs []float64) WriterData {
 }
 
 // Constructor for timestamp data array
-func NewWriterDataTimestamp(xs []C.qdb_timespec_t) WriterData {
+func NewWriterDataTimestampFromTimespec(xs []C.qdb_timespec_t) WriterData {
 	return WriterDataTimestamp{Values: xs}
 }
 
 // Constructor for timestamp data array
-func NewWriterDataTimestampFromTimeSlice(xs []time.Time) WriterData {
-	return NewWriterDataTimestamp(TimeSliceToQdbTimespec(xs))
+func NewWriterDataTimestamp(xs []time.Time) WriterData {
+	return NewWriterDataTimestampFromTimespec(TimeSliceToQdbTimespec(xs))
 }
 
 // Constructor for blob data array
@@ -267,16 +362,86 @@ func (t WriterTable) GetName() string {
 }
 
 // Batch writer. Accepts options and data
-
-func (t *WriterTable) SetIndex(idx []C.qdb_timespec_t) error {
+func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) error {
 	t.idx = idx
 	t.rowCount = len(idx)
 
 	return nil
 }
 
-func (t WriterTable) GetIndex() []C.qdb_timespec_t {
+func (t *WriterTable) SetIndex(idx []time.Time) error {
+	return t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
+}
+
+func (t WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
 	return t.idx
+}
+
+func (t WriterTable) GetIndex() []time.Time {
+	return QdbTimespecSliceToTime(t.GetIndexAsNative())
+}
+
+// toNativeTableData converts the "table data" part of the WriterTable to native C type,
+// i.e., it fills the C struct `qdb_exp_batch_push_table_data_t` with the data from the WriterTable.
+func (t WriterTable) toNativeTableData(out *C.qdb_exp_batch_push_table_data_t) error {
+	// Set row and column counts directly.
+	out.row_count = C.qdb_size_t(t.rowCount)
+	out.column_count = C.qdb_size_t(len(t.data))
+
+	// Index ("timestamps") slice: directly reference underlying Go slice memory.
+	if len(t.idx) == 0 {
+		return fmt.Errorf("Index is empty")
+	}
+
+	if len(t.data) == 0 {
+		return fmt.Errorf("Index provided, but no column data provided")
+	}
+
+	out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
+
+	// Allocate native columns array.
+	columnCount := len(t.data)
+	nativeColumns := make([]C.qdb_exp_batch_push_column_t, columnCount)
+
+	// Convert each WriterData to its native counterpart.
+	for i := 0; i < columnCount; i++ {
+		t.data[i].toNative(&nativeColumns[i])
+	}
+
+	out.columns = (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(&nativeColumns[0]))
+
+	return nil
+}
+
+// toNative converts WriterTable to native C type and avoids copies where possible.
+// It is the caller's responsibility to ensure that the WriterTable lives at least
+// as long as the native C structure.
+func (t WriterTable) toNative(out *C.qdb_exp_batch_push_table_t) error {
+
+	// Directly reference the internal Go string without copying (unsafe!).
+	// Go string is (pointer, length), compatible with a C char* pointer.
+	out.name = (*C.char)(unsafe.Pointer(unsafe.StringData(t.TableName)))
+
+	err := t.toNativeTableData(&out.data)
+	if err != nil {
+		return err
+	}
+
+	// Zero-initialize the rest of the struct. This should already be the case,
+	// but just in case, we are very explicit about all the default values we
+	// use.
+	//
+	// Insert truncate -- not supported yet
+	out.truncate_ranges = nil
+	out.truncate_range_count = 0
+
+	// Deduplication -- to-do / later
+	out.deduplication_mode = C.qdb_exp_batch_deduplication_mode_t(C.qdb_exp_batch_deduplication_mode_disabled)
+
+	// Never automatically create tables
+	out.creation = C.qdb_exp_batch_creation_mode_t(C.qdb_exp_batch_dont_create)
+
+	return nil
 }
 
 // Sets data for a single column
@@ -419,6 +584,16 @@ func (w *Writer) Length() int {
 func (w *Writer) Push() error {
 	if w.Length() == 0 {
 		return fmt.Errorf("No tables to push")
+	}
+
+	tables := make([]*C.qdb_exp_batch_push_table_t, w.Length())
+	n := 0
+
+	for _, v := range w.tables {
+		err := v.toNative(tables[n])
+		if err != nil {
+			return fmt.Errorf("Failed to convert table %q to native: %v", v.TableName, err)
+		}
 	}
 
 	return nil

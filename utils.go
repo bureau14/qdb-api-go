@@ -209,7 +209,7 @@ func generateWriterDataTimestamp(n int) WriterData {
 	//            we're reusing the code that generates the index here.
 	idx := generateDefaultIndex(n)
 
-	return NewWriterDataTimestampFromTimeSlice(idx)
+	return NewWriterDataTimestamp(idx)
 }
 
 func generateWriterDataBlob(n int) WriterData {
