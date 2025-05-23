@@ -8,9 +8,9 @@ package qdb
 import "C"
 
 import (
-	"errors"
 	"fmt"
 	"time"
+	"unsafe"
 )
 
 type writerError struct {
@@ -25,25 +25,54 @@ func New(text string) error {
 	return &writerError{text}
 }
 
-// A single column's data within a WriterTable, representing values to be inserted as a single column into QuasarDB.
-// These objects are relatively cheap to copy, as all internal arrays are pointers.
-type WriterData struct {
-	ValueType TsValueType
+type WriterData interface {
+	// Possibly some methods, but often empty
+	valueType() TsValueType
+}
 
-	// int64 value array. Only set if ValueType is Int64
-	Int64Array []int64
+// Int64
+type WriterDataInt64 struct {
+	Values []int64
+}
 
-	// double value array. Only set if ValueType is Double
-	DoubleArray []float64
+func (wd WriterDataInt64) valueType() TsValueType {
+	return TsValueInt64
+}
 
-	// timestamp value array. Only set if ValueType is Timestamp
-	TimestampArray []C.qdb_timespec_t
+// Double
+type WriterDataDouble struct {
+	Values []float64
+}
 
-	// blob value array. Only set if ValueType is Blob
-	BlobArray [][]byte
+func (cd WriterDataDouble) valueType() TsValueType {
+	return TsValueDouble
+}
 
-	// string value array. Only set if ValueType is String
-	StringArray []string
+// Timestamp
+type WriterDataTimestamp struct {
+	Values []C.qdb_timespec_t
+}
+
+func (cd WriterDataTimestamp) valueType() TsValueType {
+	return TsValueTimestamp
+}
+
+// Blob
+type WriterDataBlob struct {
+	Values [][]byte
+}
+
+func (cd WriterDataBlob) valueType() TsValueType {
+	return TsValueBlob
+}
+
+// String
+type WriterDataString struct {
+	Values []string
+}
+
+func (cd WriterDataString) valueType() TsValueType {
+	return TsValueString
 }
 
 // Metadata we need to represent a single column.
@@ -93,50 +122,127 @@ type Writer struct {
 
 // Constructor for in64 data array
 func NewWriterDataInt64(xs []int64) WriterData {
-	return WriterData{ValueType: TsValueInt64, Int64Array: xs}
+	return WriterDataInt64{Values: xs}
 }
 
 // Constructor for double data array
 func NewWriterDataDouble(xs []float64) WriterData {
-	return WriterData{ValueType: TsValueDouble, DoubleArray: xs}
+	return WriterDataDouble{Values: xs}
 }
 
 // Constructor for timestamp data array
 func NewWriterDataTimestamp(xs []C.qdb_timespec_t) WriterData {
-	return WriterData{ValueType: TsValueTimestamp, TimestampArray: xs}
+	return WriterDataTimestamp{Values: xs}
 }
 
 // Constructor for timestamp data array
 func NewWriterDataTimestampFromTimeSlice(xs []time.Time) WriterData {
-	return WriterData{ValueType: TsValueTimestamp, TimestampArray: TimeSliceToQdbTimespec(xs)}
+	return NewWriterDataTimestamp(TimeSliceToQdbTimespec(xs))
 }
 
 // Constructor for blob data array
 func NewWriterDataBlob(xs [][]byte) WriterData {
-	return WriterData{ValueType: TsValueBlob, BlobArray: xs}
+	return WriterDataBlob{Values: xs}
 }
 
 // Constructor for string data array
 func NewWriterDataString(xs []string) WriterData {
-	return WriterData{ValueType: TsValueString, StringArray: xs}
+	return WriterDataString{Values: xs}
 }
 
-func (t WriterData) GetInt64Array() ([]int64, error) {
-	// This would be an internal error
-	if t.ValueType != TsValueInt64 {
-		return nil, errors.New(fmt.Sprintf("Not an int64 column type: %v", t.ValueType))
+func ifaceDataPtr(i interface{}) unsafe.Pointer {
+	// internal helper in your package (private, defined once)
+	type iface struct {
+		tab  unsafe.Pointer
+		data unsafe.Pointer
 	}
 
-	return t.Int64Array, nil
+	return (*iface)(unsafe.Pointer(&i)).data
 }
 
-func (t WriterData) GetDoubleArray() ([]float64, error) {
-	// This would be an internal error
-	if t.ValueType != TsValueDouble {
-		return nil, errors.New(fmt.Sprintf("Not a float64  column type: %v", t.ValueType))
+// GetInt64Array safely converts WriterData to *WriterDataInt64.
+//
+// Returns an error if data is not of type Int64.
+func GetInt64Array(x WriterData) (*WriterDataInt64, error) {
+	v, ok := x.(WriterDataInt64)
+	if !ok {
+		return nil, fmt.Errorf("GetInt64Array: type mismatch, expected WriterDataInt64, got %T", x)
 	}
+	return &v, nil
+}
 
-	return t.DoubleArray, nil
+// GetInt64ArrayUnsafe is an unsafe version of GetInt64Array. Undefined behavior occurs when
+// invoked on the incorrect type.
+func GetInt64ArrayUnsafe(x WriterData) *WriterDataInt64 {
+	return (*WriterDataInt64)(ifaceDataPtr(x))
+}
+
+// GetDoubleArray safely converts WriterData to *WriterDataDouble.
+//
+// Returns an error if data is not of type Double.
+func GetDoubleArray(x WriterData) (*WriterDataDouble, error) {
+	v, ok := x.(WriterDataDouble)
+	if !ok {
+		return nil, fmt.Errorf("GetDoubleArray: type mismatch, expected WriterDataDouble, got %T", x)
+	}
+	return &v, nil
+}
+
+// GetDoubleArrayUnsafe is an unsafe version of GetDoubleArray. Undefined behavior occurs when
+// invoked on the incorrect type.
+func GetDoubleArrayUnsafe(x WriterData) *WriterDataDouble {
+	return (*WriterDataDouble)(ifaceDataPtr(x))
+}
+
+// GetTimestampArray safely converts WriterData to *WriterDataTimestamp.
+//
+// Returns an error if data is not of type Timestamp.
+func GetTimestampArray(x WriterData) (*WriterDataTimestamp, error) {
+	v, ok := x.(WriterDataTimestamp)
+	if !ok {
+		return nil, fmt.Errorf("GetTimestampArray: type mismatch, expected WriterDataTimestamp, got %T", x)
+	}
+	return &v, nil
+}
+
+// GetTimestampArrayUnsafe is an unsafe version of GetTimestampArray. Undefined behavior occurs when
+// invoked on the incorrect type.
+func GetTimestampArrayUnsafe(x WriterData) *WriterDataTimestamp {
+	return (*WriterDataTimestamp)(ifaceDataPtr(x))
+}
+
+// GetStringArray safely converts WriterData to *WriterDataString.
+//
+// Returns an error if data is not of type String.
+func GetStringArray(x WriterData) (*WriterDataString, error) {
+	v, ok := x.(WriterDataString)
+	if !ok {
+		return nil, fmt.Errorf("GetStringArray: type mismatch, expected WriterDataString, got %T", x)
+	}
+	return &v, nil
+}
+
+// GetStringArrayUnsafe is an unsafe version of GetStringArray. Undefined behavior occurs when
+// invoked on the incorrect type.
+func GetStringArrayUnsafe(x WriterData) *WriterDataString {
+	return (*WriterDataString)(ifaceDataPtr(x))
+}
+
+// GetBlobArray safely converts WriterData to *WriterDataBlob.
+//
+// Returns an error if data is not of type Blob.
+func GetBlobArray(x WriterData) (*WriterDataBlob, error) {
+	v, ok := x.(WriterDataBlob)
+	if !ok {
+		return nil, fmt.Errorf("GetBlobArray: type mismatch, expected WriterDataBlob, got %T", x)
+	}
+	return &v, nil
+}
+
+// GetBlobArrayUnsafe is an unsafe version of GetBlobArray. Undefined behavior occurs when
+// invoked on the incorrect type.
+func GetBlobArrayUnsafe(x WriterData) *WriterDataBlob {
+	return (*WriterDataBlob)(ifaceDataPtr(x))
 }
 
 func NewWriterTable(t string, cols []WriterColumn) WriterTable {
@@ -176,25 +282,17 @@ func (t WriterTable) GetIndex() []C.qdb_timespec_t {
 // Sets data for a single column
 func (t *WriterTable) SetData(offset int, xs WriterData) error {
 	if len(t.columnInfoByOffset) <= offset {
-		return errors.New(fmt.Sprintf("Column offset out of range: %v", offset))
+		return fmt.Errorf("Column offset out of range: %v", offset)
 	}
 
 	col := t.columnInfoByOffset[offset]
-	if col.ColumnType.AsValueType() != xs.ValueType {
-		return errors.New(fmt.Sprintf("Column's expected value type does not match provided value type: column type (%v)'s value type %v != %v", col.ColumnType, col.ColumnType.AsValueType(), xs.ValueType))
+	if col.ColumnType.AsValueType() != xs.valueType() {
+		return fmt.Errorf("Column's expected value type does not match provided value type: column type (%v)'s value type %v != %v", col.ColumnType, col.ColumnType.AsValueType(), xs.valueType())
 	}
 
 	t.data[offset] = xs
 
 	return nil
-}
-
-func (t WriterTable) GetData(offset int) (WriterData, error) {
-	if offset >= len(t.data) {
-		return WriterData{}, errors.New(fmt.Sprintf("Column offset out of range: %v", offset))
-	}
-
-	return t.data[offset], nil
 }
 
 // Sets all all column data for a single table into the writer, assumes offsets of provided
@@ -209,7 +307,14 @@ func (t *WriterTable) SetDatas(xs []WriterData) error {
 	}
 
 	return nil
+}
 
+func (t WriterTable) GetData(offset int) (WriterData, error) {
+	if offset >= len(t.data) {
+		return nil, fmt.Errorf("Column offset out of range: %v", offset)
+	}
+
+	return t.data[offset], nil
 }
 
 // Returns new WriterOptions struct with default options set.
@@ -299,7 +404,7 @@ func (w *Writer) SetTable(t WriterTable) error {
 func (w *Writer) GetTable(name string) (WriterTable, error) {
 	t, ok := w.tables[name]
 	if !ok {
-		return WriterTable{}, errors.New(fmt.Sprintf("Table not found: %s", name))
+		return WriterTable{}, fmt.Errorf("Table not found: %s", name)
 	}
 
 	return t, nil
@@ -313,7 +418,7 @@ func (w *Writer) Length() int {
 // Pushes all tables to the server according to PushOptions.
 func (w *Writer) Push() error {
 	if w.Length() == 0 {
-		return errors.New("No tables to push")
+		return fmt.Errorf("No tables to push")
 	}
 
 	return nil
