@@ -239,11 +239,15 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.Nil(err, fmt.Sprintf("%v", err))
+	defer handle.Close()
+
 	// Create a new writer
 	writer := NewWriterWithDefaultOptions()
 	require.NotNil(writer)
 
 	// Push the writer
-	err := writer.Push()
+	err = writer.Push(handle)
 	assert.NotNil(err, "expect error when pushing an empty writer")
 }

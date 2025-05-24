@@ -30,7 +30,7 @@ type WriterData interface {
 	valueType() TsValueType
 
 	// Convert to native C type
-	toNative(out *C.qdb_exp_batch_push_column_t) error
+	toNative(h HandleType, out *C.qdb_exp_batch_push_column_t) error
 }
 
 // Int64
@@ -42,7 +42,7 @@ func (wd WriterDataInt64) valueType() TsValueType {
 	return TsValueInt64
 }
 
-func (wd WriterDataInt64) toNative(out *C.qdb_exp_batch_push_column_t) error {
+func (wd WriterDataInt64) toNative(_ HandleType, out *C.qdb_exp_batch_push_column_t) error {
 	out.data_type = C.qdb_ts_column_int64
 
 	// out.data is a union that are all pointers, so we can safely cast
@@ -67,7 +67,7 @@ func (wd WriterDataDouble) valueType() TsValueType {
 	return TsValueDouble
 }
 
-func (wd WriterDataDouble) toNative(out *C.qdb_exp_batch_push_column_t) error {
+func (wd WriterDataDouble) toNative(_ HandleType, out *C.qdb_exp_batch_push_column_t) error {
 	out.data_type = C.qdb_ts_column_double
 
 	// out.data is a union that are all pointers, so we can safely cast
@@ -92,7 +92,7 @@ func (cd WriterDataTimestamp) valueType() TsValueType {
 	return TsValueTimestamp
 }
 
-func (wd WriterDataTimestamp) toNative(out *C.qdb_exp_batch_push_column_t) error {
+func (wd WriterDataTimestamp) toNative(_ HandleType, out *C.qdb_exp_batch_push_column_t) error {
 	out.data_type = C.qdb_ts_column_timestamp
 
 	// out.data is a union that are all pointers, so we can safely cast
@@ -117,24 +117,55 @@ func (cd WriterDataBlob) valueType() TsValueType {
 	return TsValueBlob
 }
 
-func (wd WriterDataBlob) toNative(out *C.qdb_exp_batch_push_column_t) error {
+func (wd WriterDataBlob) toNative(h HandleType, out *C.qdb_exp_batch_push_column_t) error {
 	out.data_type = C.qdb_ts_column_blob
 
 	n := len(wd.Values)
-
 	if n == 0 {
-		return fmt.Errorf("Timestamp data is empty")
+		return fmt.Errorf("blob data is empty")
 	}
 
-	// Use native C allocation so that we can pass the pointer to the C API,
-	// and release it after the entrie push is done.
-	//
-	// This is *important*, otherwise we risk leaking memory, but it's also
-	// the only way we can pass the contents of the blob to the C API without
-	// copies.
-	_ = C.size_t(n) * C.size_t(unsafe.Sizeof(C.qdb_blob_t{}))
+	// size of one qdb_blob_t, and total bytes we need
+	elemSize := C.qdb_size_t(unsafe.Sizeof(C.qdb_blob_t{}))
+	total := C.qdb_size_t(n) * elemSize
 
-	// todo: complete
+	// Allocate memory through C, rather than Go, since we need the lifetime of this
+	// memory to extend beyond the Go function call.
+	//
+	// We need to allocate a contiguous array, and allocate it via QuasarDB’s allocator
+	// as it uses TBB (faster) and is auto-freed on session close.
+	//
+	// :NOTE: when you’re done with this buffer, call:
+	//
+	//    C.qdb_release(h.handle, basePtr)
+	//
+	// NOT C.free()
+	var basePtr unsafe.Pointer
+	errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
+	if errCode != C.qdb_e_ok {
+		return fmt.Errorf("qdb_alloc_buffer failed: %v", errCode)
+	}
+
+	// out.data is a union of pointers; store our qdb_blob_t* there
+	uPtr := (*unsafe.Pointer)(unsafe.Pointer(&out.data[0]))
+	*uPtr = basePtr
+
+	// fill each qdb_blob_t in the contiguous buffer
+	for i, v := range wd.Values {
+		elem := (*C.qdb_blob_t)(unsafe.Pointer(
+			uintptr(basePtr) + uintptr(i)*uintptr(elemSize),
+		))
+
+		if len(v) > 0 {
+			// zero-copy into Go heap
+			elem.content = unsafe.Pointer(&v[0])
+			elem.content_length = C.qdb_size_t(len(v))
+		} else {
+			// explicit zero, since allocator doesn't guarantee zeroed memory
+			elem.content = nil
+			elem.content_length = 0
+		}
+	}
 
 	return nil
 }
@@ -148,24 +179,54 @@ func (cd WriterDataString) valueType() TsValueType {
 	return TsValueString
 }
 
-func (wd WriterDataString) toNative(out *C.qdb_exp_batch_push_column_t) error {
-	out.data_type = C.qdb_ts_column_blob
+func (wd WriterDataString) toNative(h HandleType, out *C.qdb_exp_batch_push_column_t) error {
+	// Tell the C API we’re pushing strings
+	out.data_type = C.qdb_ts_column_string
 
 	n := len(wd.Values)
-
 	if n == 0 {
-		return fmt.Errorf("String data is empty")
+		return fmt.Errorf("string data is empty")
 	}
 
-	// Use native C allocation so that we can pass the pointer to the C API,
-	// and release it after the entrie push is done.
-	//
-	// This is *important*, otherwise we risk leaking memory, but it's also
-	// the only way we can pass the contents of the blob to the C API without
-	// copies.
-	_ = C.size_t(n) * C.size_t(unsafe.Sizeof(C.qdb_string_t{}))
+	// Compute total size for n qdb_string_t structs
+	elemSize := C.size_t(unsafe.Sizeof(C.qdb_string_t{}))
+	total := C.size_t(n) * elemSize
 
-	// todo: complete
+	// Allocate memory through C, rather than Go, since we need the lifetime of this
+	// memory to extend beyond the Go function call.
+	//
+	// We need to allocate a contiguous array, and allocate it via QuasarDB’s allocator
+	// as it uses TBB (faster) and is auto-freed on session close.
+	//
+	// :NOTE: when you’re done with this buffer, call:
+	//
+	//    C.qdb_release(h.handle, basePtr)
+	//
+	// NOT C.free()
+	var basePtr unsafe.Pointer
+	errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
+	if errCode != C.qdb_e_ok {
+		return fmt.Errorf("qdb_alloc_buffer failed: %v", errCode)
+	}
+
+	// Fill each qdb_string_t at basePtr + i*elemSize
+	for i, s := range wd.Values {
+		elem := (*C.qdb_string_t)(unsafe.Pointer(
+			uintptr(basePtr) + uintptr(i)*uintptr(elemSize),
+		))
+
+		if len(s) > 0 {
+			// Zero-copy: point directly into Go string data.
+			// Go 1.23+ provides unsafe.StringData for this.
+			strPtr := unsafe.StringData(s)
+			elem.data = (*C.char)(unsafe.Pointer(strPtr))
+			elem.length = C.size_t(len(s))
+		} else {
+			// Handle empty string explicitly
+			elem.data = nil
+			elem.length = 0
+		}
+	}
 
 	return nil
 }
@@ -383,7 +444,7 @@ func (t WriterTable) GetIndex() []time.Time {
 
 // toNativeTableData converts the "table data" part of the WriterTable to native C type,
 // i.e., it fills the C struct `qdb_exp_batch_push_table_data_t` with the data from the WriterTable.
-func (t WriterTable) toNativeTableData(out *C.qdb_exp_batch_push_table_data_t) error {
+func (t WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_table_data_t) error {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
 	out.column_count = C.qdb_size_t(len(t.data))
@@ -405,7 +466,7 @@ func (t WriterTable) toNativeTableData(out *C.qdb_exp_batch_push_table_data_t) e
 
 	// Convert each WriterData to its native counterpart.
 	for i := 0; i < columnCount; i++ {
-		t.data[i].toNative(&nativeColumns[i])
+		t.data[i].toNative(h, &nativeColumns[i])
 	}
 
 	out.columns = (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(&nativeColumns[0]))
@@ -416,13 +477,13 @@ func (t WriterTable) toNativeTableData(out *C.qdb_exp_batch_push_table_data_t) e
 // toNative converts WriterTable to native C type and avoids copies where possible.
 // It is the caller's responsibility to ensure that the WriterTable lives at least
 // as long as the native C structure.
-func (t WriterTable) toNative(out *C.qdb_exp_batch_push_table_t) error {
+func (t WriterTable) toNative(h HandleType, out *C.qdb_exp_batch_push_table_t) error {
 
 	// Directly reference the internal Go string without copying (unsafe!).
 	// Go string is (pointer, length), compatible with a C char* pointer.
 	out.name = (*C.char)(unsafe.Pointer(unsafe.StringData(t.TableName)))
 
-	err := t.toNativeTableData(&out.data)
+	err := t.toNativeTableData(h, &out.data)
 	if err != nil {
 		return err
 	}
@@ -581,7 +642,7 @@ func (w *Writer) Length() int {
 }
 
 // Pushes all tables to the server according to PushOptions.
-func (w *Writer) Push() error {
+func (w *Writer) Push(h HandleType) error {
 	if w.Length() == 0 {
 		return fmt.Errorf("No tables to push")
 	}
@@ -590,7 +651,7 @@ func (w *Writer) Push() error {
 	n := 0
 
 	for _, v := range w.tables {
-		err := v.toNative(tables[n])
+		err := v.toNative(h, tables[n])
 		if err != nil {
 			return fmt.Errorf("Failed to convert table %q to native: %v", v.TableName, err)
 		}
