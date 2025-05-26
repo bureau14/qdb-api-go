@@ -31,6 +31,9 @@ type WriterData interface {
 
 	// Convert to native C type
 	toNative(h HandleType, out *C.qdb_exp_batch_push_column_t) error
+
+	// Release any C allocated buffers created by toNative
+	releaseNative(h HandleType, col *C.qdb_exp_batch_push_column_t) error
 }
 
 // Int64
@@ -55,6 +58,11 @@ func (wd WriterDataInt64) toNative(_ HandleType, out *C.qdb_exp_batch_push_colum
 
 	*ptr = unsafe.Pointer(&wd.Values[0])
 
+	return nil
+}
+
+func (wd WriterDataInt64) releaseNative(_ HandleType, _ *C.qdb_exp_batch_push_column_t) error {
+	// no C-managed memory allocated
 	return nil
 }
 
@@ -83,6 +91,11 @@ func (wd WriterDataDouble) toNative(_ HandleType, out *C.qdb_exp_batch_push_colu
 	return nil
 }
 
+func (wd WriterDataDouble) releaseNative(_ HandleType, _ *C.qdb_exp_batch_push_column_t) error {
+	// no C-managed memory allocated
+	return nil
+}
+
 // Timestamp
 type WriterDataTimestamp struct {
 	Values []C.qdb_timespec_t
@@ -105,6 +118,11 @@ func (wd WriterDataTimestamp) toNative(_ HandleType, out *C.qdb_exp_batch_push_c
 
 	*ptr = unsafe.Pointer(&wd.Values[0])
 
+	return nil
+}
+
+func (wd WriterDataTimestamp) releaseNative(_ HandleType, _ *C.qdb_exp_batch_push_column_t) error {
+	// no C-managed memory allocated
 	return nil
 }
 
@@ -170,6 +188,15 @@ func (wd WriterDataBlob) toNative(h HandleType, out *C.qdb_exp_batch_push_column
 	return nil
 }
 
+func (wd WriterDataBlob) releaseNative(h HandleType, col *C.qdb_exp_batch_push_column_t) error {
+	ptr := (*unsafe.Pointer)(unsafe.Pointer(&col.data[0]))
+	if *ptr != nil {
+		C.qdb_release(h.handle, *ptr)
+		*ptr = nil
+	}
+	return nil
+}
+
 // String
 type WriterDataString struct {
 	Values []string
@@ -228,6 +255,15 @@ func (wd WriterDataString) toNative(h HandleType, out *C.qdb_exp_batch_push_colu
 		}
 	}
 
+	return nil
+}
+
+func (wd WriterDataString) releaseNative(h HandleType, col *C.qdb_exp_batch_push_column_t) error {
+	ptr := (*unsafe.Pointer)(unsafe.Pointer(&col.data[0]))
+	if *ptr != nil {
+		C.qdb_release(h.handle, *ptr)
+		*ptr = nil
+	}
 	return nil
 }
 
@@ -516,6 +552,30 @@ func (t *WriterTable) toNative(h HandleType, out *C.qdb_exp_batch_push_table_t) 
 	return nil
 }
 
+func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_table_t) error {
+	if tbl == nil {
+		panic("WriterTable.releaseNative: nil table pointer")
+	}
+
+	columnCount := len(t.data)
+	if columnCount == 0 || tbl.data.columns == nil {
+		panic("WriterTable.releaseNative: inconsistent state")
+	}
+
+	elemSize := C.qdb_size_t(unsafe.Sizeof(C.qdb_exp_batch_push_column_t{}))
+	basePtr := unsafe.Pointer(tbl.data.columns)
+	for i := 0; i < columnCount; i++ {
+		col := (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(
+			uintptr(basePtr) + uintptr(i)*uintptr(elemSize)))
+		t.data[i].releaseNative(h, col)
+	}
+
+	C.qdb_release(h.handle, basePtr)
+	tbl.data.columns = nil
+
+	return nil
+}
+
 // Sets data for a single column
 func (t *WriterTable) SetData(offset int, xs WriterData) error {
 	if len(t.columnInfoByOffset) <= offset {
@@ -665,6 +725,15 @@ func (w *Writer) Push(h HandleType) error {
 		err := v.toNative(h, tables[n])
 		if err != nil {
 			return fmt.Errorf("Failed to convert table %q to native: %v", v.TableName, err)
+		}
+	}
+
+	// Todo: invoke actual push function
+
+	for _, v := range w.tables {
+		err := v.releaseNative(h, tables[n])
+		if err != nil {
+			return fmt.Errorf("Failed to release memory for table %q: %v", v.TableName, err)
 		}
 	}
 
