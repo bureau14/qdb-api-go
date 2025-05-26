@@ -460,16 +460,27 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 
 	out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
 
-	// Allocate native columns array.
+	// Allocate native columns array using the QuasarDB allocator so the
+	// memory remains valid after this function returns.
 	columnCount := len(t.data)
-	nativeColumns := make([]C.qdb_exp_batch_push_column_t, columnCount)
+	elemSize := C.qdb_size_t(unsafe.Sizeof(C.qdb_exp_batch_push_column_t{}))
+	total := C.qdb_size_t(columnCount) * elemSize
+
+	var basePtr unsafe.Pointer
+	errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
+	if errCode != C.qdb_e_ok {
+		return fmt.Errorf("qdb_alloc_buffer failed: %v", errCode)
+	}
 
 	// Convert each WriterData to its native counterpart.
 	for i := 0; i < columnCount; i++ {
-		t.data[i].toNative(h, &nativeColumns[i])
+		elem := (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(
+			uintptr(basePtr) + uintptr(i)*uintptr(elemSize)))
+		t.data[i].toNative(h, elem)
 	}
 
-	out.columns = (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(&nativeColumns[0]))
+	// Store the pointer to the first element.
+	out.columns = (*C.qdb_exp_batch_push_column_t)(basePtr)
 
 	return nil
 }
