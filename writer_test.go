@@ -9,27 +9,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// fixture for creating a default test WriterTable
+func newTestWriterTable(t *testing.T, numColumns int) WriterTable {
+	t.Helper()
+
+	tableName := generateDefaultAlias()
+	columns := generateWriterColumns(numColumns)
+
+	writerTable := NewWriterTable(tableName, columns)
+	require.NotNil(t, writerTable)
+
+	return writerTable
+}
+
+// fixture for Writer creation with default options
+func newTestWriter(t *testing.T) Writer {
+	t.Helper()
+
+	writer := NewWriterWithDefaultOptions()
+	require.NotNil(t, writer)
+
+	return writer
+}
+
 func TestWriterTableCreateNew(t *testing.T) {
 	assert := assert.New(t)
 
-	tableName := generateDefaultAlias()
-	columns := generateWriterColumns(1)
+	writerTable := newTestWriterTable(t, 1)
 
-	writerTable := NewWriterTable(tableName, columns)
-
-	if assert.NotNil(writerTable) {
-		assert.Equal(tableName, writerTable.GetName(), "table names should be equal")
-	}
+	assert.Equal(writerTable.GetName(), writerTable.TableName, "table names should match")
 }
 
 func TestWriterTableCanSetIndex(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
-	tableName := generateDefaultAlias()
-	columns := generateWriterColumns(1)
-
-	writerTable := NewWriterTable(tableName, columns)
+	writerTable := newTestWriterTable(t, 1)
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
@@ -74,19 +89,13 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 }
 
 func TestWriterOptionsCanCreateNew(t *testing.T) {
-	// Validate some default assumptions
 	assert := assert.New(t)
+
 	options := NewWriterOptions()
 
-	// Transactional push by default
-	assert.Equal(options.GetPushMode(), WriterPushModeTransactional)
-
-	// By default deduplication is disabled
-	if assert.False(options.IsDropDuplicatesEnabled()) {
-		// And then we also expect an empty array of to-deduplicate columns
-		cols := options.GetDropDuplicateColumns()
-		assert.Empty(cols)
-	}
+	assert.Equal(WriterPushModeTransactional, options.GetPushMode())
+	assert.False(options.IsDropDuplicatesEnabled())
+	assert.Empty(options.GetDropDuplicateColumns())
 }
 
 func TestWriterOptionsCanSetProperties(t *testing.T) {
@@ -144,23 +153,19 @@ func TestWriterCanCreateWithOptions(t *testing.T) {
 // Tests successful addition of a table to the writer
 func TestWriterCanAddTable(t *testing.T) {
 	assert := assert.New(t)
-	require := require.New(t)
 
 	// Create a new writer
-	writer := NewWriterWithDefaultOptions()
-	require.NotNil(writer)
+	writer := newTestWriter(t)
 
 	// Create a new table
-	tableName := generateDefaultAlias()
-	columns := generateWriterColumns(8)
-	writerTable := NewWriterTable(tableName, columns)
+	writerTable := newTestWriterTable(t, 8)
 
 	// Add the table to the writer
 	err := writer.SetTable(writerTable)
 	if assert.Nil(err) {
 		assert.Equal(writer.Length(), 1, "expect one table in the writer")
 
-		writerTable_, err := writer.GetTable(tableName)
+		writerTable_, err := writer.GetTable(writerTable.GetName())
 
 		if assert.Nil(err) {
 			assert.Equal(writerTable, writerTable_, "expect tables to be identical")
@@ -171,15 +176,12 @@ func TestWriterCanAddTable(t *testing.T) {
 // Tests that adding a table with the same name twice returns an error
 func TestWriterCannotAddTableTwice(t *testing.T) {
 	assert := assert.New(t)
-	require := require.New(t)
 
 	// Create a new writer
-	writer := NewWriterWithDefaultOptions()
-	require.NotNil(writer)
+	writer := newTestWriter(t)
 
 	// Create a new table
-	tableName := generateDefaultAlias()
-	writerTable := NewWriterTable(tableName, generateWriterColumns(8))
+	writerTable := newTestWriterTable(t, 8)
 
 	// Add the table to the writer
 	err := writer.SetTable(writerTable)
@@ -194,11 +196,9 @@ func TestWriterCannotAddTableTwice(t *testing.T) {
 // Tests that adding a table with the same name twice returns an error
 func TestWriterReturnsErrorIfTableNotFound(t *testing.T) {
 	assert := assert.New(t)
-	require := require.New(t)
 
 	// Create a new writer
-	writer := NewWriterWithDefaultOptions()
-	require.NotNil(writer)
+	writer := newTestWriter(t)
 
 	// Create a new table
 	tableName := generateDefaultAlias()
@@ -211,18 +211,11 @@ func TestWriterCanAddMultipleTables(t *testing.T) {
 	require := require.New(t)
 
 	// Create a new writer
-	writer := NewWriterWithDefaultOptions()
-	require.NotNil(writer)
+	writer := newTestWriter(t)
 
-	// Create a new table
-	tableName1 := generateDefaultAlias()
-	tableName2 := generateDefaultAlias()
-
-	columns1 := generateWriterColumns(8)
-	columns2 := generateWriterColumns(8)
-
-	writerTable1 := NewWriterTable(tableName1, columns1)
-	writerTable2 := NewWriterTable(tableName2, columns2)
+	// Create two new tables to compare
+	writerTable1 := newTestWriterTable(t, 8)
+	writerTable2 := newTestWriterTable(t, 8)
 
 	// Add the first table to the writer
 	err := writer.SetTable(writerTable1)
@@ -244,8 +237,7 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 	defer handle.Close()
 
 	// Create a new writer
-	writer := NewWriterWithDefaultOptions()
-	require.NotNil(writer)
+	writer := newTestWriter(t)
 
 	// Push the writer
 	err = writer.Push(handle)
