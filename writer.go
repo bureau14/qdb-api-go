@@ -418,7 +418,7 @@ func NewWriterTable(t string, cols []WriterColumn) WriterTable {
 	return WriterTable{t, -1, columnInfoByOffset, columnOffsetByName, nil, data}
 }
 
-func (t WriterTable) GetName() string {
+func (t *WriterTable) GetName() string {
 	return t.TableName
 }
 
@@ -434,17 +434,17 @@ func (t *WriterTable) SetIndex(idx []time.Time) error {
 	return t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
 }
 
-func (t WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
+func (t *WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
 	return t.idx
 }
 
-func (t WriterTable) GetIndex() []time.Time {
+func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
 
 // toNativeTableData converts the "table data" part of the WriterTable to native C type,
 // i.e., it fills the C struct `qdb_exp_batch_push_table_data_t` with the data from the WriterTable.
-func (t WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_table_data_t) error {
+func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_table_data_t) error {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
 	out.column_count = C.qdb_size_t(len(t.data))
@@ -477,7 +477,7 @@ func (t WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_t
 // toNative converts WriterTable to native C type and avoids copies where possible.
 // It is the caller's responsibility to ensure that the WriterTable lives at least
 // as long as the native C structure.
-func (t WriterTable) toNative(h HandleType, out *C.qdb_exp_batch_push_table_t) error {
+func (t *WriterTable) toNative(h HandleType, out *C.qdb_exp_batch_push_table_t) error {
 
 	// Directly reference the internal Go string without copying (unsafe!).
 	// Go string is (pointer, length), compatible with a C char* pointer.
@@ -535,7 +535,7 @@ func (t *WriterTable) SetDatas(xs []WriterData) error {
 	return nil
 }
 
-func (t WriterTable) GetData(offset int) (WriterData, error) {
+func (t *WriterTable) GetData(offset int) (WriterData, error) {
 	if offset >= len(t.data) {
 		return nil, fmt.Errorf("Column offset out of range: %v", offset)
 	}
@@ -609,7 +609,7 @@ func NewWriterWithDefaultOptions() Writer {
 }
 
 // Returns the writer's options
-func (w Writer) GetOptions() WriterOptions {
+func (w *Writer) GetOptions() WriterOptions {
 	return w.options
 }
 
