@@ -41,7 +41,7 @@ then
     for URL in "${URLS[@]}"
     do
         echo "Checking: ${URL}..."
-        curl -s --head --fail "${URL}" > /dev/null || die "Url not found: ${URL}"
+        curl -s -L --head --fail "${URL}" > /dev/null || die "Url not found: ${URL}"
     done
 
     echo "Extracting each tarball into qdb/ subdirectory"
