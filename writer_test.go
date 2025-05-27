@@ -296,3 +296,25 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 	err = writer.Push(handle)
 	assert.NotNil(err, "expect error when pushing an empty writer")
 }
+
+// Test that the batch writer can push into a table without issues.
+func TestWriterCanPushSingleTable(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.Nil(err, fmt.Sprintf("%v", err))
+	defer handle.Close()
+
+	// Create a new writer
+	writer := newTestWriter(t)
+
+	// Create a new table
+	writerTable := newTestWriterTable(t, 8)
+
+	writer.SetTable(writerTable)
+
+	// Push the writer
+	err = writer.Push(handle)
+	assert.Nil(err, "Unable to push writer after setting table")
+}
