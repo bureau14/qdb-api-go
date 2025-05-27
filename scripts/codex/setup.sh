@@ -62,7 +62,6 @@ else
     echo "${QDB_PATH} already exists, skip downloading dependencies"
 fi
 
-
 ##
 # Codex doesn't have network connectivity after the initial container is built, and
 # as such all our go dependencies should be downloaded as part of the setup process.
@@ -71,3 +70,11 @@ fi
 echo "Running build to download Go artifacts"
 
 bash scripts/teamcity/10.build.sh
+
+##
+# Codex *may* also not check out submodules. To make sure these are checked out, and since
+# this is the last time we're able to use the internet, let's make sure they are checked
+# out.
+echo "Checking out git submodules"
+
+git submodule update --init --recursive
