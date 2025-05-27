@@ -72,6 +72,11 @@ echo "Running build to download Go artifacts"
 bash scripts/teamcity/10.build.sh
 
 ##
+# Maybe test dependencies are not yet downloaded. Make ultra super sure this is the
+# case by executing `go mod download`.
+go mod download
+
+##
 # Codex *may* also not check out submodules. To make sure these are checked out, and since
 # this is the last time we're able to use the internet, let's make sure they are checked
 # out.
