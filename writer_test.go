@@ -306,11 +306,28 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	require.Nil(err, fmt.Sprintf("%v", err))
 	defer handle.Close()
 
-	// Create a new writer
-	writer := newTestWriter(t)
+	// First generate the table schema + layout we will work with
+	columns := generateWriterColumnsOfAllTypes()
+	idx := generateDefaultIndex(1024)
+	datas := generateWriterDatas(len(idx), columns)
 
-	// Create a new table
-	writerTable := newTestWriterTable(t, 8)
+	// Creating the table automatically assign it a name
+	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
+	require.Nil(err, fmt.Sprintf("%v", err))
+
+	// Now create a WriterTable structure and fill it
+	writerTable := NewWriterTable(table.alias, columns)
+	require.NotNil(writerTable)
+
+	err = writerTable.SetIndex(idx)
+	require.Nil(err, "Unable to set index")
+
+	err = writerTable.SetDatas(datas)
+	require.Nil(err, "Unable to set data")
+
+	// And actually push the data by creating a writer, adding the table to it
+	// and invoking Push().
+	writer := newTestWriter(t)
 
 	writer.SetTable(writerTable)
 
