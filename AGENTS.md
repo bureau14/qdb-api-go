@@ -15,7 +15,8 @@ This Agents.md file provides comprehensive guidance for OpenAI Codex and other A
 
 
 ### Test setup
-Before running tests, from the git project's root, always execute:
+
+From the project root execute:
 
 ```bash
 bash scripts/tests/setup/start-services.sh
@@ -23,14 +24,14 @@ bash scripts/tests/setup/start-services.sh
 
 ### Running tests
 
-For running tests, reuse our teamcity test script:
+Reuse our TeamCity test script:
 
 ```bash
 bash scripts/teamcity/20.test.sh
 ```
 
 ### Tests teardown
-After running tests, from the git project's root, always execute (even in case of test failure):
+From the project root execute:
 
 ```bash
 bash scripts/tests/setup/stop-services.sh
