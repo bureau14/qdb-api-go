@@ -61,3 +61,13 @@ then
 else
     echo "${QDB_PATH} already exists, skip downloading dependencies"
 fi
+
+
+##
+# Codex doesn't have network connectivity after the initial container is built, and
+# as such all our go dependencies should be downloaded as part of the setup process.
+#
+# The easiest way to achieve this is just to run our teamcity's build script.
+echo "Running build to download Go artifacts"
+
+bash scripts/teamcity/10.build.sh
