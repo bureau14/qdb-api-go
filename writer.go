@@ -160,8 +160,8 @@ func (wd WriterDataBlob) toNative(h HandleType, out *C.qdb_exp_batch_push_column
 	// NOT C.free()
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
-	if errCode != C.qdb_e_ok {
-		return fmt.Errorf("qdb_alloc_buffer failed: %v", errCode)
+	if err := makeErrorOrNil(errCode); err != nil {
+		return err
 	}
 
 	// out.data is a union of pointers; store our qdb_blob_t* there
@@ -232,8 +232,8 @@ func (wd WriterDataString) toNative(h HandleType, out *C.qdb_exp_batch_push_colu
 	// NOT C.free()
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
-	if errCode != C.qdb_e_ok {
-		return fmt.Errorf("qdb_alloc_buffer failed: %v", errCode)
+	if err := makeErrorOrNil(errCode); err != nil {
+		return err
 	}
 
 	// Fill each qdb_string_t at basePtr + i*elemSize
@@ -301,10 +301,19 @@ const (
 	WriterPushModeAsync         WriterPushMode = C.qdb_exp_batch_push_async
 )
 
+type WriterDeduplicationMode C.qdb_exp_batch_deduplication_mode_t
+
+const (
+	WriterDeduplicationModeDisabled WriterDeduplicationMode = C.qdb_exp_batch_deduplication_mode_disabled
+	WriterDeduplicationModeDrop     WriterDeduplicationMode = C.qdb_exp_batch_deduplication_mode_drop
+	WriterDeduplicationModeUpsert   WriterDeduplicationMode = C.qdb_exp_batch_deduplication_mode_upsert
+)
+
 type WriterOptions struct {
 	pushMode             WriterPushMode
 	dropDuplicates       bool
 	dropDuplicateColumns []string
+	dedupMode            WriterDeduplicationMode
 }
 
 type Writer struct {
@@ -504,8 +513,8 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
-	if errCode != C.qdb_e_ok {
-		return fmt.Errorf("qdb_alloc_buffer failed: %v", errCode)
+	if err := makeErrorOrNil(errCode); err != nil {
+		return err
 	}
 
 	// Convert each WriterData to its native counterpart.
@@ -524,7 +533,7 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 // toNative converts WriterTable to native C type and avoids copies where possible.
 // It is the caller's responsibility to ensure that the WriterTable lives at least
 // as long as the native C structure.
-func (t *WriterTable) toNative(h HandleType, out *C.qdb_exp_batch_push_table_t) error {
+func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) error {
 
 	// Directly reference the internal Go string without copying (unsafe!).
 	// Go string is (pointer, length), compatible with a C char* pointer.
@@ -543,8 +552,37 @@ func (t *WriterTable) toNative(h HandleType, out *C.qdb_exp_batch_push_table_t) 
 	out.truncate_ranges = nil
 	out.truncate_range_count = 0
 
-	// Deduplication -- to-do / later
-	out.deduplication_mode = C.qdb_exp_batch_deduplication_mode_t(C.qdb_exp_batch_deduplication_mode_disabled)
+	// Deduplication parameters
+	out.deduplication_mode = C.qdb_exp_batch_deduplication_mode_t(opts.dedupMode)
+
+	// Upsert mode requires explicit columns so QuasarDB knows which columns
+	// are compared for duplicates.
+	if opts.dedupMode == WriterDeduplicationModeUpsert && len(opts.dropDuplicateColumns) == 0 {
+		return fmt.Errorf("upsert deduplication mode requires drop duplicate columns to be set")
+	}
+
+	if len(opts.dropDuplicateColumns) > 0 {
+		count := len(opts.dropDuplicateColumns)
+		elemSize := C.qdb_size_t(unsafe.Sizeof((*C.char)(nil)))
+		total := C.qdb_size_t(count) * elemSize
+
+		var basePtr unsafe.Pointer
+		errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
+		if err := makeErrorOrNil(errCode); err != nil {
+			return err
+		}
+
+		slice := (*[1 << 30]*C.char)(basePtr)[:count:count]
+		for i, c := range opts.dropDuplicateColumns {
+			slice[i] = (*C.char)(unsafe.Pointer(unsafe.StringData(c)))
+		}
+
+		out.where_duplicate = (**C.char)(basePtr)
+		out.where_duplicate_count = C.qdb_size_t(count)
+	} else {
+		out.where_duplicate = nil
+		out.where_duplicate_count = 0
+	}
 
 	// Never automatically create tables
 	out.creation = C.qdb_exp_batch_creation_mode_t(C.qdb_exp_batch_dont_create)
@@ -572,6 +610,11 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 
 	C.qdb_release(h.handle, basePtr)
 	tbl.data.columns = nil
+
+	if tbl.where_duplicate != nil {
+		C.qdb_release(h.handle, unsafe.Pointer(tbl.where_duplicate))
+		tbl.where_duplicate = nil
+	}
 
 	return nil
 }
@@ -616,12 +659,22 @@ func (t *WriterTable) GetData(offset int) (WriterData, error) {
 
 // Returns new WriterOptions struct with default options set.
 func NewWriterOptions() WriterOptions {
-	return WriterOptions{WriterPushModeTransactional, false, []string{}}
+	return WriterOptions{
+		pushMode:             WriterPushModeTransactional,
+		dropDuplicates:       false,
+		dropDuplicateColumns: []string{},
+		dedupMode:            WriterDeduplicationModeDisabled,
+	}
 }
 
 // Returns the currently set push mode
 func (options WriterOptions) GetPushMode() WriterPushMode {
 	return options.pushMode
+}
+
+// Returns the deduplication mode currently set.
+func (options WriterOptions) GetDeduplicationMode() WriterDeduplicationMode {
+	return options.dedupMode
 }
 
 // Returns true if deduplication is enabled
@@ -632,6 +685,10 @@ func (options WriterOptions) IsDropDuplicatesEnabled() bool {
 // Enables deduplication based on all columns
 func (options WriterOptions) EnableDropDuplicates() WriterOptions {
 	options.dropDuplicates = true
+	if options.dedupMode == WriterDeduplicationModeDisabled {
+		// Dropping duplicates causes the least overhead when enabled.
+		options.dedupMode = WriterDeduplicationModeDrop
+	}
 	return options
 }
 
@@ -639,6 +696,10 @@ func (options WriterOptions) EnableDropDuplicates() WriterOptions {
 func (options WriterOptions) EnableDropDuplicatesOn(columns []string) WriterOptions {
 	options.dropDuplicates = true
 	options.dropDuplicateColumns = columns
+	if options.dedupMode == WriterDeduplicationModeDisabled {
+		// Default deduplication mode when enabling is to drop duplicates.
+		options.dedupMode = WriterDeduplicationModeDrop
+	}
 	return options
 }
 
@@ -651,6 +712,15 @@ func (options WriterOptions) GetDropDuplicateColumns() []string {
 // Sets the push mode to the desired push mode
 func (options WriterOptions) WithPushMode(mode WriterPushMode) WriterOptions {
 	options.pushMode = mode
+	return options
+}
+
+// WithDeduplicationMode selects the deduplication behaviour. Upsert mode only
+// becomes valid when specific columns are supplied; this is validated during
+// native conversion.
+func (options WriterOptions) WithDeduplicationMode(mode WriterDeduplicationMode) WriterOptions {
+	options.dedupMode = mode
+	options.dropDuplicates = mode != WriterDeduplicationModeDisabled
 	return options
 }
 
@@ -687,9 +757,17 @@ func (w *Writer) GetOptions() WriterOptions {
 // Sets the data of a table. Returns error if table already exists.
 func (w *Writer) SetTable(t WriterTable) error {
 	// Check if the table already exists
-	_, exists := w.tables[t.TableName]
-	if exists {
+	if _, exists := w.tables[t.TableName]; exists {
 		return fmt.Errorf("table %q already exists", t.TableName)
+	}
+
+	// Ensure schema consistency with previously added tables by comparing to
+	// the first table. If a=b and a=c, then b=c.
+	for _, existing := range w.tables {
+		if !writerTableSchemasEqual(existing, t) {
+			return fmt.Errorf("table %q schema differs from existing table %q", t.TableName, existing.TableName)
+		}
+		break
 	}
 
 	w.tables[t.TableName] = t
@@ -718,24 +796,46 @@ func (w *Writer) Push(h HandleType) error {
 		return fmt.Errorf("No tables to push")
 	}
 
-	tables := make([]*C.qdb_exp_batch_push_table_t, w.Length())
-	n := 0
+	tbls := make([]C.qdb_exp_batch_push_table_t, w.Length())
+	writerTables := make([]WriterTable, w.Length())
+	i := 0
 
 	for _, v := range w.tables {
-		err := v.toNative(h, tables[n])
-		if err != nil {
+		writerTables[i] = v
+		if err := v.toNative(h, w.options, &tbls[i]); err != nil {
+			for j := 0; j < i; j++ {
+				writerTables[j].releaseNative(h, &tbls[j])
+			}
 			return fmt.Errorf("Failed to convert table %q to native: %v", v.TableName, err)
 		}
+		i++
 	}
 
-	// Todo: invoke actual push function
+	var tableSchemas **C.qdb_exp_batch_push_table_schema_t
+	errCode := C.qdb_exp_batch_push(h.handle,
+		C.qdb_exp_batch_push_mode_t(w.options.pushMode),
+		(*C.qdb_exp_batch_push_table_t)(unsafe.Pointer(&tbls[0])),
+		tableSchemas,
+		C.qdb_size_t(len(tbls)))
+	err := makeErrorOrNil(errCode)
 
-	for _, v := range w.tables {
-		err := v.releaseNative(h, tables[n])
-		if err != nil {
-			return fmt.Errorf("Failed to release memory for table %q: %v", v.TableName, err)
+	for idx, tbl := range writerTables {
+		tbl.releaseNative(h, &tbls[idx])
+	}
+
+	return err
+}
+
+// writerTableSchemasEqual returns true when both tables have the same column
+// names and types in identical order.
+func writerTableSchemasEqual(a, b WriterTable) bool {
+	if len(a.columnInfoByOffset) != len(b.columnInfoByOffset) {
+		return false
+	}
+	for i := range a.columnInfoByOffset {
+		if a.columnInfoByOffset[i] != b.columnInfoByOffset[i] {
+			return false
 		}
 	}
-
-	return nil
+	return true
 }

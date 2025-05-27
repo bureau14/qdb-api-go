@@ -96,6 +96,7 @@ func TestWriterOptionsCanCreateNew(t *testing.T) {
 	assert.Equal(WriterPushModeTransactional, options.GetPushMode())
 	assert.False(options.IsDropDuplicatesEnabled())
 	assert.Empty(options.GetDropDuplicateColumns())
+	assert.Equal(WriterDeduplicationModeDisabled, options.GetDeduplicationMode())
 }
 
 func TestWriterOptionsCanSetProperties(t *testing.T) {
@@ -128,6 +129,13 @@ func TestWriterOptionsCanSetProperties(t *testing.T) {
 		cols_ := options.GetDropDuplicateColumns()
 		assert.Equal(cols_, cols)
 	}
+
+	// Verify that deduplication mode defaults to drop when enabled
+	assert.Equal(WriterDeduplicationModeDrop, options.GetDeduplicationMode())
+
+	// Setting deduplication mode explicitly to upsert
+	options = options.WithDeduplicationMode(WriterDeduplicationModeUpsert)
+	assert.Equal(WriterDeduplicationModeUpsert, options.GetDeduplicationMode())
 }
 
 func TestWriterCanCreateNew(t *testing.T) {
@@ -148,6 +156,28 @@ func TestWriterCanCreateWithOptions(t *testing.T) {
 
 	// Validate that the writer is not nil
 	assert.NotNil(writer)
+}
+
+func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.Nil(err, fmt.Sprintf("%v", err))
+	defer handle.Close()
+
+	// Writer with upsert mode but no deduplication columns
+	opts := NewWriterOptions().WithDeduplicationMode(WriterDeduplicationModeUpsert)
+	writer := NewWriter(opts)
+
+	tbl := newTestWriterTable(t, 1)
+	require.Nil(tbl.SetIndex(generateDefaultIndex(1)))
+	require.Nil(tbl.SetDatas(generateWriterDatas(1, tbl.columnInfoByOffset)))
+
+	require.Nil(writer.SetTable(tbl))
+
+	err = writer.Push(handle)
+	assert.NotNil(err, "expect error when enabling upsert without columns")
 }
 
 // Tests successful addition of a table to the writer
@@ -213,9 +243,11 @@ func TestWriterCanAddMultipleTables(t *testing.T) {
 	// Create a new writer
 	writer := newTestWriter(t)
 
-	// Create two new tables to compare
+	// Create two new tables with identical schema
 	writerTable1 := newTestWriterTable(t, 8)
-	writerTable2 := newTestWriterTable(t, 8)
+	cols := make([]WriterColumn, len(writerTable1.columnInfoByOffset))
+	copy(cols, writerTable1.columnInfoByOffset)
+	writerTable2 := NewWriterTable(generateDefaultAlias(), cols)
 
 	// Add the first table to the writer
 	err := writer.SetTable(writerTable1)
@@ -225,6 +257,27 @@ func TestWriterCanAddMultipleTables(t *testing.T) {
 	require.Nil(err)
 
 	assert.Equal(writer.Length(), 2, "expect two tables in the writer")
+}
+
+// TestWriterSetTableSchemaConsistency verifies that SetTable rejects tables
+// whose column schema differs from previously added tables.
+func TestWriterSetTableSchemaConsistency(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	writer := newTestWriter(t)
+
+	// First table with integer columns
+	cols1 := generateWriterColumnsOfType(2, TsColumnInt64)
+	tbl1 := NewWriterTable(generateDefaultAlias(), cols1)
+	require.Nil(writer.SetTable(tbl1))
+
+	// Second table with a different schema
+	cols2 := generateWriterColumnsOfType(2, TsColumnDouble)
+	tbl2 := NewWriterTable(generateDefaultAlias(), cols2)
+	err := writer.SetTable(tbl2)
+
+	assert.NotNil(err, "expect error when table schemas differ")
 }
 
 // Tests that the writer returns an error when invoking Push() without adding any tables
