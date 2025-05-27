@@ -19,6 +19,14 @@ function die {
     exit 1
 }
 
+# Ensure git submodules are available before performing any build steps.
+echo "Checking out git submodules"
+git submodule update --init --recursive
+
+# Install runtime utilities needed by the test scripts.
+echo "Installing test dependencies"
+apt-get update -y && apt-get install -y lsof >/dev/null
+
 
 ##
 # Download nightly quasardb artifacts and extract in qdb/ subdirectory.
@@ -76,10 +84,3 @@ bash scripts/teamcity/10.build.sh
 # case by executing `go mod download`.
 go mod download
 
-##
-# Codex *may* also not check out submodules. To make sure these are checked out, and since
-# this is the last time we're able to use the internet, let's make sure they are checked
-# out.
-echo "Checking out git submodules"
-
-git submodule update --init --recursive

@@ -16,7 +16,13 @@ This Agents.md file provides comprehensive guidance for OpenAI Codex and other A
 
 ### Test setup
 
-From the project root execute:
+Ensure all dependencies are available before starting any services:
+
+```bash
+bash scripts/codex/setup.sh
+```
+
+From the project root execute the startup script to launch the test clusters:
 
 ```bash
 bash scripts/tests/setup/start-services.sh
@@ -31,7 +37,7 @@ bash scripts/teamcity/20.test.sh
 ```
 
 ### Tests teardown
-From the project root execute:
+From the project root execute the shutdown script:
 
 ```bash
 bash scripts/tests/setup/stop-services.sh
