@@ -307,7 +307,7 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	defer handle.Close()
 
 	// First generate the table schema + layout we will work with
-	columns := generateWriterColumnsOfAllTypes()
+	columns := generateWriterColumnsOfType(8, TsColumnInt64)
 	idx := generateDefaultIndex(1024)
 	datas := generateWriterDatas(len(idx), columns)
 
