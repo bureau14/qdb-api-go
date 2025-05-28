@@ -47,8 +47,12 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	writerTable := newTestWriterTable(t, 1)
 	require.NotNil(writerTable)
 
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.Nil(err)
+	defer handle.Close()
+
 	idx := generateDefaultIndex(1024)
-	err := writerTable.SetIndex(idx)
+	err = writerTable.SetIndex(handle, idx)
 
 	if assert.Nil(err) {
 		assert.Equal(writerTable.GetIndex(), idx)
@@ -72,10 +76,11 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	err = writerTable.SetIndex(idx)
+	err = writerTable.SetIndex(handle, idx)
 	require.Nil(err)
 
-	datas := generateWriterDatas(len(idx), columns)
+	datas, err := generateWriterDatas(handle, len(idx), columns)
+	require.Nil(err)
 	err = writerTable.SetDatas(datas)
 
 	if assert.Nil(err) {
@@ -171,8 +176,11 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	writer := NewWriter(opts)
 
 	tbl := newTestWriterTable(t, 1)
-	require.Nil(tbl.SetIndex(generateDefaultIndex(1)))
-	require.Nil(tbl.SetDatas(generateWriterDatas(1, tbl.columnInfoByOffset)))
+	err = tbl.SetIndex(handle, generateDefaultIndex(1))
+	require.Nil(err)
+	datas, err := generateWriterDatas(handle, 1, tbl.columnInfoByOffset)
+	require.Nil(err)
+	require.Nil(tbl.SetDatas(datas))
 
 	require.Nil(writer.SetTable(tbl))
 
@@ -309,7 +317,8 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	// First generate the table schema + layout we will work with
 	columns := generateWriterColumnsOfType(8, TsColumnInt64)
 	idx := generateDefaultIndex(1024)
-	datas := generateWriterDatas(len(idx), columns)
+	datas, err := generateWriterDatas(handle, len(idx), columns)
+	require.Nil(err)
 
 	// Creating the table automatically assign it a name
 	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
@@ -319,7 +328,7 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	writerTable := NewWriterTable(table.alias, columns)
 	require.NotNil(writerTable)
 
-	err = writerTable.SetIndex(idx)
+	err = writerTable.SetIndex(handle, idx)
 	require.Nil(err, "Unable to set index")
 
 	err = writerTable.SetDatas(datas)
