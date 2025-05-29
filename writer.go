@@ -245,8 +245,12 @@ func (wd *WriterDataBlob) releaseNative(h HandleType) error {
 	}
 
 	C.qdb_release(h.handle, unsafe.Pointer(wd.xs))
+	if wd.content != nil {
+		C.qdb_release(h.handle, wd.content)
+	}
 
 	wd.xs = nil
+	wd.content = nil
 
 	return nil
 }
@@ -346,8 +350,12 @@ func (wd *WriterDataString) releaseNative(h HandleType) error {
 	}
 
 	C.qdb_release(h.handle, unsafe.Pointer(wd.xs))
+	if wd.content != nil {
+		C.qdb_release(h.handle, wd.content)
+	}
 
 	wd.xs = nil
+	wd.content = nil
 
 	return nil
 }
@@ -715,12 +723,29 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 	tbl.name = nil
 	t.TableName = nil
 
+	if t.idx != nil {
+		qdbRelease(h, t.idx)
+		tbl.data.timestamps = nil
+		t.idx = nil
+	}
+
 	for _, v := range t.data {
 		v.releaseNative(h)
 	}
 
-	qdbRelease(h, tbl.data.columns)
-	tbl.data.columns = nil
+	if tbl.data.columns != nil {
+		// Release any column names we allocated during toNativeTableData
+		columnSlice := unsafe.Slice(tbl.data.columns, columnCount)
+		for i := range columnSlice {
+			if columnSlice[i].name != nil {
+				qdbRelease(h, columnSlice[i].name)
+				columnSlice[i].name = nil
+			}
+		}
+
+		qdbRelease(h, tbl.data.columns)
+		tbl.data.columns = nil
+	}
 
 	if tbl.where_duplicate != nil {
 		qdbRelease(h, tbl.where_duplicate)
