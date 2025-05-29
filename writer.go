@@ -182,7 +182,6 @@ func NewWriterDataBlob(h HandleType, xs [][]byte) (WriterData, error) {
 	}
 
 	// Step 1: allocate qdb_blob_t array
-	elemSize := unsafe.Sizeof(C.qdb_blob_t{})
 	blobArrayPtr, err := qdbAllocBuffer[C.qdb_blob_t](h, count)
 	if err != nil {
 		return nil, fmt.Errorf("blob struct array allocation failed: %v", err)
@@ -196,37 +195,40 @@ func NewWriterDataBlob(h HandleType, xs [][]byte) (WriterData, error) {
 		}
 	}
 
-	// Step 3: allocate single contiguous content buffer
-	totalContentSize := maxBlobSize * count
-	contentPtr, err := qdbAllocBytes(h, totalContentSize) // bytes
-	if err != nil {
-		// Cleanup previous allocation before returning
-		C.qdb_release(h.handle, unsafe.Pointer(blobArrayPtr))
-		return nil, fmt.Errorf("blob content buffer allocation failed: %v", err)
+	// Step 3: allocate single slab of memory to hold all blobs
+	var contentPtr unsafe.Pointer
+	if maxBlobSize > 0 {
+		totalContentSize := maxBlobSize * count
+		contentPtr, err = qdbAllocBytes(h, totalContentSize)
+		if err != nil {
+			// Cleanup previous allocation before returning
+			qdbRelease(h, blobArrayPtr)
+			return nil, fmt.Errorf("blob content buffer allocation failed: %v", err)
+		}
 	}
 
 	// Step 4: copy blob contents into single contiguous allocation
+	blobSlice := unsafe.Slice(blobArrayPtr, count)
 	for i, v := range xs {
-		blob := (*C.qdb_blob_t)(unsafe.Pointer(uintptr(unsafe.Pointer(blobArrayPtr)) + uintptr(i)*elemSize))
-		offset := uintptr(i * maxBlobSize)
-		destPtr := unsafe.Pointer(uintptr(contentPtr) + offset)
+		var destPtr unsafe.Pointer
 
 		if len(v) > 0 {
+			// Calculate the correct offset within the large contiguous slab
+			destPtr = unsafe.Pointer(uintptr(contentPtr) + uintptr(i*maxBlobSize))
 			C.memcpy(destPtr, unsafe.Pointer(&v[0]), C.size_t(len(v)))
-			blob.content = destPtr
-			blob.content_length = C.qdb_size_t(len(v))
+			blobSlice[i].content = destPtr
+			blobSlice[i].content_length = C.qdb_size_t(len(v))
 		} else {
 			// Explicitly handle empty blobs
-			blob.content = nil
-			blob.content_length = 0
+			blobSlice[i].content = nil
+			blobSlice[i].content_length = 0
 		}
 	}
 
 	return &WriterDataBlob{
-		xs:      (*C.qdb_blob_t)(blobArrayPtr),
+		xs:      blobArrayPtr,
 		content: contentPtr,
 	}, nil
-
 }
 
 func (cd WriterDataBlob) valueType() TsValueType {
@@ -257,9 +259,77 @@ type WriterDataString struct {
 
 // Constructor for string data array
 func NewWriterDataString(h HandleType, xs []string) (WriterData, error) {
-	// Todo: implement
+	// NewWriterDataBlob allocates a single large contiguous memory region for all blob contents
+	// to reduce memory fragmentation and improve allocation performance.
+	//
+	// Each blob occupies a fixed-length segment equal to the largest blob size.
+	// Smaller blobs do not fully utilize their allocated segment.
+	//
+	// Both the blob descriptor structs and contents are explicitly allocated
+	// and must be explicitly released using C.qdb_release() after usage.
 
-	return &WriterDataString{}, nil
+	count := len(xs)
+	if count == 0 {
+		return nil, fmt.Errorf("no blobs provided")
+	}
+
+	// Step 1: allocate qdb_string_t array
+	stringArrayPtr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
+	if err != nil {
+		return nil, fmt.Errorf("blob struct array allocation failed: %v", err)
+	}
+
+	// Step 2: find largest blob size for uniform allocation
+	maxStringSize := 0
+	for _, v := range xs {
+		if len(v) > maxStringSize {
+			// Max size we need to allocate is the length of the string + 1, for
+			// the null terminator.
+			//
+			// QuasarDB C API doesn't strictly require it, but it is better to be
+			// safe.
+			maxStringSize = len(v) + 1
+		}
+	}
+
+	// Step 3: allocate single slab of memory to hold all blobs
+	var contentPtr unsafe.Pointer
+	if maxStringSize > 0 {
+		totalContentSize := maxStringSize * count
+		contentPtr, err = qdbAllocBytes(h, totalContentSize)
+		if err != nil {
+			// Cleanup previous allocation before returning
+			qdbRelease(h, stringArrayPtr)
+			return nil, fmt.Errorf("blob content buffer allocation failed: %v", err)
+		}
+	}
+
+	// Step 4: copy blob contents into single contiguous allocation
+	stringSlice := unsafe.Slice(stringArrayPtr, count)
+	for i, v := range xs {
+		var destPtr unsafe.Pointer
+
+		if len(v) > 0 {
+			// Calculate the correct offset within the large contiguous slab
+			destPtr = unsafe.Pointer(uintptr(contentPtr) + uintptr(i*maxStringSize))
+			C.memcpy(destPtr, unsafe.Pointer(unsafe.StringData(v)), C.size_t(len(v)))
+
+			// Don't forget to write the \0 null terminator.
+			*(*byte)(unsafe.Pointer(uintptr(destPtr) + uintptr(len(v)))) = 0
+
+			stringSlice[i].data = (*C.char)(destPtr)
+			stringSlice[i].length = C.qdb_size_t(len(v))
+		} else {
+			// Explicitly handle empty strings
+			stringSlice[i].data = nil
+			stringSlice[i].length = 0
+		}
+	}
+
+	return &WriterDataString{
+		xs:      stringArrayPtr,
+		content: contentPtr,
+	}, nil
 }
 
 func (cd WriterDataString) valueType() TsValueType {
