@@ -117,6 +117,7 @@ const (
 	ErrOperationNotPermitted     ErrorType = C.qdb_e_operation_not_permitted
 	ErrIteratorEnd               ErrorType = C.qdb_e_iterator_end
 	ErrInvalidReply              ErrorType = C.qdb_e_invalid_reply
+	ErrOkCreated                 ErrorType = C.qdb_e_ok_created
 	ErrNoSpaceLeft               ErrorType = C.qdb_e_no_space_left
 	ErrQuotaExceeded             ErrorType = C.qdb_e_quota_exceeded
 	ErrAliasTooLong              ErrorType = C.qdb_e_alias_too_long
@@ -133,6 +134,8 @@ const (
 	ErrNetworkInbufTooSmall      ErrorType = C.qdb_e_network_inbuf_too_small
 	ErrNetworkError              ErrorType = C.qdb_e_network_error
 	ErrDataCorruption            ErrorType = C.qdb_e_data_corruption
+	ErrPartialFailure            ErrorType = C.qdb_e_partial_failure
+	ErrAsyncPipeFull             ErrorType = C.qdb_e_async_pipe_full
 )
 
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
