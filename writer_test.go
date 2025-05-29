@@ -15,7 +15,8 @@ func newTestWriterTable(t *testing.T, h HandleType, numColumns int) WriterTable 
 	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(numColumns)
 
-	writerTable := NewWriterTable(h, tableName, columns)
+	writerTable, err := NewWriterTable(h, tableName, columns)
+	require.NoError(t, err)
 	require.NotNil(t, writerTable)
 
 	return writerTable
@@ -31,24 +32,32 @@ func newTestWriter(t *testing.T) Writer {
 	return writer
 }
 
-func TestWriterTableCreateNew(t *testing.T, h HandleType) {
+func TestWriterTableCreateNew(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
-	writerTable := newTestWriterTable(t, h, 1)
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(err)
+	defer handle.Close()
 
-	assert.Equal(writerTable.GetName(), writerTable.TableName, "table names should match")
+	alias := generateDefaultAlias()
+	cols := generateWriterColumns(1)
+	writerTable, err := NewWriterTable(handle, alias, cols)
+	require.NoError(err)
+
+	assert.Equal(alias, writerTable.GetName(), "table names should match")
 }
 
 func TestWriterTableCanSetIndex(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
-	writerTable := newTestWriterTable(t, 1)
-	require.NotNil(writerTable)
-
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
 	require.NoError(err)
 	defer handle.Close()
+
+	writerTable := newTestWriterTable(t, handle, 1)
+	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
 	err = writerTable.SetIndex(handle, idx)
@@ -175,7 +184,7 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	opts := NewWriterOptions().WithDeduplicationMode(WriterDeduplicationModeUpsert)
 	writer := NewWriter(opts)
 
-	tbl := newTestWriterTable(t, 1)
+	tbl := newTestWriterTable(t, handle, 1)
 	err = tbl.SetIndex(handle, generateDefaultIndex(1))
 	require.NoError(err)
 	datas, err := generateWriterDatas(handle, 1, tbl.columnInfoByOffset)
@@ -191,15 +200,20 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 // Tests successful addition of a table to the writer
 func TestWriterCanAddTable(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
+
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(err)
+	defer handle.Close()
 
 	// Create a new writer
 	writer := newTestWriter(t)
 
 	// Create a new table
-	writerTable := newTestWriterTable(t, 8)
+	writerTable := newTestWriterTable(t, handle, 8)
 
 	// Add the table to the writer
-	err := writer.SetTable(writerTable)
+	err = writer.SetTable(writerTable)
 	if assert.Nil(err) {
 		assert.Equal(writer.Length(), 1, "expect one table in the writer")
 
@@ -214,15 +228,20 @@ func TestWriterCanAddTable(t *testing.T) {
 // Tests that adding a table with the same name twice returns an error
 func TestWriterCannotAddTableTwice(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
+
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(err)
+	defer handle.Close()
 
 	// Create a new writer
 	writer := newTestWriter(t)
 
 	// Create a new table
-	writerTable := newTestWriterTable(t, 8)
+	writerTable := newTestWriterTable(t, handle, 8)
 
 	// Add the table to the writer
-	err := writer.SetTable(writerTable)
+	err = writer.SetTable(writerTable)
 	if assert.Nil(err) {
 		assert.Equal(writer.Length(), 1, "expect one table in the writer")
 
@@ -248,17 +267,22 @@ func TestWriterCanAddMultipleTables(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(err)
+	defer handle.Close()
+
 	// Create a new writer
 	writer := newTestWriter(t)
 
 	// Create two new tables with identical schema
-	writerTable1 := newTestWriterTable(t, 8)
+	writerTable1 := newTestWriterTable(t, handle, 8)
 	cols := make([]WriterColumn, len(writerTable1.columnInfoByOffset))
 	copy(cols, writerTable1.columnInfoByOffset)
-	writerTable2 := NewWriterTable(generateDefaultAlias(), cols)
+	writerTable2, err := NewWriterTable(handle, generateDefaultAlias(), cols)
+	require.NoError(err)
 
 	// Add the first table to the writer
-	err := writer.SetTable(writerTable1)
+	err = writer.SetTable(writerTable1)
 	require.Nil(err)
 
 	err = writer.SetTable(writerTable2)
@@ -273,17 +297,23 @@ func TestWriterSetTableSchemaConsistency(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(err)
+	defer handle.Close()
+
 	writer := newTestWriter(t)
 
 	// First table with integer columns
 	cols1 := generateWriterColumnsOfType(2, TsColumnInt64)
-	tbl1 := NewWriterTable(generateDefaultAlias(), cols1)
+	tbl1, err := NewWriterTable(handle, generateDefaultAlias(), cols1)
+	require.NoError(err)
 	require.NoError(writer.SetTable(tbl1))
 
 	// Second table with a different schema
 	cols2 := generateWriterColumnsOfType(2, TsColumnDouble)
-	tbl2 := NewWriterTable(generateDefaultAlias(), cols2)
-	err := writer.SetTable(tbl2)
+	tbl2, err := NewWriterTable(handle, generateDefaultAlias(), cols2)
+	require.NoError(err)
+	err = writer.SetTable(tbl2)
 
 	assert.NotNil(err, "expect error when table schemas differ")
 }
@@ -325,7 +355,8 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	require.NoError(err)
 
 	// Now create a WriterTable structure and fill it
-	writerTable := NewWriterTable(table.alias, columns)
+	writerTable, err := NewWriterTable(handle, table.alias, columns)
+	require.NoError(err)
 	require.NotNil(writerTable)
 
 	err = writerTable.SetIndex(handle, idx)

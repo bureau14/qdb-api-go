@@ -809,7 +809,7 @@ func (w *Writer) SetTable(t WriterTable) error {
 	// the first table. If a=b and a=c, then b=c.
 	for _, existing := range w.tables {
 		if !writerTableSchemasEqual(existing, t) {
-			return fmt.Errorf("table %q schema differs from existing table %q", t.TableName, existing.TableName)
+			return fmt.Errorf("table %q schema differs from existing table %q", t.GetName(), existing.GetName())
 		}
 		break
 	}
@@ -856,7 +856,7 @@ func (w *Writer) Push(h HandleType) error {
 		if err != nil {
 			// Potential memory leak as we don't clear up all our qdbAllocBuffer data, but
 			// extemely unlikely to occur.
-			return fmt.Errorf("Failed to convert table %q to native: %v", v.TableName, err)
+			return fmt.Errorf("Failed to convert table %q to native: %v", v.GetName(), err)
 		}
 		defer v.releaseNative(h, &tblSlice[i])
 		i++
