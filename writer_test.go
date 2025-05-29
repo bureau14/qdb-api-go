@@ -1,7 +1,6 @@
 package qdb
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -48,7 +47,7 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	require.NotNil(writerTable)
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.Nil(err)
+	require.NoError(err)
 	defer handle.Close()
 
 	idx := generateDefaultIndex(1024)
@@ -66,21 +65,21 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	columns := generateWriterColumnsOfAllTypes()
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.Nil(err, fmt.Sprintf("%v", err))
+	require.NoError(err)
 	defer handle.Close()
 
 	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
-	require.Nil(err, fmt.Sprintf("%v", err))
+	require.NoError(err)
 
 	writerTable := NewWriterTable(table.alias, columns)
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
 	err = writerTable.SetIndex(handle, idx)
-	require.Nil(err)
+	require.NoError(err)
 
 	datas, err := generateWriterDatas(handle, len(idx), columns)
-	require.Nil(err)
+	require.NoError(err)
 	err = writerTable.SetDatas(datas)
 
 	if assert.Nil(err) {
@@ -168,7 +167,7 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	require := require.New(t)
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.Nil(err, fmt.Sprintf("%v", err))
+	require.NoError(err)
 	defer handle.Close()
 
 	// Writer with upsert mode but no deduplication columns
@@ -177,12 +176,12 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 
 	tbl := newTestWriterTable(t, 1)
 	err = tbl.SetIndex(handle, generateDefaultIndex(1))
-	require.Nil(err)
+	require.NoError(err)
 	datas, err := generateWriterDatas(handle, 1, tbl.columnInfoByOffset)
-	require.Nil(err)
-	require.Nil(tbl.SetDatas(datas))
 
-	require.Nil(writer.SetTable(tbl))
+	require.NoError(err)
+	require.NoError(tbl.SetDatas(datas))
+	require.NoError(writer.SetTable(tbl))
 
 	err = writer.Push(handle)
 	assert.NotNil(err, "expect error when enabling upsert without columns")
@@ -262,7 +261,7 @@ func TestWriterCanAddMultipleTables(t *testing.T) {
 	require.Nil(err)
 
 	err = writer.SetTable(writerTable2)
-	require.Nil(err)
+	require.NoError(err)
 
 	assert.Equal(writer.Length(), 2, "expect two tables in the writer")
 }
@@ -278,7 +277,7 @@ func TestWriterSetTableSchemaConsistency(t *testing.T) {
 	// First table with integer columns
 	cols1 := generateWriterColumnsOfType(2, TsColumnInt64)
 	tbl1 := NewWriterTable(generateDefaultAlias(), cols1)
-	require.Nil(writer.SetTable(tbl1))
+	require.NoError(writer.SetTable(tbl1))
 
 	// Second table with a different schema
 	cols2 := generateWriterColumnsOfType(2, TsColumnDouble)
@@ -294,7 +293,7 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 	require := require.New(t)
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.Nil(err, fmt.Sprintf("%v", err))
+	require.NoError(err)
 	defer handle.Close()
 
 	// Create a new writer
@@ -311,28 +310,28 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	require := require.New(t)
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.Nil(err, fmt.Sprintf("%v", err))
+	require.NoError(err)
 	defer handle.Close()
 
 	// First generate the table schema + layout we will work with
 	columns := generateWriterColumnsOfType(8, TsColumnInt64)
 	idx := generateDefaultIndex(1024)
 	datas, err := generateWriterDatas(handle, len(idx), columns)
-	require.Nil(err)
+	require.NoError(err)
 
 	// Creating the table automatically assign it a name
 	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
-	require.Nil(err, fmt.Sprintf("%v", err))
+	require.NoError(err)
 
 	// Now create a WriterTable structure and fill it
 	writerTable := NewWriterTable(table.alias, columns)
 	require.NotNil(writerTable)
 
 	err = writerTable.SetIndex(handle, idx)
-	require.Nil(err, "Unable to set index")
+	require.NoError(err)
 
 	err = writerTable.SetDatas(datas)
-	require.Nil(err, "Unable to set data")
+	require.NoError(err)
 
 	// And actually push the data by creating a writer, adding the table to it
 	// and invoking Push().
@@ -342,5 +341,5 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 
 	// Push the writer
 	err = writer.Push(handle)
-	assert.Nil(err, "Unable to push writer after setting table")
+	assert.NoError(err)
 }
