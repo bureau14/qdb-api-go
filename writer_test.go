@@ -9,13 +9,13 @@ import (
 )
 
 // fixture for creating a default test WriterTable
-func newTestWriterTable(t *testing.T, numColumns int) WriterTable {
+func newTestWriterTable(t *testing.T, h HandleType, numColumns int) WriterTable {
 	t.Helper()
 
 	tableName := generateDefaultAlias()
 	columns := generateWriterColumns(numColumns)
 
-	writerTable := NewWriterTable(tableName, columns)
+	writerTable := NewWriterTable(h, tableName, columns)
 	require.NotNil(t, writerTable)
 
 	return writerTable
@@ -31,10 +31,10 @@ func newTestWriter(t *testing.T) Writer {
 	return writer
 }
 
-func TestWriterTableCreateNew(t *testing.T) {
+func TestWriterTableCreateNew(t *testing.T, h HandleType) {
 	assert := assert.New(t)
 
-	writerTable := newTestWriterTable(t, 1)
+	writerTable := newTestWriterTable(t, h, 1)
 
 	assert.Equal(writerTable.GetName(), writerTable.TableName, "table names should match")
 }
@@ -71,7 +71,8 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
 	require.NoError(err)
 
-	writerTable := NewWriterTable(table.alias, columns)
+	writerTable, err := NewWriterTable(handle, table.alias, columns)
+	require.NoError(err)
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
