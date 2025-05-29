@@ -316,12 +316,16 @@ func charStarArrayToSlice(strings **C.char, length int) []*C.char {
 func qdbAllocBytes(h HandleType, totalBytes int) (unsafe.Pointer, error) {
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_alloc_buffer(h.handle, C.qdb_size_t(totalBytes), &basePtr)
-	if err := makeErrorOrNil(errCode); err != nil {
+	err := makeErrorOrNil(errCode)
+
+	if err != nil {
 		return nil, err
 	}
+
 	if basePtr == nil {
 		return nil, fmt.Errorf("qdbAllocBytes: returned nil pointer")
 	}
+
 	return basePtr, nil
 }
 
@@ -358,4 +362,29 @@ func qdbAllocAndCopy[Src, Dst any](h HandleType, src []Src) (*Dst, error) {
 	C.memcpy(dstPtr, unsafe.Pointer(&src[0]), C.size_t(totalSize))
 
 	return (*Dst)(dstPtr), nil
+}
+
+func qdbRelease[T any](h HandleType, ptr *T) {
+	C.qdb_release(h.handle, unsafe.Pointer(ptr))
+}
+
+// Copies a Go string and returns a `char const *`-like string. Allocates memory using
+// the QDB C API's memory handler for high performance memory allocation. Must be released
+// by the user using `qdbRelease()` when done.
+func qdbCopyString(h HandleType, s string) (*C.char, error) {
+	if len(s) == 0 {
+		return nil, fmt.Errorf("cannot allocate empty string")
+	}
+
+	ptr, err := qdbAllocBytes(h, len(s)+1)
+	if err != nil {
+		return nil, fmt.Errorf("qdbCopyString: allocation failed: %w", err)
+	}
+
+	C.memcpy(ptr, unsafe.Pointer(unsafe.StringData(s)), C.size_t(len(s)))
+
+	// null terminator
+	*(*byte)(unsafe.Pointer(uintptr(ptr) + uintptr(len(s)))) = 0
+
+	return (*C.char)(ptr), nil
 }
