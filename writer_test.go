@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -345,7 +346,7 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	defer handle.Close()
 
 	// First generate the table schema + layout we will work with
-	columns := generateWriterColumnsOfType(8, TsColumnInt64)
+	columns := generateWriterColumnsOfAllTypes()
 	idx := generateDefaultIndex(1024)
 	datas, err := generateWriterDatas(handle, len(idx), columns)
 	require.NoError(err)
@@ -374,4 +375,9 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	// Push the writer
 	err = writer.Push(handle)
 	assert.NoError(err)
+
+	// Read back the data
+	q := fmt.Sprintf("select * from %s in range(1970, +10d)", table.Name())
+	fmt.Printf("got query: %s\n", q)
+
 }
