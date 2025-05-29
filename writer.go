@@ -70,8 +70,7 @@ func (wd *WriterDataInt64) releaseNative(h HandleType) error {
 		return fmt.Errorf("Internal error: no value array for WriterDataInt64")
 	}
 
-	C.qdb_release(h.handle, unsafe.Pointer(wd.xs))
-
+	qdbRelease(h, wd.xs)
 	wd.xs = nil
 
 	return nil
@@ -109,8 +108,7 @@ func (wd *WriterDataDouble) releaseNative(h HandleType) error {
 		return fmt.Errorf("Internal error: no value array for WriterDataDouble")
 	}
 
-	C.qdb_release(h.handle, unsafe.Pointer(wd.xs))
-
+	qdbRelease(h, wd.xs)
 	wd.xs = nil
 
 	return nil
@@ -152,7 +150,7 @@ func (wd *WriterDataTimestamp) releaseNative(h HandleType) error {
 		return fmt.Errorf("Internal error: no value array for WriterDataTimestamp")
 	}
 
-	C.qdb_release(h.handle, unsafe.Pointer(wd.xs))
+	qdbRelease(h, wd.xs)
 
 	wd.xs = nil
 
@@ -244,7 +242,7 @@ func (wd *WriterDataBlob) releaseNative(h HandleType) error {
 		return fmt.Errorf("Internal error: no value array for WriterDataBlob")
 	}
 
-	C.qdb_release(h.handle, unsafe.Pointer(wd.xs))
+	qdbRelease(h, wd.xs)
 
 	wd.xs = nil
 
@@ -345,7 +343,7 @@ func (wd *WriterDataString) releaseNative(h HandleType) error {
 		return fmt.Errorf("Internal error: no value array for WriterDataString")
 	}
 
-	C.qdb_release(h.handle, unsafe.Pointer(wd.xs))
+	qdbRelease(h, wd.xs)
 
 	wd.xs = nil
 
@@ -712,7 +710,6 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 	}
 
 	qdbRelease(h, t.TableName)
-	tbl.name = nil
 	t.TableName = nil
 
 	for _, v := range t.data {
