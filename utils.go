@@ -15,7 +15,7 @@ import (
 )
 
 // All available columns we support
-var columnTypes = [...]TsColumnType{TsColumnInt64, TsColumnDouble, TsColumnTimestamp, TsColumnBlob, TsColumnString, TsColumnSymbol}
+var columnTypes = [...]TsColumnType{TsColumnInt64, TsColumnDouble, TsColumnTimestamp, TsColumnBlob, TsColumnString}
 
 func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	var v *C.char
@@ -170,7 +170,7 @@ func createTableOfWriterColumns(handle HandleType, columns []WriterColumn, shard
 
 	columnInfos := convertWriterColumnsToColumnInfo(columns)
 
-	table := handle.Timeseries(tableName)
+	table := handle.Table(tableName)
 	err := table.Create(shardSize, columnInfos...)
 
 	if err != nil {
