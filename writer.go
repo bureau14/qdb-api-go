@@ -544,16 +544,18 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 			return fmt.Errorf("toNative: failed to copy column name: %w", err)
 		}
 
-		*elem = C.qdb_exp_batch_push_column_t{
-			name: name,
+		// Initialize struct fields individually to avoid incorrect
+		// pointer conversions with the union field on different
+		// architectures.
+		elem.name = name
+		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
-			// What is going here is:
-			//   - `.ptr()` returns an unsafe.Pointer
-			//   - Go doesn't understand unions, and just considers the whole thing a []byte.
-			//     As this particular union is always a pointer-to-array, it's always exactly
-			//     8 bytes.
-			data: *(*[8]byte)(t.data[i].ptr()),
-		}
+		// Store the pointer to the value array in the union field.
+		// The `data` field is represented as a byte array by cgo.
+		// Writing an unsafe.Pointer fits both 32‑bit and 64‑bit
+		// systems, as the size of unsafe.Pointer matches the
+		// architecture's pointer width.
+		*(*unsafe.Pointer)(unsafe.Pointer(&elem.data[0])) = t.data[i].ptr()
 	}
 
 	// Store the pointer to the first element.
