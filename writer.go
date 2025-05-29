@@ -30,10 +30,11 @@ type WriterData interface {
 	// Possibly some methods, but often empty
 	valueType() TsValueType
 
-	// Convert to native C type
-	toNative(h HandleType) C.qdb_exp_batch_push_column_t
+	// Returns opaque pointer to internal data array, intended to be set on
+	// the `qdb_exp_batch_push_column_t` `data` field.
+	ptr() unsafe.Pointer
 
-	// Release any C allocated buffers created by toNative
+	// Release any C allocated buffers managed
 	releaseNative(h HandleType) error
 }
 
@@ -59,11 +60,8 @@ func (wd *WriterDataInt64) valueType() TsValueType {
 	return TsValueInt64
 }
 
-// Assigns the `data.ints` part of the qdb_exp_batch_push_column_t
-func (wd *WriterDataInt64) toNative(h HandleType) C.qdb_exp_batch_push_column_t {
-	// todo: implement
-
-	return C.qdb_exp_batch_push_column_t{}
+func (wd *WriterDataInt64) ptr() unsafe.Pointer {
+	return unsafe.Pointer(wd.xs)
 }
 
 func (wd *WriterDataInt64) releaseNative(h HandleType) error {
@@ -101,11 +99,8 @@ func (wd WriterDataDouble) valueType() TsValueType {
 	return TsValueDouble
 }
 
-// Assigns the `data.doubles` part of the qdb_exp_batch_push_column_t
-func (wd *WriterDataDouble) toNative(h HandleType) C.qdb_exp_batch_push_column_t {
-	// todo: implement
-
-	return C.qdb_exp_batch_push_column_t{}
+func (wd *WriterDataDouble) ptr() unsafe.Pointer {
+	return unsafe.Pointer(wd.xs)
 }
 
 // Releases all C-allocated memory, which has been allocated by the QDB C API.
@@ -148,11 +143,8 @@ func (_ WriterDataTimestamp) valueType() TsValueType {
 	return TsValueTimestamp
 }
 
-// Assigns the `data.timestamps` part of the qdb_exp_batch_push_column_t
-func (wd *WriterDataTimestamp) toNative(h HandleType) C.qdb_exp_batch_push_column_t {
-	// todo: implement
-
-	return C.qdb_exp_batch_push_column_t{}
+func (wd *WriterDataTimestamp) ptr() unsafe.Pointer {
+	return unsafe.Pointer(wd.xs)
 }
 
 func (wd *WriterDataTimestamp) releaseNative(h HandleType) error {
@@ -241,11 +233,8 @@ func (cd WriterDataBlob) valueType() TsValueType {
 	return TsValueBlob
 }
 
-// Assigns the `data.blobs` part of the qdb_exp_batch_push_column_t without copying memory.
-func (wd *WriterDataBlob) toNative(h HandleType) C.qdb_exp_batch_push_column_t {
-	// todo: implement
-
-	return C.qdb_exp_batch_push_column_t{}
+func (wd *WriterDataBlob) ptr() unsafe.Pointer {
+	return unsafe.Pointer(wd.xs)
 }
 
 func (wd *WriterDataBlob) releaseNative(h HandleType) error {
@@ -277,11 +266,8 @@ func (cd WriterDataString) valueType() TsValueType {
 	return TsValueString
 }
 
-// Assigns the `data.strings` part of the qdb_exp_batch_push_column_t without copying memory.
-func (wd *WriterDataString) toNative(h HandleType) C.qdb_exp_batch_push_column_t {
-	// todo: implement
-
-	return C.qdb_exp_batch_push_column_t{}
+func (wd *WriterDataString) ptr() unsafe.Pointer {
+	return unsafe.Pointer(wd.xs)
 }
 
 func (wd *WriterDataString) releaseNative(h HandleType) error {
@@ -533,20 +519,41 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 	// Allocate native columns array using the QuasarDB allocator so the
 	// memory remains valid after this function returns.
 	columnCount := len(t.data)
-	elemSize := C.qdb_size_t(unsafe.Sizeof(C.qdb_exp_batch_push_column_t{}))
-	total := C.qdb_size_t(columnCount) * elemSize
+	elemSize := unsafe.Sizeof(C.qdb_exp_batch_push_column_t{})
+	total := uintptr(columnCount) * elemSize
 
-	var basePtr unsafe.Pointer
-	errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
-	if err := makeErrorOrNil(errCode); err != nil {
+	basePtr, err := qdbAllocBytes(h, int(total))
+	if err != nil {
 		return err
 	}
 
 	// Convert each WriterData to its native counterpart.
-	for i := 0; i < columnCount; i++ {
+	for i, column := range t.columnInfoByOffset {
+
+		// This is the equivalent to C code:
+		//
+		//   elem = basePtr[i * elemSize]
+		//
+		// plus a whole bunch of casts necessary for Go interaction.
 		elem := (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(
 			uintptr(basePtr) + uintptr(i)*uintptr(elemSize)))
-		*elem = t.data[i].toNative(h)
+
+		// Allocate and copy column name using the QDB allocator.
+		name, err := qdbCopyString(h, column.ColumnName)
+		if err != nil {
+			return fmt.Errorf("toNative: failed to copy column name: %w", err)
+		}
+
+		*elem = C.qdb_exp_batch_push_column_t{
+			name: name,
+
+			// What is going here is:
+			//   - `.ptr()` returns an unsafe.Pointer
+			//   - Go doesn't understand unions, and just considers the whole thing a []byte.
+			//     As this particular union is always a pointer-to-array, it's always exactly
+			//     8 bytes.
+			data: *(*[8]byte)(t.data[i].ptr()),
+		}
 	}
 
 	// Store the pointer to the first element.
@@ -818,18 +825,25 @@ func (w *Writer) Push(h HandleType) error {
 		return fmt.Errorf("No tables to push")
 	}
 
-	tbls := make([]C.qdb_exp_batch_push_table_t, w.Length())
-	writerTables := make([]WriterTable, w.Length())
+	tbls, err := qdbAllocBuffer[C.qdb_exp_batch_push_table_t](h, w.Length())
+	if err != nil {
+		return fmt.Errorf("Push failed: %v", err)
+	}
+
+	defer qdbRelease(h, tbls)
 	i := 0
 
+	// Convert the raw pointer to a Go slice explicitly for easier access.
+	tblSlice := unsafe.Slice(tbls, w.Length())
+
 	for _, v := range w.tables {
-		writerTables[i] = v
-		if err := v.toNative(h, w.options, &tbls[i]); err != nil {
-			for j := 0; j < i; j++ {
-				writerTables[j].releaseNative(h, &tbls[j])
-			}
+		err := v.toNative(h, w.options, &tblSlice[i])
+		if err != nil {
+			// Potential memory leak as we don't clear up all our qdbAllocBuffer data, but
+			// extemely unlikely to occur.
 			return fmt.Errorf("Failed to convert table %q to native: %v", v.TableName, err)
 		}
+		defer v.releaseNative(h, &tblSlice[i])
 		i++
 	}
 
@@ -838,17 +852,11 @@ func (w *Writer) Push(h HandleType) error {
 	errCode := C.qdb_exp_batch_push(
 		h.handle,
 		C.qdb_exp_batch_push_mode_t(w.options.pushMode),
-		(*C.qdb_exp_batch_push_table_t)(unsafe.Pointer(&tbls[0])),
+		(*C.qdb_exp_batch_push_table_t)(unsafe.Pointer(tbls)),
 		tableSchemas,
-		C.qdb_size_t(len(tbls)),
+		C.qdb_size_t(w.Length()),
 	)
-	err := makeErrorOrNil(errCode)
-
-	for idx, tbl := range writerTables {
-		tbl.releaseNative(h, &tbls[idx])
-	}
-
-	return err
+	return makeErrorOrNil(C.qdb_error_t(errCode))
 }
 
 // writerTableSchemasEqual returns true when both tables have the same column
