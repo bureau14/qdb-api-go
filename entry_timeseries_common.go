@@ -191,6 +191,11 @@ type TimeseriesEntry struct {
 	Entry
 }
 
+// Name : Returns the name of the table
+func (t TimeseriesEntry) Name() string {
+	return t.Entry.Alias()
+}
+
 // :: internals
 
 func TsColumnInfoExToStructG(t C.qdb_ts_column_info_ex_t, entry TimeseriesEntry) tsColumn {
