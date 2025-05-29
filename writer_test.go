@@ -9,11 +9,11 @@ import (
 )
 
 // fixture for creating a default test WriterTable
-func newTestWriterTable(t *testing.T, h HandleType, numColumns int) WriterTable {
+func newTestWriterTable(t *testing.T, h HandleType) WriterTable {
 	t.Helper()
 
 	tableName := generateDefaultAlias()
-	columns := generateWriterColumns(numColumns)
+	columns := generateWriterColumnsOfAllTypes()
 
 	writerTable, err := NewWriterTable(h, tableName, columns)
 	require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	require.NoError(err)
 	defer handle.Close()
 
-	writerTable := newTestWriterTable(t, handle, 1)
+	writerTable := newTestWriterTable(t, handle)
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
@@ -184,10 +184,10 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	opts := NewWriterOptions().WithDeduplicationMode(WriterDeduplicationModeUpsert)
 	writer := NewWriter(opts)
 
-	tbl := newTestWriterTable(t, handle, 1)
-	err = tbl.SetIndex(handle, generateDefaultIndex(1))
+	tbl := newTestWriterTable(t, handle)
+	err = tbl.SetIndex(handle, generateDefaultIndex(1024))
 	require.NoError(err)
-	datas, err := generateWriterDatas(handle, 1, tbl.columnInfoByOffset)
+	datas, err := generateWriterDatas(handle, 1024, tbl.columnInfoByOffset)
 
 	require.NoError(err)
 	require.NoError(tbl.SetDatas(datas))
@@ -210,7 +210,7 @@ func TestWriterCanAddTable(t *testing.T) {
 	writer := newTestWriter(t)
 
 	// Create a new table
-	writerTable := newTestWriterTable(t, handle, 8)
+	writerTable := newTestWriterTable(t, handle)
 
 	// Add the table to the writer
 	err = writer.SetTable(writerTable)
@@ -238,7 +238,7 @@ func TestWriterCannotAddTableTwice(t *testing.T) {
 	writer := newTestWriter(t)
 
 	// Create a new table
-	writerTable := newTestWriterTable(t, handle, 8)
+	writerTable := newTestWriterTable(t, handle)
 
 	// Add the table to the writer
 	err = writer.SetTable(writerTable)
@@ -275,7 +275,7 @@ func TestWriterCanAddMultipleTables(t *testing.T) {
 	writer := newTestWriter(t)
 
 	// Create two new tables with identical schema
-	writerTable1 := newTestWriterTable(t, handle, 8)
+	writerTable1 := newTestWriterTable(t, handle)
 	cols := make([]WriterColumn, len(writerTable1.columnInfoByOffset))
 	copy(cols, writerTable1.columnInfoByOffset)
 	writerTable2, err := NewWriterTable(handle, generateDefaultAlias(), cols)
