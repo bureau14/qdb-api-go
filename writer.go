@@ -290,7 +290,7 @@ type WriterColumn struct {
 
 // Single table to be provided to the batch writer.
 type WriterTable struct {
-	TableName string
+	TableName *C.char
 
 	// All arrays are guaranteed to be of lenght `rowCount`. This means specifically
 	// the `idx` parameter and all Writerdata value arrays within `data`.
@@ -432,7 +432,7 @@ func GetBlobArrayUnsafe(x WriterData) *WriterDataBlob {
 	return (*WriterDataBlob)(ifaceDataPtr(x))
 }
 
-func NewWriterTable(t string, cols []WriterColumn) WriterTable {
+func NewWriterTable(h HandleType, t string, cols []WriterColumn) (WriterTable, error) {
 	// Pre-allocate our data array, which has exactly 1 entry for every column we intend to write.
 	data := make([]WriterData, len(cols))
 
@@ -445,12 +445,21 @@ func NewWriterTable(t string, cols []WriterColumn) WriterTable {
 		columnOffsetByName[col.ColumnName] = i
 	}
 
+	tableName, err := qdbCopyString(h, t)
+	if err != nil {
+		return WriterTable{}, err
+	}
+
 	// An index of column offset to name
-	return WriterTable{t, 0, columnInfoByOffset, columnOffsetByName, nil, data}
+	return WriterTable{tableName, 0, columnInfoByOffset, columnOffsetByName, nil, data}, nil
+}
+
+func (t *WriterTable) GetNameNative() *C.char {
+	return t.TableName
 }
 
 func (t *WriterTable) GetName() string {
-	return t.TableName
+	return C.GoString(t.GetNameNative())
 }
 
 // Sets the index into the table
@@ -569,9 +578,7 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 // as long as the native C structure.
 func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) error {
 
-	// Directly reference the internal Go string without copying (unsafe!).
-	// Go string is (pointer, length), compatible with a C char* pointer.
-	out.name = (*C.char)(unsafe.Pointer(unsafe.StringData(t.TableName)))
+	out.name = t.TableName
 
 	err := t.toNativeTableData(h, &out.data)
 	if err != nil {
@@ -630,20 +637,23 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 	}
 
 	columnCount := len(t.data)
-	if columnCount == 0 || tbl.data.columns == nil {
+	if columnCount == 0 || tbl.data.columns == nil || tbl.name == nil {
 		panic("WriterTable.releaseNative: inconsistent state")
 	}
 
-	basePtr := unsafe.Pointer(tbl.data.columns)
-	for i := 0; i < columnCount; i++ {
-		t.data[i].releaseNative(h)
+	qdbRelease(h, t.TableName)
+	tbl.name = nil
+	t.TableName = nil
+
+	for _, v := range t.data {
+		v.releaseNative(h)
 	}
 
-	C.qdb_release(h.handle, basePtr)
+	qdbRelease(h, tbl.data.columns)
 	tbl.data.columns = nil
 
 	if tbl.where_duplicate != nil {
-		C.qdb_release(h.handle, unsafe.Pointer(tbl.where_duplicate))
+		qdbRelease(h, tbl.where_duplicate)
 		tbl.where_duplicate = nil
 	}
 
@@ -787,9 +797,12 @@ func (w *Writer) GetOptions() WriterOptions {
 
 // Sets the data of a table. Returns error if table already exists.
 func (w *Writer) SetTable(t WriterTable) error {
+	tableName := t.GetName()
+
 	// Check if the table already exists
-	if _, exists := w.tables[t.TableName]; exists {
-		return fmt.Errorf("table %q already exists", t.TableName)
+	_, exists := w.tables[tableName]
+	if exists {
+		return fmt.Errorf("table %q already exists", tableName)
 	}
 
 	// Ensure schema consistency with previously added tables by comparing to
@@ -801,7 +814,7 @@ func (w *Writer) SetTable(t WriterTable) error {
 		break
 	}
 
-	w.tables[t.TableName] = t
+	w.tables[tableName] = t
 
 	return nil
 }
