@@ -159,8 +159,8 @@ func (wd *WriterDataTimestamp) releaseNative(h HandleType) error {
 
 // Blob
 type WriterDataBlob struct {
-	xs      *C.qdb_blob_t  // array of blob structs
-	content unsafe.Pointer // content array for *all* blobs, allocated as one large slice
+	xs      *C.qdb_blob_t // array of blob structs
+	content *byte         // content array for *all* blobs, allocated as one large slice
 }
 
 // Constructor for blob data array
@@ -194,15 +194,17 @@ func NewWriterDataBlob(h HandleType, xs [][]byte) (WriterData, error) {
 	}
 
 	// Step 3: allocate single slab of memory to hold all blobs
-	var contentPtr unsafe.Pointer
+	var contentPtr *byte
+	var rawPtr unsafe.Pointer
 	if maxBlobSize > 0 {
 		totalContentSize := maxBlobSize * count
-		contentPtr, err = qdbAllocBytes(h, totalContentSize)
+		rawPtr, err = qdbAllocBytes(h, totalContentSize)
 		if err != nil {
 			// Cleanup previous allocation before returning
 			qdbRelease(h, blobArrayPtr)
 			return nil, fmt.Errorf("blob content buffer allocation failed: %v", err)
 		}
+		contentPtr = (*byte)(rawPtr)
 	}
 
 	// Step 4: copy blob contents into single contiguous allocation
@@ -212,7 +214,7 @@ func NewWriterDataBlob(h HandleType, xs [][]byte) (WriterData, error) {
 
 		if len(v) > 0 {
 			// Calculate the correct offset within the large contiguous slab
-			destPtr = unsafe.Pointer(uintptr(contentPtr) + uintptr(i*maxBlobSize))
+			destPtr = unsafe.Pointer(uintptr(rawPtr) + uintptr(i*maxBlobSize))
 			C.memcpy(destPtr, unsafe.Pointer(&v[0]), C.size_t(len(v)))
 			blobSlice[i].content = destPtr
 			blobSlice[i].content_length = C.qdb_size_t(len(v))
@@ -243,9 +245,9 @@ func (wd *WriterDataBlob) releaseNative(h HandleType) error {
 	}
 
 	qdbRelease(h, wd.xs)
-  if wd.content != nil {
-    qdbRelease(h, wd.content)
-  }
+	if wd.content != nil {
+		qdbRelease(h, wd.content)
+	}
 
 	wd.xs = nil
 	wd.content = nil
@@ -256,7 +258,7 @@ func (wd *WriterDataBlob) releaseNative(h HandleType) error {
 // String
 type WriterDataString struct {
 	xs      *C.qdb_string_t // array of string structs
-	content unsafe.Pointer  // content array for *all* strings, allocated as one large slice
+	content *C.char         // content array for *all* strings, allocated as one large slice
 }
 
 // Constructor for string data array
@@ -294,16 +296,18 @@ func NewWriterDataString(h HandleType, xs []string) (WriterData, error) {
 		}
 	}
 
-	// Step 3: allocate single slab of memory to hold all blobs
-	var contentPtr unsafe.Pointer
+	// Step 3: allocate single slab of memory to hold all strings
+	var contentPtr *C.char
+	var rawPtr unsafe.Pointer
 	if maxStringSize > 0 {
 		totalContentSize := maxStringSize * count
-		contentPtr, err = qdbAllocBytes(h, totalContentSize)
+		rawPtr, err = qdbAllocBytes(h, totalContentSize)
 		if err != nil {
 			// Cleanup previous allocation before returning
 			qdbRelease(h, stringArrayPtr)
 			return nil, fmt.Errorf("blob content buffer allocation failed: %v", err)
 		}
+		contentPtr = (*C.char)(rawPtr)
 	}
 
 	// Step 4: copy blob contents into single contiguous allocation
@@ -313,7 +317,7 @@ func NewWriterDataString(h HandleType, xs []string) (WriterData, error) {
 
 		if len(v) > 0 {
 			// Calculate the correct offset within the large contiguous slab
-			destPtr = unsafe.Pointer(uintptr(contentPtr) + uintptr(i*maxStringSize))
+			destPtr = unsafe.Pointer(uintptr(rawPtr) + uintptr(i*maxStringSize))
 			C.memcpy(destPtr, unsafe.Pointer(unsafe.StringData(v)), C.size_t(len(v)))
 
 			// Don't forget to write the \0 null terminator.
@@ -348,7 +352,7 @@ func (wd *WriterDataString) releaseNative(h HandleType) error {
 	}
 
 	qdbRelease(h, wd.xs)
-  if wd.content != nil {
+	if wd.content != nil {
 		qdbRelease(h, wd.content)
 	}
 
