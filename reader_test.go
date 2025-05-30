@@ -40,9 +40,10 @@ func TestReaderOptionsCanSetProperties(t *testing.T) {
 
 func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 	assert := assert.New(t)
+	require := require.New(t)
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.NoError(t, err)
+	require.NoError(err)
 	defer handle.Close()
 
 	// Error when no range provided
