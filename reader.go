@@ -537,3 +537,93 @@ func newReaderTable(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 
 	return out, nil
 }
+
+type ReaderOptions struct {
+	tables     []string
+	columns    []string
+	rangeStart time.Time
+	rangeEnd   time.Time
+}
+
+func NewReaderOptions() ReaderOptions {
+	return ReaderOptions{}
+}
+
+// Creates ReaderOptions object that fetches all data for all columns for a set of tables
+func NewReaderDefaultOptions(tables []string) ReaderOptions {
+	return NewReaderOptions().WithTables(tables).WithoutTimeRange()
+}
+
+func (ro ReaderOptions) WithTables(tables []string) ReaderOptions {
+	ro.tables = tables
+	return ro
+}
+
+func (ro ReaderOptions) WithColumns(columns []string) ReaderOptions {
+	ro.columns = columns
+	return ro
+}
+
+func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOptions {
+	ro.rangeStart = start
+	ro.rangeEnd = end
+
+	return ro
+}
+
+// No time range provided implies basically all data set
+func (ro ReaderOptions) WithoutTimeRange() ReaderOptions {
+
+	// TODO: implement
+	//
+	//   the `ro.rangeStart` should match the equivalent of `qdb_min_time` from the qdb C api.
+	//   the `ro.rangeEnd` should match the equivalent of `qdb_min_tax` from the qdb C api.
+	//
+	// it should reuse these C.qdb_min_time and C.qdb_max_time variables, rather than hard-coding those constants in the go code
+
+	return ro
+
+}
+
+// Holds the current state of the reader
+type Reader struct {
+	// Options that were used to initialize the reader, for future reference if required
+	options ReaderOptions
+
+	// Current state of the reader handle.
+	state *C.qdb_reader_handle_t
+}
+
+// Initialize a new bulk reader. This performs the initialization of the bulk reader, and does not yet fetch data.
+// The user is expected to invoke `Reader.Close()` to release allocated memory.
+func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
+	var ret Reader
+	ret.options = options
+
+	// Step 1: validation of options
+	//  options.tables is not allowed to be nil
+	//  options.rangeEnd must be after options.rangeEnd
+
+	// Step 2: convert the options.rangeStart / options.rangeEnd to qdb_ts_range_t
+
+	// Step 3: Initialize `C.qdb_bulk_reader_table_t` structs. Even though our C API allows for using different ranges per table, we use a fixed range
+	//         for all tables. As such, we can reuse the previously constructed time ranges for all tables.
+	//         As the `qdb_ts_range` is allocated on the stack and not the heap, we can safely pass the pointer directly to all the tables.
+	//         Please use `qdbCopyString` from utils.go to allocate the strings, and `defer qdbRelease()` them right after allocation.
+
+	// Step 4: Initialize `columns` arguments to be invoked if necessary. We probably need to copy the strings as we cannot pass pointers directly into
+	//         C functions anymore since go 1.20+. If this assumption is correct, please use the `qdbCopyString` method from utils.go to allocate strings,
+	//         and `defer qdbRelease()` them immediately after allocating them,
+
+	// Step 5: invoke qdb_bulk_reader_fetch()
+	//         We now have all the parameters we need. Allow the qdb_bulk_reader_fetch() method to directly set the ret.state
+
+	// Done, return state.
+
+	return ret, nil
+}
+
+// Releases underlying memory
+func (r *Reader) Close() {
+	// if state is non-nil, invoke qdbRelease() on state
+}
