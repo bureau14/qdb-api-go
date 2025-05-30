@@ -27,7 +27,7 @@ func New(text string) error {
 }
 
 type WriterData interface {
-	// Possibly some methods, but often empty
+	// Returns the type of value of this class
 	valueType() TsValueType
 
 	// Returns opaque pointer to internal data array, intended to be set on
