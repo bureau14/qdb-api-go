@@ -574,12 +574,13 @@ func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOpti
 // No time range provided implies basically all data set
 func (ro ReaderOptions) WithoutTimeRange() ReaderOptions {
 
-	// TODO: implement
-	//
-	//   the `ro.rangeStart` should match the equivalent of `qdb_min_time` from the qdb C api.
-	//   the `ro.rangeEnd` should match the equivalent of `qdb_min_tax` from the qdb C api.
-	//
-	// it should reuse these C.qdb_min_time and C.qdb_max_time variables, rather than hard-coding those constants in the go code
+	// Initialize the time range to the full allowed range supported by
+	// QuasarDB.  We intentionally reuse the helper functions defined in
+	// constants.go which expose the C values `qdb_min_time` and
+	// `qdb_max_time` so we don't hard code the values here.
+
+	ro.rangeStart = MinTimespec()
+	ro.rangeEnd = MaxTimespec()
 
 	return ro
 
@@ -591,7 +592,7 @@ type Reader struct {
 	options ReaderOptions
 
 	// Current state of the reader handle.
-	state *C.qdb_reader_handle_t
+	state C.qdb_reader_handle_t
 }
 
 // Initialize a new bulk reader. This performs the initialization of the bulk reader, and does not yet fetch data.
@@ -601,22 +602,103 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	ret.options = options
 
 	// Step 1: validation of options
-	//  options.tables is not allowed to be nil
-	//  options.rangeEnd must be after options.rangeEnd
+	//  - at least one table must be specified
+	//  - a valid time range must be provided
+	if len(options.tables) == 0 {
+		return ret, fmt.Errorf("no tables provided")
+	}
+
+	if options.rangeStart.IsZero() && options.rangeEnd.IsZero() {
+		return ret, fmt.Errorf("time range not specified")
+	}
+
+	if !options.rangeEnd.After(options.rangeStart) {
+		return ret, fmt.Errorf("invalid time range")
+	}
 
 	// Step 2: convert the options.rangeStart / options.rangeEnd to qdb_ts_range_t
+	var cRange C.qdb_ts_range_t
+	TimeToQdbTimespec(options.rangeStart, &cRange.begin)
+	TimeToQdbTimespec(options.rangeEnd, &cRange.end)
 
-	// Step 3: Initialize `C.qdb_bulk_reader_table_t` structs. Even though our C API allows for using different ranges per table, we use a fixed range
-	//         for all tables. As such, we can reuse the previously constructed time ranges for all tables.
-	//         As the `qdb_ts_range` is allocated on the stack and not the heap, we can safely pass the pointer directly to all the tables.
-	//         Please use `qdbCopyString` from utils.go to allocate the strings, and `defer qdbRelease()` them right after allocation.
+	// Step 3: Initialize `C.qdb_bulk_reader_table_t` structs. Even though our C API allows for using
+	// different ranges per table, we use a fixed range for all tables. As such, we can reuse the
+	// previously constructed time ranges for all tables.  The table array itself is allocated via
+	// the QuasarDB allocator so it is compatible with the C API.  Each table name must also be
+	// allocated using qdbCopyString and is immediately deferred for release.
+	tableCount := len(options.tables)
+	cTables, err := qdbAllocBuffer[C.qdb_bulk_reader_table_t](h, tableCount)
+	if err != nil {
+		return ret, fmt.Errorf("failed to allocate table array: %w", err)
+	}
+	defer qdbRelease(h, cTables)
+	tblSlice := unsafe.Slice(cTables, tableCount)
 
-	// Step 4: Initialize `columns` arguments to be invoked if necessary. We probably need to copy the strings as we cannot pass pointers directly into
-	//         C functions anymore since go 1.20+. If this assumption is correct, please use the `qdbCopyString` method from utils.go to allocate strings,
-	//         and `defer qdbRelease()` them immediately after allocating them,
+	for i, tbl := range options.tables {
+		name, err := qdbCopyString(h, tbl)
+		if err != nil {
+			// release any previously allocated names before returning
+			for j := 0; j < i; j++ {
+				if tblSlice[j].name != nil {
+					qdbRelease(h, tblSlice[j].name)
+				}
+			}
+			return ret, fmt.Errorf("failed to copy table name: %w", err)
+		}
+		defer qdbRelease(h, name)
 
-	// Step 5: invoke qdb_bulk_reader_fetch()
-	//         We now have all the parameters we need. Allow the qdb_bulk_reader_fetch() method to directly set the ret.state
+		tblSlice[i].name = name
+		tblSlice[i].ranges = &cRange
+		tblSlice[i].range_count = 1
+	}
+
+	// Step 4: Initialize `columns` arguments.  Column names are optional.  If provided we allocate
+	// an array of char* pointers and copy each string using qdbCopyString.  The allocated memory is
+	// freed immediately after calling into the C API.
+	columnCount := len(options.columns)
+	var cColumns **C.char
+	if columnCount > 0 {
+		ptr, err := qdbAllocBuffer[*C.char](h, columnCount)
+		if err != nil {
+			return ret, fmt.Errorf("failed to allocate column array: %w", err)
+		}
+		defer qdbRelease(h, ptr)
+		colSlice := unsafe.Slice(ptr, columnCount)
+		for i, col := range options.columns {
+			cname, err := qdbCopyString(h, col)
+			if err != nil {
+				for j := 0; j < i; j++ {
+					if colSlice[j] != nil {
+						qdbRelease(h, colSlice[j])
+					}
+				}
+				return ret, fmt.Errorf("failed to copy column name: %w", err)
+			}
+			defer qdbRelease(h, cname)
+			colSlice[i] = cname
+		}
+		cColumns = ptr
+	} else {
+		cColumns = nil
+	}
+
+	// Step 5: invoke qdb_bulk_reader_fetch() which initializes the native reader handle.  After
+	// this call the C API manages its own copy of the provided tables and columns so we can
+	// safely release our temporary allocations via the deferred qdbRelease calls.
+	var readerHandle C.qdb_reader_handle_t
+	errCode := C.qdb_bulk_reader_fetch(
+		h.handle,
+		cColumns,
+		C.qdb_size_t(columnCount),
+		cTables,
+		C.qdb_size_t(tableCount),
+		&readerHandle,
+	)
+	if err := makeErrorOrNil(errCode); err != nil {
+		return ret, err
+	}
+
+	ret.state = readerHandle
 
 	// Done, return state.
 

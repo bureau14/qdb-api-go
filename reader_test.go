@@ -11,29 +11,47 @@ import (
 func TestReaderOptionsCanCreateNew(t *testing.T) {
 	assert := assert.New(t)
 
-	// TODO: implement test case that ensure we can create a ReaderOptions object in the first place
+	opts := NewReaderOptions()
+	assert.Empty(opts.tables)
+	assert.Empty(opts.columns)
+	assert.True(opts.rangeStart.IsZero())
+	assert.True(opts.rangeEnd.IsZero())
 }
 
 func TestReaderOptionsCanSetProperties(t *testing.T) {
 	assert := assert.New(t)
 
-	// TODO: implement test cases for ReaderOptions:
-	//   - verify that we can set tables using WithTables()
-	//   - verify that we can set columns using WithColumns()
-	//   - verify that we can set the time range using WithTimeRange()
-	//   - verify that we can disable the time range using WithoutTimeRange()
-	//
-	// Each test should assert that the values inside `ReaderOptions` are actually set correctly
+	tables := []string{"tbl1", "tbl2"}
+	columns := []string{"col1", "col2"}
+	start := time.Unix(0, 0)
+	end := time.Unix(10, 0)
 
+	opts := NewReaderOptions().WithTables(tables).WithColumns(columns).WithTimeRange(start, end)
+
+	assert.Equal(tables, opts.tables)
+	assert.Equal(columns, opts.columns)
+	assert.Equal(start, opts.rangeStart)
+	assert.Equal(end, opts.rangeEnd)
+
+	opts = opts.WithoutTimeRange()
+	assert.True(opts.rangeStart.Equal(MinTimespec()))
+	assert.True(opts.rangeEnd.Equal(MaxTimespec()))
 }
 
 func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 	assert := assert.New(t)
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.NoError(err)
+	require.NoError(t, err)
 	defer handle.Close()
 
-	// TODO: implements test case for NewReader() that ensures that an error is returned if
-	//       either no range is set at all, or the range end is not after the range start.
+	// Error when no range provided
+	opts := NewReaderOptions().WithTables([]string{"table1"})
+	_, err = NewReader(handle, opts)
+	assert.Error(err)
+
+	// Error when range end precedes start
+	opts = opts.WithTimeRange(time.Unix(10, 0), time.Unix(5, 0))
+	_, err = NewReader(handle, opts)
+	assert.Error(err)
 }
