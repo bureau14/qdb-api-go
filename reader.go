@@ -9,6 +9,7 @@ package qdb
 import "C"
 import (
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -27,6 +28,14 @@ type ReaderData interface {
 type ReaderDataInt64 struct {
 	name string
 	xs   []int64
+}
+
+func (rd *ReaderDataInt64) Name() string {
+	return rd.name
+}
+
+func (rd *ReaderDataInt64) Data() []int64 {
+	return rd.xs
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -66,4 +75,56 @@ func newReaderDataInt64(name string, xs C.qdb_exp_batch_push_column_t, n int) (R
 
 	// Return result
 	return out, nil
+}
+
+// Double
+type ReaderDataDouble struct {
+	name string
+	xs   []float64
+}
+
+func (rd *ReaderDataDouble) Name() string {
+	return rd.name
+}
+
+func (rd *ReaderDataDouble) Data() []float64 {
+	return rd.xs
+}
+
+// Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
+// that copies data.
+//
+// Assumes `data.data_type` is double,returns error otherwise.
+//
+// name: column name
+// xs:   C array of reader column data
+// n:    length of `data` inside array
+func newReaderDataDouble(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataDouble, error) {
+	// TODO: complete with the exact same commment structure and code structure as newReaderDataInt64
+}
+
+// Timestamp
+type ReaderDataTimestamp struct {
+	name string
+	xs   []time.Time
+}
+
+func (rd *ReaderDataTimestamp) Name() string {
+	return rd.name
+}
+
+func (rd *ReaderDataTimestamp) Data() []time.Time {
+	return rd.xs
+}
+
+// Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
+// that copies data.
+//
+// Assumes `data.data_type` is timestamp, returns error otherwise.
+//
+// name: column name
+// xs:   C array of reader column data
+// n:    length of `data` inside array
+func newReaderDataTimestamp(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataTimestamp, error) {
+	// TODO: complete with the exact same commment structure and code structure as newReaderDataInt64
 }
