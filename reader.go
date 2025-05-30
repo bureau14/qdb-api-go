@@ -17,11 +17,8 @@ type ReaderData interface {
 	// Returns the column name
 	Name() string
 
-	// Possibly some methods, but often empty
+	// returns the type of data for this column
 	valueType() TsValueType
-
-	// Release any C allocated buffers managed
-	release(h HandleType) error
 }
 
 // Int64
@@ -36,6 +33,10 @@ func (rd *ReaderDataInt64) Name() string {
 
 func (rd *ReaderDataInt64) Data() []int64 {
 	return rd.xs
+}
+
+func (rd *ReaderDataInt64) valueType() TsValueType {
+	return TsValueInt64
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -91,6 +92,10 @@ func (rd *ReaderDataDouble) Data() []float64 {
 	return rd.xs
 }
 
+func (rd *ReaderDataDouble) valueType() TsValueType {
+	return TsValueDouble
+}
+
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
 // that copies data.
 //
@@ -142,6 +147,10 @@ func (rd *ReaderDataTimestamp) Name() string {
 
 func (rd *ReaderDataTimestamp) Data() []time.Time {
 	return rd.xs
+}
+
+func (rd *ReaderDataTimestamp) valueType() TsValueType {
+	return TsValueTimestamp
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -197,6 +206,10 @@ func (rd *ReaderDataBlob) Data() [][]byte {
 	return rd.xs
 }
 
+func (rd *ReaderDataBlob) valueType() TsValueType {
+	return TsValueBlob
+}
+
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
 // that copies data.
 //
@@ -249,6 +262,10 @@ func (rd *ReaderDataString) Name() string {
 
 func (rd *ReaderDataString) Data() []string {
 	return rd.xs
+}
+
+func (rd *ReaderDataString) valueType() TsValueType {
+	return TsValueString
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -339,31 +356,184 @@ func (rt *ReaderTable) RowCount() string {
 // As all schemas for all tables are required to be the same, this function accepts the `columns`
 // parameter that were parsed earlier. For convenience, in our case, we set it as part of each
 // ReaderTable object.
-func newReaderTable(columns []ReaderColumn, tbl qdb_exp_batch_push_table_t) (ReaderTable, error) {
+func newReaderTable(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (ReaderTable, error) {
 
 	// Step 1: input validation
-	// TODO: return error if `tbl.name` is nil
-	// TODO: return error if `tbl.data.timestamps` is nil
-	// TODO: return error if `tbl.data.columns` is nil
-	// TODO: return error if `tbl.data.row_count` is not > 0
-	// TODO: return error if `tbl.data.column_count` is not > 0
+	if tbl.name == nil {
+		return ReaderTable{}, fmt.Errorf("Internal error: nil table name")
+	}
+
+	if tbl.data.timestamps == nil {
+		return ReaderTable{}, fmt.Errorf("Internal error: nil timestamps for table %s", C.GoString(tbl.name))
+	}
+
+	if tbl.data.columns == nil {
+		return ReaderTable{}, fmt.Errorf("Internal error: nil columns for table %s", C.GoString(tbl.name))
+	}
+
+	if tbl.data.row_count <= 0 {
+		return ReaderTable{}, fmt.Errorf("Internal error: invalid row count %d", tbl.data.row_count)
+	}
+
+	if tbl.data.column_count <= 0 {
+		return ReaderTable{}, fmt.Errorf("Internal error: invalid column count %d", tbl.data.column_count)
+	}
 
 	var out ReaderTable
 	out.columnInfoByOffset = columns
 
-	// TODO: set out.tableName from tbl.name, copy memory
+	// Copy table name from C memory
+	out.tableName = C.GoString(tbl.name)
 
 	// We mostly care about the actual data and will be using that struct a lot, so let's
 	// acquire a reference to it.
 	var data *C.qdb_exp_batch_push_table_data_t = &(tbl.data)
 
-	// TODO: set out.rowCount based on data.row_count
-	// TODO: set out.idx based on data.timestamps. use the rowCount to know how long the slice should be
+	// Set row count
+	out.rowCount = int(data.row_count)
 
-	// TODO: store the `data` object by:
-	//  - iterating over all the `data.columns`, store in variable name `column`
-	//  - add check that `column.data_type` matches the `columns[i].ValueType()`, this would be an internal error if not the case
-	//  - dispatch to correct `newReaderData...` function based on the ValueType() and store it in out.data[i]
+	// Copy index
+	idxSlice := unsafe.Slice(data.timestamps, out.rowCount)
+	out.idx = make([]time.Time, out.rowCount)
+	for i, v := range idxSlice {
+		out.idx[i] = QdbTimespecToTime(v)
+	}
+
+	// Store the column data
+	colCount := int(data.column_count)
+	out.data = make([]ReaderData, colCount)
+
+	columnSlice := unsafe.Slice(data.columns, colCount)
+	for i := 0; i < colCount; i++ {
+		column := columnSlice[i]
+
+		expected := C.qdb_ts_column_type_t(columns[i].columnType)
+		if column.data_type != expected {
+			return ReaderTable{}, fmt.Errorf("Internal error: column %d type mismatch (expected %v, got %v)", i, expected, column.data_type)
+		}
+
+		name := columns[i].columnName
+
+		switch columns[i].columnType.AsValueType() {
+		case TsValueInt64:
+			v, err := newReaderDataInt64(name, column, out.rowCount)
+			if err != nil {
+				return ReaderTable{}, err
+			}
+			out.data[i] = &v
+		case TsValueDouble:
+			v, err := newReaderDataDouble(name, column, out.rowCount)
+			if err != nil {
+				return ReaderTable{}, err
+			}
+			out.data[i] = &v
+		case TsValueTimestamp:
+			v, err := newReaderDataTimestamp(name, column, out.rowCount)
+			if err != nil {
+				return ReaderTable{}, err
+			}
+			out.data[i] = &v
+		case TsValueBlob:
+			v, err := newReaderDataBlob(name, column, out.rowCount)
+			if err != nil {
+				return ReaderTable{}, err
+			}
+			out.data[i] = &v
+		case TsValueString:
+			v, err := newReaderDataString(name, column, out.rowCount)
+			if err != nil {
+				return ReaderTable{}, err
+			}
+			out.data[i] = &v
+		default:
+			return ReaderTable{}, fmt.Errorf("Internal error: unsupported value type for column %s", name)
+		}
+	}
 
 	return out, nil
+}
+
+// GetReaderDataInt64 safely extracts a slice of int64 values from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataInt64.
+func GetReaderDataInt64(rd ReaderData) ([]int64, error) {
+	v, ok := rd.(*ReaderDataInt64)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataInt64: type mismatch, expected ReaderDataInt64, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataInt64Unsafe is the unsafe variant of GetReaderDataInt64. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataInt64Unsafe(rd ReaderData) []int64 {
+	return (*ReaderDataInt64)(ifaceDataPtr(rd)).xs
+}
+
+// GetReaderDataDouble safely extracts a slice of float64 values from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataDouble.
+func GetReaderDataDouble(rd ReaderData) ([]float64, error) {
+	v, ok := rd.(*ReaderDataDouble)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataDouble: type mismatch, expected ReaderDataDouble, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataDoubleUnsafe is the unsafe variant of GetReaderDataDouble. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataDoubleUnsafe(rd ReaderData) []float64 {
+	return (*ReaderDataDouble)(ifaceDataPtr(rd)).xs
+}
+
+// GetReaderDataTimestamp safely extracts a slice of time.Time values from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataTimestamp.
+func GetReaderDataTimestamp(rd ReaderData) ([]time.Time, error) {
+	v, ok := rd.(*ReaderDataTimestamp)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataTimestamp: type mismatch, expected ReaderDataTimestamp, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataTimestampUnsafe is the unsafe variant of GetReaderDataTimestamp. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataTimestampUnsafe(rd ReaderData) []time.Time {
+	return (*ReaderDataTimestamp)(ifaceDataPtr(rd)).xs
+}
+
+// GetReaderDataBlob safely extracts a slice of byte slices from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataBlob.
+func GetReaderDataBlob(rd ReaderData) ([][]byte, error) {
+	v, ok := rd.(*ReaderDataBlob)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataBlob: type mismatch, expected ReaderDataBlob, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataBlobUnsafe is the unsafe variant of GetReaderDataBlob. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataBlobUnsafe(rd ReaderData) [][]byte {
+	return (*ReaderDataBlob)(ifaceDataPtr(rd)).xs
+}
+
+// GetReaderDataString safely extracts a slice of strings from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataString.
+func GetReaderDataString(rd ReaderData) ([]string, error) {
+	v, ok := rd.(*ReaderDataString)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataString: type mismatch, expected ReaderDataString, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataStringUnsafe is the unsafe variant of GetReaderDataString. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataStringUnsafe(rd ReaderData) []string {
+	return (*ReaderDataString)(ifaceDataPtr(rd)).xs
 }
