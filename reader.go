@@ -78,6 +78,23 @@ func newReaderDataInt64(name string, xs C.qdb_exp_batch_push_column_t, n int) (R
 	return out, nil
 }
 
+// GetReaderDataInt64 safely extracts a slice of int64 values from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataInt64.
+func GetReaderDataInt64(rd ReaderData) ([]int64, error) {
+	v, ok := rd.(*ReaderDataInt64)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataInt64: type mismatch, expected ReaderDataInt64, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataInt64Unsafe is the unsafe variant of GetReaderDataInt64. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataInt64Unsafe(rd ReaderData) []int64 {
+	return (*ReaderDataInt64)(ifaceDataPtr(rd)).xs
+}
+
 // Double
 type ReaderDataDouble struct {
 	name string
@@ -135,6 +152,23 @@ func newReaderDataDouble(name string, xs C.qdb_exp_batch_push_column_t, n int) (
 	return out, nil
 }
 
+// GetReaderDataDouble safely extracts a slice of float64 values from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataDouble.
+func GetReaderDataDouble(rd ReaderData) ([]float64, error) {
+	v, ok := rd.(*ReaderDataDouble)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataDouble: type mismatch, expected ReaderDataDouble, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataDoubleUnsafe is the unsafe variant of GetReaderDataDouble. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataDoubleUnsafe(rd ReaderData) []float64 {
+	return (*ReaderDataDouble)(ifaceDataPtr(rd)).xs
+}
+
 // Timestamp
 type ReaderDataTimestamp struct {
 	name string
@@ -190,6 +224,23 @@ func newReaderDataTimestamp(name string, xs C.qdb_exp_batch_push_column_t, n int
 
 	// Return result
 	return out, nil
+}
+
+// GetReaderDataTimestamp safely extracts a slice of time.Time values from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataTimestamp.
+func GetReaderDataTimestamp(rd ReaderData) ([]time.Time, error) {
+	v, ok := rd.(*ReaderDataTimestamp)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataTimestamp: type mismatch, expected ReaderDataTimestamp, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataTimestampUnsafe is the unsafe variant of GetReaderDataTimestamp. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataTimestampUnsafe(rd ReaderData) []time.Time {
+	return (*ReaderDataTimestamp)(ifaceDataPtr(rd)).xs
 }
 
 // Blob
@@ -250,6 +301,23 @@ func newReaderDataBlob(name string, xs C.qdb_exp_batch_push_column_t, n int) (Re
 	return out, nil
 }
 
+// GetReaderDataBlob safely extracts a slice of byte slices from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataBlob.
+func GetReaderDataBlob(rd ReaderData) ([][]byte, error) {
+	v, ok := rd.(*ReaderDataBlob)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataBlob: type mismatch, expected ReaderDataBlob, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataBlobUnsafe is the unsafe variant of GetReaderDataBlob. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataBlobUnsafe(rd ReaderData) [][]byte {
+	return (*ReaderDataBlob)(ifaceDataPtr(rd)).xs
+}
+
 // String
 type ReaderDataString struct {
 	name string
@@ -306,6 +374,23 @@ func newReaderDataString(name string, xs C.qdb_exp_batch_push_column_t, n int) (
 
 	// Return result
 	return out, nil
+}
+
+// GetReaderDataString safely extracts a slice of strings from a ReaderData object.
+//
+// Returns an error if the underlying type is not ReaderDataString.
+func GetReaderDataString(rd ReaderData) ([]string, error) {
+	v, ok := rd.(*ReaderDataString)
+	if !ok {
+		return nil, fmt.Errorf("GetReaderDataString: type mismatch, expected ReaderDataString, got %T", rd)
+	}
+	return v.xs, nil
+}
+
+// GetReaderDataStringUnsafe is the unsafe variant of GetReaderDataString. Undefined behavior
+// occurs when invoked on a ReaderData of the incorrect concrete type.
+func GetReaderDataStringUnsafe(rd ReaderData) []string {
+	return (*ReaderDataString)(ifaceDataPtr(rd)).xs
 }
 
 // Metadata we need to represent a single column.
@@ -451,89 +536,4 @@ func newReaderTable(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 	}
 
 	return out, nil
-}
-
-// GetReaderDataInt64 safely extracts a slice of int64 values from a ReaderData object.
-//
-// Returns an error if the underlying type is not ReaderDataInt64.
-func GetReaderDataInt64(rd ReaderData) ([]int64, error) {
-	v, ok := rd.(*ReaderDataInt64)
-	if !ok {
-		return nil, fmt.Errorf("GetReaderDataInt64: type mismatch, expected ReaderDataInt64, got %T", rd)
-	}
-	return v.xs, nil
-}
-
-// GetReaderDataInt64Unsafe is the unsafe variant of GetReaderDataInt64. Undefined behavior
-// occurs when invoked on a ReaderData of the incorrect concrete type.
-func GetReaderDataInt64Unsafe(rd ReaderData) []int64 {
-	return (*ReaderDataInt64)(ifaceDataPtr(rd)).xs
-}
-
-// GetReaderDataDouble safely extracts a slice of float64 values from a ReaderData object.
-//
-// Returns an error if the underlying type is not ReaderDataDouble.
-func GetReaderDataDouble(rd ReaderData) ([]float64, error) {
-	v, ok := rd.(*ReaderDataDouble)
-	if !ok {
-		return nil, fmt.Errorf("GetReaderDataDouble: type mismatch, expected ReaderDataDouble, got %T", rd)
-	}
-	return v.xs, nil
-}
-
-// GetReaderDataDoubleUnsafe is the unsafe variant of GetReaderDataDouble. Undefined behavior
-// occurs when invoked on a ReaderData of the incorrect concrete type.
-func GetReaderDataDoubleUnsafe(rd ReaderData) []float64 {
-	return (*ReaderDataDouble)(ifaceDataPtr(rd)).xs
-}
-
-// GetReaderDataTimestamp safely extracts a slice of time.Time values from a ReaderData object.
-//
-// Returns an error if the underlying type is not ReaderDataTimestamp.
-func GetReaderDataTimestamp(rd ReaderData) ([]time.Time, error) {
-	v, ok := rd.(*ReaderDataTimestamp)
-	if !ok {
-		return nil, fmt.Errorf("GetReaderDataTimestamp: type mismatch, expected ReaderDataTimestamp, got %T", rd)
-	}
-	return v.xs, nil
-}
-
-// GetReaderDataTimestampUnsafe is the unsafe variant of GetReaderDataTimestamp. Undefined behavior
-// occurs when invoked on a ReaderData of the incorrect concrete type.
-func GetReaderDataTimestampUnsafe(rd ReaderData) []time.Time {
-	return (*ReaderDataTimestamp)(ifaceDataPtr(rd)).xs
-}
-
-// GetReaderDataBlob safely extracts a slice of byte slices from a ReaderData object.
-//
-// Returns an error if the underlying type is not ReaderDataBlob.
-func GetReaderDataBlob(rd ReaderData) ([][]byte, error) {
-	v, ok := rd.(*ReaderDataBlob)
-	if !ok {
-		return nil, fmt.Errorf("GetReaderDataBlob: type mismatch, expected ReaderDataBlob, got %T", rd)
-	}
-	return v.xs, nil
-}
-
-// GetReaderDataBlobUnsafe is the unsafe variant of GetReaderDataBlob. Undefined behavior
-// occurs when invoked on a ReaderData of the incorrect concrete type.
-func GetReaderDataBlobUnsafe(rd ReaderData) [][]byte {
-	return (*ReaderDataBlob)(ifaceDataPtr(rd)).xs
-}
-
-// GetReaderDataString safely extracts a slice of strings from a ReaderData object.
-//
-// Returns an error if the underlying type is not ReaderDataString.
-func GetReaderDataString(rd ReaderData) ([]string, error) {
-	v, ok := rd.(*ReaderDataString)
-	if !ok {
-		return nil, fmt.Errorf("GetReaderDataString: type mismatch, expected ReaderDataString, got %T", rd)
-	}
-	return v.xs, nil
-}
-
-// GetReaderDataStringUnsafe is the unsafe variant of GetReaderDataString. Undefined behavior
-// occurs when invoked on a ReaderData of the incorrect concrete type.
-func GetReaderDataStringUnsafe(rd ReaderData) []string {
-	return (*ReaderDataString)(ifaceDataPtr(rd)).xs
 }
