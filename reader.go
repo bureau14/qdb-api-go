@@ -282,3 +282,38 @@ func (rt *ReaderTable) TableName() string {
 func (rt *ReaderTable) RowCount() string {
 	return rt.tableName
 }
+
+// Creates new ReaderTable object out of a qdb_exp_batch_push_table_t struct. Memory-safe,
+// in that it copies all the memory which means these objects are safe to use for a long time.
+//
+// As all schemas for all tables are required to be the same, this function accepts the `columns`
+// parameter that were parsed earlier. For convenience, in our case, we set it as part of each
+// ReaderTable object.
+func newReaderTable(columns []ReaderColumn, tbl qdb_exp_batch_push_table_t) (ReaderTable, error) {
+
+	// Step 1: input validation
+	// TODO: return error if `tbl.name` is nil
+	// TODO: return error if `tbl.data.timestamps` is nil
+	// TODO: return error if `tbl.data.columns` is nil
+	// TODO: return error if `tbl.data.row_count` is not > 0
+	// TODO: return error if `tbl.data.column_count` is not > 0
+
+	var out ReaderTable
+	out.columnInfoByOffset = columns
+
+	// TODO: set out.tableName from tbl.name, copy memory
+
+	// We mostly care about the actual data and will be using that struct a lot, so let's
+	// acquire a reference to it.
+	var data *C.qdb_exp_batch_push_table_data_t = &(tbl.data)
+
+	// TODO: set out.rowCount based on data.row_count
+	// TODO: set out.idx based on data.timestamps. use the rowCount to know how long the slice should be
+
+	// TODO: store the `data` object by:
+	//  - iterating over all the `data.columns`, store in variable name `column`
+	//  - add check that `column.data_type` matches the `columns[i].ValueType()`, this would be an internal error if not the case
+	//  - dispatch to correct `newReaderData...` function based on the ValueType() and store it in out.data[i]
+
+	return out, nil
+}
