@@ -205,11 +205,36 @@ func (rd *ReaderDataBlob) Data() [][]byte {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataBlob(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataTimestamp, error) {
-	// TODO: complete with the exact same commment structure and code structure as newReaderDataInt64, with
-	//       the addition that an additional copy of data must happen for the actual data within the blobs.
-	//       That is, the `qdb_blob_t` structures must be copied into `[]byte` structures in a memory-safe
-	//       way.
+func newReaderDataBlob(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataBlob, error) {
+	// Step 1: validation of input parameters
+	if xs.data_type != C.qdb_ts_column_blob {
+		return ReaderDataBlob{}, fmt.Errorf("Internal error, expected data type to be blob, got: %v", xs.data_type)
+	}
+	if n <= 0 {
+		return ReaderDataBlob{}, fmt.Errorf("Internal error: invalid column length %d", n)
+	}
+
+	// Step 2: do a cast of xs.data[0] to *C.qdb_blob_t. As pointer sizes on different architectures
+	//         may differ, *cannot* assume it's 8 bytes, and instead use `unsafe.Pointer` as the
+	//         architecture-safe representation for the size.
+	rawPtr := *(*unsafe.Pointer)(unsafe.Pointer(&xs.data[0]))
+	cPtr := (*C.qdb_blob_t)(rawPtr)
+	if cPtr == nil {
+		return ReaderDataBlob{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
+	}
+
+	// Step 3: copy data by first interpreting it as a temporary memory unsafe-slice, then copying
+	//         it into a new, entirely Go-managed slice. This ensures the data can live on even when
+	//         we move to a new "batch" of reader data. The actual blob content is duplicated
+	//         into Go-managed byte slices.
+	out := ReaderDataBlob{name: name, xs: make([][]byte, n)}
+	tmp := unsafe.Slice(cPtr, n)
+	for i, v := range tmp {
+		out.xs[i] = C.GoBytes(unsafe.Pointer(v.content), C.int(v.content_length))
+	}
+
+	// Return result
+	return out, nil
 }
 
 // String
@@ -234,11 +259,36 @@ func (rd *ReaderDataString) Data() []string {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataString(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataTimestamp, error) {
-	// TODO: complete with the exact same commment structure and code structure as newReaderDataInt64, with
-	//       the addition that an additional copy of data must happen for the actual data within the strings.
-	//       That is, the `qdb_string_t` structures must be copied into `string` structures in a memory-safe
-	//       way.
+func newReaderDataString(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataString, error) {
+	// Step 1: validation of input parameters
+	if xs.data_type != C.qdb_ts_column_string {
+		return ReaderDataString{}, fmt.Errorf("Internal error, expected data type to be string, got: %v", xs.data_type)
+	}
+	if n <= 0 {
+		return ReaderDataString{}, fmt.Errorf("Internal error: invalid column length %d", n)
+	}
+
+	// Step 2: do a cast of xs.data[0] to *C.qdb_string_t. As pointer sizes on different architectures
+	//         may differ, *cannot* assume it's 8 bytes, and instead use `unsafe.Pointer` as the
+	//         architecture-safe representation for the size.
+	rawPtr := *(*unsafe.Pointer)(unsafe.Pointer(&xs.data[0]))
+	cPtr := (*C.qdb_string_t)(rawPtr)
+	if cPtr == nil {
+		return ReaderDataString{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
+	}
+
+	// Step 3: copy data by first interpreting it as a temporary memory unsafe-slice, then copying
+	//         it into a new, entirely Go-managed slice. This ensures the data can live on even when
+	//         we move to a new "batch" of reader data. The actual string content is duplicated
+	//         into Go-managed strings.
+	out := ReaderDataString{name: name, xs: make([]string, n)}
+	tmp := unsafe.Slice(cPtr, n)
+	for i, v := range tmp {
+		out.xs[i] = C.GoStringN(v.data, C.int(v.length))
+	}
+
+	// Return result
+	return out, nil
 }
 
 // Metadata we need to represent a single column.
