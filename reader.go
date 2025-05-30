@@ -182,3 +182,103 @@ func newReaderDataTimestamp(name string, xs C.qdb_exp_batch_push_column_t, n int
 	// Return result
 	return out, nil
 }
+
+// Blob
+type ReaderDataBlob struct {
+	name string
+	xs   [][]byte
+}
+
+func (rd *ReaderDataBlob) Name() string {
+	return rd.name
+}
+
+func (rd *ReaderDataBlob) Data() [][]byte {
+	return rd.xs
+}
+
+// Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
+// that copies data.
+//
+// Assumes `data.data_type` is blob, returns error otherwise.
+//
+// name: column name
+// xs:   C array of reader column data
+// n:    length of `data` inside array
+func newReaderDataBlob(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataTimestamp, error) {
+	// TODO: complete with the exact same commment structure and code structure as newReaderDataInt64, with
+	//       the addition that an additional copy of data must happen for the actual data within the blobs.
+	//       That is, the `qdb_blob_t` structures must be copied into `[]byte` structures in a memory-safe
+	//       way.
+}
+
+// String
+type ReaderDataString struct {
+	name string
+	xs   []string
+}
+
+func (rd *ReaderDataString) Name() string {
+	return rd.name
+}
+
+func (rd *ReaderDataString) Data() []string {
+	return rd.xs
+}
+
+// Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
+// that copies data.
+//
+// Assumes `data.data_type` is string, returns error otherwise.
+//
+// name: column name
+// xs:   C array of reader column data
+// n:    length of `data` inside array
+func newReaderDataString(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataTimestamp, error) {
+	// TODO: complete with the exact same commment structure and code structure as newReaderDataInt64, with
+	//       the addition that an additional copy of data must happen for the actual data within the strings.
+	//       That is, the `qdb_string_t` structures must be copied into `string` structures in a memory-safe
+	//       way.
+}
+
+// Metadata we need to represent a single column.
+type ReaderColumn struct {
+	columnName string
+	columnType TsColumnType
+}
+
+func (rc ReaderColumn) Name() string {
+	return rc.columnName
+}
+
+func (rc ReaderColumn) Type() TsColumnType {
+	return rc.columnType
+}
+
+type ReaderTable struct {
+	// Name of the table this data is for
+	tableName string
+
+	// All arrays are guaranteed to be of lenght `rowCount`. This means specifically
+	// the `idx` parameter and all Writerdata value arrays within `data`.
+	rowCount int
+
+	// An index that enables looking up of a column's name by its offset within the table.
+	columnInfoByOffset []ReaderColumn
+
+	// The index, can not contain null values
+	idx []time.Time
+
+	// Value arrays read from each column
+	data []ReaderData
+}
+
+// Returns name of the table
+func (rt *ReaderTable) TableName() string {
+	return rt.tableName
+}
+
+// Returns number of rows in this chunk / table
+func (rt *ReaderTable) RowCount() string {
+	return rt.tableName
+}
