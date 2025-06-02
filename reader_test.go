@@ -114,6 +114,11 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	datas, err := generateWriterDatas(handle, rowCount, columns)
 	require.NoError(err)
 
+	writerTable, err := NewWriterTable(handle, table.alias, columns)
+	require.NoError(err)
+	require.NoError(writerTable.SetIndex(handle, idx))
+	require.NoError(writerTable.SetDatas(datas))
+
 	// Capture values from generated WriterData without using cgo
 	var (
 		intData    []int64
@@ -186,11 +191,6 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 			}
 		}
 	}
-
-	writerTable, err := NewWriterTable(handle, table.alias, columns)
-	require.NoError(err)
-	require.NoError(writerTable.SetIndex(handle, idx))
-	require.NoError(writerTable.SetDatas(datas))
 
 	writer := NewWriterWithDefaultOptions()
 	writer.SetTable(writerTable)
