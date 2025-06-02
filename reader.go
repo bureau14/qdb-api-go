@@ -626,12 +626,6 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	for i, tbl := range options.tables {
 		name, err := qdbCopyString(h, tbl)
 		if err != nil {
-			// release any previously allocated names before returning
-			for j := 0; j < i; j++ {
-				if tblSlice[j].name != nil {
-					qdbRelease(h, tblSlice[j].name)
-				}
-			}
 			return ret, fmt.Errorf("failed to copy table name: %w", err)
 		}
 		defer qdbRelease(h, name)
