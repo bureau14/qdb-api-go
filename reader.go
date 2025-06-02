@@ -19,6 +19,22 @@ type ReaderData interface {
 
 	// returns the type of data for this column
 	valueType() TsValueType
+
+	// Ensures the underlying data pre-allocates a certain capacity, useful when we know
+	// we will have multiple incremental allocations.
+	ensureCapacity(n int)
+
+	// Appends another chunk of `ReaderData` to this. Validates that they are of identical types.
+	// The intent of this function is the "merge" multiple chunks of ReaderData together in case
+	// the user calls FetchAll().
+	//
+	// Returns error if:
+	//  * Name() does not match
+	//  * ReaderData is not of the same type as the struct implementing this function.
+	appendData(data ReaderData) error
+
+	// Unsafe variant of appendData(), undefined behavior in case it's used incorrectly
+	appendDataUnsafe(data ReaderData)
 }
 
 // Int64
@@ -37,6 +53,23 @@ func (rd *ReaderDataInt64) Data() []int64 {
 
 func (rd *ReaderDataInt64) valueType() TsValueType {
 	return TsValueInt64
+}
+
+func (rd *ReaderDataInt64) ensureCapacity(n int) {
+	// TODO: implement extend rd.xs
+}
+
+func (rd *ReaderDataInt64) appendData(data ReaderData) error {
+	// TODO: implement:
+	// * ensure data.Name() is identical
+	// * cast data to ReaderDataInt64, return error if not of the same type
+	// * add `data.xs` to `rd.xs`
+
+	return nil
+}
+
+func (rd *ReaderDataInt64) appendDataUnsafe(data ReaderData) {
+	// TODO: implement: unsafe variant of appendData() without error checks
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -433,6 +466,53 @@ func (rt *ReaderChunk) TableName() string {
 // Returns number of rows in this chunk / table
 func (rt *ReaderChunk) RowCount() string {
 	return rt.tableName
+}
+
+// mergeReaderChunks merges multiple chunks of the same table into one unified chunk.
+func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
+	if len(xs) == 0 {
+		return ReaderChunk{}, nil
+	}
+
+	base := xs[0]
+	totalRows := len(base.idx)
+	for i, chunk := range xs[1:] {
+		if chunk.tableName != base.tableName {
+			return ReaderChunk{}, fmt.Errorf("table name mismatch at position %d: expected '%s', got '%s'", i+1, base.tableName, chunk.tableName)
+		}
+
+		if len(chunk.data) != len(base.data) {
+			return ReaderChunk{}, fmt.Errorf("column length mismatch at chunk %d: expected %d, got %d", i+1, len(base.data), len(chunk.data))
+		}
+		for ci, c := range chunk.data {
+			if c.Name() != base.data[ci].Name() || c.ValueType() != base.data[ci].ValueType() {
+				return ReaderChunk{}, fmt.Errorf("column mismatch at chunk %d, column %d: expected '%s(%v)', got '%s(%v)'", i+1, ci, base.data[ci].Name(), base.data[ci].ValueType(), c.Name(), c.ValueType())
+			}
+		}
+		totalRows += len(chunk.idx)
+	}
+
+	mergedIdx := make([]time.Time, 0, totalRows)
+	mergedData := make([]ReaderData, len(base.data))
+	for idx, col := range base.data {
+		mergedData[idx] = col.ensureCapacity(totalRows)
+	}
+
+	for _, chunk := range xs {
+		mergedIdx = append(mergedIdx, chunk.idx...)
+		for idx, col := range chunk.data {
+			err := mergedData[idx].append(col)
+			if err != nil {
+				return ReaderChunk{}, fmt.Errorf("error appending data column %d: %w", idx, err)
+			}
+		}
+	}
+
+	return ReaderChunk{
+		tableName:          base.tableName,
+		idx:                mergedIdx,
+		data:               mergedData,
+		columnInfoByOffset: base.columnInfoByOffset}, nil
 }
 
 // Creates new ReaderChunk object out of a qdb_exp_batch_push_table_t struct. Memory-safe,
