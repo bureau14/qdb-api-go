@@ -740,6 +740,7 @@ func newReaderChunk(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 }
 
 type ReaderOptions struct {
+	batchSize  int
 	tables     []string
 	columns    []string
 	rangeStart time.Time
@@ -747,12 +748,20 @@ type ReaderOptions struct {
 }
 
 func NewReaderOptions() ReaderOptions {
-	return ReaderOptions{}
+	// Default to 32768 rows
+	var defaultBatchSize int = 32 * 1024
+
+	return ReaderOptions{batchSize: defaultBatchSize}
 }
 
 // Creates ReaderOptions object that fetches all data for all columns for a set of tables
 func NewReaderDefaultOptions(tables []string) ReaderOptions {
 	return NewReaderOptions().WithTables(tables)
+}
+
+func (ro ReaderOptions) WithBatchSize(batchSize int) ReaderOptions {
+	ro.batchSize = batchSize
+	return ro
 }
 
 func (ro ReaderOptions) WithTables(tables []string) ReaderOptions {
@@ -772,24 +781,146 @@ func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOpti
 	return ro
 }
 
-// Holds the current state of the reader
+// A batch is nothing more than a number of chunks
+type ReaderBatch []ReaderChunk
+
+// Merges multiple reader batches into one large batch.
+func mergeReaderBatches(xs []ReaderBatch) (ReaderBatch, error) {
+	// TODO: implement
+	//
+	// Step 1: short-circuit if there are either 0 or 1 batches
+
+	if len(xs) == 0 {
+		return nil, fmt.Errorf("No batches provided to mergeReaderBatches function")
+	} else if len(xs) == 1 {
+		return xs[0], nil
+	}
+
+	// Step 2: as all batches should have the exact same shape, we know exactly
+	//         how many chunks we need to allocate by just looking at the first chunk.
+	ret := make([]ReaderChunk, len(xs))
+
+	// This will be our temporary "staging" area of all chunks we intend to merge together
+	//
+	// The number of different "chunk arrays" that we'll have to merge will be exactly identical
+	// to the number of chunks of the first batch
+	chunks := make([][]ReaderChunk, len(xs[0]))
+
+	batchCount := len(xs)
+
+	// Pre-allocate all the chunk slices
+	for idx := range len(xs) {
+		// Extra safety: if, for whatever reason, one of these batches has not the
+		// *exact* same number of chunks as the first one, throw an internal error
+		if len(xs[idx]) != len(xs[0]) {
+			return nil, fmt.Errorf("Internal error: incorrect chunk count for batch at offset %d: %d != %d", idx, len(xs[idx]), len(xs[0]))
+		}
+
+		// We know that we will have exactly 1 chunk per batch that we want to merge
+		chunks[idx] = make([]ReaderChunk, batchCount)
+	}
+
+	// Step 3: gather all "chunk arrays" into the correct places, basically doing a matrix transpose.
+	//
+	// If [batch][chunk] is the shape of xs:
+	//
+	//   batch 0:  chunk[0], chunk[1], ... chunk[N]
+	//   batch 1:  chunk[0], chunk[1], ... chunk[N]
+	//   batch 2:  chunk[0], chunk[1], ... chunk[N]
+	//
+	// the output becomes chunks[N][batch] (pivoted):
+	//
+	//   chunk[0]: batch[0], batch[1], batch[2], ...
+	//   chunk[1]: batch[0], batch[1], batch[2], ...
+	//   ...
+	//
+	// All memory in all chunks is pre-allocated we can just directly insert them:
+	for chunkIdx := range chunks {
+		for batchIdx := range xs {
+			chunks[chunkIdx][batchIdx] = xs[batchIdx][chunkIdx]
+		}
+	}
+
+	// Step 4: Merge each group of chunks (`chunkGroup`) into a single, consolidated chunk.
+	//
+	// Visually, right now we have organized chunks as follows after Step 3:
+	//
+	// chunks = [
+	//   chunk 0: [batch 0 chunk 0, batch 1 chunk 0, ..., batch N chunk 0],
+	//   chunk 1: [batch 0 chunk 1, batch 1 chunk 1, ..., batch N chunk 1],
+	//   ...
+	//   chunk M: [batch 0 chunk M, batch 1 chunk M, ..., batch N chunk M]
+	// ]
+	//
+	// In this step, we'll reduce (merge) each chunk group horizontally:
+	//
+	// BEFORE MERGE:
+	//
+	//     batch 0          batch 1          batch N
+	//    -------------------------------------------------
+	// 0 | chunk[0,0]       chunk[1,0] ...   chunk[N,0]
+	// 1 | chunk[0,1]       chunk[1,1] ...   chunk[N,1]
+	// . |    ...              ...               ...
+	// M | chunk[0,M]       chunk[1,M] ...   chunk[N,M]
+	//
+	//
+	// AFTER MERGE:
+	//
+	// ----------------------------------------
+	// ret[0] --> merge(chunk[0,0], chunk[1,0], ..., chunk[N,0])
+	// ret[1] --> merge(chunk[0,1], chunk[1,1], ..., chunk[N,1])
+	//     ...
+	// ret[M] --> merge(chunk[0,M], chunk[1,M], ..., chunk[N,M])
+	//
+	for idx, chunkGroup := range chunks {
+		// merge each horizontal group of chunks ("chunkGroup") into one single chunk
+		mergedChunk, err := mergeReaderChunks(chunkGroup)
+		if err != nil {
+			return nil, fmt.Errorf("error merging chunks at index %d: %w", idx, err)
+		}
+
+		// assign into final slice
+		ret[idx] = mergedChunk
+	}
+
+	return ret, nil
+}
+
+// Represents a Reader that enables traversing over all data.
 type Reader struct {
+	// Handle that was used to create the reader, and should be reused accross all additional
+	// calls (specifically all memory allocations and/or qdb_release() invocations) in the scope
+	// of this reader.
+	handle HandleType
+
 	// Options that were used to initialize the reader, for future reference if required
 	options ReaderOptions
 
 	// Current state of the reader handle.
 	state C.qdb_reader_handle_t
+
+	// Iterator pattern: keep track whether we previously ran into an error so the user can
+	// look it up
+	err error
+
+	// Iterator pattern: true if we reached the end
+	done bool
+
+	// Iterator pattern: current batch we're pointing at
+	currentBatch ReaderBatch
 }
 
 // Initialize a new bulk reader. This performs the initialization of the bulk reader, and does not yet fetch data.
 // The user is expected to invoke `Reader.Close()` to release allocated memory.
 func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var ret Reader
+	ret.handle = h
 	ret.options = options
 
 	// Step 1: validation of options
 	//  - at least one table must be specified
 	//  - a valid time range must be provided
+	//  - the batch size must be reasonable
 	if len(options.tables) == 0 {
 		return ret, fmt.Errorf("no tables provided")
 	}
@@ -804,6 +935,11 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 
 	if options.rangeEnd.IsZero() == false && !options.rangeEnd.After(options.rangeStart) {
 		return ret, fmt.Errorf("invalid time range")
+	}
+
+	// Step 1: validate that `n` is greater than 0 and is not excessively large
+	if options.batchSize <= 0 || options.batchSize > (1<<24) {
+		return ret, fmt.Errorf("invalid batch size: %d", options.batchSize)
 	}
 
 	// Step 2: convert the options.rangeStart / options.rangeEnd to qdb_ts_range_t
@@ -882,7 +1018,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	// safely release our temporary allocations via the deferred qdbRelease calls.
 	var readerHandle C.qdb_reader_handle_t
 	errCode := C.qdb_bulk_reader_fetch(
-		h.handle,
+		ret.handle.handle,
 		cColumns,
 		C.qdb_size_t(columnCount),
 		cTables,
@@ -904,20 +1040,15 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 // objects
 //
 // Accepts the number of rows to get
-func (r *Reader) Fetch(h HandleType, n int) ([]ReaderChunk, error) {
-	// Step 1: validate that `n` is greater than 0 and is not excessively large
-	if n <= 0 || n > (1<<24) {
-		return nil, fmt.Errorf("invalid row count: %d", n)
-	}
-
+func (r *Reader) fetchBatch() ([]ReaderChunk, error) {
 	// Step 2: invoke qdb_bulk_reader_get_data
 	var cTables *C.qdb_bulk_reader_table_data_t
-	errCode := C.qdb_bulk_reader_get_data(r.state, &cTables, C.qdb_size_t(n))
+	errCode := C.qdb_bulk_reader_get_data(r.state, &cTables, C.qdb_size_t(r.options.batchSize))
 
 	// Step 3: handle return codes
 	if errCode == C.qdb_e_iterator_end {
 		if cTables != nil {
-			qdbRelease(h, cTables)
+			qdbRelease(r.handle, cTables)
 		}
 		return []ReaderChunk{}, nil
 	}
@@ -929,7 +1060,7 @@ func (r *Reader) Fetch(h HandleType, n int) ([]ReaderChunk, error) {
 	if cTables == nil {
 		return nil, fmt.Errorf("qdb_bulk_reader_get_data returned nil pointer")
 	}
-	defer qdbRelease(h, cTables)
+	defer qdbRelease(r.handle, cTables)
 
 	// Step 4: convert native structures to ReaderChunk objects
 	tableCount := len(r.options.tables)
@@ -970,73 +1101,47 @@ func (r *Reader) Fetch(h HandleType, n int) ([]ReaderChunk, error) {
 	return ret, nil
 }
 
+// Fetches the next batch, returns `true` if more data is available, `false` if the end has been reaches
+func (r *Reader) Next() bool {
+	if r.done {
+		return false
+	}
+
+	r.currentBatch, r.err = r.fetchBatch()
+
+	if r.err != nil || len(r.currentBatch) == 0 {
+		r.done = true
+		return false
+	}
+
+	return true
+}
+
+func (r *Reader) Err() error {
+	return r.err
+}
+
+func (r *Reader) Batch() ReaderBatch {
+	return r.currentBatch
+}
+
 // Fetches *all* data in one single invocation. Useful if this is what you intend to
 // do anyway.
 //
 // Be aware that this can cause a lot of memory usage if you read large tables / many tables.
-func (r *Reader) FetchAll(h HandleType) ([]ReaderChunk, error) {
-	// Request all remaining rows by passing 0 as rows_to_get
-	var cTables *C.qdb_bulk_reader_table_data_t
-	errCode := C.qdb_bulk_reader_get_data(r.state, &cTables, 0)
+func (r *Reader) FetchAll() (ReaderBatch, error) {
 
-	if errCode == C.qdb_e_iterator_end {
-		if cTables != nil {
-			qdbRelease(h, cTables)
-		}
-		return []ReaderChunk{}, nil
-	}
+	// Accumulate all batches
 
-	if err := makeErrorOrNil(errCode); err != nil {
-		return nil, err
-	}
-
-	if cTables == nil {
-		return nil, fmt.Errorf("qdb_bulk_reader_get_data returned nil pointer")
-	}
-	defer qdbRelease(h, cTables)
-
-	tableCount := len(r.options.tables)
-	tblSlice := unsafe.Slice(cTables, tableCount)
-
-	ret := make([]ReaderChunk, tableCount)
-	for i := range tableCount {
-		tblData := tblSlice[i]
-
-		colCount := int(tblData.column_count)
-		colSlice := unsafe.Slice(tblData.columns, colCount)
-
-		cols := make([]ReaderColumn, colCount)
-		for j := range colCount {
-			if colSlice[j].name == nil {
-				return nil, fmt.Errorf("nil column name for table %s", r.options.tables[i])
-			}
-			cols[j] = ReaderColumn{
-				columnName: C.GoString(colSlice[j].name),
-				columnType: TsColumnType(colSlice[j].data_type),
-			}
-		}
-
-		var tmp C.qdb_exp_batch_push_table_t
-		cname := C.CString(r.options.tables[i])
-		tmp.name = cname
-		tmp.data = tblData
-
-		rt, err := newReaderChunk(cols, tmp)
-		C.free(unsafe.Pointer(cname))
-		if err != nil {
-			return nil, err
-		}
-		ret[i] = rt
-	}
-
-	return ret, nil
 }
 
 // Releases underlying memory
-func (r *Reader) Close(h HandleType) {
+func (r *Reader) Close() {
 	// if state is non-nil, invoke qdbRelease() on state
 	if r.state != nil {
-		qdbReleasePointer(h, unsafe.Pointer(r.state))
+
+		qdbReleasePointer(r.handle, unsafe.Pointer(r.state))
+
 		r.state = nil
 	}
 

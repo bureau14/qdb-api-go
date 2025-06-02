@@ -91,7 +91,7 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 		WithColumns(columnNames)
 
 	reader, err := NewReader(handle, opts)
-	defer reader.Close(handle)
+	defer reader.Close()
 	assert.NoError(err)
 }
 
@@ -205,10 +205,10 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	opts := NewReaderOptions().WithTables([]string{table.Name()}).WithColumns(columnNames)
 	reader, err := NewReader(handle, opts)
 	require.NoError(err)
-	defer reader.Close(handle)
+	defer reader.Close()
 
 	// Step 3: fetch all data from reader
-	tables, err := reader.FetchAll(handle)
+	tables, err := reader.FetchAll()
 	require.NoError(err)
 
 	// Step 4: assert that there's just a single table being returned
