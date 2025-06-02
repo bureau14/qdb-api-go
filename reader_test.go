@@ -52,8 +52,15 @@ func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 	_, err = NewReader(handle, opts)
 	assert.Error(err)
 
-	// TODO: implement test case that tests setting an IsZero() time for the start,
-	//       but a non-IsZero for the end, and vice versa.
+	// Error when start is zero but end is non-zero
+	opts = opts.WithTimeRange(time.Time{}, time.Unix(5, 0))
+	_, err = NewReader(handle, opts)
+	assert.Error(err)
+
+	// Error when start is non-zero but end is zero
+	opts = opts.WithTimeRange(time.Unix(5, 0), time.Time{})
+	_, err = NewReader(handle, opts)
+	assert.Error(err)
 }
 
 func TestReaderCanOpenWithValidOptions(t *testing.T) {

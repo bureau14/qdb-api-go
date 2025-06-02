@@ -593,8 +593,13 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		return ret, fmt.Errorf("no tables provided")
 	}
 
-	// TODO: validate that either both rangeStart and rangeEnd are zero, or none of them are
-	//       zero, but not just one of them.
+	// Validate the time range arguments.
+	// Either both rangeStart and rangeEnd must be zero (meaning no range
+	// filtering) or both must be non-zero.  Having only one of them set is
+	// invalid.
+	if options.rangeStart.IsZero() != options.rangeEnd.IsZero() {
+		return ret, fmt.Errorf("invalid time range")
+	}
 
 	if options.rangeEnd.IsZero() == false && !options.rangeEnd.After(options.rangeStart) {
 		return ret, fmt.Errorf("invalid time range")
@@ -605,8 +610,19 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var cRangeCount int = 0
 
 	if options.rangeStart.IsZero() == false && options.rangeEnd.IsZero() == false {
-		// TODO: there is exactly 1 range, so we need to invoke qdbAllocBuffer() and
-		//       fill values appropriately.
+		// There is exactly one range. Allocate memory for it via qdbAllocBuffer
+		// and convert the start and end times to the native representation.
+		ptr, err := qdbAllocBuffer[C.qdb_ts_range_t](h, 1)
+		if err != nil {
+			return ret, fmt.Errorf("failed to allocate time range: %w", err)
+		}
+		defer qdbRelease(h, ptr)
+
+		slice := unsafe.Slice(ptr, 1)
+		slice[0].begin = toQdbTimespec(options.rangeStart)
+		slice[0].end = toQdbTimespec(options.rangeEnd)
+
+		cRanges = ptr
 		cRangeCount = 1
 	}
 
