@@ -9,6 +9,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestReaderMergeChunksColumnLengthMismatch(t *testing.T) {
+	chunk1 := sampleReaderChunk("table1", time.Unix(100, 0), []ReaderColumn{
+		&ReaderDataInt64{name: "col1", xs: []int64{10}},
+	})
+
+	chunk2 := sampleReaderChunk("table1", time.Unix(200, 0), []ReaderColumn{
+		&ReaderDataInt64{name: "col1", xs: []int64{20}},
+		&ReaderDataDouble{name: "col2", xs: []float64{30.0}},
+	})
+
+	_, err := mergeReaderChunks([]ReaderChunk{chunk1, chunk2})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "column length mismatch")
+}
+
+func TestReaderMergeChunksColumnMismatch(t *testing.T) {
+	chunk1 := sampleReaderChunk("table1", time.Unix(100, 0), []ReaderColumn{
+		&ReaderDataInt64{name: "col1", xs: []int64{10}},
+	})
+
+	chunk2 := sampleReaderChunk("table1", time.Unix(200, 0), []ReaderColumn{
+		&ReaderDataDouble{name: "col2", xs: []float64{20.5}}, // different column type
+	})
+
+	_, err := mergeReaderChunks([]ReaderChunk{chunk1, chunk2})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "column mismatch")
+}
+
+func TestReaderMergeChunksTableMismatch(t *testing.T) {
+	chunk1 := sampleReaderChunk("table1", time.Unix(100, 0), []ReaderColumn{
+		&ReaderDataInt64{name: "col1", xs: []int64{10}},
+	})
+
+	chunk2 := sampleReaderChunk("table2", time.Unix(200, 0), []ReaderColumn{
+		&ReaderDataInt64{name: "col1", xs: []int64{20}},
+	})
+
+	_, err := mergeReaderChunks([]ReaderChunk{chunk1, chunk2})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "table name mismatch")
+}
+
 func TestReaderOptionsCanCreateNew(t *testing.T) {
 	assert := assert.New(t)
 
@@ -244,4 +287,32 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 		}
 	}
 
+}
+
+func sampleReaderChunk(tblName string, timestamp time.Time, columnDefs []ReaderColumn) ReaderChunk {
+	return ReaderChunk{
+		tableName:          tblName,
+		timestamps:         []time.Time{timestamp},
+		columns:            columnDefs,
+		columnInfoByOffset: map[uint64]TsColumnInfo{},
+	}
+}
+
+func TestMergeReaderChunks(t *testing.T) {
+	chunk1 := sampleReaderChunk("table1", time.Unix(100, 0), []ReaderColumn{
+		&ReaderDataInt64{name: "col1", xs: []int64{10}},
+	})
+
+	chunk2 := sampleReaderChunk("table1", time.Unix(200, 0), []ReaderColumn{
+		&ReaderDataInt64{name: "col1", xs: []int64{20}},
+	})
+
+	mergedChunk, err := mergeReaderChunks([]ReaderChunk{chunk1, chunk2})
+	require.NoError(t, err)
+	assert.Equal(t, "table1", mergedChunk.TableName())
+	assert.Equal(t, []time.Time{time.Unix(100, 0), time.Unix(200, 0)}, mergedChunk.timestamps)
+
+	colData, err := GetReaderDataInt64(mergedChunk.columns[0])
+	require.NoError(t, err)
+	assert.Equal(t, []int64{10, 20}, colData)
 }

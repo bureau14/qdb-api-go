@@ -20,6 +20,22 @@ type ReaderData interface {
 
 	// returns the type of data for this column
 	valueType() TsValueType
+
+	// Ensures the underlying data pre-allocates a certain capacity, useful when we know
+	// we will have multiple incremental allocations.
+	ensureCapacity(n int)
+
+	// Appends another chunk of `ReaderData` to this. Validates that they are of identical types.
+	// The intent of this function is the "merge" multiple chunks of ReaderData together in case
+	// the user calls FetchAll().
+	//
+	// Returns error if:
+	//  * Name() does not match
+	//  * ReaderData is not of the same type as the struct implementing this function.
+	appendData(data ReaderData) error
+
+	// Unsafe variant of appendData(), undefined behavior in case it's used incorrectly
+	appendDataUnsafe(data ReaderData)
 }
 
 // Int64
@@ -38,6 +54,23 @@ func (rd *ReaderDataInt64) Data() []int64 {
 
 func (rd *ReaderDataInt64) valueType() TsValueType {
 	return TsValueInt64
+}
+
+func (rd *ReaderDataInt64) ensureCapacity(n int) {
+	// TODO: implement extend rd.xs
+}
+
+func (rd *ReaderDataInt64) appendData(data ReaderData) error {
+	// TODO: implement:
+	// * ensure data.Name() is identical
+	// * cast data to ReaderDataInt64, return error if not of the same type
+	// * add `data.xs` to `rd.xs`
+
+	return nil
+}
+
+func (rd *ReaderDataInt64) appendDataUnsafe(data ReaderData) {
+	// TODO: implement: unsafe variant of appendData() without error checks
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -408,7 +441,7 @@ func (rc ReaderColumn) Type() TsColumnType {
 	return rc.columnType
 }
 
-type ReaderTable struct {
+type ReaderChunk struct {
 	// Name of the table this data is for
 	tableName string
 
@@ -427,45 +460,92 @@ type ReaderTable struct {
 }
 
 // Returns name of the table
-func (rt *ReaderTable) TableName() string {
+func (rt *ReaderChunk) TableName() string {
 	return rt.tableName
 }
 
 // Returns number of rows in this chunk / table
-func (rt *ReaderTable) RowCount() string {
+func (rt *ReaderChunk) RowCount() string {
 	return rt.tableName
 }
 
-// Creates new ReaderTable object out of a qdb_exp_batch_push_table_t struct. Memory-safe,
+// mergeReaderChunks merges multiple chunks of the same table into one unified chunk.
+func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
+	if len(xs) == 0 {
+		return ReaderChunk{}, nil
+	}
+
+	base := xs[0]
+	totalRows := len(base.idx)
+	for i, chunk := range xs[1:] {
+		if chunk.tableName != base.tableName {
+			return ReaderChunk{}, fmt.Errorf("table name mismatch at position %d: expected '%s', got '%s'", i+1, base.tableName, chunk.tableName)
+		}
+
+		if len(chunk.data) != len(base.data) {
+			return ReaderChunk{}, fmt.Errorf("column length mismatch at chunk %d: expected %d, got %d", i+1, len(base.data), len(chunk.data))
+		}
+		for ci, c := range chunk.data {
+			if c.Name() != base.data[ci].Name() || c.ValueType() != base.data[ci].ValueType() {
+				return ReaderChunk{}, fmt.Errorf("column mismatch at chunk %d, column %d: expected '%s(%v)', got '%s(%v)'", i+1, ci, base.data[ci].Name(), base.data[ci].ValueType(), c.Name(), c.ValueType())
+			}
+		}
+		totalRows += len(chunk.idx)
+	}
+
+	mergedIdx := make([]time.Time, 0, totalRows)
+	mergedData := make([]ReaderData, len(base.data))
+	for idx, col := range base.data {
+		mergedData[idx] = col.ensureCapacity(totalRows)
+	}
+
+	for _, chunk := range xs {
+		mergedIdx = append(mergedIdx, chunk.idx...)
+		for idx, col := range chunk.data {
+			err := mergedData[idx].append(col)
+			if err != nil {
+				return ReaderChunk{}, fmt.Errorf("error appending data column %d: %w", idx, err)
+			}
+		}
+	}
+
+	return ReaderChunk{
+		tableName:          base.tableName,
+		idx:                mergedIdx,
+		data:               mergedData,
+		columnInfoByOffset: base.columnInfoByOffset}, nil
+}
+
+// Creates new ReaderChunk object out of a qdb_exp_batch_push_table_t struct. Memory-safe,
 // in that it copies all the memory which means these objects are safe to use for a long time.
 //
 // As all schemas for all tables are required to be the same, this function accepts the `columns`
 // parameter that were parsed earlier. For convenience, in our case, we set it as part of each
-// ReaderTable object.
-func newReaderTable(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (ReaderTable, error) {
+// ReaderChunk object.
+func newReaderChunk(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (ReaderChunk, error) {
 
 	// Step 1: input validation
 	if tbl.name == nil {
-		return ReaderTable{}, fmt.Errorf("Internal error: nil table name")
+		return ReaderChunk{}, fmt.Errorf("Internal error: nil table name")
 	}
 
 	if tbl.data.timestamps == nil {
-		return ReaderTable{}, fmt.Errorf("Internal error: nil timestamps for table %s", C.GoString(tbl.name))
+		return ReaderChunk{}, fmt.Errorf("Internal error: nil timestamps for table %s", C.GoString(tbl.name))
 	}
 
 	if tbl.data.columns == nil {
-		return ReaderTable{}, fmt.Errorf("Internal error: nil columns for table %s", C.GoString(tbl.name))
+		return ReaderChunk{}, fmt.Errorf("Internal error: nil columns for table %s", C.GoString(tbl.name))
 	}
 
 	if tbl.data.row_count <= 0 {
-		return ReaderTable{}, fmt.Errorf("Internal error: invalid row count %d", tbl.data.row_count)
+		return ReaderChunk{}, fmt.Errorf("Internal error: invalid row count %d", tbl.data.row_count)
 	}
 
 	if tbl.data.column_count <= 0 {
-		return ReaderTable{}, fmt.Errorf("Internal error: invalid column count %d", tbl.data.column_count)
+		return ReaderChunk{}, fmt.Errorf("Internal error: invalid column count %d", tbl.data.column_count)
 	}
 
-	var out ReaderTable
+	var out ReaderChunk
 	out.columnInfoByOffset = columns
 
 	// Copy table name from C memory
@@ -495,7 +575,7 @@ func newReaderTable(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 
 		expected := C.qdb_ts_column_type_t(columns[i].columnType)
 		if column.data_type != expected {
-			return ReaderTable{}, fmt.Errorf("Internal error: column %d type mismatch (expected %v, got %v)", i, expected, column.data_type)
+			return ReaderChunk{}, fmt.Errorf("Internal error: column %d type mismatch (expected %v, got %v)", i, expected, column.data_type)
 		}
 
 		name := columns[i].columnName
@@ -504,35 +584,35 @@ func newReaderTable(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 		case TsValueInt64:
 			v, err := newReaderDataInt64(name, column, out.rowCount)
 			if err != nil {
-				return ReaderTable{}, err
+				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		case TsValueDouble:
 			v, err := newReaderDataDouble(name, column, out.rowCount)
 			if err != nil {
-				return ReaderTable{}, err
+				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		case TsValueTimestamp:
 			v, err := newReaderDataTimestamp(name, column, out.rowCount)
 			if err != nil {
-				return ReaderTable{}, err
+				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		case TsValueBlob:
 			v, err := newReaderDataBlob(name, column, out.rowCount)
 			if err != nil {
-				return ReaderTable{}, err
+				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		case TsValueString:
 			v, err := newReaderDataString(name, column, out.rowCount)
 			if err != nil {
-				return ReaderTable{}, err
+				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		default:
-			return ReaderTable{}, fmt.Errorf("Internal error: unsupported value type for column %s", name)
+			return ReaderChunk{}, fmt.Errorf("Internal error: unsupported value type for column %s", name)
 		}
 	}
 
@@ -700,11 +780,11 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	return ret, nil
 }
 
-// Fetches a single batch of data. Returns an array of 'ReaderTable'
+// Fetches a single batch of data. Returns an array of 'ReaderChunk'
 // objects
 //
 // Accepts the number of rows to get
-func (r *Reader) Fetch(h HandleType, n int) ([]ReaderTable, error) {
+func (r *Reader) Fetch(h HandleType, n int) ([]ReaderChunk, error) {
 	// Step 1: validate that `n` is greater than 0 and is not excessively large
 	if n <= 0 || n > (1<<24) {
 		return nil, fmt.Errorf("invalid row count: %d", n)
@@ -719,7 +799,7 @@ func (r *Reader) Fetch(h HandleType, n int) ([]ReaderTable, error) {
 		if cTables != nil {
 			qdbRelease(h, cTables)
 		}
-		return []ReaderTable{}, nil
+		return []ReaderChunk{}, nil
 	}
 
 	if err := makeErrorOrNil(errCode); err != nil {
@@ -731,11 +811,11 @@ func (r *Reader) Fetch(h HandleType, n int) ([]ReaderTable, error) {
 	}
 	defer qdbRelease(h, cTables)
 
-	// Step 4: convert native structures to ReaderTable objects
+	// Step 4: convert native structures to ReaderChunk objects
 	tableCount := len(r.options.tables)
 	tblSlice := unsafe.Slice(cTables, tableCount)
 
-	ret := make([]ReaderTable, tableCount)
+	ret := make([]ReaderChunk, tableCount)
 
 	for i := 0; i < tableCount; i++ {
 		tblData := tblSlice[i]
@@ -759,7 +839,7 @@ func (r *Reader) Fetch(h HandleType, n int) ([]ReaderTable, error) {
 		tmp.name = cname
 		tmp.data = tblData
 
-		rt, err := newReaderTable(cols, tmp)
+		rt, err := newReaderChunk(cols, tmp)
 		C.free(unsafe.Pointer(cname))
 		if err != nil {
 			return nil, err
@@ -774,7 +854,7 @@ func (r *Reader) Fetch(h HandleType, n int) ([]ReaderTable, error) {
 // do anyway.
 //
 // Be aware that this can cause a lot of memory usage if you read large tables / many tables.
-func (r *Reader) FetchAll(h HandleType) ([]ReaderTable, error) {
+func (r *Reader) FetchAll(h HandleType) ([]ReaderChunk, error) {
 	// Request all remaining rows by passing 0 as rows_to_get
 	var cTables *C.qdb_bulk_reader_table_data_t
 	errCode := C.qdb_bulk_reader_get_data(r.state, &cTables, 0)
@@ -783,7 +863,7 @@ func (r *Reader) FetchAll(h HandleType) ([]ReaderTable, error) {
 		if cTables != nil {
 			qdbRelease(h, cTables)
 		}
-		return []ReaderTable{}, nil
+		return []ReaderChunk{}, nil
 	}
 
 	if err := makeErrorOrNil(errCode); err != nil {
@@ -798,7 +878,7 @@ func (r *Reader) FetchAll(h HandleType) ([]ReaderTable, error) {
 	tableCount := len(r.options.tables)
 	tblSlice := unsafe.Slice(cTables, tableCount)
 
-	ret := make([]ReaderTable, tableCount)
+	ret := make([]ReaderChunk, tableCount)
 	for i := 0; i < tableCount; i++ {
 		tblData := tblSlice[i]
 
@@ -821,7 +901,7 @@ func (r *Reader) FetchAll(h HandleType) ([]ReaderTable, error) {
 		tmp.name = cname
 		tmp.data = tblData
 
-		rt, err := newReaderTable(cols, tmp)
+		rt, err := newReaderChunk(cols, tmp)
 		C.free(unsafe.Pointer(cname))
 		if err != nil {
 			return nil, err
