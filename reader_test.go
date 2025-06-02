@@ -66,14 +66,23 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	defer handle.Close()
 
 	// Use all the column types we have
-	columns := generateColumnInfosOfAllTypes()
+	columnInfos := generateColumnInfosOfAllTypes()
 
 	// Ensure a certain table exists
-	table, err := createTableOfColumnInfosAndDefaultShardSize(handle, columns)
+	table, err := createTableOfColumnInfosAndDefaultShardSize(handle, columnInfos)
 	require.NoError(err)
 
-	// Error when no range provided
-	opts := NewReaderOptions().WithTables([]string{table.Name()}).WithoutTimeRange()
+	// Collect column names for reader
+	var columnNames []string
+	for _, info := range columnInfos {
+		columnNames = append(columnNames, info.Name())
+	}
+
+	// Reader should open with valid options: all columns and full time range
+	opts := NewReaderOptions().
+		WithTables([]string{table.Name()}).
+		WithColumns(columnNames).
+		WithoutTimeRange()
 	_, err = NewReader(handle, opts)
 	assert.NoError(err)
 }
