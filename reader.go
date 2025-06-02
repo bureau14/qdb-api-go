@@ -593,6 +593,9 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		return ret, fmt.Errorf("no tables provided")
 	}
 
+	// TODO: validate that either both rangeStart and rangeEnd are zero, or none of them are
+	//       zero, but not just one of them.
+
 	if options.rangeEnd.IsZero() == false && !options.rangeEnd.After(options.rangeStart) {
 		return ret, fmt.Errorf("invalid time range")
 	}
