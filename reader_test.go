@@ -32,10 +32,6 @@ func TestReaderOptionsCanSetProperties(t *testing.T) {
 	assert.Equal(columns, opts.columns)
 	assert.Equal(start, opts.rangeStart)
 	assert.Equal(end, opts.rangeEnd)
-
-	opts = opts.WithoutTimeRange()
-	assert.True(opts.rangeStart.Equal(MinTimespec()))
-	assert.True(opts.rangeEnd.Equal(MaxTimespec()))
 }
 
 func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
@@ -81,9 +77,8 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	// Reader should open with valid options: all columns and full time range
 	opts := NewReaderOptions().
 		WithTables([]string{table.Name()}).
-		WithColumns(columnNames).
-		WithoutTimeRange()
-	_, err = NewReader(handle, opts)
+		WithColumns(columnNames)
+
 	reader, err := NewReader(handle, opts)
 	defer reader.Close(handle)
 	assert.NoError(err)

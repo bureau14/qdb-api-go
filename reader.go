@@ -551,7 +551,7 @@ func NewReaderOptions() ReaderOptions {
 
 // Creates ReaderOptions object that fetches all data for all columns for a set of tables
 func NewReaderDefaultOptions(tables []string) ReaderOptions {
-	return NewReaderOptions().WithTables(tables).WithoutTimeRange()
+	return NewReaderOptions().WithTables(tables)
 }
 
 func (ro ReaderOptions) WithTables(tables []string) ReaderOptions {
@@ -569,21 +569,6 @@ func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOpti
 	ro.rangeEnd = end
 
 	return ro
-}
-
-// No time range provided implies basically all data set
-func (ro ReaderOptions) WithoutTimeRange() ReaderOptions {
-
-	// Initialize the time range to the full allowed range supported by
-	// QuasarDB.  We intentionally reuse the helper functions defined in
-	// constants.go which expose the C values `qdb_min_time` and
-	// `qdb_max_time` so we don't hard code the values here.
-
-	ro.rangeStart = MinTimespec()
-	ro.rangeEnd = MaxTimespec()
-
-	return ro
-
 }
 
 // Holds the current state of the reader
@@ -608,18 +593,19 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		return ret, fmt.Errorf("no tables provided")
 	}
 
-	if options.rangeStart.IsZero() && options.rangeEnd.IsZero() {
-		return ret, fmt.Errorf("time range not specified")
-	}
-
-	if !options.rangeEnd.After(options.rangeStart) {
+	if options.rangeEnd.IsZero() == false && !options.rangeEnd.After(options.rangeStart) {
 		return ret, fmt.Errorf("invalid time range")
 	}
 
 	// Step 2: convert the options.rangeStart / options.rangeEnd to qdb_ts_range_t
-	var cRange C.qdb_ts_range_t
-	TimeToQdbTimespec(options.rangeStart, &cRange.begin)
-	TimeToQdbTimespec(options.rangeEnd, &cRange.end)
+	var cRanges *C.qdb_ts_range_t = nil
+	var cRangeCount int = 0
+
+	if options.rangeStart.IsZero() == false && options.rangeEnd.IsZero() == false {
+		// TODO: there is exactly 1 range, so we need to invoke qdbAllocBuffer() and
+		//       fill values appropriately.
+		cRangeCount = 1
+	}
 
 	// Step 3: Initialize `C.qdb_bulk_reader_table_t` structs. Even though our C API allows for using
 	// different ranges per table, we use a fixed range for all tables. As such, we can reuse the
@@ -648,8 +634,8 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		defer qdbRelease(h, name)
 
 		tblSlice[i].name = name
-		tblSlice[i].ranges = &cRange
-		tblSlice[i].range_count = 1
+		tblSlice[i].ranges = cRanges
+		tblSlice[i].range_count = C.qdb_size_t(cRangeCount)
 	}
 
 	// Step 4: Initialize `columns` arguments.  Column names are optional.  If provided we allocate
@@ -667,11 +653,6 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		for i, col := range options.columns {
 			cname, err := qdbCopyString(h, col)
 			if err != nil {
-				for j := 0; j < i; j++ {
-					if colSlice[j] != nil {
-						qdbRelease(h, colSlice[j])
-					}
-				}
 				return ret, fmt.Errorf("failed to copy column name: %w", err)
 			}
 			defer qdbRelease(h, cname)
