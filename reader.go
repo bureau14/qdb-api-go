@@ -699,6 +699,44 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	return ret, nil
 }
 
+// Fetches a single batch of data. Returns an array of 'ReaderTable'
+// objects
+//
+// Accepts the number of rows to get
+func (r *Reader) Fetch(h HandleType, n int) ([]ReaderTable, error) {
+
+	// Step 1: validate that `n` is greater than 0, and not ridiculously large. I would say that
+	//         2^24 (~16.7 million rows) is a good upper limit.
+	//
+	//         this avoids huge batches with large overloads and large memory consumptions.
+
+	// Step 2: invoke `C.qdb_bulk_reader_get_data` using `r.state` as the state. make sure to already
+	//         set a `defer qdbRelease(...) on the qdb_bulk_reader_table_data_t pointer after return.
+
+	// Step 3: error validation:
+	//         if return code is qdb_e_ok, it means we have data.
+	//         if return code is qdb_e_iterator_end, it means we have reached the end of the data. we
+	//                           should be pedantic and verify that the qdb_bulk_reader_table_data_t
+	//                           is still nil, otherwise it would imply data was being read/set.
+	//         if return code is anything else, return an error immediately
+
+	// Step 4: we now have enough information to fill the []ReaderTable slice we are going to return,
+	//         specifically: we know how many tables are in this batch. We can use the
+	//         `newReaderTable()` function to initialize each of them, the conversion functions are
+	//         already implemented.
+	ret := make([]ReaderTable, result_table_count)
+
+	return ret, nil
+}
+
+// Fetches *all* data in one single invocation. Useful if this is what you intend to
+// do anyway.
+//
+// Be aware that this can cause a lot of memory usage if you read large tables / many tables.
+func (r *Reader) FetchAll(h HandleType) ([]ReaderTable, error) {
+	// TODO: implement
+}
+
 // Releases underlying memory
 func (r *Reader) Close(h HandleType) {
 	// if state is non-nil, invoke qdbRelease() on state

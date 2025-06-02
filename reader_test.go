@@ -93,3 +93,26 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	defer reader.Close(handle)
 	assert.NoError(err)
 }
+
+func TestReaderCanReadDataFromSingleTable(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(err)
+	defer handle.Close()
+
+	// Step 1: create table and fill with data using the `Writer`. Look
+	//         at writer_test.go to see how to use the Writer to fill a table with
+	//         data.
+
+	// Step 2: initialize the reader on this table
+
+	// Step 3: fetch all data from reader
+
+	// Step 4: assert that there's just a single table being returned
+
+	// Step 5: assert that each column's data matches exactly what we have written into
+	//         it
+
+}
