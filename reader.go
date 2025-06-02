@@ -147,6 +147,23 @@ func (rd *ReaderDataDouble) valueType() TsValueType {
 	return TsValueDouble
 }
 
+func (rd *ReaderDataDouble) ensureCapacity(n int) {
+	// TODO: implement extend rd.xs
+}
+
+func (rd *ReaderDataDouble) appendData(data ReaderData) error {
+	// TODO: implement:
+	// * ensure data.Name() is identical
+	// * cast data to ReaderDataDouble, return error if not of the same type
+	// * add `data.xs` to `rd.xs`
+
+	return nil
+}
+
+func (rd *ReaderDataDouble) appendDataUnsafe(data ReaderData) {
+	// TODO: implement: unsafe variant of appendData() without error checks
+}
+
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
 // that copies data.
 //
@@ -219,6 +236,23 @@ func (rd *ReaderDataTimestamp) Data() []time.Time {
 
 func (rd *ReaderDataTimestamp) valueType() TsValueType {
 	return TsValueTimestamp
+}
+
+func (rd *ReaderDataTimestamp) ensureCapacity(n int) {
+	// TODO: implement extend rd.xs
+}
+
+func (rd *ReaderDataTimestamp) appendData(data ReaderData) error {
+	// TODO: implement:
+	// * ensure data.Name() is identical
+	// * cast data to ReaderDataTimestamp, return error if not of the same type
+	// * add `data.xs` to `rd.xs`
+
+	return nil
+}
+
+func (rd *ReaderDataTimestamp) appendDataUnsafe(data ReaderData) {
+	// TODO: implement: unsafe variant of appendData() without error checks
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -295,6 +329,23 @@ func (rd *ReaderDataBlob) valueType() TsValueType {
 	return TsValueBlob
 }
 
+func (rd *ReaderDataBlob) ensureCapacity(n int) {
+	// TODO: implement extend rd.xs
+}
+
+func (rd *ReaderDataBlob) appendData(data ReaderData) error {
+	// TODO: implement:
+	// * ensure data.Name() is identical
+	// * cast data to ReaderDataBlob, return error if not of the same type
+	// * add `data.xs` to `rd.xs`
+
+	return nil
+}
+
+func (rd *ReaderDataBlob) appendDataUnsafe(data ReaderData) {
+	// TODO: implement: unsafe variant of appendData() without error checks
+}
+
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
 // that copies data.
 //
@@ -368,6 +419,23 @@ func (rd *ReaderDataString) Data() []string {
 
 func (rd *ReaderDataString) valueType() TsValueType {
 	return TsValueString
+}
+
+func (rd *ReaderDataString) ensureCapacity(n int) {
+	// TODO: implement extend rd.xs
+}
+
+func (rd *ReaderDataString) appendData(data ReaderData) error {
+	// TODO: implement:
+	// * ensure data.Name() is identical
+	// * cast data to ReaderDataString, return error if not of the same type
+	// * add `data.xs` to `rd.xs`
+
+	return nil
+}
+
+func (rd *ReaderDataString) appendDataUnsafe(data ReaderData) {
+	// TODO: implement: unsafe variant of appendData() without error checks
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -486,8 +554,8 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 			return ReaderChunk{}, fmt.Errorf("column length mismatch at chunk %d: expected %d, got %d", i+1, len(base.data), len(chunk.data))
 		}
 		for ci, c := range chunk.data {
-			if c.Name() != base.data[ci].Name() || c.ValueType() != base.data[ci].ValueType() {
-				return ReaderChunk{}, fmt.Errorf("column mismatch at chunk %d, column %d: expected '%s(%v)', got '%s(%v)'", i+1, ci, base.data[ci].Name(), base.data[ci].ValueType(), c.Name(), c.ValueType())
+			if c.Name() != base.data[ci].Name() || c.valueType() != base.data[ci].valueType() {
+				return ReaderChunk{}, fmt.Errorf("column mismatch at chunk %d, column %d: expected '%s(%v)', got '%s(%v)'", i+1, ci, base.data[ci].Name(), base.data[ci].valueType(), c.Name(), c.valueType())
 			}
 		}
 		totalRows += len(chunk.idx)
@@ -495,14 +563,16 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 
 	mergedIdx := make([]time.Time, 0, totalRows)
 	mergedData := make([]ReaderData, len(base.data))
-	for idx, col := range base.data {
-		mergedData[idx] = col.ensureCapacity(totalRows)
+
+	// Pre-allocate all data, useful when merging many smaller chunks into a larger chunk
+	for idx := range len(base.data) {
+		mergedData[idx].ensureCapacity(totalRows)
 	}
 
 	for _, chunk := range xs {
 		mergedIdx = append(mergedIdx, chunk.idx...)
 		for idx, col := range chunk.data {
-			err := mergedData[idx].append(col)
+			err := mergedData[idx].appendData(col)
 			if err != nil {
 				return ReaderChunk{}, fmt.Errorf("error appending data column %d: %w", idx, err)
 			}
