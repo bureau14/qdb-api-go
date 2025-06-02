@@ -57,20 +57,30 @@ func (rd *ReaderDataInt64) valueType() TsValueType {
 }
 
 func (rd *ReaderDataInt64) ensureCapacity(n int) {
-	// TODO: implement extend rd.xs
+	if cap(rd.xs) < n {
+		tmp := make([]int64, len(rd.xs), n)
+		copy(tmp, rd.xs)
+		rd.xs = tmp
+	}
 }
 
 func (rd *ReaderDataInt64) appendData(data ReaderData) error {
-	// TODO: implement:
-	// * ensure data.Name() is identical
-	// * cast data to ReaderDataInt64, return error if not of the same type
-	// * add `data.xs` to `rd.xs`
+	if rd.name != data.Name() {
+		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
+	}
 
+	other, ok := data.(*ReaderDataInt64)
+	if !ok {
+		return fmt.Errorf("appendData: type mismatch, expected ReaderDataInt64, got %T", data)
+	}
+
+	rd.xs = append(rd.xs, other.xs...)
 	return nil
 }
 
 func (rd *ReaderDataInt64) appendDataUnsafe(data ReaderData) {
-	// TODO: implement: unsafe variant of appendData() without error checks
+	other := (*ReaderDataInt64)(ifaceDataPtr(data))
+	rd.xs = append(rd.xs, other.xs...)
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -148,20 +158,30 @@ func (rd *ReaderDataDouble) valueType() TsValueType {
 }
 
 func (rd *ReaderDataDouble) ensureCapacity(n int) {
-	// TODO: implement extend rd.xs
+	if cap(rd.xs) < n {
+		tmp := make([]float64, len(rd.xs), n)
+		copy(tmp, rd.xs)
+		rd.xs = tmp
+	}
 }
 
 func (rd *ReaderDataDouble) appendData(data ReaderData) error {
-	// TODO: implement:
-	// * ensure data.Name() is identical
-	// * cast data to ReaderDataDouble, return error if not of the same type
-	// * add `data.xs` to `rd.xs`
+	if rd.name != data.Name() {
+		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
+	}
 
+	other, ok := data.(*ReaderDataDouble)
+	if !ok {
+		return fmt.Errorf("appendData: type mismatch, expected ReaderDataDouble, got %T", data)
+	}
+
+	rd.xs = append(rd.xs, other.xs...)
 	return nil
 }
 
 func (rd *ReaderDataDouble) appendDataUnsafe(data ReaderData) {
-	// TODO: implement: unsafe variant of appendData() without error checks
+	other := (*ReaderDataDouble)(ifaceDataPtr(data))
+	rd.xs = append(rd.xs, other.xs...)
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -239,20 +259,30 @@ func (rd *ReaderDataTimestamp) valueType() TsValueType {
 }
 
 func (rd *ReaderDataTimestamp) ensureCapacity(n int) {
-	// TODO: implement extend rd.xs
+	if cap(rd.xs) < n {
+		tmp := make([]time.Time, len(rd.xs), n)
+		copy(tmp, rd.xs)
+		rd.xs = tmp
+	}
 }
 
 func (rd *ReaderDataTimestamp) appendData(data ReaderData) error {
-	// TODO: implement:
-	// * ensure data.Name() is identical
-	// * cast data to ReaderDataTimestamp, return error if not of the same type
-	// * add `data.xs` to `rd.xs`
+	if rd.name != data.Name() {
+		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
+	}
 
+	other, ok := data.(*ReaderDataTimestamp)
+	if !ok {
+		return fmt.Errorf("appendData: type mismatch, expected ReaderDataTimestamp, got %T", data)
+	}
+
+	rd.xs = append(rd.xs, other.xs...)
 	return nil
 }
 
 func (rd *ReaderDataTimestamp) appendDataUnsafe(data ReaderData) {
-	// TODO: implement: unsafe variant of appendData() without error checks
+	other := (*ReaderDataTimestamp)(ifaceDataPtr(data))
+	rd.xs = append(rd.xs, other.xs...)
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -330,20 +360,30 @@ func (rd *ReaderDataBlob) valueType() TsValueType {
 }
 
 func (rd *ReaderDataBlob) ensureCapacity(n int) {
-	// TODO: implement extend rd.xs
+	if cap(rd.xs) < n {
+		tmp := make([][]byte, len(rd.xs), n)
+		copy(tmp, rd.xs)
+		rd.xs = tmp
+	}
 }
 
 func (rd *ReaderDataBlob) appendData(data ReaderData) error {
-	// TODO: implement:
-	// * ensure data.Name() is identical
-	// * cast data to ReaderDataBlob, return error if not of the same type
-	// * add `data.xs` to `rd.xs`
+	if rd.name != data.Name() {
+		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
+	}
 
+	other, ok := data.(*ReaderDataBlob)
+	if !ok {
+		return fmt.Errorf("appendData: type mismatch, expected ReaderDataBlob, got %T", data)
+	}
+
+	rd.xs = append(rd.xs, other.xs...)
 	return nil
 }
 
 func (rd *ReaderDataBlob) appendDataUnsafe(data ReaderData) {
-	// TODO: implement: unsafe variant of appendData() without error checks
+	other := (*ReaderDataBlob)(ifaceDataPtr(data))
+	rd.xs = append(rd.xs, other.xs...)
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -422,20 +462,30 @@ func (rd *ReaderDataString) valueType() TsValueType {
 }
 
 func (rd *ReaderDataString) ensureCapacity(n int) {
-	// TODO: implement extend rd.xs
+	if cap(rd.xs) < n {
+		tmp := make([]string, len(rd.xs), n)
+		copy(tmp, rd.xs)
+		rd.xs = tmp
+	}
 }
 
 func (rd *ReaderDataString) appendData(data ReaderData) error {
-	// TODO: implement:
-	// * ensure data.Name() is identical
-	// * cast data to ReaderDataString, return error if not of the same type
-	// * add `data.xs` to `rd.xs`
+	if rd.name != data.Name() {
+		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
+	}
 
+	other, ok := data.(*ReaderDataString)
+	if !ok {
+		return fmt.Errorf("appendData: type mismatch, expected ReaderDataString, got %T", data)
+	}
+
+	rd.xs = append(rd.xs, other.xs...)
 	return nil
 }
 
 func (rd *ReaderDataString) appendDataUnsafe(data ReaderData) {
-	// TODO: implement: unsafe variant of appendData() without error checks
+	other := (*ReaderDataString)(ifaceDataPtr(data))
+	rd.xs = append(rd.xs, other.xs...)
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
