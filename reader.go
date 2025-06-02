@@ -999,14 +999,14 @@ func (r *Reader) FetchAll(h HandleType) ([]ReaderChunk, error) {
 	tblSlice := unsafe.Slice(cTables, tableCount)
 
 	ret := make([]ReaderChunk, tableCount)
-	for i := 0; i < tableCount; i++ {
+	for i := range tableCount {
 		tblData := tblSlice[i]
 
 		colCount := int(tblData.column_count)
 		colSlice := unsafe.Slice(tblData.columns, colCount)
 
 		cols := make([]ReaderColumn, colCount)
-		for j := 0; j < colCount; j++ {
+		for j := range colCount {
 			if colSlice[j].name == nil {
 				return nil, fmt.Errorf("nil column name for table %s", r.options.tables[i])
 			}
