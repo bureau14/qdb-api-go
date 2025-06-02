@@ -84,5 +84,7 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 		WithColumns(columnNames).
 		WithoutTimeRange()
 	_, err = NewReader(handle, opts)
+	reader, err := NewReader(handle, opts)
+	defer reader.Close(handle)
 	assert.NoError(err)
 }
