@@ -386,7 +386,11 @@ func qdbAllocAndCopy[Src, Dst any](h HandleType, src []Src) (*Dst, error) {
 }
 
 func qdbRelease[T any](h HandleType, ptr *T) {
-	C.qdb_release(h.handle, unsafe.Pointer(ptr))
+	qdbReleasePointer(h, unsafe.Pointer(ptr))
+}
+
+func qdbReleasePointer(h HandleType, ptr unsafe.Pointer) {
+	C.qdb_release(h.handle, ptr)
 }
 
 // Copies a Go string and returns a `char const *`-like string. Allocates memory using

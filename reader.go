@@ -706,6 +706,11 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 }
 
 // Releases underlying memory
-func (r *Reader) Close() {
+func (r *Reader) Close(h HandleType) {
 	// if state is non-nil, invoke qdbRelease() on state
+	if r.state != nil {
+		qdbReleasePointer(h, unsafe.Pointer(r.state))
+		r.state = nil
+	}
+
 }
