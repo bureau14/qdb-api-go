@@ -56,3 +56,24 @@ func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 	_, err = NewReader(handle, opts)
 	assert.Error(err)
 }
+
+func TestReaderCanOpenWithValidOptions(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	handle, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(err)
+	defer handle.Close()
+
+	// Use all the column types we have
+	columns := generateColumnInfosOfAllTypes()
+
+	// Ensure a certain table exists
+	table, err := createTableOfColumnInfosAndDefaultShardSize(handle, columns)
+	require.NoError(err)
+
+	// Error when no range provided
+	opts := NewReaderOptions().WithTables([]string{table.Name()}).WithoutTimeRange()
+	_, err = NewReader(handle, opts)
+	assert.NoError(err)
+}

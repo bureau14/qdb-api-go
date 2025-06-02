@@ -163,12 +163,20 @@ func convertWriterColumnsToColumnInfo(xs []WriterColumn) []TsColumnInfo {
 	return ret
 }
 
-// Takes writer columns and a creates a table that matches the format. Returns the table
-// object that was created.
-func createTableOfWriterColumns(handle HandleType, columns []WriterColumn, shardSize time.Duration) (TimeseriesEntry, error) {
-	tableName := generateDefaultAlias()
+func generateColumnInfosOfType(n int, ctype TsColumnType) []TsColumnInfo {
+	return convertWriterColumnsToColumnInfo(generateWriterColumnsOfType(n, ctype))
+}
 
-	columnInfos := convertWriterColumnsToColumnInfo(columns)
+func generateColumnInfosOfAllTypes() []TsColumnInfo {
+	return convertWriterColumnsToColumnInfo(generateWriterColumnsOfAllTypes())
+}
+
+func generateColumnInfos(n int) []TsColumnInfo {
+	return convertWriterColumnsToColumnInfo(generateWriterColumns(n))
+}
+
+func createTableOfColumnInfos(handle HandleType, columnInfos []TsColumnInfo, shardSize time.Duration) (TimeseriesEntry, error) {
+	tableName := generateDefaultAlias()
 
 	table := handle.Table(tableName)
 	err := table.Create(shardSize, columnInfos...)
@@ -178,6 +186,19 @@ func createTableOfWriterColumns(handle HandleType, columns []WriterColumn, shard
 	}
 
 	return table, nil
+}
+
+func createTableOfColumnInfosAndDefaultShardSize(handle HandleType, columns []TsColumnInfo) (TimeseriesEntry, error) {
+	var duration time.Duration = 86400 * 1000 * 1000 * 1000 // 1 day
+	return createTableOfColumnInfos(handle, columns, duration)
+}
+
+// Takes writer columns and a creates a table that matches the format. Returns the table
+// object that was created.
+func createTableOfWriterColumns(handle HandleType, columns []WriterColumn, shardSize time.Duration) (TimeseriesEntry, error) {
+	columnInfos := convertWriterColumnsToColumnInfo(columns)
+
+	return createTableOfColumnInfos(handle, columnInfos, shardSize)
 }
 
 func createTableOfWriterColumnsAndDefaultShardSize(handle HandleType, columns []WriterColumn) (TimeseriesEntry, error) {
