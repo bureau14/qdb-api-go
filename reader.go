@@ -1147,9 +1147,64 @@ func releaseBulkReaderData(h HandleType, cTables *C.qdb_bulk_reader_table_data_t
 		}
 
 		if data.columns != nil {
+			colCount := int(data.column_count)
+			colSlice := unsafe.Slice(data.columns, colCount)
+			for j := range colCount {
+				col := &colSlice[j]
+
+				raw := *(*unsafe.Pointer)(unsafe.Pointer(&col.data[0]))
+				switch col.data_type {
+				case C.qdb_ts_column_int64:
+					if raw != nil {
+						qdbRelease(h, (*C.qdb_int_t)(raw))
+					}
+				case C.qdb_ts_column_double:
+					if raw != nil {
+						qdbRelease(h, (*C.double)(raw))
+					}
+				case C.qdb_ts_column_timestamp:
+					if raw != nil {
+						qdbRelease(h, (*C.qdb_timespec_t)(raw))
+					}
+				case C.qdb_ts_column_blob:
+					if raw != nil {
+						blobPtr := (*C.qdb_blob_t)(raw)
+						blobSlice := unsafe.Slice(blobPtr, int(data.row_count))
+						for k := range data.row_count {
+							if blobSlice[k].content != nil {
+								qdbReleasePointer(h, unsafe.Pointer(blobSlice[k].content))
+								blobSlice[k].content = nil
+							}
+						}
+						qdbRelease(h, blobPtr)
+					}
+				case C.qdb_ts_column_string:
+					if raw != nil {
+						strPtr := (*C.qdb_string_t)(raw)
+						strSlice := unsafe.Slice(strPtr, int(data.row_count))
+						for k := range data.row_count {
+							if strSlice[k].data != nil {
+								qdbReleasePointer(h, unsafe.Pointer(strSlice[k].data))
+								strSlice[k].data = nil
+							}
+						}
+						qdbRelease(h, strPtr)
+					}
+				}
+
+				if col.name != nil {
+					qdbRelease(h, colSlice[j].name)
+					colSlice[j].name = nil
+				}
+
+			}
+
 			qdbRelease(h, data.columns)
 			data.columns = nil
 		}
+
+		qdbRelease(h, &data)
+
 	}
 
 	qdbRelease(h, cTables)
