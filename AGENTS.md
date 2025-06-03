@@ -25,10 +25,24 @@ bash scripts/tests/setup/start-services.sh
 
 ### Running tests
 
-Reuse our TeamCity test script:
+To run the entire test suite, execute:
 
 ```bash
-bash scripts/teamcity/20.test.sh
+go test -v ./...
+```
+
+Because the full test suite can take a long time to run minutes, it is strongly recommended that OpenAI Codex first runs individual test modules related specifically to recent changes, providing quicker feedback.
+
+To run a single test, for example `TestReaderCanReadDataFromSingleTable`, execute:
+
+```bash
+go test -v ./...  -run 'TestReaderCanReadDataFromSingleTable'
+```
+
+To run tests based on prefix, for example all tests with the `TestReader` prefix, execute:
+
+```bash
+go test -v ./...  -run 'TestReader*'
 ```
 
 ### Tests teardown
