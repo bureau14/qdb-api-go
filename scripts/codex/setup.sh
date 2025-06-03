@@ -23,9 +23,12 @@ function die {
 echo "Checking out git submodules"
 git submodule update --init --recursive
 
-# Install runtime utilities needed by the test scripts.
+# Install runtime utilities:
+#
+# * `lsof` required by `scripts/tests/setup/start-services.sh`
+# * `direnv` required for the ability of loading environment variables
 echo "Installing test dependencies"
-apt-get update -y && apt-get install -y lsof >/dev/null
+apt-get update -y && apt-get install -y direnv lsof >/dev/null
 
 ##
 # Download nightly quasardb artifacts and extract in qdb/ subdirectory.
@@ -75,3 +78,7 @@ fi
 
 echo "Downloading all build dependencies"
 go mod tidy
+
+##
+# Enable direnv usage on the current directory
+direnv allow .
