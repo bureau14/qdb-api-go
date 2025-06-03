@@ -278,57 +278,25 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 
 // Test that the batch writer can push into a table without issues.
 func TestWriterCanPushSingleTable(t *testing.T) {
-	assert := assert.New(t)
 	require := require.New(t)
 
-	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.NoError(err)
+	handle := newTestHandle(t)
 	defer handle.Close()
 
-	// First generate the table schema + layout we will work with
-	columns := generateWriterColumnsOfAllTypes()
-	idx := generateDefaultIndex(1024)
-	datas, err := generateWriterDatas(len(idx), columns)
-	require.NoError(err)
+	tables, _, _ := createAndPopulateTables(t, handle, 1, 1024)
+	pushWriterTables(t, handle, tables)
 
-	// Creating the table automatically assign it a name
-	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
-	require.NoError(err)
-
-	// Now create a WriterTable structure and fill it
-	writerTable, err := NewWriterTable(table.alias, columns)
-	require.NoError(err)
-	require.NotNil(writerTable)
-
-	writerTable.SetIndex(idx)
-
-	err = writerTable.SetDatas(datas)
-	require.NoError(err)
-
-	// And actually push the data by creating a writer, adding the table to it
-	// and invoking Push().
-	writer := newTestWriter(t)
-
-	writer.SetTable(writerTable)
-
-	// Push the writer
-	err = writer.Push(handle)
-	assert.NoError(err)
+	// If pushWriterTables returned without failing the test, we consider it a success
 }
 
 // Test that the batch writer can push into multiple tables without issues.
 func TestWriterCanPushMultipleTables(t *testing.T) {
-	// TODO: implement
-	//
-	// implement similar test case as `TestWriterCanPushSingleTable`, but in this case
-	// push into mulitple tables. Number of tables should be a parameter and reasonably large
-	// to trigger edge cases: e.g. 64 or 256 even, if it doesn't make the test take too much
-	// time.
-	//
-	// Schemas of all tables must be identical
-	//
-	// No validation of correctness of inserted data is required, the actual data validation is done
-	// mostly in the `reader_test.go` to avoid duplication of the same tests -- here we just care
-	// that no errors are raised.
+	handle := newTestHandle(t)
+	defer handle.Close()
 
+	const tableCount = 64
+	const rowCount = 256
+
+	tables, _, _ := createAndPopulateTables(t, handle, tableCount, rowCount)
+	pushWriterTables(t, handle, tables)
 }

@@ -50,6 +50,61 @@ func newTestWriter(t *testing.T) Writer {
 	return writer
 }
 
+// createAndPopulateTables creates `tableCount` tables with identical schema and
+// fills them with `rowCount` rows of random data. It returns the prepared
+// WriterTable instances, their table names, and the column schema used.
+func createAndPopulateTables(t *testing.T, handle HandleType, tableCount, rowCount int) ([]WriterTable, []string, []WriterColumn) {
+	t.Helper()
+
+	columns := generateWriterColumnsOfAllTypes()
+	idx := generateDefaultIndex(rowCount)
+	datas, err := generateWriterDatas(rowCount, columns)
+	require.NoError(t, err)
+
+	tables := make([]WriterTable, tableCount)
+	names := make([]string, tableCount)
+
+	for i := 0; i < tableCount; i++ {
+		tbl, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
+		require.NoError(t, err)
+
+		wt, err := NewWriterTable(tbl.alias, columns)
+		require.NoError(t, err)
+		wt.SetIndex(idx)
+		require.NoError(t, wt.SetDatas(datas))
+
+		tables[i] = wt
+		names[i] = tbl.Name()
+	}
+
+	return tables, names, columns
+}
+
+// pushWriterTables writes the provided tables to the server using a writer with
+// default options. Any error will fail the test via require.
+func pushWriterTables(t *testing.T, handle HandleType, tables []WriterTable) {
+	t.Helper()
+
+	writer := NewWriterWithDefaultOptions()
+	require.NotNil(t, writer)
+
+	for _, wt := range tables {
+		require.NoError(t, writer.SetTable(wt))
+	}
+
+	require.NoError(t, writer.Push(handle))
+}
+
+// columnNamesFromWriterColumns extracts the column names from the provided
+// WriterColumn definitions.
+func columnNamesFromWriterColumns(cols []WriterColumn) []string {
+	names := make([]string, len(cols))
+	for i, c := range cols {
+		names[i] = c.ColumnName
+	}
+	return names
+}
+
 // assertWriterTablesEqualReaderBatch compares the data written via WriterTables
 // with the data returned by the Reader.
 func assertWriterTablesEqualReaderBatch(t *testing.T, expected []WriterTable, names []string, got ReaderBatch) {

@@ -97,58 +97,43 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	handle := newTestHandle(t)
 	defer handle.Close()
 
-	// Step 1: create table and fill with data using the Writer
-	columns := generateWriterColumnsOfAllTypes()
-	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
-	require.NoError(err)
+	tables, names, columns := createAndPopulateTables(t, handle, 1, 1024)
+	pushWriterTables(t, handle, tables)
 
-	rowCount := 1024
-	idx := generateDefaultIndex(rowCount)
+	columnNames := columnNamesFromWriterColumns(columns)
 
-	datas, err := generateWriterDatas(rowCount, columns)
-	require.NoError(err)
-
-	writerTable, err := NewWriterTable(table.alias, columns)
-	require.NoError(err)
-	writerTable.SetIndex(idx)
-	require.NoError(writerTable.SetDatas(datas))
-
-	writer := NewWriterWithDefaultOptions()
-	writer.SetTable(writerTable)
-
-	require.NoError(writer.Push(handle))
-
-	// Step 2: initialize the reader on this table
-	var columnNames []string
-	for _, c := range columns {
-		columnNames = append(columnNames, c.ColumnName)
-	}
-
-	opts := NewReaderOptions().WithTables([]string{table.Name()}).WithColumns(columnNames)
+	opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
 	reader, err := NewReader(handle, opts)
 	require.NoError(err)
 	defer reader.Close()
 
-	// Step 3: fetch all data from reader
-	tables, err := reader.FetchAll()
+	data, err := reader.FetchAll()
 	require.NoError(err)
 
-	// Step 4 & 5: verify reader output matches the written data
-	assertWriterTablesEqualReaderBatch(t, []WriterTable{writerTable}, []string{table.Name()}, tables)
+	assertWriterTablesEqualReaderBatch(t, tables, names, data)
 }
 
 func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
 	require := require.New(t)
 
-	// TODO: implement
-	//
-	// implement similar test case as `TestReaderCanReadDataFromSingleTable`, but in this case
-	// read from mulitple tables. Number of tables should be a parameter and reasonably large
-	// to trigger edge cases: e.g. 64 or 256 even, if it doesn't make the test take too much
-	// time.
-	//
-	// Validate those again using the same logic with `assertWriterTablesEqualReaderBatch`
-	//
-	// Schemas of all tables must be identical
+	handle := newTestHandle(t)
+	defer handle.Close()
 
+	const tableCount = 64
+	const rowCount = 256
+
+	tables, names, columns := createAndPopulateTables(t, handle, tableCount, rowCount)
+	pushWriterTables(t, handle, tables)
+
+	columnNames := columnNamesFromWriterColumns(columns)
+
+	opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
+	reader, err := NewReader(handle, opts)
+	require.NoError(err)
+	defer reader.Close()
+
+	data, err := reader.FetchAll()
+	require.NoError(err)
+
+	assertWriterTablesEqualReaderBatch(t, tables, names, data)
 }
