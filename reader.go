@@ -1080,29 +1080,24 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 //
 // Accepts the number of rows to get
 func (r *Reader) fetchBatch() ([]ReaderChunk, error) {
-	// Step 2: invoke qdb_bulk_reader_get_data
 	var cTables *C.qdb_bulk_reader_table_data_t
-	errCode := C.qdb_bulk_reader_get_data(r.state, &cTables, C.qdb_size_t(r.options.batchSize))
+	tableCount := len(r.options.tables)
+	err := makeErrorOrNil(C.qdb_bulk_reader_get_data(r.state, &cTables, C.qdb_size_t(r.options.batchSize)))
 
-	// Step 3: handle return codes
-	if errCode == C.qdb_e_iterator_end {
+	if err == ErrIteratorEnd {
 		if cTables != nil {
 			qdbRelease(r.handle, cTables)
 		}
 		return []ReaderChunk{}, nil
-	}
-
-	if err := makeErrorOrNil(errCode); err != nil {
-		return nil, err
-	}
-
-	if cTables == nil {
+	} else if err != nil {
+		return nil, fmt.Errorf("unable to fetch bulk reader data: %v", err)
+	} else if cTables == nil {
 		return nil, fmt.Errorf("qdb_bulk_reader_get_data returned nil pointer")
 	}
-	defer qdbRelease(r.handle, cTables)
+
+	defer releaseBulkReaderData(r.handle, cTables, tableCount)
 
 	// Step 4: convert native structures to ReaderChunk objects
-	tableCount := len(r.options.tables)
 	tblSlice := unsafe.Slice(cTables, tableCount)
 
 	ret := make([]ReaderChunk, tableCount)
@@ -1138,6 +1133,26 @@ func (r *Reader) fetchBatch() ([]ReaderChunk, error) {
 	}
 
 	return ret, nil
+}
+
+// releaseBulkReaderData releases C memory allocated by qdb_bulk_reader_get_data,
+// including nested timestamp, column name and data arrays.
+func releaseBulkReaderData(h HandleType, cTables *C.qdb_bulk_reader_table_data_t, tableCount int) {
+	tblSlice := unsafe.Slice(cTables, tableCount)
+	for i := range tableCount {
+		data := tblSlice[i]
+		if data.timestamps != nil {
+			qdbRelease(h, data.timestamps)
+			data.timestamps = nil
+		}
+
+		if data.columns != nil {
+			qdbRelease(h, data.columns)
+			data.columns = nil
+		}
+	}
+
+	qdbRelease(h, cTables)
 }
 
 // Next prepares the next available data batch.
