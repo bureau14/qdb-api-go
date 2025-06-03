@@ -33,7 +33,28 @@ For example, to run `go env`, use:
 direnv exec . go env
 ```
 
-**Do not omit** the `direnv exec .` prefix from any commands, as this ensures the proper environment variables are loaded consistently.
+**Always** include the `direnv exec .` prefix on **every** generated shell command. Omitting it can lead to compilation failures due to missing environment variables.
+
+### Resolving direnv Permission Errors:
+
+If executing commands prefixed with `direnv exec` . results in the following error:
+
+```bash
+direnv: error /path/to/project/.envrc is blocked. Run `direnv allow` to approve its content
+```
+
+This indicates the .envrc file has not yet been explicitly trusted.
+Immediately run the following command to resolve this issue:
+
+```bash
+direnv allow .
+```
+
+After running this, retry the original command:
+
+```bash
+direnv exec . <original command>
+```
 
 ## Testing Requirements for OpenAI Codex
 
@@ -53,7 +74,7 @@ To run the entire test suite, execute:
 direnv exec . go test -v ./...
 ```
 
-Because the full test suite can take a long time to run minutes, it is strongly recommended that OpenAI Codex first runs individual test modules related specifically to recent changes, providing quicker feedback.
+Because running the full test suite may take several minutes, it is strongly recommended that OpenAI Codex first runs individual test modules related specifically to recent changes, providing quicker feedback.
 
 To run a single test, for example `TestReaderCanReadDataFromSingleTable`, execute:
 
