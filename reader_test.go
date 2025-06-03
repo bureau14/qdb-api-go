@@ -97,6 +97,7 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	require := require.New(t)
 
+	// Push data
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
 	require.NoError(err)
 	defer handle.Close()
@@ -112,13 +113,14 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	datas, err := generateWriterDatas(rowCount, columns)
 	require.NoError(err)
 
-	writerTable, err := NewWriterTable(handle, table.alias, columns)
+	writerTable, err := NewWriterTable(table.alias, columns)
 	require.NoError(err)
 	writerTable.SetIndex(idx)
 	require.NoError(writerTable.SetDatas(datas))
 
 	writer := NewWriterWithDefaultOptions()
 	writer.SetTable(writerTable)
+
 	require.NoError(writer.Push(handle))
 
 	// Step 2: initialize the reader on this table

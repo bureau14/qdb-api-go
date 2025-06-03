@@ -219,7 +219,7 @@ type WriterColumn struct {
 
 // Single table to be provided to the batch writer.
 type WriterTable struct {
-	TableName *C.char
+	TableName string
 
 	// All arrays are guaranteed to be of lenght `rowCount`. This means specifically
 	// the `idx` parameter and all Writerdata value arrays within `data`.
@@ -361,7 +361,7 @@ func GetBlobArrayUnsafe(x WriterData) *WriterDataBlob {
 	return (*WriterDataBlob)(ifaceDataPtr(x))
 }
 
-func NewWriterTable(h HandleType, t string, cols []WriterColumn) (WriterTable, error) {
+func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 	// Pre-allocate our data array, which has exactly 1 entry for every column we intend to write.
 	data := make([]WriterData, len(cols))
 
@@ -374,21 +374,12 @@ func NewWriterTable(h HandleType, t string, cols []WriterColumn) (WriterTable, e
 		columnOffsetByName[col.ColumnName] = i
 	}
 
-	tableName, err := qdbCopyString(h, t)
-	if err != nil {
-		return WriterTable{}, err
-	}
-
 	// An index of column offset to name
-	return WriterTable{tableName, 0, columnInfoByOffset, columnOffsetByName, nil, data}, nil
-}
-
-func (t *WriterTable) GetNameNative() *C.char {
-	return t.TableName
+	return WriterTable{t, 0, columnInfoByOffset, columnOffsetByName, nil, data}, nil
 }
 
 func (t *WriterTable) GetName() string {
-	return C.GoString(t.GetNameNative())
+	return t.TableName
 }
 
 func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
@@ -494,12 +485,12 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 // as long as the native C structure.
 func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) error {
 
-	out.name = t.TableName
-
-	err := t.toNativeTableData(h, &out.data)
+	tableName, err := qdbCopyString(h, t.TableName)
 	if err != nil {
 		return err
 	}
+
+	out.name = tableName
 
 	// Zero-initialize the rest of the struct. This should already be the case,
 	// but just in case, we are very explicit about all the default values we
@@ -544,13 +535,17 @@ func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_
 	// Never automatically create tables
 	out.creation = C.qdb_exp_batch_creation_mode_t(C.qdb_exp_batch_dont_create)
 
+	err = t.toNativeTableData(h, &out.data)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func releaseBatchPushBlobColumns(h HandleType, xs []C.qdb_blob_t) {
 	for _, x := range xs {
 		if x.content != nil {
-			fmt.Printf("releasing blob pointer: %v\n", x.content)
 			C.qdb_release(h.handle, x.content)
 		}
 	}
@@ -559,7 +554,6 @@ func releaseBatchPushBlobColumns(h HandleType, xs []C.qdb_blob_t) {
 func releaseBatchPushStringColumns(h HandleType, xs []C.qdb_string_t) {
 	for _, x := range xs {
 		if x.data != nil {
-			fmt.Printf("releasing string pointer: %v\n", x.data)
 			qdbRelease(h, x.data)
 		}
 	}
@@ -616,11 +610,14 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 		return fmt.Errorf("WriterTable.releaseNative: inconsistent state")
 	}
 
-	qdbRelease(h, t.TableName)
-	t.TableName = nil
+	if tbl.name != nil {
+		qdbRelease(h, tbl.name)
+		tbl.name = nil
+	}
 
 	if t.idx != nil {
 		qdbRelease(h, tbl.data.timestamps)
+		tbl.data.timestamps = nil
 	}
 
 	if tbl.data.columns != nil {
@@ -837,8 +834,9 @@ func (w *Writer) Push(h HandleType) error {
 	for _, v := range w.tables {
 		err := v.toNative(h, w.options, &tblSlice[i])
 		if err != nil {
-			// Potential memory leak as we don't clear up all our qdbAllocBuffer data, but
-			// extemely unlikely to occur.
+			// Potential memory leak occurs here, but if we cannot do this conversion,
+			// it means something is very wrong and the user should close the handle
+			// anyway (and all memory is allocated+tracked using qdbAlloc anyway)
 			return fmt.Errorf("Failed to convert table %q to native: %v", v.GetName(), err)
 		}
 		defer v.releaseNative(h, &tblSlice[i])
