@@ -3,11 +3,80 @@ package qdb
 import (
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// assertWriterTablesEqualReaderBatch compares the data written via WriterTables
+// with the data returned by the Reader.
+func assertWriterTablesEqualReaderBatch(t *testing.T, expected []WriterTable, names []string, got ReaderBatch) {
+	t.Helper()
+
+	require := require.New(t)
+	assert := assert.New(t)
+
+	require.Equal(len(expected), len(got))
+	require.Equal(len(expected), len(names))
+	for i, wt := range expected {
+		rc := got[i]
+
+		expectedName := names[i]
+		assert.Equal(expectedName, rc.tableName)
+		assert.Equal(wt.GetIndex(), rc.idx)
+
+		// Validate row count information at least matches the writer input
+		assert.Equal(len(wt.GetIndexAsNative()), rc.rowCount)
+
+		offset := len(rc.columnInfoByOffset) - len(wt.columnInfoByOffset)
+		require.GreaterOrEqual(offset, 0)
+		for j, col := range wt.columnInfoByOffset {
+			rcCol := rc.columnInfoByOffset[j+offset]
+			assert.Equal(col.ColumnName, rcCol.columnName)
+			assert.Equal(col.ColumnType, rcCol.columnType)
+
+			expectedData := wt.data[j]
+			gotData := rc.data[j+offset]
+			switch col.ColumnType {
+			case TsColumnInt64:
+				exp, err := GetInt64Array(expectedData)
+				require.NoError(err)
+				gotVals, err := GetReaderDataInt64(gotData)
+				require.NoError(err)
+				assert.Equal(exp.xs, gotVals)
+			case TsColumnDouble:
+				exp, err := GetDoubleArray(expectedData)
+				require.NoError(err)
+				gotVals, err := GetReaderDataDouble(gotData)
+				require.NoError(err)
+				assert.Equal(exp.xs, gotVals)
+			case TsColumnTimestamp:
+				exp, err := GetTimestampArray(expectedData)
+				require.NoError(err)
+				gotVals, err := GetReaderDataTimestamp(gotData)
+				require.NoError(err)
+				require.Equal(len(exp.xs), len(gotVals))
+				for k, v := range exp.xs {
+					assert.Equal(QdbTimespecToTime(v), gotVals[k])
+				}
+			case TsColumnBlob:
+				exp, err := GetBlobArray(expectedData)
+				require.NoError(err)
+				gotVals, err := GetReaderDataBlob(gotData)
+				require.NoError(err)
+				assert.Equal(exp.xs, gotVals)
+			case TsColumnString:
+				exp, err := GetStringArray(expectedData)
+				require.NoError(err)
+				gotVals, err := GetReaderDataString(gotData)
+				require.NoError(err)
+				assert.Equal(exp.xs, gotVals)
+			default:
+				t.Fatalf("unsupported column type %v", col.ColumnType)
+			}
+		}
+	}
+}
 
 func TestReaderOptionsCanCreateNew(t *testing.T) {
 	assert := assert.New(t)
@@ -96,7 +165,6 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 }
 
 func TestReaderCanReadDataFromSingleTable(t *testing.T) {
-	assert := assert.New(t)
 	require := require.New(t)
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
@@ -111,86 +179,13 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	rowCount := 8
 	idx := generateDefaultIndex(rowCount)
 
-	datas, err := generateWriterDatas(handle, rowCount, columns)
+	datas, err := generateWriterDatas(rowCount, columns)
 	require.NoError(err)
 
 	writerTable, err := NewWriterTable(handle, table.alias, columns)
 	require.NoError(err)
-	require.NoError(writerTable.SetIndex(handle, idx))
+	writerTable.SetIndex(idx)
 	require.NoError(writerTable.SetDatas(datas))
-
-	// Capture values from generated WriterData without using cgo
-	var (
-		intData    []int64
-		doubleData []float64
-		tsData     []time.Time
-		blobData   [][]byte
-		stringData []string
-	)
-
-	type timespec struct {
-		tv_sec  int64
-		tv_nsec int64
-	}
-
-	type cBlob struct {
-		content        unsafe.Pointer
-		content_length uint64
-	}
-
-	type cString struct {
-		data   *byte
-		length uint64
-	}
-
-	for i, c := range columns {
-		switch c.ColumnType {
-		case TsColumnInt64:
-			arr, err := GetInt64Array(datas[i])
-			require.NoError(err)
-			tmp := unsafe.Slice((*int64)(unsafe.Pointer(arr.xs)), rowCount)
-			intData = append(intData, tmp...)
-		case TsColumnDouble:
-			arr, err := GetDoubleArray(datas[i])
-			require.NoError(err)
-			tmp := unsafe.Slice((*float64)(unsafe.Pointer(arr.xs)), rowCount)
-			doubleData = append(doubleData, tmp...)
-		case TsColumnTimestamp:
-			arr, err := GetTimestampArray(datas[i])
-			require.NoError(err)
-			tmp := unsafe.Slice((*timespec)(unsafe.Pointer(arr.xs)), rowCount)
-			tsData = make([]time.Time, rowCount)
-			for j, v := range tmp {
-				tsData[j] = time.Unix(v.tv_sec, v.tv_nsec).UTC()
-			}
-		case TsColumnBlob:
-			arr, err := GetBlobArray(datas[i])
-			require.NoError(err)
-			tmp := unsafe.Slice((*cBlob)(unsafe.Pointer(arr.xs)), rowCount)
-			blobData = make([][]byte, rowCount)
-			for j, v := range tmp {
-				if v.content_length > 0 {
-					b := unsafe.Slice((*byte)(v.content), int(v.content_length))
-					blobData[j] = append([]byte(nil), b...)
-				} else {
-					blobData[j] = nil
-				}
-			}
-		case TsColumnString:
-			arr, err := GetStringArray(datas[i])
-			require.NoError(err)
-			tmp := unsafe.Slice((*cString)(unsafe.Pointer(arr.xs)), rowCount)
-			stringData = make([]string, rowCount)
-			for j, v := range tmp {
-				if v.length > 0 {
-					b := unsafe.Slice((*byte)(unsafe.Pointer(v.data)), int(v.length))
-					stringData[j] = string(b)
-				} else {
-					stringData[j] = ""
-				}
-			}
-		}
-	}
 
 	writer := NewWriterWithDefaultOptions()
 	writer.SetTable(writerTable)
@@ -211,37 +206,7 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	tables, err := reader.FetchAll()
 	require.NoError(err)
 
-	// Step 4: assert that there's just a single table being returned
-	require.Equal(1, len(tables))
-	tbl := tables[0]
-	assert.Equal(rowCount, tbl.rowCount)
-	assert.Equal(idx, tbl.idx)
-
-	// Step 5: assert that each column's data matches exactly what we have written into it
-	for i, col := range tbl.columnInfoByOffset {
-		switch col.columnType {
-		case TsColumnInt64:
-			got, err := GetReaderDataInt64(tbl.data[i])
-			require.NoError(err)
-			assert.Equal(intData, got)
-		case TsColumnDouble:
-			got, err := GetReaderDataDouble(tbl.data[i])
-			require.NoError(err)
-			assert.Equal(doubleData, got)
-		case TsColumnTimestamp:
-			got, err := GetReaderDataTimestamp(tbl.data[i])
-			require.NoError(err)
-			assert.Equal(tsData, got)
-		case TsColumnBlob:
-			got, err := GetReaderDataBlob(tbl.data[i])
-			require.NoError(err)
-			assert.Equal(blobData, got)
-		case TsColumnString:
-			// TODO: bulk reader string support unstable; skip check
-			got, err := GetReaderDataString(tbl.data[i])
-			require.NoError(err)
-			_ = got
-		}
-	}
+	// Step 4 & 5: verify reader output matches the written data
+	assertWriterTablesEqualReaderBatch(t, []WriterTable{writerTable}, []string{table.Name()}, tables)
 
 }
