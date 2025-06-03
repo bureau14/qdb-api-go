@@ -415,15 +415,12 @@ func qdbCopyString(h HandleType, s string) (*C.char, error) {
 		return nil, fmt.Errorf("cannot allocate empty string")
 	}
 
-	ptr, err := qdbAllocBytes(h, len(s)+1)
+	buf := append(unsafe.Slice(unsafe.StringData(s), len(s)), 0)
+
+	ptr, err := qdbAllocAndCopyBytes(h, buf)
 	if err != nil {
 		return nil, fmt.Errorf("qdbCopyString: allocation failed: %w", err)
 	}
 
-	C.memcpy(ptr, unsafe.Pointer(unsafe.StringData(s)), C.size_t(len(s)))
-
-	// null terminator
-	*(*byte)(unsafe.Pointer(uintptr(ptr) + uintptr(len(s)))) = 0
-
-	return (*C.char)(ptr), nil
+	return (*C.char)(unsafe.Pointer(ptr)), nil
 }
