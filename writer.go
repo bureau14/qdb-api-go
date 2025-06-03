@@ -32,149 +32,102 @@ type WriterData interface {
 
 	// Returns opaque pointer to internal data array, intended to be set on
 	// the `qdb_exp_batch_push_column_t` `data` field.
-	ptr() unsafe.Pointer
-
-	// Release any C allocated buffers managed
-	releaseNative(h HandleType) error
+	toNative(h HandleType) (unsafe.Pointer, error)
 }
 
 // Int64
 type WriterDataInt64 struct {
-	xs *C.qdb_int_t
+	xs []int64
 }
 
 // NewWriterDataInt64 constructs a WriterDataInt64 instance, copying the input slice
 // into memory allocated by the QDB C API. The allocated memory must be released with C.qdb_release().
-func NewWriterDataInt64(h HandleType, xs []int64) (WriterData, error) {
-	ptr, err := qdbAllocAndCopy[int64, C.qdb_int_t](h, xs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate and copy int64 data: %w", err)
-	}
-
-	return &WriterDataInt64{
-		xs: ptr,
-	}, nil
+func NewWriterDataInt64(xs []int64) WriterData {
+	return &WriterDataInt64{xs: xs}
 }
 
 func (wd *WriterDataInt64) valueType() TsValueType {
 	return TsValueInt64
 }
 
-func (wd *WriterDataInt64) ptr() unsafe.Pointer {
-	return unsafe.Pointer(wd.xs)
-}
-
-func (wd *WriterDataInt64) releaseNative(h HandleType) error {
-	// no C-managed memory allocated
-	if wd.xs == nil {
-		return fmt.Errorf("Internal error: no value array for WriterDataInt64")
+func (wd *WriterDataInt64) toNative(h HandleType) (unsafe.Pointer, error) {
+	ptr, err := qdbAllocAndCopyBuffer[int64, C.qdb_int_t](h, wd.xs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate and copy int64 data: %w", err)
 	}
 
-	qdbRelease(h, wd.xs)
-	wd.xs = nil
-
-	return nil
+	return unsafe.Pointer(ptr), nil
 }
 
 // Double
 type WriterDataDouble struct {
-	xs *C.double
+	xs []float64
 }
 
 // NewWriterDataDouble constructs a WriterDataDouble instance, copying the input slice
 // into memory allocated by the QDB C API. The allocated memory must be released with C.qdb_release().
-func NewWriterDataDouble(h HandleType, xs []float64) (WriterData, error) {
-	ptr, err := qdbAllocAndCopy[float64, C.double](h, xs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate and copy double data: %w", err)
-	}
-
-	return &WriterDataDouble{
-		xs: ptr,
-	}, nil
+func NewWriterDataDouble(xs []float64) WriterData {
+	return &WriterDataDouble{xs}
 }
 
 func (wd WriterDataDouble) valueType() TsValueType {
 	return TsValueDouble
 }
 
-func (wd *WriterDataDouble) ptr() unsafe.Pointer {
-	return unsafe.Pointer(wd.xs)
-}
-
-// Releases all C-allocated memory, which has been allocated by the QDB C API.
-func (wd *WriterDataDouble) releaseNative(h HandleType) error {
-	if wd.xs == nil {
-		return fmt.Errorf("Internal error: no value array for WriterDataDouble")
+func (wd *WriterDataDouble) toNative(h HandleType) (unsafe.Pointer, error) {
+	ptr, err := qdbAllocAndCopyBuffer[float64, C.double](h, wd.xs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate and copy double data: %w", err)
 	}
 
-	qdbRelease(h, wd.xs)
-	wd.xs = nil
-
-	return nil
+	return unsafe.Pointer(ptr), nil
 }
 
 // Timestamp
 type WriterDataTimestamp struct {
-	xs *C.qdb_timespec_t
+	xs []C.qdb_timespec_t
 }
 
 // NewWriterDataTimestampFromTimespec constructs WriterDataTimestamp from a slice of C.qdb_timespec_t,
 // copying the data into a newly allocated buffer via qdbAllocAndCopy.
-func NewWriterDataTimestampFromTimespec(h HandleType, xs []C.qdb_timespec_t) (WriterData, error) {
-	ptr, err := qdbAllocAndCopy[C.qdb_timespec_t, C.qdb_timespec_t](h, xs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate and copy timestamp data: %w", err)
-	}
-
-	return &WriterDataTimestamp{
-		xs: ptr,
-	}, nil
+func NewWriterDataTimestampFromTimespec(xs []C.qdb_timespec_t) WriterData {
+	return &WriterDataTimestamp{xs: xs}
 }
 
 // Constructor for timestamp data array
-func NewWriterDataTimestamp(h HandleType, xs []time.Time) (WriterData, error) {
-	return NewWriterDataTimestampFromTimespec(h, TimeSliceToQdbTimespec(xs))
+func NewWriterDataTimestamp(xs []time.Time) WriterData {
+	return NewWriterDataTimestampFromTimespec(TimeSliceToQdbTimespec(xs))
 }
 
 func (_ WriterDataTimestamp) valueType() TsValueType {
 	return TsValueTimestamp
 }
 
-func (wd *WriterDataTimestamp) ptr() unsafe.Pointer {
-	return unsafe.Pointer(wd.xs)
-}
-
-func (wd *WriterDataTimestamp) releaseNative(h HandleType) error {
-	if wd.xs == nil {
-		return fmt.Errorf("Internal error: no value array for WriterDataTimestamp")
+func (wd *WriterDataTimestamp) toNative(h HandleType) (unsafe.Pointer, error) {
+	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, wd.xs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate and copy timestamp data: %w", err)
 	}
 
-	qdbRelease(h, wd.xs)
-
-	wd.xs = nil
-
-	return nil
+	return unsafe.Pointer(ptr), nil
 }
 
 // Blob
 type WriterDataBlob struct {
-	xs      *C.qdb_blob_t // array of blob structs
-	content *byte         // content array for *all* blobs, allocated as one large slice
+	xs [][]byte
 }
 
 // Constructor for blob data array
-func NewWriterDataBlob(h HandleType, xs [][]byte) (WriterData, error) {
-	// NewWriterDataBlob allocates a single large contiguous memory region for all blob contents
-	// to reduce memory fragmentation and improve allocation performance.
-	//
-	// Each blob occupies a fixed-length segment equal to the largest blob size.
-	// Smaller blobs do not fully utilize their allocated segment.
-	//
-	// Both the blob descriptor structs and contents are explicitly allocated
-	// and must be explicitly released using C.qdb_release() after usage.
+func NewWriterDataBlob(xs [][]byte) WriterData {
+	return &WriterDataBlob{xs}
+}
 
-	count := len(xs)
+func (cd WriterDataBlob) valueType() TsValueType {
+	return TsValueBlob
+}
+
+func (wd *WriterDataBlob) toNative(h HandleType) (unsafe.Pointer, error) {
+	count := len(wd.xs)
 	if count == 0 {
 		return nil, fmt.Errorf("no blobs provided")
 	}
@@ -185,37 +138,17 @@ func NewWriterDataBlob(h HandleType, xs [][]byte) (WriterData, error) {
 		return nil, fmt.Errorf("blob struct array allocation failed: %v", err)
 	}
 
-	// Step 2: find largest blob size for uniform allocation
-	maxBlobSize := 0
-	for _, v := range xs {
-		if len(v) > maxBlobSize {
-			maxBlobSize = len(v)
-		}
-	}
-
-	// Step 3: allocate single slab of memory to hold all blobs
-	var contentPtr *byte
-	var rawPtr unsafe.Pointer
-	if maxBlobSize > 0 {
-		totalContentSize := maxBlobSize * count
-		rawPtr, err = qdbAllocBytes(h, totalContentSize)
-		if err != nil {
-			// Cleanup previous allocation before returning
-			qdbRelease(h, blobArrayPtr)
-			return nil, fmt.Errorf("blob content buffer allocation failed: %v", err)
-		}
-		contentPtr = (*byte)(rawPtr)
-	}
-
-	// Step 4: copy blob contents into single contiguous allocation
+	// Step 2: copy blob contents
 	blobSlice := unsafe.Slice(blobArrayPtr, count)
-	for i, v := range xs {
+	for i, v := range wd.xs {
 		var destPtr unsafe.Pointer
 
 		if len(v) > 0 {
 			// Calculate the correct offset within the large contiguous slab
-			destPtr = unsafe.Pointer(uintptr(rawPtr) + uintptr(i*maxBlobSize))
-			C.memcpy(destPtr, unsafe.Pointer(&v[0]), C.size_t(len(v)))
+			destPtr, err = qdbAllocAndCopyBytes(h, v)
+			if err != nil {
+				return nil, err
+			}
 			blobSlice[i].content = destPtr
 			blobSlice[i].content_length = C.qdb_size_t(len(v))
 		} else {
@@ -225,141 +158,57 @@ func NewWriterDataBlob(h HandleType, xs [][]byte) (WriterData, error) {
 		}
 	}
 
-	return &WriterDataBlob{
-		xs:      blobArrayPtr,
-		content: contentPtr,
-	}, nil
-}
-
-func (cd WriterDataBlob) valueType() TsValueType {
-	return TsValueBlob
-}
-
-func (wd *WriterDataBlob) ptr() unsafe.Pointer {
-	return unsafe.Pointer(wd.xs)
-}
-
-func (wd *WriterDataBlob) releaseNative(h HandleType) error {
-	if wd.xs == nil {
-		return fmt.Errorf("Internal error: no value array for WriterDataBlob")
-	}
-
-	qdbRelease(h, wd.xs)
-	if wd.content != nil {
-		qdbRelease(h, wd.content)
-	}
-
-	wd.xs = nil
-	wd.content = nil
-
-	return nil
+	return unsafe.Pointer(blobArrayPtr), nil
 }
 
 // String
 type WriterDataString struct {
-	xs      *C.qdb_string_t // array of string structs
-	content *C.char         // content array for *all* strings, allocated as one large slice
+	xs []string
 }
 
 // Constructor for string data array
-func NewWriterDataString(h HandleType, xs []string) (WriterData, error) {
-	// NewWriterDataBlob allocates a single large contiguous memory region for all blob contents
-	// to reduce memory fragmentation and improve allocation performance.
-	//
-	// Each blob occupies a fixed-length segment equal to the largest blob size.
-	// Smaller blobs do not fully utilize their allocated segment.
-	//
-	// Both the blob descriptor structs and contents are explicitly allocated
-	// and must be explicitly released using C.qdb_release() after usage.
-
-	count := len(xs)
-	if count == 0 {
-		return nil, fmt.Errorf("no blobs provided")
-	}
-
-	// Step 1: allocate qdb_string_t array
-	stringArrayPtr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
-	if err != nil {
-		return nil, fmt.Errorf("blob struct array allocation failed: %v", err)
-	}
-
-	// Step 2: find largest blob size for uniform allocation
-	maxStringSize := 0
-	for _, v := range xs {
-		if len(v) > maxStringSize {
-			// Max size we need to allocate is the length of the string + 1, for
-			// the null terminator.
-			//
-			// QuasarDB C API doesn't strictly require it, but it is better to be
-			// safe.
-			maxStringSize = len(v) + 1
-		}
-	}
-
-	// Step 3: allocate single slab of memory to hold all strings
-	var contentPtr *C.char
-	var rawPtr unsafe.Pointer
-	if maxStringSize > 0 {
-		totalContentSize := maxStringSize * count
-		rawPtr, err = qdbAllocBytes(h, totalContentSize)
-		if err != nil {
-			// Cleanup previous allocation before returning
-			qdbRelease(h, stringArrayPtr)
-			return nil, fmt.Errorf("blob content buffer allocation failed: %v", err)
-		}
-		contentPtr = (*C.char)(rawPtr)
-	}
-
-	// Step 4: copy blob contents into single contiguous allocation
-	stringSlice := unsafe.Slice(stringArrayPtr, count)
-	for i, v := range xs {
-		var destPtr unsafe.Pointer
-
-		if len(v) > 0 {
-			// Calculate the correct offset within the large contiguous slab
-			destPtr = unsafe.Pointer(uintptr(rawPtr) + uintptr(i*maxStringSize))
-			C.memcpy(destPtr, unsafe.Pointer(unsafe.StringData(v)), C.size_t(len(v)))
-
-			// Don't forget to write the \0 null terminator.
-			*(*byte)(unsafe.Pointer(uintptr(destPtr) + uintptr(len(v)))) = 0
-
-			stringSlice[i].data = (*C.char)(destPtr)
-			stringSlice[i].length = C.qdb_size_t(len(v))
-		} else {
-			// Explicitly handle empty strings
-			stringSlice[i].data = nil
-			stringSlice[i].length = 0
-		}
-	}
-
-	return &WriterDataString{
-		xs:      stringArrayPtr,
-		content: contentPtr,
-	}, nil
+func NewWriterDataString(xs []string) WriterData {
+	return &WriterDataString{xs}
 }
 
 func (cd WriterDataString) valueType() TsValueType {
 	return TsValueString
 }
 
-func (wd *WriterDataString) ptr() unsafe.Pointer {
-	return unsafe.Pointer(wd.xs)
-}
-
-func (wd *WriterDataString) releaseNative(h HandleType) error {
-	if wd.xs == nil {
-		return fmt.Errorf("Internal error: no value array for WriterDataString")
+func (wd *WriterDataString) toNative(h HandleType) (unsafe.Pointer, error) {
+	count := len(wd.xs)
+	if count == 0 {
+		return nil, fmt.Errorf("no strings provided")
 	}
 
-	qdbRelease(h, wd.xs)
-	if wd.content != nil {
-		qdbRelease(h, wd.content)
+	// Step 1: allocate qdb_string_t array
+	retPtr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
+	if err != nil {
+		return nil, err
 	}
 
-	wd.xs = nil
-	wd.content = nil
+	retSlice := unsafe.Slice(retPtr, count)
 
-	return nil
+	// Step 2: copy string contents
+	for i, v := range wd.xs {
+		var destPtr *C.char
+
+		if len(v) > 0 {
+			// Calculate the correct offset within the large contiguous slab
+			destPtr, err = qdbCopyString(h, v)
+			if err != nil {
+				return nil, err
+			}
+			retSlice[i].data = destPtr
+			retSlice[i].length = C.qdb_size_t(len(v))
+		} else {
+			// Explicitly handle empty blobs
+			retSlice[i].data = nil
+			retSlice[i].length = 0
+		}
+	}
+
+	return unsafe.Pointer(retPtr), nil
 }
 
 // Metadata we need to represent a single column.
@@ -559,7 +408,7 @@ func (t *WriterTable) SetIndexFromNativeUnsafe(idx *C.qdb_timespec_t, rowCount i
 }
 
 func (t *WriterTable) SetIndexFromNative(h HandleType, idx []C.qdb_timespec_t) error {
-	ptr, err := qdbAllocAndCopy[C.qdb_timespec_t, C.qdb_timespec_t](h, idx)
+	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, idx)
 	if err != nil {
 		return fmt.Errorf("failed to allocate and copy index data: %w", err)
 	}
@@ -639,12 +488,19 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		elem.name = name
 		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
+		ptr, err := t.data[i].toNative(h)
+		if err != nil {
+			return err
+		}
+
 		// Store the pointer to the value array in the union field.
 		// The `data` field is represented as a byte array by cgo.
 		// Writing an unsafe.Pointer fits both 32‑bit and 64‑bit
 		// systems, as the size of unsafe.Pointer matches the
 		// architecture's pointer width.
-		*(*unsafe.Pointer)(unsafe.Pointer(&elem.data[0])) = t.data[i].ptr()
+		//
+		// `ptr` should be released using qdbRelease() once done
+		*(*unsafe.Pointer)(unsafe.Pointer(&elem.data[0])) = ptr
 	}
 
 	// Store the pointer to the first element.
@@ -711,14 +567,72 @@ func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_
 	return nil
 }
 
+func releaseBatchPushBlobColumns(h HandleType, xs []C.qdb_blob_t) {
+	for _, x := range xs {
+		if x.content != nil {
+			fmt.Printf("releasing blob pointer: %v\n", x.content)
+			C.qdb_release(h.handle, x.content)
+		}
+	}
+}
+
+func releaseBatchPushStringColumns(h HandleType, xs []C.qdb_string_t) {
+	for _, x := range xs {
+		if x.data != nil {
+			fmt.Printf("releasing string pointer: %v\n", x.data)
+			qdbRelease(h, x.data)
+		}
+	}
+}
+
+// Invokes qdb_release() in all data stored inside a push column, which we previously manually
+// allocated using the qdbAlloc.. set of functions.
+func releaseBatchPushColumn(h HandleType, x C.qdb_exp_batch_push_column_t, rowCount int) error {
+	if x.name != nil {
+		qdbRelease(h, x.name)
+	}
+
+	dataPtr := unsafe.Pointer(&x.data[0])
+	if dataPtr != nil {
+
+		// For blobs and strings, we need to go through the extra effort of releasing
+		// their internally allocated data.
+		switch x.data_type {
+		case C.qdb_ts_column_blob:
+			xs := unsafe.Slice((*C.qdb_blob_t)(dataPtr), rowCount)
+			releaseBatchPushBlobColumns(h, xs)
+			break
+		case C.qdb_ts_column_string:
+			xs := unsafe.Slice((*C.qdb_string_t)(dataPtr), rowCount)
+			releaseBatchPushStringColumns(h, xs)
+			break
+		}
+
+		fmt.Printf("releasing dataPtr: %v\n", dataPtr)
+		qdbReleasePointer(h, dataPtr)
+	}
+
+	return nil
+}
+
+func releaseBatchPushColumns(h HandleType, xs []C.qdb_exp_batch_push_column_t, rowCount int) error {
+	for _, x := range xs {
+		err := releaseBatchPushColumn(h, x, rowCount)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_table_t) error {
 	if tbl == nil {
-		panic("WriterTable.releaseNative: nil table pointer")
+		return fmt.Errorf("WriterTable.releaseNative: nil table pointer")
 	}
 
 	columnCount := len(t.data)
 	if columnCount == 0 || tbl.data.columns == nil || tbl.name == nil {
-		panic("WriterTable.releaseNative: inconsistent state")
+		return fmt.Errorf("WriterTable.releaseNative: inconsistent state")
 	}
 
 	qdbRelease(h, t.TableName)
@@ -730,18 +644,12 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 		t.idx = nil
 	}
 
-	for _, v := range t.data {
-		v.releaseNative(h)
-	}
-
 	if tbl.data.columns != nil {
 		// Release any column names we allocated during toNativeTableData
 		columnSlice := unsafe.Slice(tbl.data.columns, columnCount)
-		for i := range columnSlice {
-			if columnSlice[i].name != nil {
-				qdbRelease(h, columnSlice[i].name)
-				columnSlice[i].name = nil
-			}
+		err := releaseBatchPushColumns(h, columnSlice, int(tbl.data.row_count))
+		if err != nil {
+			return err
 		}
 
 		qdbRelease(h, tbl.data.columns)

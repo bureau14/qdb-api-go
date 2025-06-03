@@ -89,7 +89,7 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	err = writerTable.SetIndex(handle, idx)
 	require.NoError(err)
 
-	datas, err := generateWriterDatas(handle, len(idx), columns)
+	datas, err := generateWriterDatas(len(idx), columns)
 	require.NoError(err)
 	err = writerTable.SetDatas(datas)
 
@@ -188,7 +188,7 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	tbl := newTestWriterTable(t, handle)
 	err = tbl.SetIndex(handle, generateDefaultIndex(1024))
 	require.NoError(err)
-	datas, err := generateWriterDatas(handle, 1024, tbl.columnInfoByOffset)
+	datas, err := generateWriterDatas(1024, tbl.columnInfoByOffset)
 
 	require.NoError(err)
 	require.NoError(tbl.SetDatas(datas))
@@ -348,7 +348,7 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	// First generate the table schema + layout we will work with
 	columns := generateWriterColumnsOfAllTypes()
 	idx := generateDefaultIndex(1024)
-	datas, err := generateWriterDatas(handle, len(idx), columns)
+	datas, err := generateWriterDatas(len(idx), columns)
 	require.NoError(err)
 
 	// Creating the table automatically assign it a name
