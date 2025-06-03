@@ -747,6 +747,26 @@ type ReaderOptions struct {
 	rangeEnd   time.Time
 }
 
+// NewReaderOptions creates a new ReaderOptions value with default settings.
+//
+// ReaderOptions uses the builder pattern to make configuration flexible and readable.
+// You typically create an options value with NewReaderOptions, and then chain one or more
+// configuration methods like WithTables, WithColumns, WithBatchSize, and WithTimeRange.
+//
+// Example usage:
+//
+//	opts := NewReaderOptions().
+//	    WithTables([]string{"table1", "table2"}).
+//	    WithColumns([]string{"colA", "colB"}).
+//	    WithBatchSize(10000).
+//	    WithTimeRange(startTime, endTime)
+//
+// This options value can then be passed to NewReader to create a Reader
+// instance:
+//
+//	reader, err := NewReader(handle, opts)
+//
+// See WithTables, WithColumns, WithBatchSize, and WithTimeRange for configuration details.
 func NewReaderOptions() ReaderOptions {
 	// Default to 32768 rows
 	var defaultBatchSize int = 32 * 1024
@@ -910,22 +930,41 @@ type Reader struct {
 	currentBatch ReaderBatch
 }
 
-// Initialize a new bulk reader. This performs the initialization of the bulk reader, and does not yet fetch data.
-// The user is expected to invoke `Reader.Close()` to release allocated memory.
+// NewReader returns a new Reader instance that allows bulk data retrieval from quasardb tables.
+//
+// Typical usage for retrieving data involves iteration like this:
+//
+//	reader := NewReader(options)
+//	defer reader.Close()
+//	for reader.Next() {
+//	    batch := reader.Batch()
+//	    // process batch
+//	}
+//	if err := reader.Err(); err != nil {
+//	    // handle error appropriately
+//	}
+//
+// To conveniently retrieve all available data as a single batch:
+//
+//	reader := NewReader(options)
+//	defer reader.Close()
+//	batch, err := reader.FetchAll()
+//	if err != nil {
+//	    // handle error appropriately
+//	}
+//	// process batch
+//
+// Always call reader.Close() to release any associated resources.
 func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var ret Reader
 	ret.handle = h
 	ret.options = options
 
-	// Step 1: validation of options
-	//  - at least one table must be specified
-	//  - a valid time range must be provided
-	//  - the batch size must be reasonable
+	// Step 1: validations
 	if len(options.tables) == 0 {
 		return ret, fmt.Errorf("no tables provided")
 	}
 
-	// Validate the time range arguments.
 	// Either both rangeStart and rangeEnd must be zero (meaning no range
 	// filtering) or both must be non-zero.  Having only one of them set is
 	// invalid.
@@ -937,7 +976,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		return ret, fmt.Errorf("invalid time range")
 	}
 
-	// Step 1: validate that `n` is greater than 0 and is not excessively large
+	// Step 1: validate that our batchSize makes sense -- that it's not exceptionally large
 	if options.batchSize <= 0 || options.batchSize > (1<<24) {
 		return ret, fmt.Errorf("invalid batch size: %d", options.batchSize)
 	}
@@ -1101,7 +1140,13 @@ func (r *Reader) fetchBatch() ([]ReaderChunk, error) {
 	return ret, nil
 }
 
-// Fetches the next batch, returns `true` if more data is available, `false` if the end has been reaches
+// Next prepares the next available data batch.
+// It returns true if more data is available, false otherwise, making it suitable
+// for idiomatic Go loops:
+//
+//	for reader.Next() { ... }
+//
+// Always use Err() afterward to check if iteration ended due to an error.
 func (r *Reader) Next() bool {
 	if r.done {
 		return false
@@ -1117,22 +1162,54 @@ func (r *Reader) Next() bool {
 	return true
 }
 
+// Err returns the error encountered during iteration, if any.
+// After a completed iteration with Next(), Err() must be checked to
+// distinguish between successful completion and errors during reading.
 func (r *Reader) Err() error {
 	return r.err
 }
 
+// Batch returns the current batch of data prepared by Next().
+// It's designed to be called within a Next() loop:
+//
+//	for reader.Next() {
+//	    batch := reader.Batch()
+//	    // use batch
+//	}
 func (r *Reader) Batch() ReaderBatch {
 	return r.currentBatch
 }
 
-// Fetches *all* data in one single invocation. Useful if this is what you intend to
-// do anyway.
+// FetchAll retrieves the entire dataset as a single batch to simplify interaction when the entire result set is required.
 //
-// Be aware that this can cause a lot of memory usage if you read large tables / many tables.
+// It internally manages batching and merging of data, eliminating the need for callers to iterate manually.
+//
+// Important: Consider memory usage carefully — FetchAll may consume significant resources when reading large datasets.
+// Use this function when convenience outweighs potential memory overhead.
 func (r *Reader) FetchAll() (ReaderBatch, error) {
+	// Accumulate all batches from the reader's iterator, and merges them together in a single
+	// batch.
 
-	// Accumulate all batches
+	// Allocate batches with an initial capacity to avoid frequent reallocations
+	// because we expect potentially many batches for large reads.
+	batches := make([]ReaderBatch, 0, 256)
 
+	// Iterate until we've collected all available data batches
+	for r.Next() {
+		batch := r.Batch()
+		batches = append(batches, batch)
+	}
+
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+
+	finalBatch, err := mergeReaderBatches(batches)
+	if err != nil {
+		return nil, err
+	}
+
+	return finalBatch, nil
 }
 
 // Releases underlying memory
