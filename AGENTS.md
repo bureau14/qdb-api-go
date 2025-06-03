@@ -13,6 +13,28 @@ This Agents.md file provides comprehensive guidance for OpenAI Codex and other A
     - `20.test.sh`: Runs the tests. Expects QuasarDB daemon to run in the background.
  - `/codex/`: Scripts used by OpenAI Codex to download dependencies and prepare the environment.
 
+## Environment Variables and Command Prefixing
+
+This project uses `direnv` to manage environment variables essential for CGo compilation:
+
+- `CGO_CFLAGS`
+- `CGO_LDFLAGS`
+- `DYLD_LIBRARY_PATH` (on macOS)
+
+When generating any shell commands, **always prefix each command explicitly with**:
+
+```bash
+direnv exec . <command>
+```
+
+For example, to run `go env`, use:
+
+```bash
+direnv exec . go env
+```
+
+**Do not omit** the `direnv exec .` prefix from any commands, as this ensures the proper environment variables are loaded consistently.
+
 ## Testing Requirements for OpenAI Codex
 
 ### Test setup
@@ -28,7 +50,7 @@ bash scripts/tests/setup/start-services.sh
 To run the entire test suite, execute:
 
 ```bash
-go test -v ./...
+direnv exec . go test -v ./...
 ```
 
 Because the full test suite can take a long time to run minutes, it is strongly recommended that OpenAI Codex first runs individual test modules related specifically to recent changes, providing quicker feedback.
@@ -36,13 +58,13 @@ Because the full test suite can take a long time to run minutes, it is strongly 
 To run a single test, for example `TestReaderCanReadDataFromSingleTable`, execute:
 
 ```bash
-go test -v ./...  -run 'TestReaderCanReadDataFromSingleTable'
+direnv exec . go test -v ./...  -run 'TestReaderCanReadDataFromSingleTable'
 ```
 
 To run tests based on prefix, for example all tests with the `TestReader` prefix, execute:
 
 ```bash
-go test -v ./...  -run 'TestReader*'
+direnv exec . go test -v ./...  -run 'TestReader*'
 ```
 
 ### Tests teardown
