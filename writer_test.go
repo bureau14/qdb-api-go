@@ -323,8 +323,10 @@ func TestWriterCanPushMultipleTables(t *testing.T) {
 	// implement similar test case as `TestWriterCanPushSingleTable`, but in this case
 	// push into mulitple tables.
 	//
-	// Validate those again using the same logic with `assertWriterTablesEqualReaderBatch`
-	//
 	// Schemas of all tables must be identical
+	//
+	// No validation of correctness of inserted data is required, the actual data validation is done
+	// mostly in the `reader_test.go` to avoid duplication of the same tests -- here we just care
+	// that no errors are raised.
 
 }
