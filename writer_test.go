@@ -2,7 +2,6 @@ package qdb
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -278,8 +277,6 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 
 // Test that the batch writer can push into a table without issues.
 func TestWriterCanPushSingleTable(t *testing.T) {
-	require := require.New(t)
-
 	handle := newTestHandle(t)
 	defer handle.Close()
 
