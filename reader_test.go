@@ -36,15 +36,13 @@ func TestReaderOptionsCanSetProperties(t *testing.T) {
 
 func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 	assert := assert.New(t)
-	require := require.New(t)
 
-	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.NoError(err)
+	handle := newTestHandle(t)
 	defer handle.Close()
 
 	// Error when no range provided
 	opts := NewReaderOptions().WithTables([]string{"table1"})
-	_, err = NewReader(handle, opts)
+	_, err := NewReader(handle, opts)
 	assert.Error(err)
 
 	// Error when range end precedes start
@@ -67,8 +65,7 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 
-	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.NoError(err)
+	handle := newTestHandle(t)
 	defer handle.Close()
 
 	// Use all the column types we have
@@ -97,9 +94,7 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	require := require.New(t)
 
-	// Push data
-	handle, err := SetupHandle(insecureURI, 120*time.Second)
-	require.NoError(err)
+	handle := newTestHandle(t)
 	defer handle.Close()
 
 	// Step 1: create table and fill with data using the Writer
@@ -140,4 +135,18 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 
 	// Step 4 & 5: verify reader output matches the written data
 	assertWriterTablesEqualReaderBatch(t, []WriterTable{writerTable}, []string{table.Name()}, tables)
+}
+
+func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
+	require := require.New(t)
+
+	// TODO: implement
+	//
+	// implement similar test case as `TestReaderCanReadDataFromSingleTable`, but in this case
+	// read from mulitple tables.
+	//
+	// Validate those again using the same logic with `assertWriterTablesEqualReaderBatch`
+	//
+	// Schemas of all tables must be identical
+
 }

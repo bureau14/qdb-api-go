@@ -1,7 +1,6 @@
 package qdb
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -316,8 +315,18 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	err = writer.Push(handle)
 	assert.NoError(err)
 
-	// Read back the data
-	q := fmt.Sprintf("select * from %s in range(1970, +10d)", table.Name())
-	fmt.Printf("got query: %s\n", q)
+	// TODO: read back data using Reader, invoke `assertWriterTablesEqualReaderBatch` for comparison
+}
+
+// Test that the batch writer can push into multiple tables without issues.
+func TestWriterCanPushMultipleTables(t *testing.T) {
+	// TODO: implement
+	//
+	// implement similar test case as `TestWriterCanPushSingleTable`, but in this case
+	// push into mulitple tables.
+	//
+	// Validate those again using the same logic with `assertWriterTablesEqualReaderBatch`
+	//
+	// Schemas of all tables must be identical
 
 }
