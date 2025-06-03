@@ -363,6 +363,32 @@ func qdbAllocBuffer[T any](h HandleType, count int) (*T, error) {
 	return (*T)(ptr), nil
 }
 
+// qdbCopyAllocBuffer allocates and copies a typed buffer in a single call via
+// the qdb_copy_alloc_buffer C API. The function copies the content of the
+// provided source slice and returns a pointer to the newly allocated buffer.
+// Caller is responsible for releasing the memory using qdbRelease().
+func qdbCopyAllocBuffer[T any](h HandleType, src []T) (*T, error) {
+	n := len(src)
+	if n == 0 {
+		return nil, fmt.Errorf("source slice is empty; cannot allocate buffer")
+	}
+
+	totalSize := int(unsafe.Sizeof(src[0])) * n
+	var destPtr unsafe.Pointer
+	errCode := C.qdb_copy_alloc_buffer(h.handle, unsafe.Pointer(&src[0]), C.qdb_size_t(totalSize), &destPtr)
+	err := makeErrorOrNil(errCode)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if destPtr == nil {
+		return nil, fmt.Errorf("qdbCopyAllocBuffer: returned nil pointer")
+	}
+
+	return (*T)(destPtr), nil
+}
+
 // qdbAllocAndCopy allocates memory using qdbAllocBytes, copies the provided Go slice into it,
 // and returns a typed pointer (*Dst). This function safely encapsulates unsafe memory conversions.
 // Caller is responsible for releasing allocated memory.
@@ -401,15 +427,12 @@ func qdbCopyString(h HandleType, s string) (*C.char, error) {
 		return nil, fmt.Errorf("cannot allocate empty string")
 	}
 
-	ptr, err := qdbAllocBytes(h, len(s)+1)
+	buf := append(unsafe.Slice(unsafe.StringData(s), len(s)), 0)
+
+	ptr, err := qdbCopyAllocBuffer[byte](h, buf)
 	if err != nil {
 		return nil, fmt.Errorf("qdbCopyString: allocation failed: %w", err)
 	}
 
-	C.memcpy(ptr, unsafe.Pointer(unsafe.StringData(s)), C.size_t(len(s)))
-
-	// null terminator
-	*(*byte)(unsafe.Pointer(uintptr(ptr) + uintptr(len(s)))) = 0
-
-	return (*C.char)(ptr), nil
+	return (*C.char)(unsafe.Pointer(ptr)), nil
 }
