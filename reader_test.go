@@ -143,7 +143,9 @@ func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
 	// TODO: implement
 	//
 	// implement similar test case as `TestReaderCanReadDataFromSingleTable`, but in this case
-	// read from mulitple tables.
+	// read from mulitple tables. Number of tables should be a parameter and reasonably large
+	// to trigger edge cases: e.g. 64 or 256 even, if it doesn't make the test take too much
+	// time.
 	//
 	// Validate those again using the same logic with `assertWriterTablesEqualReaderBatch`
 	//

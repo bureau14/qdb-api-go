@@ -321,7 +321,9 @@ func TestWriterCanPushMultipleTables(t *testing.T) {
 	// TODO: implement
 	//
 	// implement similar test case as `TestWriterCanPushSingleTable`, but in this case
-	// push into mulitple tables.
+	// push into mulitple tables. Number of tables should be a parameter and reasonably large
+	// to trigger edge cases: e.g. 64 or 256 even, if it doesn't make the test take too much
+	// time.
 	//
 	// Schemas of all tables must be identical
 	//
