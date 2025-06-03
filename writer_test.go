@@ -314,8 +314,6 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	// Push the writer
 	err = writer.Push(handle)
 	assert.NoError(err)
-
-	// TODO: read back data using Reader, invoke `assertWriterTablesEqualReaderBatch` for comparison
 }
 
 // Test that the batch writer can push into multiple tables without issues.
