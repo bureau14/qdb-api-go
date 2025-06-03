@@ -61,11 +61,8 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	err = writerTable.SetIndex(handle, idx)
-
-	if assert.Nil(err) {
-		assert.Equal(writerTable.GetIndex(), idx)
-	}
+	writerTable.SetIndex(idx)
+	assert.Equal(writerTable.GetIndex(), idx)
 }
 
 func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
@@ -86,8 +83,7 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	err = writerTable.SetIndex(handle, idx)
-	require.NoError(err)
+	writerTable.SetIndex(idx)
 
 	datas, err := generateWriterDatas(len(idx), columns)
 	require.NoError(err)
@@ -186,8 +182,7 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	writer := NewWriter(opts)
 
 	tbl := newTestWriterTable(t, handle)
-	err = tbl.SetIndex(handle, generateDefaultIndex(1024))
-	require.NoError(err)
+	tbl.SetIndex(generateDefaultIndex(1024))
 	datas, err := generateWriterDatas(1024, tbl.columnInfoByOffset)
 
 	require.NoError(err)
@@ -360,8 +355,7 @@ func TestWriterCanPushSingleTable(t *testing.T) {
 	require.NoError(err)
 	require.NotNil(writerTable)
 
-	err = writerTable.SetIndex(handle, idx)
-	require.NoError(err)
+	writerTable.SetIndex(idx)
 
 	err = writerTable.SetDatas(datas)
 	require.NoError(err)
