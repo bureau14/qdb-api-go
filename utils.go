@@ -389,7 +389,7 @@ func qdbAllocAndCopyBytes[T any](h HandleType, src []T) (unsafe.Pointer, error) 
 // qdbAllocAndCopyBytes allocates memory using qdbAllocBytes, copies the provided Go slice into it,
 // and returns a typed pointer (*Dst). This function safely encapsulates unsafe memory conversions.
 // Caller is responsible for releasing allocated memory.
-func qdbAllocAndCopyBuffer[Src, Dst any](h HandleType, src []Src) (*Dst, error) {
+func qdbAllocAndCopyBuffer[Src any, Dst any](h HandleType, src []Src) (*Dst, error) {
 
 	basePtr, err := qdbAllocAndCopyBytes(h, src)
 	if err != nil {
