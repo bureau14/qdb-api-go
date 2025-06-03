@@ -592,7 +592,11 @@ func releaseBatchPushColumn(h HandleType, x C.qdb_exp_batch_push_column_t, rowCo
 		qdbRelease(h, x.name)
 	}
 
-	dataPtr := unsafe.Pointer(&x.data[0])
+	// Extract the pointer stored in the union field. We must read the pointer
+	// value instead of taking the address of the union field, otherwise we pass
+	// a pointer to Go stack memory to C which triggers the cgo "Go pointer to
+	// unpinned Go pointer" check.
+	dataPtr := *(*unsafe.Pointer)(unsafe.Pointer(&x.data[0]))
 	if dataPtr != nil {
 
 		// For blobs and strings, we need to go through the extra effort of releasing
@@ -601,14 +605,11 @@ func releaseBatchPushColumn(h HandleType, x C.qdb_exp_batch_push_column_t, rowCo
 		case C.qdb_ts_column_blob:
 			xs := unsafe.Slice((*C.qdb_blob_t)(dataPtr), rowCount)
 			releaseBatchPushBlobColumns(h, xs)
-			break
 		case C.qdb_ts_column_string:
 			xs := unsafe.Slice((*C.qdb_string_t)(dataPtr), rowCount)
 			releaseBatchPushStringColumns(h, xs)
-			break
 		}
 
-		fmt.Printf("releasing dataPtr: %v\n", dataPtr)
 		qdbReleasePointer(h, dataPtr)
 	}
 
