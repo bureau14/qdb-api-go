@@ -232,7 +232,7 @@ type WriterTable struct {
 	columnOffsetByName map[string]int
 
 	// The index, can not contain null values
-	idx *C.qdb_timespec_t
+	idx []C.qdb_timespec_t
 
 	// Value arrays to write for each column.
 	data []WriterData
@@ -391,41 +391,16 @@ func (t *WriterTable) GetName() string {
 	return C.GoString(t.GetNameNative())
 }
 
-// Sets the index into the table
-func (t *WriterTable) SetIndexFromNativeUnsafe(idx *C.qdb_timespec_t, rowCount int) error {
-	if t.idx != nil {
-		return fmt.Errorf("Index already set, cannot set twice")
-	}
-
-	if t.rowCount != 0 {
-		return fmt.Errorf("Internal error: index not set, but rowCount is non-zero")
-	}
-
+func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 	t.idx = idx
-	t.rowCount = rowCount
-
-	return nil
 }
 
-func (t *WriterTable) SetIndexFromNative(h HandleType, idx []C.qdb_timespec_t) error {
-	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, idx)
-	if err != nil {
-		return fmt.Errorf("failed to allocate and copy index data: %w", err)
-	}
-
-	return t.SetIndexFromNativeUnsafe(ptr, len(idx))
-}
-func (t *WriterTable) SetIndex(h HandleType, idx []time.Time) error {
-	return t.SetIndexFromNative(h, TimeSliceToQdbTimespec(idx))
+func (t *WriterTable) SetIndex(idx []time.Time) {
+	t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
 }
 
 func (t *WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
-	if t.idx == nil || t.rowCount <= 0 {
-		return nil
-	}
-
-	// Create a slice backed by the C array
-	return unsafe.Slice(t.idx, t.rowCount)
+	return t.idx
 }
 
 func (t *WriterTable) GetIndex() []time.Time {
@@ -452,7 +427,11 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		return fmt.Errorf("Index provided, but no column data provided")
 	}
 
-	out.timestamps = t.idx
+	timestampPtr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, t.idx)
+	if err != nil {
+		return fmt.Errorf("Unable to copy timestamps: %v", err)
+	}
+	out.timestamps = timestampPtr
 
 	// Allocate native columns array using the QuasarDB allocator so the
 	// memory remains valid after this function returns.
@@ -640,9 +619,7 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 	t.TableName = nil
 
 	if t.idx != nil {
-		qdbRelease(h, t.idx)
-		tbl.data.timestamps = nil
-		t.idx = nil
+		qdbRelease(h, tbl.data.timestamps)
 	}
 
 	if tbl.data.columns != nil {
