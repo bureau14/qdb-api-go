@@ -206,35 +206,33 @@ func createTableOfWriterColumnsAndDefaultShardSize(handle HandleType, columns []
 	return createTableOfWriterColumns(handle, columns, duration)
 }
 
-func generateWriterDataInt64(h HandleType, n int) (WriterData, error) {
+func generateWriterDataInt64(n int) WriterData {
 	xs := make([]int64, n)
 
 	for i, _ := range xs {
 		xs[i] = rand.Int63()
 	}
 
-	return NewWriterDataInt64(h, xs)
+	return NewWriterDataInt64(xs)
 }
 
-func generateWriterDataDouble(h HandleType, n int) (WriterData, error) {
+func generateWriterDataDouble(n int) WriterData {
 	xs := make([]float64, n)
 
 	for i, _ := range xs {
 		xs[i] = rand.NormFloat64()
 	}
 
-	return NewWriterDataDouble(h, xs)
+	return NewWriterDataDouble(xs)
 }
 
-func generateWriterDataTimestamp(h HandleType, n int) (WriterData, error) {
+func generateWriterDataTimestamp(n int) WriterData {
 	// XXX(leon): should be improved to be more random, instead
 	//            we're reusing the code that generates the index here.
-	idx := generateDefaultIndex(n)
-
-	return NewWriterDataTimestamp(h, idx)
+	return NewWriterDataTimestamp(generateDefaultIndex(n))
 }
 
-func generateWriterDataBlob(h HandleType, n int) (WriterData, error) {
+func generateWriterDataBlob(n int) WriterData {
 	xs := make([][]byte, n)
 
 	for i, _ := range xs {
@@ -253,10 +251,10 @@ func generateWriterDataBlob(h HandleType, n int) (WriterData, error) {
 		xs[i] = x
 	}
 
-	return NewWriterDataBlob(h, xs)
+	return NewWriterDataBlob(xs)
 }
 
-func generateWriterDataString(h HandleType, n int) (WriterData, error) {
+func generateWriterDataString(n int) WriterData {
 	xs := make([]string, n)
 
 	for i, _ := range xs {
@@ -265,36 +263,36 @@ func generateWriterDataString(h HandleType, n int) (WriterData, error) {
 		xs[i] = generateAlias(16)
 	}
 
-	return NewWriterDataString(h, xs)
+	return NewWriterDataString(xs)
 }
 
 // Generates artifical writer data for a single column
-func generateWriterData(h HandleType, n int, column WriterColumn) (WriterData, error) {
+func generateWriterData(n int, column WriterColumn) (WriterData, error) {
 	switch column.ColumnType {
 	case TsColumnBlob:
-		return generateWriterDataBlob(h, n)
+		return generateWriterDataBlob(n), nil
 	case TsColumnSymbol:
 		// Symbols are represented as strings to the user
 		fallthrough
 	case TsColumnString:
-		return generateWriterDataString(h, n)
+		return generateWriterDataString(n), nil
 	case TsColumnInt64:
-		return generateWriterDataInt64(h, n)
+		return generateWriterDataInt64(n), nil
 	case TsColumnDouble:
-		return generateWriterDataDouble(h, n)
+		return generateWriterDataDouble(n), nil
 	case TsColumnTimestamp:
-		return generateWriterDataTimestamp(h, n)
+		return generateWriterDataTimestamp(n), nil
 	}
 
 	return nil, fmt.Errorf("Unrecognized column type: %v", column.ColumnType)
 }
 
 // Generates artificial data to be inserted for each column.
-func generateWriterDatas(h HandleType, n int, columns []WriterColumn) ([]WriterData, error) {
+func generateWriterDatas(n int, columns []WriterColumn) ([]WriterData, error) {
 	var ret []WriterData = make([]WriterData, len(columns))
 
 	for i, column := range columns {
-		data, err := generateWriterData(h, n, column)
+		data, err := generateWriterData(n, column)
 
 		if err != nil {
 			return nil, fmt.Errorf("generateWriterData failed for column %d (%v): %w", i, column.ColumnType, err)
@@ -363,10 +361,9 @@ func qdbAllocBuffer[T any](h HandleType, count int) (*T, error) {
 	return (*T)(ptr), nil
 }
 
-// qdbAllocAndCopy allocates memory using qdbAllocBytes, copies the provided Go slice into it,
-// and returns a typed pointer (*Dst). This function safely encapsulates unsafe memory conversions.
-// Caller is responsible for releasing allocated memory.
-func qdbAllocAndCopy[Src, Dst any](h HandleType, src []Src) (*Dst, error) {
+// qdbAllocAndCopyBytes allocates memory using C.qdb_copy_alloc_buffer, and returns
+// and arbitrary pointer (unsafe.Pointer)
+func qdbAllocAndCopyBytes[T any](h HandleType, src []T) (unsafe.Pointer, error) {
 	n := len(src)
 	if n == 0 {
 		return nil, fmt.Errorf("source slice is empty; cannot allocate buffer")
@@ -374,15 +371,32 @@ func qdbAllocAndCopy[Src, Dst any](h HandleType, src []Src) (*Dst, error) {
 
 	totalSize := int(unsafe.Sizeof(src[0])) * n
 
-	dstPtr, err := qdbAllocBytes(h, totalSize)
+	var basePtr unsafe.Pointer
+	errCode := C.qdb_copy_alloc_buffer(h.handle, unsafe.Pointer(&src[0]), C.qdb_size_t(totalSize), &basePtr)
+	err := makeErrorOrNil(errCode)
+
 	if err != nil {
-		return nil, fmt.Errorf("failed allocating %d bytes via qdbAllocBytes: %w", totalSize, err)
+		return nil, err
 	}
 
-	// Perform explicit memory copy
-	C.memcpy(dstPtr, unsafe.Pointer(&src[0]), C.size_t(totalSize))
+	if basePtr == nil {
+		return nil, fmt.Errorf("qdbAllocAndCopyBytes: returned nil pointer")
+	}
 
-	return (*Dst)(dstPtr), nil
+	return basePtr, nil
+}
+
+// qdbAllocAndCopyBytes allocates memory using qdbAllocBytes, copies the provided Go slice into it,
+// and returns a typed pointer (*Dst). This function safely encapsulates unsafe memory conversions.
+// Caller is responsible for releasing allocated memory.
+func qdbAllocAndCopyBuffer[Src, Dst any](h HandleType, src []Src) (*Dst, error) {
+
+	basePtr, err := qdbAllocAndCopyBytes(h, src)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*Dst)(basePtr), nil
 }
 
 func qdbRelease[T any](h HandleType, ptr *T) {
