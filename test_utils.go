@@ -136,19 +136,19 @@ func assertWriterTablesEqualReaderBatch(t *testing.T, expected []WriterTable, na
 			gotData := rc.data[j+offset]
 			switch col.ColumnType {
 			case TsColumnInt64:
-				exp, err := GetInt64Array(expectedData)
+				exp, err := GetWriterDataInt64(expectedData)
 				require.NoError(err)
 				gotVals, err := GetReaderDataInt64(gotData)
 				require.NoError(err)
 				assert.Equal(exp.xs, gotVals)
 			case TsColumnDouble:
-				exp, err := GetDoubleArray(expectedData)
+				exp, err := GetWriterDataDouble(expectedData)
 				require.NoError(err)
 				gotVals, err := GetReaderDataDouble(gotData)
 				require.NoError(err)
 				assert.Equal(exp.xs, gotVals)
 			case TsColumnTimestamp:
-				exp, err := GetTimestampArray(expectedData)
+				exp, err := GetWriterDataTimestamp(expectedData)
 				require.NoError(err)
 				gotVals, err := GetReaderDataTimestamp(gotData)
 				require.NoError(err)
@@ -157,13 +157,13 @@ func assertWriterTablesEqualReaderBatch(t *testing.T, expected []WriterTable, na
 					assert.Equal(QdbTimespecToTime(v), gotVals[k])
 				}
 			case TsColumnBlob:
-				exp, err := GetBlobArray(expectedData)
+				exp, err := GetWriterDataBlob(expectedData)
 				require.NoError(err)
 				gotVals, err := GetReaderDataBlob(gotData)
 				require.NoError(err)
 				assert.Equal(exp.xs, gotVals)
 			case TsColumnString:
-				exp, err := GetStringArray(expectedData)
+				exp, err := GetWriterDataString(expectedData)
 				require.NoError(err)
 				gotVals, err := GetReaderDataString(gotData)
 				require.NoError(err)

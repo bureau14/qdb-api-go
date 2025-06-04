@@ -276,10 +276,10 @@ func ifaceDataPtr(i interface{}) unsafe.Pointer {
 	return (*iface)(unsafe.Pointer(&i)).data
 }
 
-// GetInt64Array safely converts WriterData to *WriterDataInt64.
+// GetWriterDataInt64 safely converts WriterData to *WriterDataInt64.
 //
 // Returns an error if data is not of type Int64.
-func GetInt64Array(x WriterData) (*WriterDataInt64, error) {
+func GetWriterDataInt64(x WriterData) (*WriterDataInt64, error) {
 	v, ok := x.(*WriterDataInt64)
 	if !ok {
 		return nil, fmt.Errorf("GetInt64Array: type mismatch, expected WriterDataInt64, got %T", x)
@@ -287,16 +287,16 @@ func GetInt64Array(x WriterData) (*WriterDataInt64, error) {
 	return v, nil
 }
 
-// GetInt64ArrayUnsafe is an unsafe version of GetInt64Array. Undefined behavior occurs when
+// GetWriterDataInt64Unsafe is an unsafe version of GetWriterDataInt64. Undefined behavior occurs when
 // invoked on the incorrect type.
-func GetInt64ArrayUnsafe(x WriterData) *WriterDataInt64 {
+func GetWriterDataInt64Unsafe(x WriterData) *WriterDataInt64 {
 	return (*WriterDataInt64)(ifaceDataPtr(x))
 }
 
-// GetDoubleArray safely converts WriterData to *WriterDataDouble.
+// GetWriterDataDouble safely converts WriterData to *WriterDataDouble.
 //
 // Returns an error if data is not of type Double.
-func GetDoubleArray(x WriterData) (*WriterDataDouble, error) {
+func GetWriterDataDouble(x WriterData) (*WriterDataDouble, error) {
 	v, ok := x.(*WriterDataDouble)
 	if !ok {
 		return nil, fmt.Errorf("GetDoubleArray: type mismatch, expected WriterDataDouble, got %T", x)
@@ -304,16 +304,16 @@ func GetDoubleArray(x WriterData) (*WriterDataDouble, error) {
 	return v, nil
 }
 
-// GetDoubleArrayUnsafe is an unsafe version of GetDoubleArray. Undefined behavior occurs when
+// GetWriterDataDoubleUnsafe is an unsafe version of GetWriterDataDouble. Undefined behavior occurs when
 // invoked on the incorrect type.
-func GetDoubleArrayUnsafe(x WriterData) *WriterDataDouble {
+func GetWriterDataDoubleUnsafe(x WriterData) *WriterDataDouble {
 	return (*WriterDataDouble)(ifaceDataPtr(x))
 }
 
-// GetTimestampArray safely converts WriterData to *WriterDataTimestamp.
+// GetWriterDataTimestamp safely converts WriterData to *WriterDataTimestamp.
 //
 // Returns an error if data is not of type Timestamp.
-func GetTimestampArray(x WriterData) (*WriterDataTimestamp, error) {
+func GetWriterDataTimestamp(x WriterData) (*WriterDataTimestamp, error) {
 	v, ok := x.(*WriterDataTimestamp)
 	if !ok {
 		return nil, fmt.Errorf("GetTimestampArray: type mismatch, expected WriterDataTimestamp, got %T", x)
@@ -321,16 +321,16 @@ func GetTimestampArray(x WriterData) (*WriterDataTimestamp, error) {
 	return v, nil
 }
 
-// GetTimestampArrayUnsafe is an unsafe version of GetTimestampArray. Undefined behavior occurs when
+// GetWriterDataTimestampUnsafe is an unsafe version of GetWriterDataTimestamp. Undefined behavior occurs when
 // invoked on the incorrect type.
-func GetTimestampArrayUnsafe(x WriterData) *WriterDataTimestamp {
+func GetWriterDataTimestampUnsafe(x WriterData) *WriterDataTimestamp {
 	return (*WriterDataTimestamp)(ifaceDataPtr(x))
 }
 
-// GetStringArray safely converts WriterData to *WriterDataString.
+// GetWriterDataString safely converts WriterData to *WriterDataString.
 //
 // Returns an error if data is not of type String.
-func GetStringArray(x WriterData) (*WriterDataString, error) {
+func GetWriterDataString(x WriterData) (*WriterDataString, error) {
 	v, ok := x.(*WriterDataString)
 	if !ok {
 		return nil, fmt.Errorf("GetStringArray: type mismatch, expected WriterDataString, got %T", x)
@@ -338,16 +338,16 @@ func GetStringArray(x WriterData) (*WriterDataString, error) {
 	return v, nil
 }
 
-// GetStringArrayUnsafe is an unsafe version of GetStringArray. Undefined behavior occurs when
+// GetWriterDataStringUnsafe is an unsafe version of GetWriterDataString. Undefined behavior occurs when
 // invoked on the incorrect type.
-func GetStringArrayUnsafe(x WriterData) *WriterDataString {
+func GetWriterDataStringUnsafe(x WriterData) *WriterDataString {
 	return (*WriterDataString)(ifaceDataPtr(x))
 }
 
-// GetBlobArray safely converts WriterData to *WriterDataBlob.
+// GetWriterDataBlob safely converts WriterData to *WriterDataBlob.
 //
 // Returns an error if data is not of type Blob.
-func GetBlobArray(x WriterData) (*WriterDataBlob, error) {
+func GetWriterDataBlob(x WriterData) (*WriterDataBlob, error) {
 	v, ok := x.(*WriterDataBlob)
 	if !ok {
 		return nil, fmt.Errorf("GetBlobArray: type mismatch, expected WriterDataBlob, got %T", x)
@@ -355,9 +355,9 @@ func GetBlobArray(x WriterData) (*WriterDataBlob, error) {
 	return v, nil
 }
 
-// GetBlobArrayUnsafe is an unsafe version of GetBlobArray. Undefined behavior occurs when
+// GetWriterDataBlobUnsafe is an unsafe version of GetWriterDataBlob. Undefined behavior occurs when
 // invoked on the incorrect type.
-func GetBlobArrayUnsafe(x WriterData) *WriterDataBlob {
+func GetWriterDataBlobUnsafe(x WriterData) *WriterDataBlob {
 	return (*WriterDataBlob)(ifaceDataPtr(x))
 }
 
