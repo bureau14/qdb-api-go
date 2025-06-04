@@ -331,8 +331,33 @@ func charStarArrayToSlice(strings **C.char, length int) []*C.char {
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.char)(nil))]*C.char)(unsafe.Pointer(strings))[:length:length]
 }
 
-// qdbAllocBytes directly allocates a buffer of the specified byte size.
-// You must explicitly call qdb_release() to free the allocated memory.
+// qdbAllocBytes allocates a raw byte buffer of the specified size via the QDB C API.
+// Caller must explicitly call qdbReleasePointer() (or qdbRelease[T]()) to free the memory.
+//
+// Key decisions and trade-offs:
+//   - Direct C allocation avoids Go heap overhead when QDB needs to manage memory itself.
+//   - Returning unsafe.Pointer ensures generic usage for any byte-based buffer.
+//   - Minimal runtime checks: only verifies non-nil pointer after allocation.
+//
+// Assumptions:
+//   - HandleType h is valid and initialized.
+//   - totalBytes > 0; otherwise QDB C API may return nil or error.
+//
+// Performance implications:
+//   - Zero Go allocations beyond the pointer itself; allocation happens in C runtime.
+//   - Caller must pay the cost of a C allocation and later free via qdbReleasePointer.
+//
+// Usage example:
+//
+//	// Allocate buffer for 1024 bytes:
+//	rawPtr, err := qdbAllocBytes(h, 1024)
+//	if err != nil {
+//	    panic(err) // allocation failure is unrecoverable in this context
+//	}
+//
+//	// ... Work with `rawptr`, then free underlying buffer:
+//
+//	qdbReleasePointer(h, rawPtr)
 func qdbAllocBytes(h HandleType, totalBytes int) (unsafe.Pointer, error) {
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_alloc_buffer(h.handle, C.qdb_size_t(totalBytes), &basePtr)
@@ -349,8 +374,35 @@ func qdbAllocBytes(h HandleType, totalBytes int) (unsafe.Pointer, error) {
 	return basePtr, nil
 }
 
-// qdbAllocBuffer allocates a typed buffer via qdbAllocBytes.
-// It explicitly calculates buffer size based on the provided element type and count.
+// qdbAllocBuffer allocates a typed buffer of `count` elements via qdbAllocBytes.
+// Calculates total size as sizeof(T) * count, then returns *T pointer to the C-allocated memory.
+//
+// Key decisions and trade-offs:
+//   - Abstracts qdbAllocBytes for any element type T, removing boilerplate size computation.
+//   - Returns *T so caller can index as a Go slice only after safe conversion (e.g., via castSlice).
+//
+// Assumptions:
+//   - count > 0; otherwise totalSize is zero or negative, leading to allocation failure.
+//   - T has no padding or alignment differences beyond what C expects.
+//
+// Performance implications:
+//   - One C allocation of totalSize bytes; zero Go allocations except pointer itself.
+//   - Caller can reinterpret returned *T as slice header via unsafe.Slice, avoiding extra copy.
+//
+// Usage example:
+//
+//	var data C.qdb_struct_t
+//	ver err error
+//
+//	data.ptr_count = 100
+//	data.ptr, err = qdbAllocBuffer[C.qdb_int_t](h, 100)
+//	if err != nil {
+//	    panic(err) // cannot proceed without buffer
+//	}
+//
+//	// ... Work with `data`, then free underlying buffer:
+//
+//	qdbRelease(h, ptr)
 func qdbAllocBuffer[T any](h HandleType, count int) (*T, error) {
 	totalSize := int(unsafe.Sizeof(*new(T))) * count
 	ptr, err := qdbAllocBytes(h, totalSize)
@@ -362,8 +414,34 @@ func qdbAllocBuffer[T any](h HandleType, count int) (*T, error) {
 	return (*T)(ptr), nil
 }
 
-// qdbAllocAndCopyBytes allocates memory using C.qdb_copy_alloc_buffer, and returns
-// and arbitrary pointer (unsafe.Pointer)
+// qdbAllocAndCopyBytes allocates a buffer via C.qdb_copy_alloc_buffer and copies the provided Go slice into it.
+// Returns an arbitrary unsafe.Pointer to C-managed memory. Caller must free via qdbReleasePointer.
+//
+// Key decisions and trade-offs:
+//   - Uses QDB’s optimized copy-and-allocate routine when copying from Go memory into C.
+//   - Reduces overhead of separate allocation + manual copy; C API may use optimized memcpy.
+//
+// Assumptions:
+//   - src slice length > 0; zero-length slices are rejected to avoid ambiguous allocations.
+//   - Elements of src are trivially copyable as raw bytes (no Go pointers inside).
+//
+// Performance implications:
+//   - Single C call handles both allocation and memory copy of totalSize bytes.
+//   - Zero Go allocations, minimal Go runtime overhead.
+//
+// Usage example:
+//
+//	// Copy a []byte into C-managed memory:
+//	data := []byte("hello QDB")
+//	ptr, err := qdbAllocAndCopyBytes[byte](h, data)
+//
+//	if err != nil {
+//	    panic(err) // cannot proceed without valid buffer
+//	}
+//
+//	// ... Work with ptr, then free underlying buffer:
+//
+//	qdbRelease(h, ptr)
 func qdbAllocAndCopyBytes[T any](h HandleType, src []T) (unsafe.Pointer, error) {
 	n := len(src)
 	if n == 0 {
@@ -387,9 +465,34 @@ func qdbAllocAndCopyBytes[T any](h HandleType, src []T) (unsafe.Pointer, error) 
 	return basePtr, nil
 }
 
-// qdbAllocAndCopyBytes allocates memory using qdbAllocBytes, copies the provided Go slice into it,
-// and returns a typed pointer (*Dst). This function safely encapsulates unsafe memory conversions.
-// Caller is responsible for releasing allocated memory.
+// qdbAllocAndCopyBuffer allocates C-managed memory and copies a Go slice into it, returning a typed pointer *Dst.
+// Internally calls qdbAllocAndCopyBytes for allocation+copy, then casts to *Dst directly.
+//
+// Key decisions and trade-offs:
+//   - Encapsulates primitive allocation+copy into typed pointer, reducing caller boilerplate.
+//   - Dst type must match underlying byte representation of Src elements.
+//
+// Assumptions:
+//   - Src and Dst element types have identical size and layout.
+//   - len(src) > 0 to avoid zero-length ambiguous allocations.
+//
+// Performance implications:
+//   - One C API call for allocation and bulk copy; zero Go heap allocations except pointer itself.
+//   - Caller can immediately use returned *Dst, then release via qdbRelease when done.
+//
+// Usage example:
+//
+//      // Copy []int32 into a C-managed buffer typed as *int32
+//      src := []int32{1, 2, 3, 4}
+//      ptr, err := qdbAllocAndCopyBuffer[int32, int32](h, src)
+//      if err != nil {
+//          panic(err)
+//      }
+//
+//      // ... Work with ptr, then free underlying buffer:
+//
+//      qdbRelease(h, ptr)
+
 func qdbAllocAndCopyBuffer[Src any, Dst any](h HandleType, src []Src) (*Dst, error) {
 
 	basePtr, err := qdbAllocAndCopyBytes(h, src)
@@ -400,17 +503,82 @@ func qdbAllocAndCopyBuffer[Src any, Dst any](h HandleType, src []Src) (*Dst, err
 	return (*Dst)(basePtr), nil
 }
 
+// qdbRelease frees C-managed memory given a typed pointer *T.
+// Under the hood, calls qdbReleasePointer with unsafe.Pointer for generic release logic.
+//
+// Key decisions and trade-offs:
+//   - Provides type-safe wrapper so caller does not need unsafe.Pointer directly.
+//   - Minimal overhead: just an inline call to qdbReleasePointer.
+//
+// Assumptions:
+//   - ptr is non-nil and was allocated by QDB C API (via qdbAllocBytes or qdbAllocAndCopyBuffer).
+//   - Releasing the wrong pointer type leads to undefined behavior in C runtime.
+//
+// Performance implications:
+//   - Single C call to free; negligible Go overhead.
+//
+// Usage example:
+//
+//	// After allocating via qdbAllocBuffer or qdbAllocAndCopyBuffer:
+//	ptr, _ := qdbAllocBuffer[int64](h, 100)
+//
+//	// ... Work with ptr, then free underlying buffer:
+//
+//	qdbRelease(h, ptr) // frees underlying C memory
 func qdbRelease[T any](h HandleType, ptr *T) {
 	qdbReleasePointer(h, unsafe.Pointer(ptr))
 }
 
+// qdbReleasePointer frees C-managed memory given an unsafe.Pointer.
+// Use this when raw unsafe.Pointer was returned from qdbAllocBytes or qdbAllocAndCopyBytes.
+//
+// Key decisions and trade-offs:
+//   - Low-level release interface for maximum flexibility.
+//   - Caller must track pointers manually, no type safety.
+//
+// Assumptions:
+//   - ptr is non-nil and points to memory allocated by QDB C API.
+//   - Double-free or freeing non-QDB memory results in undefined behavior.
+//
+// Performance implications:
+//   - Single C call; negligible Go runtime cost.
+//
+// Usage example:
+//
+//	rawPtr, _ := qdbAllocBytes(h, 512)
+//
+//	// ... use rawPtr ...
+//
+//	qdbReleasePointer(h, rawPtr) // release when finished
 func qdbReleasePointer(h HandleType, ptr unsafe.Pointer) {
 	C.qdb_release(h.handle, ptr)
 }
 
-// Copies a Go string and returns a `char const *`-like string. Allocates memory using
-// the QDB C API's memory handler for high performance memory allocation. Must be released
-// by the user using `qdbRelease()` when done.
+// qdbCopyString allocates a C-style null-terminated copy of a Go string via QDB C API.
+// Returns *C.char which must be released via qdbReleasePointer when no longer needed.
+//
+// Key decisions and trade-offs:
+//   - Uses qdbAllocAndCopyBytes to leverage QDB’s allocator and optimized memory copy.
+//   - Appends a NUL terminator explicitly to satisfy C string conventions.
+//   - Avoids Go heap for large strings, reducing garbage collector pressure.
+//
+// Assumptions:
+//   - len(s) > 0; empty string is invalid because no allocation needed or returned pointer would point to just NUL.
+//   - Caller must free returned *C.char via qdbReleasePointer to avoid memory leak.
+//
+// Performance implications:
+//   - Single allocation+copy in C; O(len(s)) time, zero Go heap allocation beyond pointer.
+//   - Ideal when passing large strings into C code repeatedly.
+//
+// Usage example:
+//
+//	// Copy a Go string into C-managed memory:
+//	cStr, err := qdbCopyString(h, \"SELECT * FROM table\")
+//	if err != nil {
+//	    panic(err)
+//	}
+//	// Use cStr with QDB C API, then free:
+//	qdbReleasePointer(h, unsafe.Pointer(cStr))
 func qdbCopyString(h HandleType, s string) (*C.char, error) {
 	if len(s) == 0 {
 		return nil, fmt.Errorf("cannot allocate empty string")
