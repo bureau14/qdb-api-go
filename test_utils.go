@@ -2,9 +2,11 @@ package qdb
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 )
@@ -279,25 +281,34 @@ func genReaderChunks(t *rapid.T) []ReaderChunk {
 	return genChunks.Draw(t, "readerChunks")
 }
 
-func assertReaderChunksEqualChunk(lhs []ReaderChunk, rhs ReaderChunk) {
-	// Returns true if `lhs` contains the exact same data as `rhs`, except
-	// all data in `rhs` is concatenated.
-	//
-	// Concatenation happens in any order, so we will probably need
-	// to sort the data in each column before comparing.
-	//
-	// Performance is not important, clarity of code is very important.
-	//
-	// Psuedo-code:
-	// - for each chunk in lhs
-	//   - verify columnInfoByOffset is identical to rhs.columnInfoByOffset
-	//   - count totalRows by taking chunk.RowCount()
-	//
-	// - assert that totalRows == len(rhs.idx)
-	//
-	// - compare index: allocate a new temporary index `time.Time` of size `totalRows`
-	// - iterate over all the chunks in lhs, append time to new temporary index
-	// - compare both indexes after first sorting them
-	//
-	// next up would be comparing all the data, but let's do that later
+func assertReaderChunksEqualChunk(t *testing.T, lhs []ReaderChunk, rhs ReaderChunk) {
+	t.Helper()
+
+	// Ensure lhs contains data to compare.
+	require.NotEmpty(t, lhs, "lhs must contain at least one chunk")
+
+	baseCols := lhs[0].columnInfoByOffset
+
+	// All lhs chunks must share the same schema while counting rows.
+	totalRows := 0
+	for i, c := range lhs {
+		require.Equal(t, baseCols, c.columnInfoByOffset, "lhs[%d] schema mismatch", i)
+		totalRows += c.RowCount()
+	}
+
+	require.Equal(t, baseCols, rhs.columnInfoByOffset, "rhs schema mismatch")
+	require.Equal(t, totalRows, len(rhs.idx), "row count mismatch")
+
+	// Build a merged index from lhs and compare after sorting.
+	mergedIdx := make([]time.Time, 0, totalRows)
+	for _, c := range lhs {
+		mergedIdx = append(mergedIdx, c.idx...)
+	}
+
+	lhsIdx := append([]time.Time(nil), mergedIdx...)
+	rhsIdx := append([]time.Time(nil), rhs.idx...)
+	sort.Slice(lhsIdx, func(i, j int) bool { return lhsIdx[i].Before(lhsIdx[j]) })
+	sort.Slice(rhsIdx, func(i, j int) bool { return rhsIdx[i].Before(rhsIdx[j]) })
+
+	assert.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
