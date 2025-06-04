@@ -426,30 +426,40 @@ func qdbCopyString(h HandleType, s string) (*C.char, error) {
 	return (*C.char)(unsafe.Pointer(ptr)), nil
 }
 
-// unsafeCastSlice performs a zero-copy reinterpretation of a slice []From as []To.
+// castSlice performs a zero-copy reinterpretation from a slice of type []From to []To.
 //
-// This function is extremely performance-critical because it completely avoids expensive memory copies.
-// Such memory copying operations are typically a significant bottleneck in hot code paths that handle
-// massive data volumes (e.g., billions of operations per second). Using unsafeCastSlice thus directly
-// contributes to substantial performance improvements.
+// Decision rationale:
+//   - Avoiding memory copies in performance-critical code paths drastically reduces runtime overhead.
+//   - Typical scenarios involve billions of operations per second, where unnecessary copying significantly affects throughput.
 //
-// Preconditions (MUST be guaranteed by caller to prevent memory corruption):
-//   - The sizes, alignments, and binary representations of the types From and To must match exactly.
+// Critical caller assumptions (must hold true to ensure correctness and safety):
+//   - Types `From` and `To` share identical memory layouts, including size, alignment, and binary representation.
+//   - Caller explicitly guarantees these assumptions; violations lead to undefined behavior.
 //
-// It returns an error in the following cases:
-//   - If input is empty (cannot safely take the address of the first element).
-//   - If the sizes of From and To differ (as this would lead to memory corruption).
+// Safety and correctness checks (returns an error explicitly if):
+//   - The input slice is empty (taking the address of the first element would panic).
+//   - The sizes of `From` and `To` differ (this would immediately result in memory corruption).
 //
-// If input is nil, it simply returns nil to facilitate method chaining.
+// Edge cases handled explicitly:
+//   - If input is nil, returns nil to simplify safe method chaining.
 //
-// Safety warning:
-//   - This function relies entirely on caller guarantees regarding type compatibility. Incorrect usage
-//     can result in severe memory corruption or undefined behavior. Ensure these conditions hold true.
+// Performance implications:
+//   - Zero-copy and zero-allocation behavior; execution time is negligible even at extremely high call rates.
+//   - Optimal for extremely hot, performance-critical code paths.
 //
-// Performance characteristics:
-//   - Zero allocations.
-//   - Zero-copy operation, hence near-instantaneous execution time.
-func unsafeCastSlice[From any, To any](input []From) ([]To, error) {
+// Usage context and explicit example:
+//
+//	// Example: reinterpret a slice of externally managed C integers as Go int64 slice without copying
+//	var cInts []C.qdb_int_t = fetchDataFromC()
+//
+//	goInts, err := castSlice[C.qdb_int_t, int64](cInts)
+//	if err != nil {
+//	    panic(err) // explicit panic ensures strict enforcement of critical safety guarantees
+//	}
+//
+//	// goInts directly references the original memory. If the memory lifetime is uncertain,
+//	// explicitly copy the data with copySlice(goInts) to guarantee memory safety.
+func castSlice[From any, To any](input []From) ([]To, error) {
 	var from From
 	var to To
 
@@ -468,4 +478,118 @@ func unsafeCastSlice[From any, To any](input []From) ([]To, error) {
 	ptr := unsafe.Pointer(&input[0])
 
 	return unsafe.Slice((*To)(ptr), len(input)), nil
+}
+
+// copySlice creates a fully Go-managed, independent copy of the provided slice.
+//
+// Decision rationale:
+//   - Using explicit copying ensures that the returned slice has a predictable lifetime and is safe
+//     against external mutations (e.g., from externally-managed C memory).
+//
+// Key assumptions:
+//   - Caller intentionally requests a deep copy to achieve memory isolation.
+//
+// Performance trade-offs:
+//   - Introduces O(n) memory-copy overhead. This operation leverages Go's optimized runtime implementation
+//     (typically via memmove), but repeated use on extremely hot code paths may become measurable.
+//
+// Usage context and example:
+//
+//	// Example scenario: safely copying an unsafe slice obtained via cPointerArrayToSliceUnsafe.
+//	var cPtr *C.qdb_int_t
+//	var rowCount int64
+//
+//	unsafeSlice, err := cPointerArrayToSliceUnsafe[C.qdb_int_t, int64](unsafe.Pointer(cPtr), rowCount)
+//	if err != nil {
+//	    panic(err) // strict enforcement of precondition validity
+//	}
+//
+//	safeSlice := copySlice(unsafeSlice) // safe, Go-managed copy
+func copySlice[T any](xs []T) []T {
+	ret := make([]T, len(xs))
+	copy(ret, xs)
+	return ret
+}
+
+// cPointerArrayToSliceUnsafe converts a raw C-style memory array (void*) directly into a Go slice without copying.
+//
+// Decision rationale:
+//   - Zero-copy reinterpretation achieves optimal performance critical to high-throughput, latency-sensitive code paths.
+//   - Use when external memory lifecycle management is strictly controlled and well-understood by the caller.
+//
+// Critical preconditions (must be strictly maintained by the caller):
+//   - Types `From` and `To` have precisely matching binary layouts (size, alignment, representation).
+//   - The input pointer (`xs`) is valid, non-nil, and points to a memory region with at least `n` elements.
+//   - Caller explicitly manages the lifetime of referenced memory to prevent undefined behavior.
+//
+// Safety considerations:
+//   - This function intentionally bypasses Go's memory safety. Violating these assumptions leads to severe
+//     memory corruption and/or undefined behavior.
+//
+// Performance implications:
+//   - Zero-copy yields maximum throughput with negligible latency.
+//
+// Usage context and example:
+//
+//	// Example scenario: directly mapping externally managed (C) memory to Go without copying.
+//	var cPtr *C.qdb_double_t
+//	var rowCount int64
+//
+//	unsafeSlice, err := cPointerArrayToSliceUnsafe[C.qdb_double_t, float64](unsafe.Pointer(cPtr), rowCount)
+//	if err != nil {
+//	    panic(err) // enforce correctness and explicit caller guarantees
+//	}
+//
+//	// Use `unsafeSlice` directly, ensuring the original C memory remains valid throughout.
+//	// If independent Go memory is later needed, explicitly invoke copySlice(unsafeSlice).
+func cPointerArrayToSliceUnsafe[From any, To any](xs unsafe.Pointer, n int64) ([]To, error) {
+	if xs == nil {
+		return nil, fmt.Errorf("cPointerArrayToSliceUnsafe: input pointer is nil")
+	}
+
+	ptr := (*From)(xs)
+	slice, err := castSlice[From, To](unsafe.Slice(ptr, n))
+	if err != nil {
+		return nil, fmt.Errorf("cPointerArrayToSliceUnsafe: %v", err)
+	}
+
+	return slice, nil
+}
+
+// cPointerArrayToSlice safely converts a raw C-style memory array (void*) into a fully Go-managed slice.
+//
+// Decision rationale:
+//   - Explicitly copies external memory, providing safe memory isolation from external sources.
+//   - Recommended when simplicity of memory management outweighs raw throughput considerations.
+//
+// Key assumptions:
+//   - Caller prioritizes memory safety over absolute maximum performance.
+//
+// Performance trade-offs:
+//   - Introduces explicit O(n) memory-copy overhead. Leveraging Go runtime optimizations (memmove),
+//     the overhead remains moderate but measurable under very high load.
+//
+// Safety and memory considerations:
+//   - Resulting slice lifetime is independent of the original external memory. The original memory can safely be freed after use.
+//
+// Usage context and example:
+//
+//	// Example scenario: converting external (C-managed) memory safely to Go-managed memory.
+//	var cPtr *C.qdb_timespec_t
+//	var rowCount int64
+//
+//	safeSlice, err := cPointerArrayToSlice[C.qdb_timespec_t, time.Time](unsafe.Pointer(cPtr), rowCount)
+//	if err != nil {
+//	    panic(err) // explicit check enforces runtime correctness assumptions
+//	}
+//
+//	// safeSlice is now fully Go-managed, independent of original C memory allocation.
+//	// Original memory can safely be released after conversion.
+func cPointerArrayToSlice[From any, To any](xs unsafe.Pointer, n int64) ([]To, error) {
+	ret, err := cPointerArrayToSliceUnsafe[From, To](xs, n)
+	if err != nil {
+		return nil, fmt.Errorf("cPointerArrayToSlice: %v", err)
+	}
+
+	return copySlice(ret), nil
 }
