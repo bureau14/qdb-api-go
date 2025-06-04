@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 )
 
 func TestReaderOptionsCanCreateNew(t *testing.T) {
@@ -136,4 +137,22 @@ func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
 	require.NoError(err)
 
 	assertWriterTablesEqualReaderBatch(t, tables, names, data)
+}
+
+// TestReaderMergeReaderChunksPanics demonstrates that mergeReaderChunks panics
+// when given valid input.
+func TestReaderMergeReaderChunksPanics(t *testing.T) {
+	assert := assert.New(t)
+	rapid.Check(t, func(t *rapid.T) {
+		chunk := genReaderChunk(t)
+		assert.Panics(func() { mergeReaderChunks([]ReaderChunk{chunk}) })
+	})
+}
+
+func TestReaderMergeReaderBatchesPanics(t *testing.T) {
+	assert := assert.New(t)
+	rapid.Check(t, func(t *rapid.T) {
+		batches := genReaderBatches(t)
+		assert.Panics(func() { mergeReaderBatches(batches) })
+	})
 }
