@@ -96,30 +96,40 @@ func newReaderDataInt64(name string, xs []int64) ReaderDataInt64 {
 // xs:   C array of reader column data
 // n:    length of `data` inside array
 func newReaderDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataInt64, error) {
-	// Step 1: validation of input parameters
+
+	// Ensure the column type matches int64; mismatches lead to invalid reads.
 	if xs.data_type != C.qdb_ts_column_int64 {
-		return ReaderDataInt64{}, fmt.Errorf("Internal error, expected data type to be int64, got: %v", xs.data_type)
+		return ReaderDataInt64{},
+			fmt.Errorf("newReaderDataInt64FromNative: expected data_type int64, got %v", xs.data_type)
 	}
+	// Reject non-positive lengths; indexing with n <= 0 is invalid.
 	if n <= 0 {
-		return ReaderDataInt64{}, fmt.Errorf("Internal error: invalid column length %d", n)
+		return ReaderDataInt64{},
+			fmt.Errorf("newReaderDataInt64FromNative: invalid column length %d", n)
 	}
 
-	// Step 2: do a cast of xs.data[0] to *C.qdb_int_t. As pointer sizes on different architectures
-	//         may differ, *cannot* assume it's 8 bytes, and instead use `unsafe.Pointer` as the
-	//         architecture-safe representation for the size.
+	// Extract the raw C pointer from xs.data[0] (void* array). Casting via unsafe.Pointer
+	// ensures portability across architectures (pointer size differences).
 	rawPtr := *(*unsafe.Pointer)(unsafe.Pointer(&xs.data[0]))
-	cPtr := (*C.qdb_int_t)(rawPtr)
-	if cPtr == nil {
-		return ReaderDataInt64{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
+	if rawPtr == nil {
+		return ReaderDataInt64{},
+			fmt.Errorf("newReaderDataInt64FromNative: nil data pointer for column %q", name)
 	}
 
-	xs_, err := unsafeCastSlice[C.qdb_int_t, int64](unsafe.Slice(cPtr, n))
+	// SAFELY convert the C pointer array to a fully Go-managed []int64 slice.
+	// cPointerArrayToSlice enforces:
+	//   - runtime check that sizeof(C.qdb_int_t) == sizeof(int64)
+	//   - bounds validation on length
+	//   - explicit copy from C memory into Go memory
+	// This guarantees memory safety even if the original C buffer is freed afterward.
+	goSlice, err := cPointerArrayToSlice[C.qdb_int_t, int64](rawPtr, int64(n))
 	if err != nil {
 		return ReaderDataInt64{}, fmt.Errorf("newReaderDataInt64FromNative: %v", err)
 	}
 
-	// Return result
-	return newReaderDataInt64(name, xs_), nil
+	// Wrap the Go-managed []int64 in a ReaderDataInt64 and return.
+	// Using newReaderDataInt64 centralizes ReaderDataInt64 construction logic.
+	return newReaderDataInt64(name, goSlice), nil
 }
 
 // GetReaderDataInt64 safely extracts a slice of int64 values from a ReaderData object.
