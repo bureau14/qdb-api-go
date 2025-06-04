@@ -11,15 +11,7 @@ import (
 func TestTimeCanConvertToQdbTimespec(t *testing.T) {
 	assert := assert.New(t)
 
-	genTime := rapid.Custom(func(t *rapid.T) time.Time {
-		// Draw a random Unix second between one year ago and the distant future, *after* the year 2038
-		sec := rapid.Int64Range(0, 17_179_869_184).Draw(t, "sec")
-
-		nsec := rapid.Int64Range(0, 999_999_999).Draw(t, "nsec")
-		return time.Unix(sec, nsec).UTC()
-	})
-
-	genTimes := rapid.SliceOf(genTime)
+	genTimes := rapid.SliceOf(rapid.Custom(genTime))
 
 	rapid.Check(t, func(t *rapid.T) {
 

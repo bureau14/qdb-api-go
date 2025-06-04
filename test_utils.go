@@ -1,11 +1,13 @@
 package qdb
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 )
 
 const (
@@ -173,4 +175,141 @@ func assertWriterTablesEqualReaderBatch(t *testing.T, expected []WriterTable, na
 			}
 		}
 	}
+}
+
+// genTime generates a random UTC time as used in time_test.go.
+func genTime(t *rapid.T) time.Time {
+	sec := rapid.Int64Range(0, 17_179_869_184).Draw(t, "sec")
+	nsec := rapid.Int64Range(0, 999_999_999).Draw(t, "nsec")
+	return time.Unix(sec, nsec).UTC()
+}
+
+// genReaderChunk constructs a ReaderChunk with random int64 columns.
+// The chunk will contain between 1 and 1024 rows and up to 8 columns.
+func genReaderChunk(t *rapid.T) ReaderChunk {
+	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
+	cols := rapid.IntRange(1, 8).Draw(t, "cols")
+
+	idx := make([]time.Time, rows)
+	for i := 0; i < rows; i++ {
+		idx[i] = genTime(t)
+	}
+
+	data := make([]ReaderData, cols)
+	for c := 0; c < cols; c++ {
+		values := make([]int64, rows)
+		for r := 0; r < rows; r++ {
+			values[r] = rapid.Int64().Draw(t, fmt.Sprintf("val_%d_%d", c, r))
+		}
+		rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
+		data[c] = &rd
+	}
+
+	return ReaderChunk{
+		tableName: "tbl",
+		rowCount:  rows,
+		idx:       idx,
+		data:      data,
+	}
+}
+
+// genReaderChunks returns between 1 and 8 ReaderChunks that all share the same
+// schema.
+func genReaderChunks(t *rapid.T) []ReaderChunk {
+	count := rapid.IntRange(1, 8).Draw(t, "chunkCount")
+	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
+	cols := rapid.IntRange(1, 8).Draw(t, "cols")
+
+	makeChunk := func() ReaderChunk {
+		idx := make([]time.Time, rows)
+		for i := 0; i < rows; i++ {
+			idx[i] = genTime(t)
+		}
+
+		data := make([]ReaderData, cols)
+		for c := 0; c < cols; c++ {
+			values := make([]int64, rows)
+			for r := 0; r < rows; r++ {
+				values[r] = rapid.Int64().Draw(t, fmt.Sprintf("v_%d_%d", c, r))
+			}
+			rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
+			data[c] = &rd
+		}
+
+		return ReaderChunk{tableName: "tbl", rowCount: rows, idx: idx, data: data}
+	}
+
+	out := make([]ReaderChunk, count)
+	for i := 0; i < count; i++ {
+		out[i] = makeChunk()
+	}
+	return out
+}
+
+// genReaderBatch generates a single ReaderBatch with a consistent schema.
+func genReaderBatch(t *rapid.T) ReaderBatch {
+	count := rapid.IntRange(2, 8).Draw(t, "chunkCount")
+	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
+	cols := rapid.IntRange(1, 8).Draw(t, "cols")
+
+	makeChunk := func() ReaderChunk {
+		idx := make([]time.Time, rows)
+		for i := 0; i < rows; i++ {
+			idx[i] = genTime(t)
+		}
+
+		data := make([]ReaderData, cols)
+		for c := 0; c < cols; c++ {
+			values := make([]int64, rows)
+			for r := 0; r < rows; r++ {
+				values[r] = rapid.Int64().Draw(t, fmt.Sprintf("b_v_%d_%d", c, r))
+			}
+			rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
+			data[c] = &rd
+		}
+
+		return ReaderChunk{tableName: "tbl", rowCount: rows, idx: idx, data: data}
+	}
+
+	batch := make([]ReaderChunk, count)
+	for i := 0; i < count; i++ {
+		batch[i] = makeChunk()
+	}
+	return batch
+}
+
+// genReaderBatches returns up to 8 ReaderBatch values, all sharing the same shape.
+func genReaderBatches(t *rapid.T) []ReaderBatch {
+	batchCount := rapid.IntRange(2, 4).Draw(t, "batchCount")
+	chunkCount := rapid.IntRange(batchCount+1, batchCount+4).Draw(t, "chunkCount")
+
+	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
+	cols := rapid.IntRange(1, 8).Draw(t, "cols")
+
+	makeChunk := func() ReaderChunk {
+		idx := make([]time.Time, rows)
+		for i := 0; i < rows; i++ {
+			idx[i] = genTime(t)
+		}
+		data := make([]ReaderData, cols)
+		for c := 0; c < cols; c++ {
+			values := make([]int64, rows)
+			for r := 0; r < rows; r++ {
+				values[r] = rapid.Int64().Draw(t, fmt.Sprintf("b_v_%d_%d", c, r))
+			}
+			rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
+			data[c] = &rd
+		}
+		return ReaderChunk{tableName: "tbl", rowCount: rows, idx: idx, data: data}
+	}
+
+	batches := make([]ReaderBatch, batchCount)
+	for b := 0; b < batchCount; b++ {
+		batch := make([]ReaderChunk, chunkCount)
+		for c := 0; c < chunkCount; c++ {
+			batch[c] = makeChunk()
+		}
+		batches[b] = batch
+	}
+	return batches
 }
