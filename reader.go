@@ -685,12 +685,8 @@ func newReaderChunk(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 	// Set row count
 	out.rowCount = int(data.row_count)
 
-	// Copy index
-	idxSlice := unsafe.Slice(data.timestamps, out.rowCount)
-	out.idx = make([]time.Time, out.rowCount)
-	for i, v := range idxSlice {
-		out.idx[i] = QdbTimespecToTime(v)
-	}
+	// Copy index using utility to convert slice of C.qdb_timespec_t to []time.Time
+	out.idx = QdbTimespecSliceToTime(unsafe.Slice(data.timestamps, out.rowCount))
 
 	// Store the column data
 	colCount := int(data.column_count)
