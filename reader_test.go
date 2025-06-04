@@ -142,17 +142,18 @@ func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
 // TestReaderMergeReaderChunksPanics demonstrates that mergeReaderChunks panics
 // when given valid input.
 func TestReaderMergeReaderChunksPanics(t *testing.T) {
-	assert := assert.New(t)
 	rapid.Check(t, func(t *rapid.T) {
-		chunk := genReaderChunk(t)
-		assert.Panics(func() { mergeReaderChunks([]ReaderChunk{chunk}) })
+		xs := genReaderChunks(t)
+		_, err := mergeReaderChunks(xs)
+
+		assert.NoError(t, err)
 	})
 }
 
 func TestReaderMergeReaderBatchesPanics(t *testing.T) {
-	assert := assert.New(t)
 	rapid.Check(t, func(t *rapid.T) {
 		batches := genReaderBatches(t)
-		assert.Panics(func() { mergeReaderBatches(batches) })
+		_, err := mergeReaderBatches(batches)
+		assert.NoError(t, err)
 	})
 }

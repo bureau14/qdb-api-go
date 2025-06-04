@@ -152,12 +152,10 @@ func assertWriterTablesEqualReaderBatch(t *testing.T, expected []WriterTable, na
 			case TsColumnTimestamp:
 				exp, err := GetTimestampArray(expectedData)
 				require.NoError(err)
+				expectedTimes := QdbTimespecSliceToTime(exp.xs)
 				gotVals, err := GetReaderDataTimestamp(gotData)
 				require.NoError(err)
-				require.Equal(len(exp.xs), len(gotVals))
-				for k, v := range exp.xs {
-					assert.Equal(QdbTimespecToTime(v), gotVals[k])
-				}
+				assert.Equal(expectedTimes, gotVals)
 			case TsColumnBlob:
 				exp, err := GetBlobArray(expectedData)
 				require.NoError(err)

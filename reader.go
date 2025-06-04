@@ -600,8 +600,14 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 		return ReaderChunk{}, nil
 	}
 
-	base := xs[0]
-	totalRows := len(base.idx)
+	var base ReaderChunk = xs[0]
+	var totalRows int = len(base.idx)
+
+	// Short-circuit in case there is just a single chunk, which is actuallyu a common case
+	if len(xs) == 1 {
+		return base, nil
+	}
+
 	for i, chunk := range xs[1:] {
 		if chunk.tableName != base.tableName {
 			return ReaderChunk{}, fmt.Errorf("table name mismatch at position %d: expected '%s', got '%s'", i+1, base.tableName, chunk.tableName)
