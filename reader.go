@@ -628,8 +628,26 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	mergedData := make([]ReaderData, len(base.data))
 
 	// Pre-allocate all data, useful when merging many smaller chunks into a larger chunk
-	for idx := range len(base.data) {
-		mergedData[idx].ensureCapacity(totalRows)
+	for idx, col := range base.data {
+		var newCol ReaderData
+		switch c := col.(type) {
+		case *ReaderDataInt64:
+			newCol = &ReaderDataInt64{name: c.name, xs: make([]int64, 0, totalRows)}
+		case *ReaderDataDouble:
+			newCol = &ReaderDataDouble{name: c.name, xs: make([]float64, 0, totalRows)}
+		case *ReaderDataTimestamp:
+			newCol = &ReaderDataTimestamp{name: c.name, xs: make([]time.Time, 0, totalRows)}
+		case *ReaderDataBlob:
+			newCol = &ReaderDataBlob{name: c.name, xs: make([][]byte, 0, totalRows)}
+		case *ReaderDataString:
+			newCol = &ReaderDataString{name: c.name, xs: make([]string, 0, totalRows)}
+		default:
+			return ReaderChunk{}, fmt.Errorf("unsupported ReaderData type %T for column %d", col, idx)
+		}
+
+		// Ensure that the slice backing array can hold the final merged size
+		newCol.ensureCapacity(totalRows)
+		mergedData[idx] = newCol
 	}
 
 	for _, chunk := range xs {
@@ -827,7 +845,8 @@ func mergeReaderBatches(xs []ReaderBatch) (ReaderBatch, error) {
 
 	// Step 2: as all batches should have the exact same shape, we know exactly
 	//         how many chunks we need to allocate by just looking at the first chunk.
-	ret := make([]ReaderChunk, len(xs))
+	// The final batch will contain as many chunks as the first input batch
+	ret := make([]ReaderChunk, len(xs[0]))
 
 	// This will be our temporary "staging" area of all chunks we intend to merge together
 	//
@@ -837,15 +856,15 @@ func mergeReaderBatches(xs []ReaderBatch) (ReaderBatch, error) {
 
 	batchCount := len(xs)
 
-	// Pre-allocate all the chunk slices
-	for idx := range len(xs) {
-		// Extra safety: if, for whatever reason, one of these batches has not the
-		// *exact* same number of chunks as the first one, throw an internal error
-		if len(xs[idx]) != len(xs[0]) {
-			return nil, fmt.Errorf("Internal error: incorrect chunk count for batch at offset %d: %d != %d", idx, len(xs[idx]), len(xs[0]))
+	// Ensure all batches have an identical number of chunks
+	for idx, b := range xs {
+		if len(b) != len(xs[0]) {
+			return nil, fmt.Errorf("Internal error: incorrect chunk count for batch at offset %d: %d != %d", idx, len(b), len(xs[0]))
 		}
+	}
 
-		// We know that we will have exactly 1 chunk per batch that we want to merge
+	// Pre-allocate all the chunk slices for the pivoted matrix
+	for idx := range chunks {
 		chunks[idx] = make([]ReaderChunk, batchCount)
 	}
 
