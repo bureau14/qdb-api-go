@@ -761,3 +761,50 @@ func cPointerArrayToSlice[From any, To any](xs unsafe.Pointer, n int64) ([]To, e
 
 	return copySlice(ret), nil
 }
+
+// sliceEnsureCapacity ensures that the provided slice has a capacity of at least n.
+// If xs is nil, it returns a new slice of length 0 and capacity n.
+// If cap(xs) ≥ n, it returns xs unchanged. Otherwise, it allocates a new slice
+// with the same length as xs but capacity n, copies the elements, and returns it.
+//
+// Trade-offs and performance implications:
+//   - If cap(xs) < n, this performs one allocation of size n×sizeof(E) and one bulk copy O(len(xs)).
+//   - If cap(xs) ≥ n, there is zero allocation and zero copy overhead.
+//   - Avoids repeated reallocations when appending to slices in hot loops by pre-reserving capacity.
+//
+// Assumptions:
+//   - xs can be nil or a valid slice. A nil xs is treated like an empty slice of length 0.
+//   - n ≥ 0; negative n is undefined behavior (caller responsibility).
+//
+// Usage example:
+//
+//	// Case 1: xs is nil, want capacity 100
+//	var xs []int64
+//	xs = sliceEnsureCapacity[int64](xs, 100)
+//	// Now len(xs)==0, cap(xs)==100
+//
+//	// Case 2: xs has len 5, cap 5, want capacity 20
+//	xs = []int64{1, 2, 3, 4, 5}
+//	xs = sliceEnsureCapacity[int64](xs, 20)
+//	// Now len(xs)==5, cap(xs)==20, original elements preserved
+//
+//	// Case 3: xs already has cap ≥ n
+//	xs = make([]int64, 3, 50)
+//	xs = sliceEnsureCapacity[int64](xs, 20)
+//	// cap(xs) was 50, ≥20, so xs returned unchanged
+func sliceEnsureCapacity[E any](xs []E, n int) []E {
+	// Treat nil like an empty slice; allocate new slice of length 0, capacity n.
+	if xs == nil {
+		return make([]E, 0, n)
+	}
+
+	// If existing capacity is sufficient, return unchanged.
+	if cap(xs) >= n {
+		return xs
+	}
+
+	// Need a larger-capacity slice: allocate with same length, new capacity n.
+	ys := make([]E, len(xs), n)
+	copy(ys, xs) // bulk copy of existing elements
+	return ys
+}

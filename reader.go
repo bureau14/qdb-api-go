@@ -23,7 +23,10 @@ type ReaderData interface {
 
 	// Ensures the underlying data pre-allocates a certain capacity, useful when we know
 	// we will have multiple incremental allocations.
-	ensureCapacity(n int)
+	EnsureCapacity(n int)
+
+	// Ensures underlying data is reset to 0
+	Clear()
 
 	// Appends another chunk of `ReaderData` to this. Validates that they are of identical types.
 	// The intent of this function is the "merge" multiple chunks of ReaderData together in case
@@ -56,12 +59,12 @@ func (rd *ReaderDataInt64) valueType() TsValueType {
 	return TsValueInt64
 }
 
-func (rd *ReaderDataInt64) ensureCapacity(n int) {
-	if cap(rd.xs) < n {
-		tmp := make([]int64, len(rd.xs), n)
-		copy(tmp, rd.xs)
-		rd.xs = tmp
-	}
+func (rd *ReaderDataInt64) EnsureCapacity(n int) {
+	rd.xs = sliceEnsureCapacity(rd.xs, n)
+}
+
+func (rd *ReaderDataInt64) Clear() {
+	rd.xs = make([]int64, 0)
 }
 
 func (rd *ReaderDataInt64) appendData(data ReaderData) error {
@@ -167,12 +170,12 @@ func (rd *ReaderDataDouble) valueType() TsValueType {
 	return TsValueDouble
 }
 
-func (rd *ReaderDataDouble) ensureCapacity(n int) {
-	if cap(rd.xs) < n {
-		tmp := make([]float64, len(rd.xs), n)
-		copy(tmp, rd.xs)
-		rd.xs = tmp
-	}
+func (rd *ReaderDataDouble) EnsureCapacity(n int) {
+	rd.xs = sliceEnsureCapacity(rd.xs, n)
+}
+
+func (rd *ReaderDataDouble) Clear() {
+	rd.xs = make([]float64, 0)
 }
 
 func (rd *ReaderDataDouble) appendData(data ReaderData) error {
@@ -266,12 +269,12 @@ func (rd *ReaderDataTimestamp) valueType() TsValueType {
 	return TsValueTimestamp
 }
 
-func (rd *ReaderDataTimestamp) ensureCapacity(n int) {
-	if cap(rd.xs) < n {
-		tmp := make([]time.Time, len(rd.xs), n)
-		copy(tmp, rd.xs)
-		rd.xs = tmp
-	}
+func (rd *ReaderDataTimestamp) EnsureCapacity(n int) {
+	rd.xs = sliceEnsureCapacity(rd.xs, n)
+}
+
+func (rd *ReaderDataTimestamp) Clear() {
+	rd.xs = make([]time.Time, 0)
 }
 
 func (rd *ReaderDataTimestamp) appendData(data ReaderData) error {
@@ -364,12 +367,12 @@ func (rd *ReaderDataBlob) valueType() TsValueType {
 	return TsValueBlob
 }
 
-func (rd *ReaderDataBlob) ensureCapacity(n int) {
-	if cap(rd.xs) < n {
-		tmp := make([][]byte, len(rd.xs), n)
-		copy(tmp, rd.xs)
-		rd.xs = tmp
-	}
+func (rd *ReaderDataBlob) EnsureCapacity(n int) {
+	rd.xs = sliceEnsureCapacity(rd.xs, n)
+}
+
+func (rd *ReaderDataBlob) Clear() {
+	rd.xs = make([][]byte, 0)
 }
 
 func (rd *ReaderDataBlob) appendData(data ReaderData) error {
@@ -467,12 +470,12 @@ func (rd *ReaderDataString) valueType() TsValueType {
 	return TsValueString
 }
 
-func (rd *ReaderDataString) ensureCapacity(n int) {
-	if cap(rd.xs) < n {
-		tmp := make([]string, len(rd.xs), n)
-		copy(tmp, rd.xs)
-		rd.xs = tmp
-	}
+func (rd *ReaderDataString) EnsureCapacity(n int) {
+	rd.xs = sliceEnsureCapacity(rd.xs, n)
+}
+
+func (rd *ReaderDataString) Clear() {
+	rd.xs = make([]string, 0)
 }
 
 func (rd *ReaderDataString) appendData(data ReaderData) error {
@@ -584,6 +587,27 @@ type ReaderChunk struct {
 	data []ReaderData
 }
 
+// Clears all column data and index
+func (rc *ReaderChunk) Clear() {
+	// Empty slice
+	rc.idx = make([]time.Time, 0)
+
+	for i := range len(rc.data) {
+		rc.data[i].Clear()
+	}
+}
+
+// Ensures index and all data arrays have a certain capacity
+func (rc *ReaderChunk) EnsureCapacity(n int) {
+	rc.idx = sliceEnsureCapacity(rc.idx, n)
+
+	for i := range len(rc.data) {
+		// ReaderData has its own virtual method to ensure capacity,
+		// as they're all of different types
+		rc.data[i].EnsureCapacity(n)
+	}
+}
+
 // Returns name of the table
 func (rt *ReaderChunk) TableName() string {
 	return rt.tableName
@@ -601,7 +625,7 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	}
 
 	var base ReaderChunk = xs[0]
-	var totalRows int = len(base.idx)
+	var totalRows int = 0
 
 	// Short-circuit in case there is just a single chunk, which is actuallyu a common case
 	if len(xs) == 1 {
@@ -610,15 +634,15 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 
 	for i, chunk := range xs[1:] {
 		if chunk.tableName != base.tableName {
-			return ReaderChunk{}, fmt.Errorf("table name mismatch at position %d: expected '%s', got '%s'", i+1, base.tableName, chunk.tableName)
+			return base, fmt.Errorf("table name mismatch at position %d: expected '%s', got '%s'", i+1, base.tableName, chunk.tableName)
 		}
 
 		if len(chunk.data) != len(base.data) {
-			return ReaderChunk{}, fmt.Errorf("column length mismatch at chunk %d: expected %d, got %d", i+1, len(base.data), len(chunk.data))
+			return base, fmt.Errorf("column length mismatch at chunk %d: expected %d, got %d", i+1, len(base.data), len(chunk.data))
 		}
 		for ci, c := range chunk.data {
 			if c.Name() != base.data[ci].Name() || c.valueType() != base.data[ci].valueType() {
-				return ReaderChunk{}, fmt.Errorf("column mismatch at chunk %d, column %d: expected '%s(%v)', got '%s(%v)'", i+1, ci, base.data[ci].Name(), base.data[ci].valueType(), c.Name(), c.valueType())
+				return base, fmt.Errorf("column mismatch at chunk %d, column %d: expected '%s(%v)', got '%s(%v)'", i+1, ci, base.data[ci].Name(), base.data[ci].valueType(), c.Name(), c.valueType())
 			}
 		}
 		totalRows += len(chunk.idx)
@@ -629,24 +653,22 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 
 	// Pre-allocate all data, useful when merging many smaller chunks into a larger chunk
 	for idx, col := range base.data {
-		var newCol ReaderData
-		switch c := col.(type) {
-		case *ReaderDataInt64:
-			newCol = &ReaderDataInt64{name: c.name, xs: make([]int64, 0, totalRows)}
-		case *ReaderDataDouble:
-			newCol = &ReaderDataDouble{name: c.name, xs: make([]float64, 0, totalRows)}
-		case *ReaderDataTimestamp:
-			newCol = &ReaderDataTimestamp{name: c.name, xs: make([]time.Time, 0, totalRows)}
-		case *ReaderDataBlob:
-			newCol = &ReaderDataBlob{name: c.name, xs: make([][]byte, 0, totalRows)}
-		case *ReaderDataString:
-			newCol = &ReaderDataString{name: c.name, xs: make([]string, 0, totalRows)}
-		default:
-			return ReaderChunk{}, fmt.Errorf("unsupported ReaderData type %T for column %d", col, idx)
-		}
+		// Rather than a lot of boilerplate, we just reuse the input object of the
+		// base object, and reset that object's content to 0.
+		//
+		// This keeps the code small.
+		//
+		// We do need to make sure that we actually get "rid" of the references of
+		// the old column, as slices are typically passed by reference, so all cols
+		// would be pointing to the same slice reference
+		var newCol ReaderData = col
+
+		// Resets the actual held data, but not the column data / name
+		newCol.Clear()
 
 		// Ensure that the slice backing array can hold the final merged size
-		newCol.ensureCapacity(totalRows)
+		newCol.EnsureCapacity(totalRows)
+
 		mergedData[idx] = newCol
 	}
 
