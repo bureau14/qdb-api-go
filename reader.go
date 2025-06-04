@@ -202,35 +202,33 @@ func (rd *ReaderDataDouble) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataDouble(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataDouble, error) {
-	// Step 1: validation of input parameters
+func newReaderDataDouble(name string, xs []float64) ReaderDataDouble {
+	return ReaderDataDouble{name: name, xs: xs}
+}
+
+// newReaderDataDoubleFromNative converts the native C representation to a Go-managed
+// ReaderDataDouble. Memory from the C layer is copied into Go slices.
+//
+// Assumes `xs.data_type` is double, returns error otherwise.
+func newReaderDataDoubleFromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataDouble, error) {
 	if xs.data_type != C.qdb_ts_column_double {
-		return ReaderDataDouble{}, fmt.Errorf("Internal error, expected data type to be double, got: %v", xs.data_type)
+		return ReaderDataDouble{}, fmt.Errorf("newReaderDataDoubleFromNative: expected data type double, got: %v", xs.data_type)
 	}
 	if n <= 0 {
-		return ReaderDataDouble{}, fmt.Errorf("Internal error: invalid column length %d", n)
+		return ReaderDataDouble{}, fmt.Errorf("newReaderDataDoubleFromNative: invalid column length %d", n)
 	}
 
-	// Step 2: do a cast of xs.data[0] to *C.double. As pointer sizes on different architectures
-	//         may differ, *cannot* assume it's 8 bytes, and instead use `unsafe.Pointer` as the
-	//         architecture-safe representation for the size.
 	rawPtr := *(*unsafe.Pointer)(unsafe.Pointer(&xs.data[0]))
-	cPtr := (*C.double)(rawPtr)
-	if cPtr == nil {
-		return ReaderDataDouble{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
+	if rawPtr == nil {
+		return ReaderDataDouble{}, fmt.Errorf("newReaderDataDoubleFromNative: nil data pointer for column %s", name)
 	}
 
-	// Step 3: copy data by first interpreting it as a temporary memory unsafe-slice, then copying
-	//         it into a new, entirely Go-managed slice. This ensures the data can live on even when
-	//         we move to a new "batch" of reader data.
-	out := ReaderDataDouble{name: name, xs: make([]float64, n)}
-	tmp := unsafe.Slice(cPtr, n)
-	for i, v := range tmp {
-		out.xs[i] = float64(v)
+	goSlice, err := cPointerArrayToSlice[C.double, float64](rawPtr, int64(n))
+	if err != nil {
+		return ReaderDataDouble{}, fmt.Errorf("newReaderDataDoubleFromNative: %v", err)
 	}
 
-	// Return result
-	return out, nil
+	return newReaderDataDouble(name, goSlice), nil
 }
 
 // GetReaderDataDouble safely extracts a slice of float64 values from a ReaderData object.
@@ -303,35 +301,32 @@ func (rd *ReaderDataTimestamp) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataTimestamp(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataTimestamp, error) {
-	// Step 1: validation of input parameters
+func newReaderDataTimestamp(name string, xs []time.Time) ReaderDataTimestamp {
+	return ReaderDataTimestamp{name: name, xs: xs}
+}
+
+// newReaderDataTimestampFromNative converts the native C representation to a Go-managed
+// ReaderDataTimestamp, copying the C memory into Go slices.
+func newReaderDataTimestampFromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataTimestamp, error) {
 	if xs.data_type != C.qdb_ts_column_timestamp {
-		return ReaderDataTimestamp{}, fmt.Errorf("Internal error, expected data type to be timestamp, got: %v", xs.data_type)
+		return ReaderDataTimestamp{}, fmt.Errorf("newReaderDataTimestampFromNative: expected data type timestamp, got: %v", xs.data_type)
 	}
 	if n <= 0 {
-		return ReaderDataTimestamp{}, fmt.Errorf("Internal error: invalid column length %d", n)
+		return ReaderDataTimestamp{}, fmt.Errorf("newReaderDataTimestampFromNative: invalid column length %d", n)
 	}
 
-	// Step 2: do a cast of xs.data[0] to *C.qdb_timespec_t. As pointer sizes on different architectures
-	//         may differ, *cannot* assume it's 8 bytes, and instead use `unsafe.Pointer` as the
-	//         architecture-safe representation for the size.
 	rawPtr := *(*unsafe.Pointer)(unsafe.Pointer(&xs.data[0]))
-	cPtr := (*C.qdb_timespec_t)(rawPtr)
-	if cPtr == nil {
-		return ReaderDataTimestamp{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
+	if rawPtr == nil {
+		return ReaderDataTimestamp{}, fmt.Errorf("newReaderDataTimestampFromNative: nil data pointer for column %s", name)
 	}
 
-	// Step 3: copy data by first interpreting it as a temporary memory unsafe-slice, then copying
-	//         it into a new, entirely Go-managed slice. This ensures the data can live on even when
-	//         we move to a new "batch" of reader data.
-	out := ReaderDataTimestamp{name: name, xs: make([]time.Time, n)}
-	tmp := unsafe.Slice(cPtr, n)
-	for i, v := range tmp {
-		out.xs[i] = QdbTimespecToTime(v)
+	tsSlice, err := cPointerArrayToSlice[C.qdb_timespec_t, C.qdb_timespec_t](rawPtr, int64(n))
+	if err != nil {
+		return ReaderDataTimestamp{}, fmt.Errorf("newReaderDataTimestampFromNative: %v", err)
 	}
 
-	// Return result
-	return out, nil
+	goTimes := QdbTimespecSliceToTime(tsSlice)
+	return newReaderDataTimestamp(name, goTimes), nil
 }
 
 // GetReaderDataTimestamp safely extracts a slice of time.Time values from a ReaderData object.
@@ -404,36 +399,37 @@ func (rd *ReaderDataBlob) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataBlob(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataBlob, error) {
-	// Step 1: validation of input parameters
+func newReaderDataBlob(name string, xs [][]byte) ReaderDataBlob {
+	return ReaderDataBlob{name: name, xs: xs}
+}
+
+// newReaderDataBlobFromNative converts the C.qdb_exp_batch_push_column_t blob representation
+// to a Go-managed ReaderDataBlob.
+func newReaderDataBlobFromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataBlob, error) {
 	if xs.data_type != C.qdb_ts_column_blob {
-		return ReaderDataBlob{}, fmt.Errorf("Internal error, expected data type to be blob, got: %v", xs.data_type)
+		return ReaderDataBlob{}, fmt.Errorf("newReaderDataBlobFromNative: expected data type blob, got: %v", xs.data_type)
 	}
 	if n <= 0 {
-		return ReaderDataBlob{}, fmt.Errorf("Internal error: invalid column length %d", n)
+		return ReaderDataBlob{}, fmt.Errorf("newReaderDataBlobFromNative: invalid column length %d", n)
 	}
 
-	// Step 2: do a cast of xs.data[0] to *C.qdb_blob_t. As pointer sizes on different architectures
-	//         may differ, *cannot* assume it's 8 bytes, and instead use `unsafe.Pointer` as the
-	//         architecture-safe representation for the size.
 	rawPtr := *(*unsafe.Pointer)(unsafe.Pointer(&xs.data[0]))
-	cPtr := (*C.qdb_blob_t)(rawPtr)
-	if cPtr == nil {
-		return ReaderDataBlob{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
+	if rawPtr == nil {
+		return ReaderDataBlob{}, fmt.Errorf("newReaderDataBlobFromNative: nil data pointer for column %s", name)
 	}
 
-	// Step 3: copy data by first interpreting it as a temporary memory unsafe-slice, then copying
-	//         it into a new, entirely Go-managed slice. This ensures the data can live on even when
-	//         we move to a new "batch" of reader data. The actual blob content is duplicated
-	//         into Go-managed byte slices.
-	out := ReaderDataBlob{name: name, xs: make([][]byte, n)}
-	tmp := unsafe.Slice(cPtr, n)
-	for i, v := range tmp {
-		out.xs[i] = C.GoBytes(unsafe.Pointer(v.content), C.int(v.content_length))
+	blobs, err := cPointerArrayToSlice[C.qdb_blob_t, C.qdb_blob_t](rawPtr, int64(n))
+	if err != nil {
+		return ReaderDataBlob{}, fmt.Errorf("newReaderDataBlobFromNative: %v", err)
 	}
 
-	// Return result
-	return out, nil
+	outSlice := make([][]byte, n)
+	for i, v := range blobs {
+		// C.GoBytes performs a copy of the underlying C memory.
+		outSlice[i] = C.GoBytes(unsafe.Pointer(v.content), C.int(v.content_length))
+	}
+
+	return newReaderDataBlob(name, outSlice), nil
 }
 
 // GetReaderDataBlob safely extracts a slice of byte slices from a ReaderData object.
@@ -506,36 +502,37 @@ func (rd *ReaderDataString) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataString(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataString, error) {
-	// Step 1: validation of input parameters
+func newReaderDataString(name string, xs []string) ReaderDataString {
+	return ReaderDataString{name: name, xs: xs}
+}
+
+// newReaderDataStringFromNative converts the C representation of string columns to a
+// Go-managed ReaderDataString.
+func newReaderDataStringFromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataString, error) {
 	if xs.data_type != C.qdb_ts_column_string {
-		return ReaderDataString{}, fmt.Errorf("Internal error, expected data type to be string, got: %v", xs.data_type)
+		return ReaderDataString{}, fmt.Errorf("newReaderDataStringFromNative: expected data type string, got: %v", xs.data_type)
 	}
 	if n <= 0 {
-		return ReaderDataString{}, fmt.Errorf("Internal error: invalid column length %d", n)
+		return ReaderDataString{}, fmt.Errorf("newReaderDataStringFromNative: invalid column length %d", n)
 	}
 
-	// Step 2: do a cast of xs.data[0] to *C.qdb_string_t. As pointer sizes on different architectures
-	//         may differ, *cannot* assume it's 8 bytes, and instead use `unsafe.Pointer` as the
-	//         architecture-safe representation for the size.
 	rawPtr := *(*unsafe.Pointer)(unsafe.Pointer(&xs.data[0]))
-	cPtr := (*C.qdb_string_t)(rawPtr)
-	if cPtr == nil {
-		return ReaderDataString{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
+	if rawPtr == nil {
+		return ReaderDataString{}, fmt.Errorf("newReaderDataStringFromNative: nil data pointer for column %s", name)
 	}
 
-	// Step 3: copy data by first interpreting it as a temporary memory unsafe-slice, then copying
-	//         it into a new, entirely Go-managed slice. This ensures the data can live on even when
-	//         we move to a new "batch" of reader data. The actual string content is duplicated
-	//         into Go-managed strings.
-	out := ReaderDataString{name: name, xs: make([]string, n)}
-	tmp := unsafe.Slice(cPtr, n)
-	for i, v := range tmp {
-		out.xs[i] = C.GoStringN(v.data, C.int(v.length))
+	strs, err := cPointerArrayToSlice[C.qdb_string_t, C.qdb_string_t](rawPtr, int64(n))
+	if err != nil {
+		return ReaderDataString{}, fmt.Errorf("newReaderDataStringFromNative: %v", err)
 	}
 
-	// Return result
-	return out, nil
+	goSlice := make([]string, n)
+	for i, v := range strs {
+		// C.GoStringN copies the C string content into Go-managed memory
+		goSlice[i] = C.GoStringN(v.data, C.int(v.length))
+	}
+
+	return newReaderDataString(name, goSlice), nil
 }
 
 // GetReaderDataString safely extracts a slice of strings from a ReaderData object.
@@ -718,25 +715,25 @@ func newReaderChunk(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 			}
 			out.data[i] = &v
 		case TsValueDouble:
-			v, err := newReaderDataDouble(name, column, out.rowCount)
+			v, err := newReaderDataDoubleFromNative(name, column, out.rowCount)
 			if err != nil {
 				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		case TsValueTimestamp:
-			v, err := newReaderDataTimestamp(name, column, out.rowCount)
+			v, err := newReaderDataTimestampFromNative(name, column, out.rowCount)
 			if err != nil {
 				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		case TsValueBlob:
-			v, err := newReaderDataBlob(name, column, out.rowCount)
+			v, err := newReaderDataBlobFromNative(name, column, out.rowCount)
 			if err != nil {
 				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
 		case TsValueString:
-			v, err := newReaderDataString(name, column, out.rowCount)
+			v, err := newReaderDataStringFromNative(name, column, out.rowCount)
 			if err != nil {
 				return ReaderChunk{}, err
 			}
