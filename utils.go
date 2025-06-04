@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"time"
 	"unsafe"
 )
@@ -423,4 +424,48 @@ func qdbCopyString(h HandleType, s string) (*C.char, error) {
 	}
 
 	return (*C.char)(unsafe.Pointer(ptr)), nil
+}
+
+// unsafeCastSlice performs a zero-copy reinterpretation of a slice []From as []To.
+//
+// This function is extremely performance-critical because it completely avoids expensive memory copies.
+// Such memory copying operations are typically a significant bottleneck in hot code paths that handle
+// massive data volumes (e.g., billions of operations per second). Using unsafeCastSlice thus directly
+// contributes to substantial performance improvements.
+//
+// Preconditions (MUST be guaranteed by caller to prevent memory corruption):
+//   - The sizes, alignments, and binary representations of the types From and To must match exactly.
+//
+// It returns an error in the following cases:
+//   - If input is empty (cannot safely take the address of the first element).
+//   - If the sizes of From and To differ (as this would lead to memory corruption).
+//
+// If input is nil, it simply returns nil to facilitate method chaining.
+//
+// Safety warning:
+//   - This function relies entirely on caller guarantees regarding type compatibility. Incorrect usage
+//     can result in severe memory corruption or undefined behavior. Ensure these conditions hold true.
+//
+// Performance characteristics:
+//   - Zero allocations.
+//   - Zero-copy operation, hence near-instantaneous execution time.
+func unsafeCastSlice[From any, To any](input []From) ([]To, error) {
+	var from From
+	var to To
+
+	if reflect.TypeOf(from).Size() != reflect.TypeOf(to).Size() {
+		return nil, fmt.Errorf("unsafeCastSlice: source and destination types differ in size: %d != %d", reflect.TypeOf(from).Size(), reflect.TypeOf(to).Size())
+	}
+
+	if input == nil {
+		return nil, nil
+	}
+
+	if len(input) == 0 {
+		return nil, fmt.Errorf("unsafeCastSlice: input slice is empty")
+	}
+
+	ptr := unsafe.Pointer(&input[0])
+
+	return unsafe.Slice((*To)(ptr), len(input)), nil
 }
