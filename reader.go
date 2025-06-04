@@ -83,6 +83,10 @@ func (rd *ReaderDataInt64) appendDataUnsafe(data ReaderData) {
 	rd.xs = append(rd.xs, other.xs...)
 }
 
+func newReaderDataInt64(name string, xs []int64) ReaderDataInt64 {
+	return ReaderDataInt64{name: name, xs: xs}
+}
+
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
 // that copies data.
 //
@@ -91,7 +95,7 @@ func (rd *ReaderDataInt64) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataInt64(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataInt64, error) {
+func newReaderDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ReaderDataInt64, error) {
 	// Step 1: validation of input parameters
 	if xs.data_type != C.qdb_ts_column_int64 {
 		return ReaderDataInt64{}, fmt.Errorf("Internal error, expected data type to be int64, got: %v", xs.data_type)
@@ -109,17 +113,13 @@ func newReaderDataInt64(name string, xs C.qdb_exp_batch_push_column_t, n int) (R
 		return ReaderDataInt64{}, fmt.Errorf("Internal error: nil data pointer for column %s", name)
 	}
 
-	// Step 3: copy data by first interpreting it as a temporary memory unsafe-slice, then copying
-	//         it into a new, entirely Go-managed slice. This ensures the data can live on even when
-	//         we move to a new "batch" of reader data.
-	out := ReaderDataInt64{name: name, xs: make([]int64, n)}
-	tmp := unsafe.Slice(cPtr, n)
-	for i, v := range tmp {
-		out.xs[i] = int64(v)
+	xs_, err := unsafeCastSlice[C.qdb_int_t, int64](unsafe.Slice(cPtr, n))
+	if err != nil {
+		return ReaderDataInt64{}, fmt.Errorf("newReaderDataInt64FromNative: %v", err)
 	}
 
 	// Return result
-	return out, nil
+	return newReaderDataInt64(name, xs_), nil
 }
 
 // GetReaderDataInt64 safely extracts a slice of int64 values from a ReaderData object.
@@ -702,7 +702,7 @@ func newReaderChunk(columns []ReaderColumn, tbl C.qdb_exp_batch_push_table_t) (R
 
 		switch columns[i].columnType.AsValueType() {
 		case TsValueInt64:
-			v, err := newReaderDataInt64(name, column, out.rowCount)
+			v, err := newReaderDataInt64FromNative(name, column, out.rowCount)
 			if err != nil {
 				return ReaderChunk{}, err
 			}
