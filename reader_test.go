@@ -111,7 +111,7 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 	data, err := reader.FetchAll()
 	require.NoError(err)
 
-	assertWriterTablesEqualReaderBatch(t, tables, names, data)
+	assertWriterTablesEqualReaderChunks(t, tables, names, data)
 }
 
 func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
@@ -136,24 +136,18 @@ func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
 	data, err := reader.FetchAll()
 	require.NoError(err)
 
-	assertWriterTablesEqualReaderBatch(t, tables, names, data)
+	assertWriterTablesEqualReaderChunks(t, tables, names, data)
 }
 
 // TestReaderMergeReaderChunksPanics demonstrates that mergeReaderChunks panics
 // when given valid input.
-func TestReaderMergeReaderChunksPanics(t *testing.T) {
+func TestReaderMergeReaderChunks(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		xs := genReaderChunks(t)
-		_, err := mergeReaderChunks(xs)
+		ret, err := mergeReaderChunks(xs)
 
 		assert.NoError(t, err)
-	})
-}
 
-func TestReaderMergeReaderBatchesPanics(t *testing.T) {
-	rapid.Check(t, func(t *rapid.T) {
-		batches := genReaderBatches(t)
-		_, err := mergeReaderBatches(batches)
-		assert.NoError(t, err)
+		assertReaderChunksEqualChunk(xs, ret)
 	})
 }

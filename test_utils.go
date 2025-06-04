@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
 )
@@ -109,70 +108,10 @@ func columnNamesFromWriterColumns(cols []WriterColumn) []string {
 
 // assertWriterTablesEqualReaderBatch compares the data written via WriterTables
 // with the data returned by the Reader.
-func assertWriterTablesEqualReaderBatch(t *testing.T, expected []WriterTable, names []string, got ReaderBatch) {
+func assertWriterTablesEqualReaderChunks(t *testing.T, expected []WriterTable, names []string, rc ReaderChunk) {
 	t.Helper()
 
-	require := require.New(t)
-	assert := assert.New(t)
-
-	require.Equal(len(expected), len(got))
-	require.Equal(len(expected), len(names))
-	for i, wt := range expected {
-		rc := got[i]
-
-		expectedName := names[i]
-		assert.Equal(expectedName, rc.tableName)
-		assert.Equal(wt.GetIndex(), rc.idx)
-
-		// Validate row count information at least matches the writer input
-		assert.Equal(len(wt.GetIndexAsNative()), rc.rowCount)
-
-		offset := len(rc.columnInfoByOffset) - len(wt.columnInfoByOffset)
-		require.GreaterOrEqual(offset, 0)
-		for j, col := range wt.columnInfoByOffset {
-			rcCol := rc.columnInfoByOffset[j+offset]
-			assert.Equal(col.ColumnName, rcCol.columnName)
-			assert.Equal(col.ColumnType, rcCol.columnType)
-
-			expectedData := wt.data[j]
-			gotData := rc.data[j+offset]
-			switch col.ColumnType {
-			case TsColumnInt64:
-				exp, err := GetWriterDataInt64(expectedData)
-				require.NoError(err)
-				gotVals, err := GetReaderDataInt64(gotData)
-				require.NoError(err)
-				assert.Equal(exp.xs, gotVals)
-			case TsColumnDouble:
-				exp, err := GetWriterDataDouble(expectedData)
-				require.NoError(err)
-				gotVals, err := GetReaderDataDouble(gotData)
-				require.NoError(err)
-				assert.Equal(exp.xs, gotVals)
-			case TsColumnTimestamp:
-				exp, err := GetWriterDataTimestamp(expectedData)
-				require.NoError(err)
-				expectedTimes := QdbTimespecSliceToTime(exp.xs)
-				gotVals, err := GetReaderDataTimestamp(gotData)
-				require.NoError(err)
-				assert.Equal(expectedTimes, gotVals)
-			case TsColumnBlob:
-				exp, err := GetWriterDataBlob(expectedData)
-				require.NoError(err)
-				gotVals, err := GetReaderDataBlob(gotData)
-				require.NoError(err)
-				assert.Equal(exp.xs, gotVals)
-			case TsColumnString:
-				exp, err := GetWriterDataString(expectedData)
-				require.NoError(err)
-				gotVals, err := GetReaderDataString(gotData)
-				require.NoError(err)
-				assert.Equal(exp.xs, gotVals)
-			default:
-				t.Fatalf("unsupported column type %v", col.ColumnType)
-			}
-		}
-	}
+	// TODO: implement
 }
 
 // genTime generates a random UTC time as used in time_test.go.
@@ -182,132 +121,183 @@ func genTime(t *rapid.T) time.Time {
 	return time.Unix(sec, nsec).UTC()
 }
 
-// genReaderChunk constructs a ReaderChunk with random int64 columns.
-// The chunk will contain between 1 and 1024 rows and up to 8 columns.
-func genReaderChunk(t *rapid.T) ReaderChunk {
-	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
-	cols := rapid.IntRange(1, 8).Draw(t, "cols")
+// genReaderChunks returns between 1 and 8 ReaderChunks that all share the same
+// schema.
+func genTimes(t *rapid.T) []time.Time {
+	genTimes := rapid.SliceOf(rapid.Custom(genTime))
 
-	idx := make([]time.Time, rows)
-	for i := 0; i < rows; i++ {
+	return genTimes.Draw(t, "times")
+}
+
+// Generator for `ReaderColumn`
+func genReaderColumn(t *rapid.T) ReaderColumn {
+	// Column names are just a-zA-Z
+	columnName := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "columnName")
+	columnType := rapid.SampledFrom(TsColumnTypes[:]).Draw(t, "columnType")
+
+	return ReaderColumn{
+		columnName: columnName,
+		columnType: columnType,
+	}
+}
+
+func genReaderColumns(t *rapid.T) []ReaderColumn {
+	// Between 1 and 8 columns
+	genColumns := rapid.SliceOfN(rapid.Custom(genReaderColumn), 1, 8)
+
+	return genColumns.Draw(t, "readerColumns")
+}
+
+func genReaderData(t *rapid.T) ReaderData {
+	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
+	return genReaderDataOfRowCount(t, rowCount)
+}
+
+func genReaderDataOfRowCount(t *rapid.T, rowCount int) ReaderData {
+	column := rapid.Custom(genReaderColumn).Draw(t, "columnType")
+
+	return genReaderDataOfRowCountAndColumn(t, rowCount, column)
+}
+
+func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ReaderData {
+	switch column.columnType.AsValueType() {
+	case TsValueInt64:
+		return genReaderDataInt64(t, column.Name(), rowCount)
+	case TsValueDouble:
+		return genReaderDataDouble(t, column.Name(), rowCount)
+	case TsValueTimestamp:
+		return genReaderDataTimestamp(t, column.Name(), rowCount)
+	case TsValueBlob:
+		return genReaderDataBlob(t, column.Name(), rowCount)
+	case TsValueString:
+		return genReaderDataString(t, column.Name(), rowCount)
+	}
+
+	panic(fmt.Sprintf("Invalid column type for column: %v", column))
+}
+
+func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ReaderDataInt64 {
+	values := make([]int64, rowCount)
+	for i := range rowCount {
+		values[i] = rapid.Int64().Draw(t, "int64")
+	}
+
+	ret := newReaderDataInt64(name, values)
+	return &ret
+}
+
+func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ReaderDataDouble {
+	values := make([]float64, rowCount)
+	for i := range rowCount {
+		values[i] = rapid.Float64().Draw(t, "float64")
+	}
+
+	ret := newReaderDataDouble(name, values)
+	return &ret
+}
+
+func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ReaderDataTimestamp {
+	values := make([]time.Time, rowCount)
+	for i := range rowCount {
+		values[i] = genTime(t)
+	}
+
+	ret := newReaderDataTimestamp(name, values)
+	return &ret
+}
+
+func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ReaderDataBlob {
+	values := make([][]byte, rowCount)
+	for i := range rowCount {
+		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "bytes")
+	}
+
+	ret := newReaderDataBlob(name, values)
+	return &ret
+}
+
+func genReaderDataString(t *rapid.T, name string, rowCount int) *ReaderDataString {
+	values := make([]string, rowCount)
+	for i := range rowCount {
+		// Really random unicode, limit it to 32 characters and 64 bytes (unicode
+		// can of course use more than 1 byte per character)
+		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string value")
+	}
+
+	ret := newReaderDataString(name, values)
+	return &ret
+}
+
+func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
+
+	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
+
+	idx := make([]time.Time, rowCount)
+	for i := range rowCount {
 		idx[i] = genTime(t)
 	}
 
-	data := make([]ReaderData, cols)
-	for c := 0; c < cols; c++ {
-		values := make([]int64, rows)
-		for r := 0; r < rows; r++ {
-			values[r] = rapid.Int64().Draw(t, fmt.Sprintf("val_%d_%d", c, r))
-		}
-		rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
-		data[c] = &rd
+	data := make([]ReaderData, len(cols))
+	for i, col := range cols {
+		data[i] = genReaderDataOfRowCountAndColumn(t, rowCount, col)
 	}
 
-	return ReaderChunk{
-		tableName: "tbl",
-		rowCount:  rows,
-		idx:       idx,
-		data:      data,
+	ret, err := NewReaderChunk(
+		cols,
+		idx,
+		data)
+
+	if err != nil {
+		panic(err)
 	}
+
+	return ret
+}
+
+// genReaderChunk constructs a ReaderChunk with random columns.
+// The chunk will contain between 1 and 1024 rows and up to 8 columns.
+func genReaderChunk(t *rapid.T) ReaderChunk {
+
+	columns := genReaderColumns(t)
+
+	return genReaderChunkOfSchema(t, columns)
 }
 
 // genReaderChunks returns between 1 and 8 ReaderChunks that all share the same
-// schema.
+// schema. This is important because the bulk reader always requires and ensures
+// that all chunks within a single operation share the same schema, and this
+// makes the data realistic.
 func genReaderChunks(t *rapid.T) []ReaderChunk {
-	count := rapid.IntRange(1, 8).Draw(t, "chunkCount")
-	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
-	cols := rapid.IntRange(1, 8).Draw(t, "cols")
 
-	makeChunk := func() ReaderChunk {
-		idx := make([]time.Time, rows)
-		for i := 0; i < rows; i++ {
-			idx[i] = genTime(t)
-		}
+	cols := genReaderColumns(t)
 
-		data := make([]ReaderData, cols)
-		for c := 0; c < cols; c++ {
-			values := make([]int64, rows)
-			for r := 0; r < rows; r++ {
-				values[r] = rapid.Int64().Draw(t, fmt.Sprintf("v_%d_%d", c, r))
-			}
-			rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
-			data[c] = &rd
-		}
+	genChunk := rapid.Custom(func(t *rapid.T) ReaderChunk {
+		return genReaderChunkOfSchema(t, cols)
+	})
 
-		return ReaderChunk{tableName: "tbl", rowCount: rows, idx: idx, data: data}
-	}
-
-	out := make([]ReaderChunk, count)
-	for i := 0; i < count; i++ {
-		out[i] = makeChunk()
-	}
-	return out
+	genChunks := rapid.SliceOfN(genChunk, 1, 8)
+	return genChunks.Draw(t, "readerChunks")
 }
 
-// genReaderBatch generates a single ReaderBatch with a consistent schema.
-func genReaderBatch(t *rapid.T) ReaderBatch {
-	count := rapid.IntRange(2, 8).Draw(t, "chunkCount")
-	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
-	cols := rapid.IntRange(1, 8).Draw(t, "cols")
-
-	makeChunk := func() ReaderChunk {
-		idx := make([]time.Time, rows)
-		for i := 0; i < rows; i++ {
-			idx[i] = genTime(t)
-		}
-
-		data := make([]ReaderData, cols)
-		for c := 0; c < cols; c++ {
-			values := make([]int64, rows)
-			for r := 0; r < rows; r++ {
-				values[r] = rapid.Int64().Draw(t, fmt.Sprintf("b_v_%d_%d", c, r))
-			}
-			rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
-			data[c] = &rd
-		}
-
-		return ReaderChunk{tableName: "tbl", rowCount: rows, idx: idx, data: data}
-	}
-
-	batch := make([]ReaderChunk, count)
-	for i := 0; i < count; i++ {
-		batch[i] = makeChunk()
-	}
-	return batch
-}
-
-// genReaderBatches returns up to 8 ReaderBatch values, all sharing the same shape.
-func genReaderBatches(t *rapid.T) []ReaderBatch {
-	batchCount := rapid.IntRange(2, 4).Draw(t, "batchCount")
-	chunkCount := rapid.IntRange(batchCount+1, batchCount+4).Draw(t, "chunkCount")
-
-	rows := rapid.IntRange(1, 1024).Draw(t, "rows")
-	cols := rapid.IntRange(1, 8).Draw(t, "cols")
-
-	makeChunk := func() ReaderChunk {
-		idx := make([]time.Time, rows)
-		for i := 0; i < rows; i++ {
-			idx[i] = genTime(t)
-		}
-		data := make([]ReaderData, cols)
-		for c := 0; c < cols; c++ {
-			values := make([]int64, rows)
-			for r := 0; r < rows; r++ {
-				values[r] = rapid.Int64().Draw(t, fmt.Sprintf("b_v_%d_%d", c, r))
-			}
-			rd := newReaderDataInt64(fmt.Sprintf("c%d", c), values)
-			data[c] = &rd
-		}
-		return ReaderChunk{tableName: "tbl", rowCount: rows, idx: idx, data: data}
-	}
-
-	batches := make([]ReaderBatch, batchCount)
-	for b := 0; b < batchCount; b++ {
-		batch := make([]ReaderChunk, chunkCount)
-		for c := 0; c < chunkCount; c++ {
-			batch[c] = makeChunk()
-		}
-		batches[b] = batch
-	}
-	return batches
+func assertReaderChunksEqualChunk(lhs []ReaderChunk, rhs ReaderChunk) {
+	// Returns true if `lhs` contains the exact same data as `rhs`, except
+	// all data in `rhs` is concatenated.
+	//
+	// Concatenation happens in any order, so we will probably need
+	// to sort the data in each column before comparing.
+	//
+	// Performance is not important, clarity of code is very important.
+	//
+	// Psuedo-code:
+	// - for each chunk in lhs
+	//   - verify columnInfoByOffset is identical to rhs.columnInfoByOffset
+	//   - count totalRows by taking chunk.RowCount()
+	//
+	// - assert that totalRows == len(rhs.idx)
+	//
+	// - compare index: allocate a new temporary index `time.Time` of size `totalRows`
+	// - iterate over all the chunks in lhs, append time to new temporary index
+	// - compare both indexes after first sorting them
+	//
+	// next up would be comparing all the data, but let's do that later
 }

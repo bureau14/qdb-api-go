@@ -33,6 +33,15 @@ const (
 	TsColumnSymbol        TsColumnType = C.qdb_ts_column_symbol
 )
 
+var TsColumnTypes = []TsColumnType{
+	TsColumnBlob,
+	TsColumnDouble,
+	TsColumnInt64,
+	TsColumnString,
+	TsColumnTimestamp,
+	TsColumnSymbol,
+}
+
 // TsValueType : Timeseries value types
 //
 // Values we're able to represent inside a database, as some values are represented
@@ -49,6 +58,14 @@ const (
 	TsValueBlob
 	TsValueString
 )
+
+var TsValueTypes = []TsValueType{
+	TsValueBlob,
+	TsValueDouble,
+	TsValueInt64,
+	TsValueString,
+	TsValueTimestamp,
+}
 
 func (v TsValueType) AsColumnType() TsColumnType {
 	switch v {
@@ -67,6 +84,26 @@ func (v TsValueType) AsColumnType() TsColumnType {
 	}
 
 	panic(fmt.Sprintf("Unrecognized value type: %v", v))
+}
+
+// Returns true if this column is valid and non-null
+func (v TsColumnType) IsValid() bool {
+	switch v {
+	case TsColumnBlob:
+		fallthrough
+	case TsColumnSymbol:
+		fallthrough
+	case TsColumnString:
+		fallthrough
+	case TsColumnDouble:
+		fallthrough
+	case TsColumnInt64:
+		fallthrough
+	case TsColumnTimestamp:
+		return true
+	}
+
+	return false
 }
 
 func (v TsColumnType) AsValueType() TsValueType {
