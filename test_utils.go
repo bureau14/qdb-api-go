@@ -116,22 +116,69 @@ func assertWriterTablesEqualReaderChunks(t *testing.T, expected []WriterTable, n
 	// TODO: implement
 }
 
-// genTime generates a random UTC time as used in time_test.go.
+// genTime generates a random UTC time for property-based testing of time-related logic.
+//
+// Decision rationale:
+//   - Samples both seconds and nanoseconds separately to cover edge cases across a broad temporal range.
+//   - Ensures output is in UTC to avoid timezone-related variations.
+//
+// Key assumptions:
+//   - Seconds are drawn uniformly from [0, 17_179_869_184), covering multiple centuries.
+//   - Nanoseconds are drawn uniformly from [0, 1e9), covering full sub-second precision.
+//
+// Performance trade-offs:
+//   - Negligible overhead relative to test suite runtime.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	ts := genTime(t) // ts is a randomized time.Time in UTC
 func genTime(t *rapid.T) time.Time {
 	sec := rapid.Int64Range(0, 17_179_869_184).Draw(t, "sec")
 	nsec := rapid.Int64Range(0, 999_999_999).Draw(t, "nsec")
 	return time.Unix(sec, nsec).UTC()
 }
 
-// genReaderChunks returns between 1 and 8 ReaderChunks that all share the same
-// schema.
+// genTimes generates a non-empty slice of UTC times for testing.
+//
+// Decision rationale:
+//   - Delegates to genTime for each element, ensuring uniform random distribution.
+//   - Uses rapid.SliceOf to vary slice length, exercising reader behavior on dynamic inputs.
+//
+// Key assumptions:
+//   - The resulting slice has length ≥1.
+//   - Each time value is independent and in UTC.
+//
+// Performance trade-offs:
+//   - Leverages rapid's generator; overhead is minimal for typical test sizes.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	times := genTimes(t) // []time.Time, length ∈ [1, default upper bound]
 func genTimes(t *rapid.T) []time.Time {
 	genTimes := rapid.SliceOf(rapid.Custom(genTime))
 
 	return genTimes.Draw(t, "times")
 }
 
-// Generator for `ReaderColumn`
+// genReaderColumn produces a random ReaderColumn with an 8-letter ASCII name and a random TsColumnType.
+//
+// Decision rationale:
+//   - Uses fixed-length alphabetic names to simplify test scenarios and avoid unicode complexities.
+//   - Samples from TsColumnTypes to cover all supported column types.
+//
+// Key assumptions:
+//   - Name matches `[a-zA-Z]{8}`.
+//   - TsColumnTypes slice includes all valid types for ReaderColumn.
+//
+// Performance trade-offs:
+//   - Constant time generation; overhead negligible in test context.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	col := genReaderColumn(t) // ReaderColumn{Name: "AbCdEfGh", Type: TsValueInt64}
 func genReaderColumn(t *rapid.T) ReaderColumn {
 	// Column names are just a-zA-Z
 	columnName := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "columnName")
@@ -143,6 +190,23 @@ func genReaderColumn(t *rapid.T) ReaderColumn {
 	}
 }
 
+// genReaderColumns generates between 1 and 8 ReaderColumn definitions for schema testing.
+//
+// Decision rationale:
+//   - Varies column count to test dynamic schema handling.
+//   - Upper bound of 8 balances complexity and coverage.
+//
+// Key assumptions:
+//   - Minimum of 1 column avoids empty-schema edge cases.
+//   - Downstream logic handles name uniqueness.
+//
+// Performance trade-offs:
+//   - Linear in column count; trivial for test sizes.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	cols := genReaderColumns(t) // []ReaderColumn length ∈ [1,8]
 func genReaderColumns(t *rapid.T) []ReaderColumn {
 	// Between 1 and 8 columns
 	genColumns := rapid.SliceOfN(rapid.Custom(genReaderColumn), 1, 8)
@@ -150,17 +214,70 @@ func genReaderColumns(t *rapid.T) []ReaderColumn {
 	return genColumns.Draw(t, "readerColumns")
 }
 
+// genReaderData generates a ReaderData instance for a random column with random row count.
+//
+// Decision rationale:
+//   - Draws rowCount ∈ [1,1024] to simulate varying data sizes.
+//   - Delegates to genReaderDataOfRowCount for type-specific value generation.
+//
+// Key assumptions:
+//   - rowCount ≥ 1 ensures non-empty data sets.
+//   - Column type selection occurs in downstream generation.
+//
+// Performance trade-offs:
+//   - Generation cost is O(rowCount); acceptable in property tests.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rd := genReaderData(t) // ReaderData with random schema and data
 func genReaderData(t *rapid.T) ReaderData {
 	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
 	return genReaderDataOfRowCount(t, rowCount)
 }
 
+// genReaderDataOfRowCount generates ReaderData for a single randomly chosen column and given rowCount.
+//
+// Decision rationale:
+//   - Separates rowCount control from schema generation for flexible tests.
+//   - Randomly selects column type to cover all data paths.
+//
+// Key assumptions:
+//   - rowCount ≥ 1.
+//   - genReaderColumn yields valid ReaderColumn metadata.
+//
+// Performance trade-offs:
+//   - One slice creation per value; linear in rowCount.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rd := genReaderDataOfRowCount(t, 100) // 100 rows of random data for one column
 func genReaderDataOfRowCount(t *rapid.T, rowCount int) ReaderData {
 	column := rapid.Custom(genReaderColumn).Draw(t, "columnType")
 
 	return genReaderDataOfRowCountAndColumn(t, rowCount, column)
 }
 
+// genReaderDataOfRowCountAndColumn generates ReaderData matching the provided schema for a fixed row count.
+//
+// Decision rationale:
+//   - Routes to type-specific generators based on columnType.AsValueType().
+//   - Ensures data aligns with ReaderColumn metadata for schema consistency.
+//
+// Key assumptions:
+//   - rowCount ≥ 0.
+//   - column.columnType.AsValueType() covers all TsValue* cases.
+//   - Panics on invalid type to signal incorrect test configuration.
+//
+// Performance trade-offs:
+//   - Single pass through rowCount and type dispatch; linear in rowCount.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	col := genReaderColumn(t)
+//	rd := genReaderDataOfRowCountAndColumn(t, 50, col)
 func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ReaderData {
 	switch column.columnType.AsValueType() {
 	case TsValueInt64:
@@ -178,6 +295,23 @@ func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderCol
 	panic(fmt.Sprintf("Invalid column type for column: %v", column))
 }
 
+// genReaderDataInt64 generates a ReaderDataInt64 instance with random int64 values.
+//
+// Decision rationale:
+//   - Uses rapid.Int64() for full-range integer testing.
+//   - Wraps values in ReaderDataInt64 guaranteeing correct API usage.
+//
+// Key assumptions:
+//   - name is a valid column identifier.
+//   - rowCount ≥ 0.
+//
+// Performance trade-offs:
+//   - O(rowCount) time and memory; acceptable in test suites.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rdi := genReaderDataInt64(t, "col_int64", 10) // 10 random int64s
 func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ReaderDataInt64 {
 	values := make([]int64, rowCount)
 	for i := range rowCount {
@@ -188,6 +322,23 @@ func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ReaderDataInt64 
 	return &ret
 }
 
+// genReaderDataDouble generates a ReaderDataDouble instance with random float64 values.
+//
+// Decision rationale:
+//   - Uses rapid.Float64() to cover special float values (NaN, ±Inf) and standard range.
+//   - Encapsulates values in ReaderDataDouble for type safety.
+//
+// Key assumptions:
+//   - name is a valid column identifier.
+//   - rowCount ≥ 0.
+//
+// Performance trade-offs:
+//   - O(rowCount) generation cost; negligible in test contexts.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rdd := genReaderDataDouble(t, "col_double", 5) // 5 random float64s
 func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ReaderDataDouble {
 	values := make([]float64, rowCount)
 	for i := range rowCount {
@@ -198,6 +349,23 @@ func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ReaderDataDoubl
 	return &ret
 }
 
+// genReaderDataTimestamp generates a ReaderDataTimestamp instance with random UTC time values.
+//
+// Decision rationale:
+//   - Reuses genTime to produce high-precision timestamps across broad ranges.
+//   - Encapsulates values in ReaderDataTimestamp for API conformity.
+//
+// Key assumptions:
+//   - name is a valid column identifier.
+//   - rowCount ≥ 0.
+//
+// Performance trade-offs:
+//   - O(rowCount) cost driven by genTime complexity.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rdt := genReaderDataTimestamp(t, "ts_col", 3) // 3 random timestamps
 func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ReaderDataTimestamp {
 	values := make([]time.Time, rowCount)
 	for i := range rowCount {
@@ -208,6 +376,23 @@ func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ReaderDataTi
 	return &ret
 }
 
+// genReaderDataBlob generates a ReaderDataBlob instance with random byte slices.
+//
+// Decision rationale:
+//   - Uses rapid.SliceOfN(rapid.Byte(),1,64) to create blobs varying from 1 to 64 bytes.
+//   - Tests binary data paths with realistic size distributions.
+//
+// Key assumptions:
+//   - name is a valid column identifier.
+//   - rowCount ≥ 0.
+//
+// Performance trade-offs:
+//   - O(total_bytes) generation cost, suitable for unit tests.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rdb := genReaderDataBlob(t, "blob_col", 4) // 4 random blobs
 func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ReaderDataBlob {
 	values := make([][]byte, rowCount)
 	for i := range rowCount {
@@ -218,6 +403,23 @@ func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ReaderDataBlob {
 	return &ret
 }
 
+// genReaderDataString generates a ReaderDataString instance with random Unicode strings.
+//
+// Decision rationale:
+//   - Uses rapid.StringN(1,32,64) to enforce ≤32 characters and ≤64 bytes per string.
+//   - Covers multibyte UTF-8 scenarios in tests.
+//
+// Key assumptions:
+//   - name is a valid column identifier.
+//   - rowCount ≥ 0.
+//
+// Performance trade-offs:
+//   - O(total_chars) cost proportional to string lengths.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rds := genReaderDataString(t, "str_col", 6) // 6 random strings
 func genReaderDataString(t *rapid.T, name string, rowCount int) *ReaderDataString {
 	values := make([]string, rowCount)
 	for i := range rowCount {
@@ -230,6 +432,24 @@ func genReaderDataString(t *rapid.T, name string, rowCount int) *ReaderDataStrin
 	return &ret
 }
 
+// genReaderChunkOfSchema generates a ReaderChunk for a fixed schema and random row count.
+//
+// Decision rationale:
+//   - Draws rowCount ∈ [1,1024] and index times via genTime for realistic row positions.
+//   - Constructs column data arrays matching schema to validate reader chunk assembly.
+//
+// Key assumptions:
+//   - cols slice length ≥ 1 defines the schema.
+//   - NewReaderChunk enforces length and type consistency.
+//
+// Performance trade-offs:
+//   - O(rowCount * numColumns) data generation; reasonable for property tests.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	schema := genReaderColumns(t)
+//	rc := genReaderChunkOfSchema(t, schema)
 func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 
 	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
@@ -256,8 +476,23 @@ func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 	return ret
 }
 
-// genReaderChunk constructs a ReaderChunk with random columns.
-// The chunk will contain between 1 and 1024 rows and up to 8 columns.
+// genReaderChunk generates a ReaderChunk with randomized schema and data.
+//
+// Decision rationale:
+//   - Combines schema generation (genReaderColumns) and chunk construction for end-to-end tests.
+//   - Ensures reader logic handles variable schemas and data sizes in one flow.
+//
+// Key assumptions:
+//   - At least one column and one row are generated per chunk.
+//   - Schema and data lengths are consistent.
+//
+// Performance trade-offs:
+//   - Aggregate cost of column and row generation; acceptable for unit/property tests.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	rc := genReaderChunk(t) // ReaderChunk with random schema and rows
 func genReaderChunk(t *rapid.T) ReaderChunk {
 
 	columns := genReaderColumns(t)
@@ -265,10 +500,23 @@ func genReaderChunk(t *rapid.T) ReaderChunk {
 	return genReaderChunkOfSchema(t, columns)
 }
 
-// genReaderChunks returns between 1 and 8 ReaderChunks that all share the same
-// schema. This is important because the bulk reader always requires and ensures
-// that all chunks within a single operation share the same schema, and this
-// makes the data realistic.
+// genReaderChunks generates a slice of ReaderChunks sharing a consistent schema.
+//
+// Decision rationale:
+//   - Validates bulk reader requirements that all chunks in a batch conform to one schema.
+//   - Varies the number of chunks between 1 and 8 to simulate realistic batched reads.
+//
+// Key assumptions:
+//   - All returned ReaderChunk elements use identical column schemas.
+//   - Row counts across chunks may differ for coverage.
+//
+// Performance trade-offs:
+//   - Overhead proportional to total rows across chunks; suitable for test suites.
+//
+// Usage example:
+//
+//	t := rapid.MakeT()
+//	chunks := genReaderChunks(t) // []ReaderChunk length ∈ [1,8]
 func genReaderChunks(t *rapid.T) []ReaderChunk {
 
 	cols := genReaderColumns(t)
