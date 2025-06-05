@@ -94,3 +94,19 @@ From the project root execute the shutdown script:
 ```bash
 bash scripts/tests/setup/stop-services.sh
 ```
+## Function Documentation Style
+
+When documenting functions, closely follow the commenting approach used at the bottom of `utils.go` and the generators in `test_utils.go`.
+
+- Use concise, high-signal comments that explain *why* and *how* rather than repeating *what* the code already shows.
+- Include bullet lists for key sections, each prefixed with `//`:
+  - `// Decision rationale:` followed by short bullets describing choices made.
+  - `// Key assumptions:` bullets stating the required preconditions or invariants.
+  - `// Performance trade-offs:` bullets outlining costs versus benefits.
+- Provide an inline usage example with each line starting with `//`. Avoid fenced code blocks so the comment format mirrors production code.
+- Avoid trivial comments. Focus on explaining design choices, trade-offs and assumptions.
+- Optimize for clarity and LLM readability. Never use emojis.
+
+## Helper Function Guidelines
+
+Create small, composable helper functions where practical. Prefer reusing existing helpers from `utils.go` and `test_utils.go` instead of duplicating logic.
