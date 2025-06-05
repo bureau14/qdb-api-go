@@ -706,3 +706,49 @@ func assertReaderChunksEqualChunk(t *testing.T, lhs []ReaderChunk, rhs ReaderChu
 
 	assert.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
+
+// -- WriterOptions generators -------------------------------------------------
+
+var writerPushModes = []WriterPushMode{
+	WriterPushModeTransactional,
+	WriterPushModeFast,
+	WriterPushModeAsync,
+}
+
+func genWriterPushMode(t *rapid.T) WriterPushMode {
+	return rapid.SampledFrom(writerPushModes[:]).Draw(t, "writerPushMode")
+}
+
+var writerPushFlags = []WriterPushFlag{
+	WriterPushFlagNone,
+	WriterPushFlagWriteThrough,
+	WriterPushFlagAsyncClientPush,
+	WriterPushFlagWriteThrough | WriterPushFlagAsyncClientPush,
+}
+
+func genWriterPushFlag(t *rapid.T) WriterPushFlag {
+	return rapid.SampledFrom(writerPushFlags[:]).Draw(t, "writerPushFlag")
+}
+
+var writerDedupModes = []WriterDeduplicationMode{
+	WriterDeduplicationModeDisabled,
+	WriterDeduplicationModeDrop,
+}
+
+func genWriterDedupMode(t *rapid.T) WriterDeduplicationMode {
+	return rapid.SampledFrom(writerDedupModes[:]).Draw(t, "writerDedupMode")
+}
+
+func genWriterOptions(t *rapid.T) WriterOptions {
+	opts := NewWriterOptions()
+	opts.pushMode = genWriterPushMode(t)
+	opts.pushFlags = genWriterPushFlag(t)
+	opts = opts.WithDeduplicationMode(genWriterDedupMode(t))
+	opts.dropDuplicateColumns = nil
+
+	if !opts.IsValid() {
+		panic("genWriterOptions produced invalid options")
+	}
+
+	return opts
+}

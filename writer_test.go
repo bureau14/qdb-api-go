@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 )
 
 func TestWriterTableCreateNew(t *testing.T) {
@@ -298,24 +299,28 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 }
 
 // Test that the batch writer can push into a table without issues.
-func TestWriterCanPushSingleTable(t *testing.T) {
-	handle := newTestHandle(t)
-	defer handle.Close()
-
-	tables, _, _ := createAndPopulateTables(t, handle, 1, 1024)
-	pushWriterTables(t, handle, tables)
-
-	// If pushWriterTables returned without failing the test, we consider it a success
+// TestWriterOptionsGenerator ensures the options generator only emits valid configurations.
+func TestWriterOptionsGenerator(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		opts := genWriterOptions(rt)
+		require.True(rt, opts.IsValid())
+	})
 }
 
-// Test that the batch writer can push into multiple tables without issues.
-func TestWriterCanPushMultipleTables(t *testing.T) {
-	handle := newTestHandle(t)
-	defer handle.Close()
+// TestWriterCanPushTables verifies the writer can push one or more tables using random options.
+func TestWriterCanPushTables(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		handle := newTestHandle(t)
+		defer handle.Close()
 
-	const tableCount = 64
-	const rowCount = 256
+		tableCount := rapid.IntRange(1, 8).Draw(rt, "tableCount")
+		tables := genPopulatedTables(rt, handle, tableCount)
 
-	tables, _, _ := createAndPopulateTables(t, handle, tableCount, rowCount)
-	pushWriterTables(t, handle, tables)
+		writer := NewWriter(genWriterOptions(rt))
+		for _, wt := range tables {
+			require.NoError(rt, writer.SetTable(wt))
+		}
+
+		require.NoError(rt, writer.Push(handle))
+	})
 }
