@@ -254,13 +254,6 @@ const (
 	WriterDeduplicationModeUpsert   WriterDeduplicationMode = C.qdb_exp_batch_deduplication_mode_upsert
 )
 
-type WriterOptions struct {
-	pushMode             WriterPushMode
-	dropDuplicates       bool
-	dropDuplicateColumns []string
-	dedupMode            WriterDeduplicationMode
-}
-
 type Writer struct {
 	options WriterOptions
 	tables  map[string]WriterTable
@@ -678,17 +671,35 @@ func (t *WriterTable) GetData(offset int) (WriterData, error) {
 	return t.data[offset], nil
 }
 
+type WriterPushFlag C.qdb_exp_batch_push_flags_t
+
+const (
+	WriterPushFlagNone            WriterPushFlag = C.qdb_exp_batch_push_flag_none
+	WriterPushFlagWriteThrough    WriterPushFlag = C.qdb_exp_batch_push_flag_write_through
+	WriterPushFlagAsyncClientPush WriterPushFlag = C.qdb_exp_batch_push_flag_asynchronous_client_push
+)
+
+type WriterOptions struct {
+	pushMode             WriterPushMode
+	dropDuplicates       bool
+	dropDuplicateColumns []string
+	dedupMode            WriterDeduplicationMode
+	pushFlags            WriterPushFlag
+}
+
 // NewWriterOptions returns a WriterOptions struct initialized with safe, default settings.
 //
 // Defaults:
 // - Push mode: Transactional (strongest consistency, lowest performance)
 // - Deduplication: Disabled (fastest ingestion, risk of duplicate data)
+// - Write-Through: Enabled (don't pollute the query cache with newly written data)
 func NewWriterOptions() WriterOptions {
 	return WriterOptions{
 		pushMode:             WriterPushModeTransactional,
 		dropDuplicates:       false,
 		dropDuplicateColumns: []string{},
 		dedupMode:            WriterDeduplicationModeDisabled,
+		pushFlags:            WriterPushFlagWriteThrough,
 	}
 }
 
@@ -705,6 +716,40 @@ func (options WriterOptions) GetDeduplicationMode() WriterDeduplicationMode {
 // IsDropDuplicatesEnabled indicates whether deduplication is currently enabled.
 func (options WriterOptions) IsDropDuplicatesEnabled() bool {
 	return options.dropDuplicates
+}
+
+// Enables WriteThrough flag
+func (options WriterOptions) EnableWriteThrough() WriterOptions {
+	// Todo: implement using a bitwise operation on options.pushFlags
+	return options
+}
+
+// Disables WriteThrough flag
+func (options WriterOptions) DisableWriteThrough() WriterOptions {
+	// Todo: implement using a bitwise operattion on options.pushFlags
+	return options
+}
+
+func (options WriterOptions) IsWriteThroughEnabled() bool {
+	// Todo: implement using bitwise and, probably return options.pushFlags & WriterPushFlagWriteThrough or similar?
+	return true
+}
+
+// Enables asynchronous client push: function returns back to client before data is actually written to database
+func (options WriterOptions) EnableAsyncClientPush() WriterOptions {
+	// Todo: implement using a bitwise operation on options.pushFlags
+	return options
+}
+
+// Disable asynchronous client push: function returns back to client before data is actually written to database
+func (options WriterOptions) DisableAsyncClientPush() WriterOptions {
+	// Todo: implement using a bitwise operattion on options.pushFlags
+	return options
+}
+
+func (options WriterOptions) IsAsyncClientPushEnabled() bool {
+	// Todo: implement using bitwise and, probably return options.pushFlags & WriterPushFlagAsyncClientPush or similar?
+	return true
 }
 
 // EnableDropDuplicates activates deduplication across all columns.
