@@ -1083,6 +1083,11 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	fmt.Printf("tblData.column_count: %v\n", tblData.column_count)
 	fmt.Printf("tblData.columns: %v\n", tblData.columns)
 	fmt.Printf("tblData.row_count: %v\n", tblData.row_count)
+
+	if tblData.columns == nil || tblData.column_count <= 0 {
+		return ret, fmt.Errorf("invalid column metadata (ptr=%v count=%d)", tblData.columns, tblData.column_count)
+	}
+
 	colCount := int(tblData.column_count)
 	colSlice := unsafe.Slice(tblData.columns, colCount)
 
@@ -1106,9 +1111,13 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 // releaseBulkReaderData releases C memory allocated by qdb_bulk_reader_get_data,
 // including nested timestamp, column name and data arrays.
 func releaseBulkReaderData(h HandleType, cTables *C.qdb_bulk_reader_table_data_t, tableCount int) {
+	if cTables == nil || tableCount <= 0 {
+		return
+	}
+
 	tblSlice := unsafe.Slice(cTables, tableCount)
 	for i := range tableCount {
-		data := tblSlice[i]
+		data := &tblSlice[i]
 		if data.timestamps != nil {
 			qdbRelease(h, data.timestamps)
 			data.timestamps = nil
@@ -1116,63 +1125,61 @@ func releaseBulkReaderData(h HandleType, cTables *C.qdb_bulk_reader_table_data_t
 
 		if data.columns != nil {
 			colCount := int(data.column_count)
-			colSlice := unsafe.Slice(data.columns, colCount)
-			for j := range colCount {
-				col := &colSlice[j]
+			if colCount > 0 {
+				colSlice := unsafe.Slice(data.columns, colCount)
+				for j := range colCount {
+					col := &colSlice[j]
 
-				raw := *(*unsafe.Pointer)(unsafe.Pointer(&col.data[0]))
-				switch col.data_type {
-				case C.qdb_ts_column_int64:
-					if raw != nil {
-						qdbRelease(h, (*C.qdb_int_t)(raw))
-					}
-				case C.qdb_ts_column_double:
-					if raw != nil {
-						qdbRelease(h, (*C.double)(raw))
-					}
-				case C.qdb_ts_column_timestamp:
-					if raw != nil {
-						qdbRelease(h, (*C.qdb_timespec_t)(raw))
-					}
-				case C.qdb_ts_column_blob:
-					if raw != nil {
-						blobPtr := (*C.qdb_blob_t)(raw)
-						blobSlice := unsafe.Slice(blobPtr, int(data.row_count))
-						for k := range data.row_count {
-							if blobSlice[k].content != nil {
-								qdbReleasePointer(h, unsafe.Pointer(blobSlice[k].content))
-								blobSlice[k].content = nil
-							}
+					raw := *(*unsafe.Pointer)(unsafe.Pointer(&col.data[0]))
+					switch col.data_type {
+					case C.qdb_ts_column_int64:
+						if raw != nil {
+							qdbRelease(h, (*C.qdb_int_t)(raw))
 						}
-						qdbRelease(h, blobPtr)
-					}
-				case C.qdb_ts_column_string:
-					if raw != nil {
-						strPtr := (*C.qdb_string_t)(raw)
-						strSlice := unsafe.Slice(strPtr, int(data.row_count))
-						for k := range data.row_count {
-							if strSlice[k].data != nil {
-								qdbReleasePointer(h, unsafe.Pointer(strSlice[k].data))
-								strSlice[k].data = nil
-							}
+					case C.qdb_ts_column_double:
+						if raw != nil {
+							qdbRelease(h, (*C.double)(raw))
 						}
-						qdbRelease(h, strPtr)
+					case C.qdb_ts_column_timestamp:
+						if raw != nil {
+							qdbRelease(h, (*C.qdb_timespec_t)(raw))
+						}
+					case C.qdb_ts_column_blob:
+						if raw != nil {
+							blobPtr := (*C.qdb_blob_t)(raw)
+							blobSlice := unsafe.Slice(blobPtr, int(data.row_count))
+							for k := range data.row_count {
+								if blobSlice[k].content != nil {
+									qdbReleasePointer(h, unsafe.Pointer(blobSlice[k].content))
+									blobSlice[k].content = nil
+								}
+							}
+							qdbRelease(h, blobPtr)
+						}
+					case C.qdb_ts_column_string:
+						if raw != nil {
+							strPtr := (*C.qdb_string_t)(raw)
+							strSlice := unsafe.Slice(strPtr, int(data.row_count))
+							for k := range data.row_count {
+								if strSlice[k].data != nil {
+									qdbReleasePointer(h, unsafe.Pointer(strSlice[k].data))
+									strSlice[k].data = nil
+								}
+							}
+							qdbRelease(h, strPtr)
+						}
+					}
+
+					if col.name != nil {
+						qdbRelease(h, colSlice[j].name)
+						colSlice[j].name = nil
 					}
 				}
-
-				if col.name != nil {
-					qdbRelease(h, colSlice[j].name)
-					colSlice[j].name = nil
-				}
-
 			}
 
 			qdbRelease(h, data.columns)
 			data.columns = nil
 		}
-
-		qdbRelease(h, &data)
-
 	}
 
 	qdbRelease(h, cTables)
