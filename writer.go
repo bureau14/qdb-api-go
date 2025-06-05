@@ -678,7 +678,11 @@ func (t *WriterTable) GetData(offset int) (WriterData, error) {
 	return t.data[offset], nil
 }
 
-// Returns new WriterOptions struct with default options set.
+// NewWriterOptions returns a WriterOptions struct initialized with safe, default settings.
+//
+// Defaults:
+// - Push mode: Transactional (strongest consistency, lowest performance)
+// - Deduplication: Disabled (fastest ingestion, risk of duplicate data)
 func NewWriterOptions() WriterOptions {
 	return WriterOptions{
 		pushMode:             WriterPushModeTransactional,
@@ -688,76 +692,109 @@ func NewWriterOptions() WriterOptions {
 	}
 }
 
-// Returns the currently set push mode
+// GetPushMode returns the current WriterPushMode configured in WriterOptions.
 func (options WriterOptions) GetPushMode() WriterPushMode {
 	return options.pushMode
 }
 
-// Returns the deduplication mode currently set.
+// GetDeduplicationMode returns the current deduplication strategy.
 func (options WriterOptions) GetDeduplicationMode() WriterDeduplicationMode {
 	return options.dedupMode
 }
 
-// Returns true if deduplication is enabled
+// IsDropDuplicatesEnabled indicates whether deduplication is currently enabled.
 func (options WriterOptions) IsDropDuplicatesEnabled() bool {
 	return options.dropDuplicates
 }
 
-// Enables deduplication based on all columns
+// EnableDropDuplicates activates deduplication across all columns.
+//
+// Trade-off:
+//   - Increases CPU and memory overhead slightly due to additional hashing/comparison,
+//     but ensures data uniqueness across the full row.
 func (options WriterOptions) EnableDropDuplicates() WriterOptions {
 	options.dropDuplicates = true
 	if options.dedupMode == WriterDeduplicationModeDisabled {
-		// Dropping duplicates causes the least overhead when enabled.
-		options.dedupMode = WriterDeduplicationModeDrop
+		options.dedupMode = WriterDeduplicationModeDrop // set least-expensive deduplication strategy
 	}
 	return options
 }
 
-// Enables deduplicates based on the provided columns
+// EnableDropDuplicatesOn activates deduplication limited to specific columns.
+//
+// Assumption:
+// - Caller specifies at least one valid column; validation is deferred.
+//
+// Performance implication:
+// - Reduces overhead compared to full-row deduplication, useful for large, wide tables.
 func (options WriterOptions) EnableDropDuplicatesOn(columns []string) WriterOptions {
 	options.dropDuplicates = true
 	options.dropDuplicateColumns = columns
 	if options.dedupMode == WriterDeduplicationModeDisabled {
-		// Default deduplication mode when enabling is to drop duplicates.
-		options.dedupMode = WriterDeduplicationModeDrop
+		options.dedupMode = WriterDeduplicationModeDrop // use least-expensive strategy by default
 	}
 	return options
 }
 
-// Returns the columns to be deduplicated on. If empty, deduplicates based on
-// equality of all columns.
+// GetDropDuplicateColumns returns a slice of columns targeted for deduplication.
+//
+// Behavior:
+// - Empty slice implies deduplication is performed across all columns.
 func (options WriterOptions) GetDropDuplicateColumns() []string {
 	return options.dropDuplicateColumns
 }
 
-// Sets the push mode to the desired push mode
+// WithPushMode sets the desired push mode and returns an updated copy of WriterOptions.
+//
+// Trade-offs:
+// - Transactional: High consistency guarantees, slower performance
+// - Fast/Async: Lower consistency, higher throughput
 func (options WriterOptions) WithPushMode(mode WriterPushMode) WriterOptions {
 	options.pushMode = mode
 	return options
 }
 
-// WithDeduplicationMode selects the deduplication behaviour. Upsert mode only
-// becomes valid when specific columns are supplied; this is validated during
-// native conversion.
+// WithDeduplicationMode explicitly sets deduplication behavior.
+//
+// Assumption:
+// - Upsert mode validity depends on provided columns; caller must ensure correct usage.
+//
+// Implications:
+// - Enabling any deduplication mode activates dropDuplicates automatically.
 func (options WriterOptions) WithDeduplicationMode(mode WriterDeduplicationMode) WriterOptions {
 	options.dedupMode = mode
 	options.dropDuplicates = mode != WriterDeduplicationModeDisabled
 	return options
 }
 
-// Shortcut for `WithPushMode(WriterPushModeAsync)`
+// WithAsyncPush is a convenience method equivalent to WithPushMode(WriterPushModeAsync).
 func (options WriterOptions) WithAsyncPush() WriterOptions {
 	return options.WithPushMode(WriterPushModeAsync)
 }
 
-// Shortcut for `WithPushMode(WriterPushModeAsync)`
+// WithFastPush is a convenience method equivalent to WithPushMode(WriterPushModeFast).
 func (options WriterOptions) WithFastPush() WriterOptions {
 	return options.WithPushMode(WriterPushModeFast)
 }
 
-// Shortcut for `WithPushMode(WriterPushModeAsync)`
+// WithTransactionalPush is a convenience method equivalent to WithPushMode(WriterPushModeTransactional).
 func (options WriterOptions) WithTransactionalPush() WriterOptions {
 	return options.WithPushMode(WriterPushModeTransactional)
+}
+
+// setNative transfers specific fields from WriterOptions into a native C struct qdb_exp_batch_options_t.
+//
+// Important:
+//   - This method intentionally mutates only a subset of the fields in the native struct.
+//   - Fields not explicitly set here must be configured separately.
+//
+// Rationale:
+//   - Direct mapping from WriterOptions to qdb_exp_batch_options_t is not 1:1; some options are
+//     managed elsewhere due to structural differences between Go and native representations.
+func (options WriterOptions) setNative(opts C.qdb_exp_batch_options_t) C.qdb_exp_batch_options_t {
+	opts.mode = C.qdb_exp_batch_push_mode_t(options.pushMode)
+	return opts
+
 }
 
 // Creates a new Writer with the provided options
@@ -845,9 +882,12 @@ func (w *Writer) Push(h HandleType) error {
 
 	var tableSchemas = (**C.qdb_exp_batch_push_table_schema_t)(nil)
 
-	errCode := C.qdb_exp_batch_push(
+	var options C.qdb_exp_batch_options_t
+	options = w.options.setNative(options)
+
+	errCode := C.qdb_exp_batch_push_with_options(
 		h.handle,
-		C.qdb_exp_batch_push_mode_t(w.options.pushMode),
+		&options,
 		(*C.qdb_exp_batch_push_table_t)(unsafe.Pointer(tbls)),
 		tableSchemas,
 		C.qdb_size_t(w.Length()),
