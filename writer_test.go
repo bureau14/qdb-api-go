@@ -112,6 +112,28 @@ func TestWriterOptionsCanSetProperties(t *testing.T) {
 	// Setting deduplication mode explicitly to upsert
 	options = options.WithDeduplicationMode(WriterDeduplicationModeUpsert)
 	assert.Equal(WriterDeduplicationModeUpsert, options.GetDeduplicationMode())
+
+	// Verify write-through flag manipulation
+	options = NewWriterOptions()
+	assert.True(options.IsWriteThroughEnabled())
+
+	options = options.DisableWriteThrough()
+	assert.False(options.IsWriteThroughEnabled())
+	assert.False(options.IsAsyncClientPushEnabled())
+
+	// enable async first then re-enable write through
+	options = options.EnableAsyncClientPush().EnableWriteThrough()
+	assert.True(options.IsAsyncClientPushEnabled())
+	assert.True(options.IsWriteThroughEnabled())
+
+	// disable only write through; async should remain
+	options = options.DisableWriteThrough()
+	assert.False(options.IsWriteThroughEnabled())
+	assert.True(options.IsAsyncClientPushEnabled())
+
+	// disable async; write-through untouched
+	options = options.DisableAsyncClientPush()
+	assert.False(options.IsAsyncClientPushEnabled())
 }
 
 func TestWriterCanCreateNew(t *testing.T) {
