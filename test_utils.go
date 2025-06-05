@@ -133,14 +133,6 @@ func writerTablesColumns(tables []WriterTable) []WriterColumn {
 	return writerTableColumns(tables[0])
 }
 
-// assertWriterTablesEqualReaderBatch compares the data written via WriterTables
-// with the data returned by the Reader.
-func assertWriterTablesEqualReaderChunks(t *testing.T, expected []WriterTable, names []string, rc ReaderChunk) {
-	t.Helper()
-
-	// TODO: implement
-}
-
 // genWriterColumn generates a WriterColumn with a random name and type.
 func genWriterColumn(t *rapid.T) WriterColumn {
 	name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "writerColumnName")
@@ -675,40 +667,6 @@ func genReaderChunks(t *rapid.T) []ReaderChunk {
 	return genChunks.Draw(t, "readerChunks")
 }
 
-func assertReaderChunksEqualChunk(t *testing.T, lhs []ReaderChunk, rhs ReaderChunk) {
-	t.Helper()
-
-	// Ensure lhs contains data to compare.
-	require.NotEmpty(t, lhs, "lhs must contain at least one chunk")
-
-	baseCols := lhs[0].columnInfoByOffset
-
-	// All lhs chunks must share the same schema while counting rows.
-	totalRows := 0
-	for i, c := range lhs {
-		require.Equal(t, baseCols, c.columnInfoByOffset, "lhs[%d] schema mismatch", i)
-		totalRows += c.RowCount()
-	}
-
-	require.Equal(t, baseCols, rhs.columnInfoByOffset, "rhs schema mismatch")
-	require.Equal(t, totalRows, len(rhs.idx), "row count mismatch")
-
-	// Build a merged index from lhs and compare after sorting.
-	mergedIdx := make([]time.Time, 0, totalRows)
-	for _, c := range lhs {
-		mergedIdx = append(mergedIdx, c.idx...)
-	}
-
-	lhsIdx := append([]time.Time(nil), mergedIdx...)
-	rhsIdx := append([]time.Time(nil), rhs.idx...)
-	sort.Slice(lhsIdx, func(i, j int) bool { return lhsIdx[i].Before(lhsIdx[j]) })
-	sort.Slice(rhsIdx, func(i, j int) bool { return rhsIdx[i].Before(rhsIdx[j]) })
-
-	assert.Equal(t, lhsIdx, rhsIdx, "index mismatch")
-}
-
-// -- WriterOptions generators -------------------------------------------------
-
 var writerPushModes = []WriterPushMode{
 	WriterPushModeTransactional,
 	WriterPushModeFast,
@@ -751,4 +709,44 @@ func genWriterOptions(t *rapid.T) WriterOptions {
 	}
 
 	return opts
+}
+
+func assertReaderChunksEqualChunk(t *testing.T, lhs []ReaderChunk, rhs ReaderChunk) {
+	t.Helper()
+
+	// Ensure lhs contains data to compare.
+	require.NotEmpty(t, lhs, "lhs must contain at least one chunk")
+
+	baseCols := lhs[0].columnInfoByOffset
+
+	// All lhs chunks must share the same schema while counting rows.
+	totalRows := 0
+	for i, c := range lhs {
+		require.Equal(t, baseCols, c.columnInfoByOffset, "lhs[%d] schema mismatch", i)
+		totalRows += c.RowCount()
+	}
+
+	require.Equal(t, baseCols, rhs.columnInfoByOffset, "rhs schema mismatch")
+	require.Equal(t, totalRows, len(rhs.idx), "row count mismatch")
+
+	// Build a merged index from lhs and compare after sorting.
+	mergedIdx := make([]time.Time, 0, totalRows)
+	for _, c := range lhs {
+		mergedIdx = append(mergedIdx, c.idx...)
+	}
+
+	lhsIdx := append([]time.Time(nil), mergedIdx...)
+	rhsIdx := append([]time.Time(nil), rhs.idx...)
+	sort.Slice(lhsIdx, func(i, j int) bool { return lhsIdx[i].Before(lhsIdx[j]) })
+	sort.Slice(rhsIdx, func(i, j int) bool { return rhsIdx[i].Before(rhsIdx[j]) })
+
+	assert.Equal(t, lhsIdx, rhsIdx, "index mismatch")
+}
+
+// assertWriterTablesEqualReaderBatch compares the data written via WriterTables
+// with the data returned by the Reader.
+func assertWriterTablesEqualReaderChunks(t *testing.T, expected []WriterTable, names []string, rc ReaderChunk) {
+	t.Helper()
+
+	// TODO: implement
 }
