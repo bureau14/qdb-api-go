@@ -375,6 +375,10 @@ func (t *WriterTable) GetName() string {
 	return t.TableName
 }
 
+func (t *WriterTable) RowCount() int {
+	return t.rowCount
+}
+
 func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 	t.idx = idx
 	t.rowCount = len(idx)
