@@ -847,6 +847,44 @@ func (options WriterOptions) GetDropDuplicateColumns() []string {
 	return options.dropDuplicateColumns
 }
 
+// IsValid validates the combination of WriterOptions fields.
+//
+// Decision rationale:
+//   - Centralized sanity checks simplify downstream validation and generators.
+//   - Mirrors checks performed during conversion in WriterTable.toNative.
+func (options WriterOptions) IsValid() bool {
+	switch options.pushMode {
+	case WriterPushModeTransactional, WriterPushModeFast, WriterPushModeAsync:
+	default:
+		return false
+	}
+
+	switch options.dedupMode {
+	case WriterDeduplicationModeDisabled, WriterDeduplicationModeDrop, WriterDeduplicationModeUpsert:
+	default:
+		return false
+	}
+
+	allowedFlags := WriterPushFlagWriteThrough | WriterPushFlagAsyncClientPush | WriterPushFlagNone
+	if options.pushFlags&^allowedFlags != 0 {
+		return false
+	}
+
+	if options.dedupMode == WriterDeduplicationModeUpsert && len(options.dropDuplicateColumns) == 0 {
+		return false
+	}
+
+	if options.dedupMode == WriterDeduplicationModeDisabled && options.dropDuplicates {
+		return false
+	}
+
+	if options.dedupMode != WriterDeduplicationModeDisabled && !options.dropDuplicates {
+		return false
+	}
+
+	return true
+}
+
 // WithPushMode sets the desired push mode and returns an updated copy of WriterOptions.
 //
 // Trade-offs:
