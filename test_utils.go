@@ -108,12 +108,158 @@ func columnNamesFromWriterColumns(cols []WriterColumn) []string {
 	return names
 }
 
+// writerTableNames returns the table names for the provided WriterTables.
+func writerTableNames(tables []WriterTable) []string {
+	names := make([]string, len(tables))
+	for i, wt := range tables {
+		names[i] = wt.GetName()
+	}
+	return names
+}
+
+// writerTableColumns returns the column schema for the provided WriterTable.
+func writerTableColumns(table WriterTable) []WriterColumn {
+	cols := make([]WriterColumn, len(table.columnInfoByOffset))
+	copy(cols, table.columnInfoByOffset)
+	return cols
+}
+
+// writerTablesColumns assumes all tables share the same schema and returns that
+// schema. Panics if tables is empty.
+func writerTablesColumns(tables []WriterTable) []WriterColumn {
+	if len(tables) == 0 {
+		panic("writerTablesColumns called with no tables")
+	}
+	return writerTableColumns(tables[0])
+}
+
 // assertWriterTablesEqualReaderBatch compares the data written via WriterTables
 // with the data returned by the Reader.
 func assertWriterTablesEqualReaderChunks(t *testing.T, expected []WriterTable, names []string, rc ReaderChunk) {
 	t.Helper()
 
 	// TODO: implement
+}
+
+// genWriterColumn generates a WriterColumn with a random name and type.
+func genWriterColumn(t *rapid.T) WriterColumn {
+	name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "writerColumnName")
+	ctype := rapid.SampledFrom(columnTypes[:]).Draw(t, "writerColumnType")
+	return WriterColumn{ColumnName: name, ColumnType: ctype}
+}
+
+// genWriterColumnsOfAllTypes returns one column for each supported type with random names.
+func genWriterColumnsOfAllTypes(t *rapid.T) []WriterColumn {
+	cols := make([]WriterColumn, len(columnTypes))
+	for i, ctype := range columnTypes {
+		name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, fmt.Sprintf("writerColName%v", i))
+		cols[i] = WriterColumn{ColumnName: name, ColumnType: ctype}
+	}
+	return cols
+}
+
+// genIndexAscending creates an increasing time index starting from a random time.
+func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
+	start := genTime(t)
+	stepNs := rapid.Int64Range(1, int64(time.Second)).Draw(t, "stepNs")
+	idx := make([]time.Time, rowCount)
+	for i := 0; i < rowCount; i++ {
+		idx[i] = start.Add(time.Duration(stepNs * int64(i)))
+	}
+	return idx
+}
+
+func genWriterDataInt64(t *rapid.T, rowCount int) WriterData {
+	values := make([]int64, rowCount)
+	for i := range values {
+		values[i] = rapid.Int64().Draw(t, "int64")
+	}
+	return NewWriterDataInt64(values)
+}
+
+func genWriterDataDouble(t *rapid.T, rowCount int) WriterData {
+	values := make([]float64, rowCount)
+	for i := range values {
+		values[i] = rapid.Float64().Draw(t, "float64")
+	}
+	return NewWriterDataDouble(values)
+}
+
+func genWriterDataTimestamp(t *rapid.T, rowCount int) WriterData {
+	values := make([]time.Time, rowCount)
+	for i := range values {
+		values[i] = genTime(t)
+	}
+	return NewWriterDataTimestamp(values)
+}
+
+func genWriterDataBlob(t *rapid.T, rowCount int) WriterData {
+	values := make([][]byte, rowCount)
+	for i := range values {
+		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "blob")
+	}
+	return NewWriterDataBlob(values)
+}
+
+func genWriterDataString(t *rapid.T, rowCount int) WriterData {
+	values := make([]string, rowCount)
+	for i := range values {
+		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string")
+	}
+	return NewWriterDataString(values)
+}
+
+// genWriterData generates WriterData for the specified column type and row count.
+func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) WriterData {
+	switch ctype {
+	case TsColumnInt64:
+		return genWriterDataInt64(t, rowCount)
+	case TsColumnDouble:
+		return genWriterDataDouble(t, rowCount)
+	case TsColumnTimestamp:
+		return genWriterDataTimestamp(t, rowCount)
+	case TsColumnBlob:
+		return genWriterDataBlob(t, rowCount)
+	case TsColumnString:
+		return genWriterDataString(t, rowCount)
+	}
+	panic(fmt.Sprintf("unknown column type: %v", ctype))
+}
+
+// genWriterDatas returns WriterData slices matching the provided columns.
+func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []WriterData {
+	datas := make([]WriterData, len(columns))
+	for i, col := range columns {
+		datas[i] = genWriterData(t, rowCount, col.ColumnType)
+	}
+	return datas
+}
+
+// genPopulatedTables creates tables in the QuasarDB instance and populates them
+// with random data. Because it actually creates tables on the server, the
+// provided handle must be valid. The returned WriterTables can be written using
+// pushWriterTables or further inspected.
+func genPopulatedTables(t *rapid.T, handle HandleType, tableCount int) []WriterTable {
+	rowCount := rapid.IntRange(1, 64).Draw(t, "rowCount")
+
+	columns := genWriterColumnsOfAllTypes(t)
+	idx := genIndexAscending(t, rowCount)
+	datas := genWriterDatas(t, rowCount, columns)
+
+	tables := make([]WriterTable, tableCount)
+
+	for i := 0; i < tableCount; i++ {
+		tbl, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
+		require.NoError(t, err)
+
+		wt, err := NewWriterTable(tbl.alias, columns)
+		require.NoError(t, err)
+		wt.SetIndex(idx)
+		require.NoError(t, wt.SetDatas(datas))
+
+		tables[i] = wt
+	}
+	return tables
 }
 
 // genTime generates a random UTC time for property-based testing of time-related logic.

@@ -93,50 +93,52 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 }
 
 func TestReaderCanReadDataFromSingleTable(t *testing.T) {
-	require := require.New(t)
+	rapid.Check(t, func(rt *rapid.T) {
+		handle := newTestHandle(t)
+		defer handle.Close()
 
-	handle := newTestHandle(t)
-	defer handle.Close()
+		tables := genPopulatedTables(rt, handle, 1)
+		pushWriterTables(t, handle, tables)
 
-	tables, names, columns := createAndPopulateTables(t, handle, 1, 1024)
-	pushWriterTables(t, handle, tables)
+		names := writerTableNames(tables)
+		columns := writerTablesColumns(tables)
+		columnNames := columnNamesFromWriterColumns(columns)
 
-	columnNames := columnNamesFromWriterColumns(columns)
+		opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
+		reader, err := NewReader(handle, opts)
+		require.NoError(rt, err)
+		defer reader.Close()
 
-	opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
-	reader, err := NewReader(handle, opts)
-	require.NoError(err)
-	defer reader.Close()
+		data, err := reader.FetchAll()
+		require.NoError(rt, err)
 
-	data, err := reader.FetchAll()
-	require.NoError(err)
-
-	assertWriterTablesEqualReaderChunks(t, tables, names, data)
+		assertWriterTablesEqualReaderChunks(t, tables, names, data)
+	})
 }
 
 func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
-	require := require.New(t)
+	rapid.Check(t, func(rt *rapid.T) {
+		handle := newTestHandle(t)
+		defer handle.Close()
 
-	handle := newTestHandle(t)
-	defer handle.Close()
+		tableCount := rapid.IntRange(2, 8).Draw(rt, "tableCount")
+		tables := genPopulatedTables(rt, handle, tableCount)
+		pushWriterTables(t, handle, tables)
 
-	const tableCount = 64
-	const rowCount = 256
+		names := writerTableNames(tables)
+		columns := writerTablesColumns(tables)
+		columnNames := columnNamesFromWriterColumns(columns)
 
-	tables, names, columns := createAndPopulateTables(t, handle, tableCount, rowCount)
-	pushWriterTables(t, handle, tables)
+		opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
+		reader, err := NewReader(handle, opts)
+		require.NoError(rt, err)
+		defer reader.Close()
 
-	columnNames := columnNamesFromWriterColumns(columns)
+		data, err := reader.FetchAll()
+		require.NoError(rt, err)
 
-	opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
-	reader, err := NewReader(handle, opts)
-	require.NoError(err)
-	defer reader.Close()
-
-	data, err := reader.FetchAll()
-	require.NoError(err)
-
-	assertWriterTablesEqualReaderChunks(t, tables, names, data)
+		assertWriterTablesEqualReaderChunks(t, tables, names, data)
+	})
 }
 
 // TestReaderMergeReaderChunksPanics demonstrates that mergeReaderChunks panics
