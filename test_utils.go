@@ -711,7 +711,28 @@ func genWriterOptions(t *rapid.T) WriterOptions {
 	return opts
 }
 
-func assertReaderChunksEqualChunk(t *testing.T, lhs []ReaderChunk, rhs ReaderChunk) {
+type testHelper interface {
+	require.TestingT
+	Helper()
+}
+
+// assertReaderChunksEqualChunk verifies that merging lhs chunks produces rhs.
+//
+// Decision rationale:
+//   - Simplifies equality checks when mergeReaderChunks is expected to behave
+//     identically to manual concatenation.
+//
+// Key assumptions:
+//   - lhs is non-empty and all chunks share one schema.
+//   - rhs uses the same schema as lhs and contains the combined rows.
+//
+// Performance trade-offs:
+//   - Indexes are copied once for sorting; cost is O(totalRows).
+//
+// Usage example:
+//
+//	assertReaderChunksEqualChunk(rt, left, merged)
+func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChunk) {
 	t.Helper()
 
 	// Ensure lhs contains data to compare.
@@ -743,18 +764,21 @@ func assertReaderChunksEqualChunk(t *testing.T, lhs []ReaderChunk, rhs ReaderChu
 	assert.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
 
-// assertWriterTablesEqualReaderChunks verifies that the ReaderChunk returned by
-// FetchAll matches the WriterTable input.
+// assertWriterTablesEqualReaderChunks checks that rc contains exactly the rows
+// written in expected tables.
 //
 // Decision rationale:
 //   - Consolidates row-count validation across tests.
 //   - Serves as the first step toward full data comparison.
 //
 // Key assumptions:
-//   - `expected` contains the tables pushed to QuasarDB in the same order as
-//     `names`.
-//   - `rc` originates from FetchAll using those names.
-func assertWriterTablesEqualReaderChunks(t *testing.T, expected []WriterTable, names []string, rc ReaderChunk) {
+//   - expected tables were pushed in the same order as names.
+//   - rc was returned by FetchAll for those table names.
+//
+// Usage example:
+//
+//	assertWriterTablesEqualReaderChunks(rt, tables, names, chunk)
+func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, names []string, rc ReaderChunk) {
 	t.Helper()
 
 	var expectedRows int
