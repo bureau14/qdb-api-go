@@ -718,38 +718,96 @@ func (options WriterOptions) IsDropDuplicatesEnabled() bool {
 	return options.dropDuplicates
 }
 
-// Enables WriteThrough flag
+// EnableWriteThrough ensures each push bypasses the server-side cache.
+//
+// Decision rationale:
+//   - Write-through avoids stale reads when concurrent clients rely on cache coherency.
+//
+// Key assumptions:
+//   - Other push flags remain intact; we simply set the bit via OR.
+//
+// Performance trade-offs:
+//   - Slightly higher latency as new values are immediately committed.
+//
+// Usage example:
+//
+//	opt := NewWriterOptions().EnableWriteThrough()
 func (options WriterOptions) EnableWriteThrough() WriterOptions {
-	// Todo: implement using a bitwise operation on options.pushFlags
+	options.pushFlags |= WriterPushFlagWriteThrough
 	return options
 }
 
-// Disables WriteThrough flag
+// DisableWriteThrough allows caching of newly pushed data on the server.
+//
+// Decision rationale:
+//   - Useful when write-heavy workloads benefit from reduced commit overhead.
+//
+// Key assumptions:
+//   - Caller intentionally accepts potential cache incoherency during writes.
+//
+// Performance trade-offs:
+//   - May serve slightly stale data if cache eviction lags behind writes.
+//
+// Usage example:
+//
+//	opt := NewWriterOptions().DisableWriteThrough()
 func (options WriterOptions) DisableWriteThrough() WriterOptions {
-	// Todo: implement using a bitwise operattion on options.pushFlags
+	options.pushFlags &^= WriterPushFlagWriteThrough
 	return options
 }
 
+// IsWriteThroughEnabled reports whether push operations bypass the cache.
+//
+// Decision rationale:
+//   - Helps unit tests verify flag manipulation logic.
 func (options WriterOptions) IsWriteThroughEnabled() bool {
-	// Todo: implement using bitwise and, probably return options.pushFlags & WriterPushFlagWriteThrough or similar?
-	return true
+	return options.pushFlags&WriterPushFlagWriteThrough != 0
 }
 
-// Enables asynchronous client push: function returns back to client before data is actually written to database
+// EnableAsyncClientPush makes Push return before the server writes data.
+//
+// Decision rationale:
+//   - Enables batching from the client without blocking on disk I/O.
+//
+// Key assumptions:
+//   - Caller handles potential failures asynchronously.
+//
+// Performance trade-offs:
+//   - Higher throughput at the cost of durability on client failure.
+//
+// Usage example:
+//
+//	opt := NewWriterOptions().EnableAsyncClientPush()
 func (options WriterOptions) EnableAsyncClientPush() WriterOptions {
-	// Todo: implement using a bitwise operation on options.pushFlags
+	options.pushFlags |= WriterPushFlagAsyncClientPush
 	return options
 }
 
-// Disable asynchronous client push: function returns back to client before data is actually written to database
+// DisableAsyncClientPush waits for server acknowledgement before returning.
+//
+// Decision rationale:
+//   - Provides stronger durability guarantees for each push.
+//
+// Key assumptions:
+//   - Caller desires synchronous semantics and accepts reduced throughput.
+//
+// Performance trade-offs:
+//   - Slower ingestion but easier error handling.
+//
+// Usage example:
+//
+//	opt := NewWriterOptions().DisableAsyncClientPush()
 func (options WriterOptions) DisableAsyncClientPush() WriterOptions {
-	// Todo: implement using a bitwise operattion on options.pushFlags
+	options.pushFlags &^= WriterPushFlagAsyncClientPush
 	return options
 }
 
+// IsAsyncClientPushEnabled reports whether pushes return before data is persisted.
+//
+// Decision rationale:
+//   - Mirrors Enable/Disable helpers for symmetric API design.
 func (options WriterOptions) IsAsyncClientPushEnabled() bool {
-	// Todo: implement using bitwise and, probably return options.pushFlags & WriterPushFlagAsyncClientPush or similar?
-	return true
+	return options.pushFlags&WriterPushFlagAsyncClientPush != 0
 }
 
 // EnableDropDuplicates activates deduplication across all columns.
