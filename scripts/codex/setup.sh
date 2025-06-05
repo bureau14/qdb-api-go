@@ -66,8 +66,7 @@ then
 
     popd > /dev/null
 
-    echo "Done downloading files quasardb dependencies: "
-    find qdb/
+    echo "Done downloading files quasardb"
 else
     echo "${QDB_PATH} already exists, skip downloading dependencies"
 fi
