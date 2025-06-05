@@ -92,37 +92,12 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	assert.NoError(err)
 }
 
-func TestReaderCanReadDataFromSingleTable(t *testing.T) {
+func TestReaderCanReadDataFromTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		handle := newTestHandle(t)
 		defer handle.Close()
 
-		tables := genPopulatedTables(rt, handle, 1)
-		pushWriterTables(t, handle, tables)
-
-		names := writerTableNames(tables)
-		columns := writerTablesColumns(tables)
-		columnNames := columnNamesFromWriterColumns(columns)
-
-		opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
-		reader, err := NewReader(handle, opts)
-		require.NoError(rt, err)
-		defer reader.Close()
-
-		data, err := reader.FetchAll()
-		require.NoError(rt, err)
-
-		assertWriterTablesEqualReaderChunks(rt, tables, names, data)
-	})
-}
-
-func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
-	rapid.Check(t, func(rt *rapid.T) {
-		handle := newTestHandle(t)
-		defer handle.Close()
-
-		tableCount := rapid.IntRange(2, 8).Draw(rt, "tableCount")
-		tables := genPopulatedTables(rt, handle, tableCount)
+		tables := genPopulatedTables(rt, handle)
 		pushWriterTables(t, handle, tables)
 
 		names := writerTableNames(tables)

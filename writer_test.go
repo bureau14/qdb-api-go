@@ -314,8 +314,7 @@ func TestWriterCanPushTables(t *testing.T) {
 		handle := newTestHandle(t)
 		defer handle.Close()
 
-		tableCount := rapid.IntRange(1, 8).Draw(rt, "tableCount")
-		tables := genPopulatedTables(rt, handle, tableCount)
+		tables := genPopulatedTables(rt, handle)
 
 		writer := NewWriter(genWriterOptions(rt))
 		for _, wt := range tables {
@@ -334,8 +333,7 @@ func TestWriterCanDeduplicate(t *testing.T) {
 		assert := assert.New(rt)
 		require := require.New(rt)
 
-		tableCount := rapid.IntRange(1, 4).Draw(rt, "tableCount")
-		tables := genPopulatedTables(rt, handle, tableCount)
+		tables := genPopulatedTables(rt, handle)
 
 		names := writerTableNames(tables)
 		columns := writerTablesColumns(tables)

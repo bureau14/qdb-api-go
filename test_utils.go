@@ -133,19 +133,30 @@ func writerTablesColumns(tables []WriterTable) []WriterColumn {
 	return writerTableColumns(tables[0])
 }
 
+func genWriterColumnOfType(t *rapid.T, ctype TsColumnType) WriterColumn {
+	name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "writerColumnName")
+	return WriterColumn{ColumnName: name, ColumnType: ctype}
+}
+
 // genWriterColumn generates a WriterColumn with a random name and type.
 func genWriterColumn(t *rapid.T) WriterColumn {
-	name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "writerColumnName")
 	ctype := rapid.SampledFrom(columnTypes[:]).Draw(t, "writerColumnType")
-	return WriterColumn{ColumnName: name, ColumnType: ctype}
+	return genWriterColumnOfType(t, ctype)
+}
+
+// genWriterColumnsOfAllTypes returns one column for each supported type with random names.
+func genWriterColumns(t *rapid.T) []WriterColumn {
+	genColumns := rapid.SliceOfN(rapid.Custom(genWriterColumn), 1, 8)
+
+	return genColumns.Draw(t, "writerColumns")
 }
 
 // genWriterColumnsOfAllTypes returns one column for each supported type with random names.
 func genWriterColumnsOfAllTypes(t *rapid.T) []WriterColumn {
 	cols := make([]WriterColumn, len(columnTypes))
 	for i, ctype := range columnTypes {
-		name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, fmt.Sprintf("writerColName%v", i))
-		cols[i] = WriterColumn{ColumnName: name, ColumnType: ctype}
+		// name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, fmt.Sprintf("writerColName%v", i))
+		cols[i] = genWriterColumnOfType(t, ctype)
 	}
 	return cols
 }
@@ -155,7 +166,7 @@ func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
 	start := genTime(t)
 	stepNs := rapid.Int64Range(1, int64(time.Second)).Draw(t, "stepNs")
 	idx := make([]time.Time, rowCount)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		idx[i] = start.Add(time.Duration(stepNs * int64(i)))
 	}
 	return idx
@@ -231,16 +242,17 @@ func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []WriterDa
 // with random data. Because it actually creates tables on the server, the
 // provided handle must be valid. The returned WriterTables can be written using
 // pushWriterTables or further inspected.
-func genPopulatedTables(t *rapid.T, handle HandleType, tableCount int) []WriterTable {
+func genPopulatedTables(t *rapid.T, handle HandleType) []WriterTable {
+	tableCount := rapid.IntRange(1, 4).Draw(t, "tableCount")
 	rowCount := rapid.IntRange(1, 64).Draw(t, "rowCount")
 
-	columns := genWriterColumnsOfAllTypes(t)
+	columns := genWriterColumns(t)
 	idx := genIndexAscending(t, rowCount)
 	datas := genWriterDatas(t, rowCount, columns)
 
 	tables := make([]WriterTable, tableCount)
 
-	for i := 0; i < tableCount; i++ {
+	for i := range tableCount {
 		tbl, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
 		require.NoError(t, err)
 
