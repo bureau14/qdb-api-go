@@ -743,10 +743,24 @@ func assertReaderChunksEqualChunk(t *testing.T, lhs []ReaderChunk, rhs ReaderChu
 	assert.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
 
-// assertWriterTablesEqualReaderBatch compares the data written via WriterTables
-// with the data returned by the Reader.
+// assertWriterTablesEqualReaderChunks verifies that the ReaderChunk returned by
+// FetchAll matches the WriterTable input.
+//
+// Decision rationale:
+//   - Consolidates row-count validation across tests.
+//   - Serves as the first step toward full data comparison.
+//
+// Key assumptions:
+//   - `expected` contains the tables pushed to QuasarDB in the same order as
+//     `names`.
+//   - `rc` originates from FetchAll using those names.
 func assertWriterTablesEqualReaderChunks(t *testing.T, expected []WriterTable, names []string, rc ReaderChunk) {
 	t.Helper()
 
-	// TODO: implement
+	var expectedRows int
+	for _, wt := range expected {
+		expectedRows += wt.RowCount()
+	}
+
+	assert.Equal(t, expectedRows, rc.RowCount(), "row count mismatch")
 }
