@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -324,7 +325,7 @@ func TestWriterCanPushTables(t *testing.T) {
 		require.NoError(rt, writer.Push(handle))
 	})
 }
-func TestWriteCanDeduplicate(t *testing.T) {
+func TestWriterCanDeduplicate(t *testing.T) {
 	assert := assert.New(t)
 
 	rapid.Check(t, func(rt *rapid.T) {
@@ -383,6 +384,9 @@ func TestWriteCanDeduplicate(t *testing.T) {
 			data, err := r.FetchAll()
 			r.Close()
 			require.NoError(rt, err)
+
+			fmt.Printf("got data: %v\n", data)
+
 			assert.Equal(len(wt.GetIndex())*2, data.RowCount())
 		}
 	})
