@@ -1032,7 +1032,6 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	// this call the C API manages its own copy of the provided tables and columns so we can
 	// safely release our temporary allocations via the deferred qdbRelease calls.
 	var readerHandle C.qdb_reader_handle_t
-	fmt.Printf("invoking C.qdb_bulk_reader_fetch with tableCount: %v\n", tableCount)
 	errCode := C.qdb_bulk_reader_fetch(
 		ret.handle.handle,
 		cColumns,
@@ -1058,38 +1057,44 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 // Accepts the number of rows to get
 func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	var ret ReaderChunk
-	var cTableData *C.qdb_bulk_reader_table_data_t
-	tableCount := len(r.options.tables)
+	var ptr *C.qdb_bulk_reader_table_data_t
 
-	fmt.Printf("invoking C.qdb_bulk_reader_get_data with tableCount: %v, options: %v\n", tableCount, r.options)
+	// qdb_bulk_reader_get_data "fills" a pointer in style of when you would get data back
+	// for a number of tables, but it returns just a pointer for a single table. all memory
+	// allocated within this function call is linked to this single object, and a qdbRelease
+	// clears eerything
+	err := makeErrorOrNil(C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize)))
 
-	err := makeErrorOrNil(C.qdb_bulk_reader_get_data(r.state, &cTableData, C.qdb_size_t(r.options.batchSize)))
+	// Trigger the `defer` statement as there are failure scenarios in both cases where err
+	// is nil or not-nil. That's why we put the ptr-check before checking error return codes.
+	if ptr != nil {
+		// All data in the `ptr`is allocated on the QuasarDB C-API side,
+		// and as such is linked to this one "root" pointer.
+		//
+		// By invoking qdbRelease on it, it automatically recursively releases
+		// all attached objects.
+		defer qdbRelease(r.handle, ptr)
+	}
 
 	if err == ErrIteratorEnd {
-		if cTableData != nil {
-			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v\n", cTableData)
+		if ptr != nil {
+			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v\n", ptr)
 		}
 		return ret, nil
 	} else if err != nil {
 		return ret, fmt.Errorf("unable to fetch bulk reader data: %v", err)
-	} else if cTableData == nil {
+	} else if ptr == nil {
 		return ret, fmt.Errorf("qdb_bulk_reader_get_data returned nil pointer")
 	}
 
-	defer releaseBulkReaderData(r.handle, cTableData, tableCount)
+	table := *ptr
 
-	tblData := *cTableData
-
-	fmt.Printf("tblData.column_count: %v\n", tblData.column_count)
-	fmt.Printf("tblData.columns: %v\n", tblData.columns)
-	fmt.Printf("tblData.row_count: %v\n", tblData.row_count)
-
-	if tblData.columns == nil || tblData.column_count <= 0 {
-		return ret, fmt.Errorf("invalid column metadata (ptr=%v count=%d)", tblData.columns, tblData.column_count)
+	if table.columns == nil || table.column_count <= 0 {
+		return ret, fmt.Errorf("invalid column metadata (columns=%v column_count=%d)", table.columns, table.column_count)
 	}
 
-	colCount := int(tblData.column_count)
-	colSlice := unsafe.Slice(tblData.columns, colCount)
+	colCount := int(table.column_count)
+	colSlice := unsafe.Slice(table.columns, colCount)
 
 	cols := make([]ReaderColumn, colCount)
 	for j := range colCount {
@@ -1100,89 +1105,12 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 		}
 	}
 
-	ret, err = newReaderChunk(cols, tblData)
+	ret, err = newReaderChunk(cols, table)
 	if err != nil {
 		return ret, err
 	}
 
 	return ret, nil
-}
-
-// releaseBulkReaderData releases C memory allocated by qdb_bulk_reader_get_data,
-// including nested timestamp, column name and data arrays.
-func releaseBulkReaderData(h HandleType, cTables *C.qdb_bulk_reader_table_data_t, tableCount int) {
-	if cTables == nil || tableCount <= 0 {
-		return
-	}
-
-	tblSlice := unsafe.Slice(cTables, tableCount)
-	for i := range tableCount {
-		data := &tblSlice[i]
-		if data.timestamps != nil {
-			qdbRelease(h, data.timestamps)
-			data.timestamps = nil
-		}
-
-		if data.columns != nil {
-			colCount := int(data.column_count)
-			if colCount > 0 {
-				colSlice := unsafe.Slice(data.columns, colCount)
-				for j := range colCount {
-					col := &colSlice[j]
-
-					raw := *(*unsafe.Pointer)(unsafe.Pointer(&col.data[0]))
-					switch col.data_type {
-					case C.qdb_ts_column_int64:
-						if raw != nil {
-							qdbRelease(h, (*C.qdb_int_t)(raw))
-						}
-					case C.qdb_ts_column_double:
-						if raw != nil {
-							qdbRelease(h, (*C.double)(raw))
-						}
-					case C.qdb_ts_column_timestamp:
-						if raw != nil {
-							qdbRelease(h, (*C.qdb_timespec_t)(raw))
-						}
-					case C.qdb_ts_column_blob:
-						if raw != nil {
-							blobPtr := (*C.qdb_blob_t)(raw)
-							blobSlice := unsafe.Slice(blobPtr, int(data.row_count))
-							for k := range data.row_count {
-								if blobSlice[k].content != nil {
-									qdbReleasePointer(h, unsafe.Pointer(blobSlice[k].content))
-									blobSlice[k].content = nil
-								}
-							}
-							qdbRelease(h, blobPtr)
-						}
-					case C.qdb_ts_column_string:
-						if raw != nil {
-							strPtr := (*C.qdb_string_t)(raw)
-							strSlice := unsafe.Slice(strPtr, int(data.row_count))
-							for k := range data.row_count {
-								if strSlice[k].data != nil {
-									qdbReleasePointer(h, unsafe.Pointer(strSlice[k].data))
-									strSlice[k].data = nil
-								}
-							}
-							qdbRelease(h, strPtr)
-						}
-					}
-
-					if col.name != nil {
-						qdbRelease(h, colSlice[j].name)
-						colSlice[j].name = nil
-					}
-				}
-			}
-
-			qdbRelease(h, data.columns)
-			data.columns = nil
-		}
-	}
-
-	qdbRelease(h, cTables)
 }
 
 // Next prepares the next available data batch.
