@@ -352,7 +352,7 @@ func TestWriteCanDeduplicate(t *testing.T) {
 
 		baseData, err := reader.FetchAll()
 		require.NoError(rt, err)
-		assertWriterTablesEqualReaderChunks(t, tables, names, baseData)
+		assertWriterTablesEqualReaderChunks(rt, tables, names, baseData)
 
 		// Push again with deduplication enabled.
 		writer = NewWriter(NewWriterOptions().EnableDropDuplicates())
@@ -366,7 +366,7 @@ func TestWriteCanDeduplicate(t *testing.T) {
 		defer reader2.Close()
 		dedupData, err := reader2.FetchAll()
 		require.NoError(rt, err)
-		assertWriterTablesEqualReaderChunks(t, tables, names, dedupData)
+		assertWriterTablesEqualReaderChunks(rt, tables, names, dedupData)
 
 		// Push once more without deduplication.
 		writer = NewWriterWithDefaultOptions()

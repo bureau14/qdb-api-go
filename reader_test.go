@@ -112,7 +112,7 @@ func TestReaderCanReadDataFromSingleTable(t *testing.T) {
 		data, err := reader.FetchAll()
 		require.NoError(rt, err)
 
-		assertWriterTablesEqualReaderChunks(t, tables, names, data)
+		assertWriterTablesEqualReaderChunks(rt, tables, names, data)
 	})
 }
 
@@ -137,7 +137,7 @@ func TestReaderCanReadDataFromMultipleTables(t *testing.T) {
 		data, err := reader.FetchAll()
 		require.NoError(rt, err)
 
-		assertWriterTablesEqualReaderChunks(t, tables, names, data)
+		assertWriterTablesEqualReaderChunks(rt, tables, names, data)
 	})
 }
 
@@ -150,6 +150,6 @@ func TestReaderMergeReaderChunks(t *testing.T) {
 
 		assert.NoError(rt, err)
 
-		assertReaderChunksEqualChunk(t, xs, ret)
+		assertReaderChunksEqualChunk(rt, xs, ret)
 	})
 }
