@@ -326,11 +326,13 @@ func TestWriterCanPushTables(t *testing.T) {
 	})
 }
 func TestWriterCanDeduplicate(t *testing.T) {
-	assert := assert.New(t)
+	handle := newTestHandle(t)
+	defer handle.Close()
 
 	rapid.Check(t, func(rt *rapid.T) {
-		handle := newTestHandle(t)
-		defer handle.Close()
+
+		assert := assert.New(rt)
+		require := require.New(rt)
 
 		tableCount := rapid.IntRange(1, 4).Draw(rt, "tableCount")
 		tables := genPopulatedTables(rt, handle, tableCount)
@@ -342,52 +344,53 @@ func TestWriterCanDeduplicate(t *testing.T) {
 		// Initial push without deduplication.
 		writer := NewWriterWithDefaultOptions()
 		for _, wt := range tables {
-			require.NoError(rt, writer.SetTable(wt))
+			require.NoError(writer.SetTable(wt))
 		}
-		require.NoError(rt, writer.Push(handle))
+		require.NoError(writer.Push(handle))
 
 		opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
 		reader, err := NewReader(handle, opts)
-		require.NoError(rt, err)
+		require.NoError(err)
 		defer reader.Close()
 
 		baseData, err := reader.FetchAll()
-		require.NoError(rt, err)
+		require.NoError(err)
 		assertWriterTablesEqualReaderChunks(rt, tables, names, baseData)
 
 		// Push again with deduplication enabled.
 		writer = NewWriter(NewWriterOptions().EnableDropDuplicates())
 		for _, wt := range tables {
-			require.NoError(rt, writer.SetTable(wt))
+			require.NoError(writer.SetTable(wt))
 		}
-		require.NoError(rt, writer.Push(handle))
+		require.NoError(writer.Push(handle))
 
 		reader2, err := NewReader(handle, opts)
-		require.NoError(rt, err)
+		require.NoError(err)
 		defer reader2.Close()
 		dedupData, err := reader2.FetchAll()
-		require.NoError(rt, err)
+		require.NoError(err)
 		assertWriterTablesEqualReaderChunks(rt, tables, names, dedupData)
 
 		// Push once more without deduplication.
 		writer = NewWriterWithDefaultOptions()
 		for _, wt := range tables {
-			require.NoError(rt, writer.SetTable(wt))
+			require.NoError(writer.SetTable(wt))
 		}
-		require.NoError(rt, writer.Push(handle))
+		require.NoError(writer.Push(handle))
 
 		// Verify each table now contains twice the original rows.
 		for _, wt := range tables {
 			rcOpts := NewReaderOptions().WithTables([]string{wt.GetName()}).WithColumns(columnNames)
 			r, err := NewReader(handle, rcOpts)
-			require.NoError(rt, err)
+			require.NoError(err)
 			data, err := r.FetchAll()
 			r.Close()
-			require.NoError(rt, err)
+			require.NoError(err)
 
-			fmt.Printf("got data: %v\n", data)
+			fmt.Printf("got writer table '%s' data with rowCount: %d: %v\n", wt.GetName(), wt.RowCount(), wt)
+			fmt.Printf("got reader data with rowCount: %d: %v\n", data.RowCount(), data)
 
-			assert.Equal(len(wt.GetIndex())*2, data.RowCount())
+			assert.Equal(wt.RowCount()*2, data.RowCount())
 		}
 	})
 }
