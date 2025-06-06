@@ -103,35 +103,100 @@ func writerTablesColumns(tables []WriterTable) []WriterColumn {
 	return writerTableColumns(tables[0])
 }
 
+// genWriterColumnOfType generates a WriterColumn with the given type and a
+// random ASCII name.
+//
+// Decision rationale:
+//   - Provides granular control over the column type for schema-specific tests.
+//   - Keeps names simple to avoid Unicode edge cases.
+//
+// Key assumptions:
+//   - ctype is a valid TsColumnType.
+//
+// Performance trade-offs:
+//   - Allocation of the name string only; negligible for property tests.
+//
+// Usage example:
+//
+//	col := genWriterColumnOfType(rt, TsColumnInt64)
 func genWriterColumnOfType(t *rapid.T, ctype TsColumnType) WriterColumn {
 	name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "writerColumnName")
 	return WriterColumn{ColumnName: name, ColumnType: ctype}
 }
 
-// genWriterColumn generates a WriterColumn with a random name and type.
+// genWriterColumn creates a WriterColumn with a random name and randomly
+// selected type.
+//
+// Decision rationale:
+//   - Used in property tests where any valid column type is acceptable.
+//   - Reuses genWriterColumnOfType to centralize name generation logic.
+//
+// Performance trade-offs:
+//   - Only draws from the generator; overhead is trivial.
+//
+// Usage example:
+//
+//	col := genWriterColumn(rt)
 func genWriterColumn(t *rapid.T) WriterColumn {
 	ctype := rapid.SampledFrom(columnTypes[:]).Draw(t, "writerColumnType")
 	return genWriterColumnOfType(t, ctype)
 }
 
-// genWriterColumnss returns between 1 and 8 random writer columnes with random type
+// genWriterColumns returns between 1 and 8 randomly typed columns.
+//
+// Decision rationale:
+//   - Exercises writer behavior with varying schema widths.
+//   - Bound of eight keeps test cases manageable while covering most scenarios.
+//
+// Key assumptions:
+//   - At least one column is always generated.
+//
+// Performance trade-offs:
+//   - Linear in column count; negligible for ≤8 columns.
+//
+// Usage example:
+//
+//	cols := genWriterColumns(rt)
 func genWriterColumns(t *rapid.T) []WriterColumn {
 	genColumns := rapid.SliceOfN(rapid.Custom(genWriterColumn), 1, 8)
 
 	return genColumns.Draw(t, "writerColumns")
 }
 
-// genWriterColumnsOfAllTypes returns one column for each supported type with random names.
+// genWriterColumnsOfAllTypes returns one column for every supported type.
+//
+// Decision rationale:
+//   - Useful when tests must cover all type-specific paths simultaneously.
+//   - Names remain random to avoid clashes across repeated calls.
+//
+// Performance trade-offs:
+//   - Allocates len(columnTypes) columns; still trivial in test context.
+//
+// Usage example:
+//
+//	cols := genWriterColumnsOfAllTypes(rt)
 func genWriterColumnsOfAllTypes(t *rapid.T) []WriterColumn {
 	cols := make([]WriterColumn, len(columnTypes))
 	for i, ctype := range columnTypes {
-		// name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, fmt.Sprintf("writerColName%v", i))
 		cols[i] = genWriterColumnOfType(t, ctype)
 	}
 	return cols
 }
 
-// genWriterColumnsOfType returns between 1 and 8 random writer columnes with provided type
+// genWriterColumnsOfType creates between 1 and 8 columns all sharing ctype.
+//
+// Decision rationale:
+//   - Allows stressing multi-column writers while keeping value types uniform.
+//
+// Key assumptions:
+//   - ctype is valid and supported by the writer.
+//
+// Performance trade-offs:
+//   - O(n) allocation where n ∈ [1,8]; trivial for tests.
+//
+// Usage example:
+//
+//	cols := genWriterColumnsOfType(rt, TsColumnInt64)
 func genWriterColumnsOfType(t *rapid.T, ctype TsColumnType) []WriterColumn {
 	columnCount := rapid.IntRange(1, 8).Draw(t, "columnCount")
 	cols := make([]WriterColumn, columnCount)
@@ -154,6 +219,17 @@ func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
 	return idx
 }
 
+// genWriterDataInt64 produces a WriterDataInt64 with rowCount random values.
+//
+// Decision rationale:
+//   - Separates value generation from table creation helpers.
+//   - Enables targeted testing of column type handling.
+//
+// Key assumptions:
+//   - rowCount ≥ 0.
+//
+// Performance trade-offs:
+//   - O(rowCount) integer generation; trivial for typical test sizes.
 func genWriterDataInt64(t *rapid.T, rowCount int) WriterData {
 	values := make([]int64, rowCount)
 	for i := range values {
@@ -162,6 +238,13 @@ func genWriterDataInt64(t *rapid.T, rowCount int) WriterData {
 	return NewWriterDataInt64(values)
 }
 
+// genWriterDataDouble returns a WriterDataDouble populated with random values.
+//
+// Key assumptions:
+//   - rowCount ≥ 0.
+//
+// Performance trade-offs:
+//   - Generates one float64 per row; negligible in tests.
 func genWriterDataDouble(t *rapid.T, rowCount int) WriterData {
 	values := make([]float64, rowCount)
 	for i := range values {
@@ -170,6 +253,10 @@ func genWriterDataDouble(t *rapid.T, rowCount int) WriterData {
 	return NewWriterDataDouble(values)
 }
 
+// genWriterDataTimestamp creates timestamp column data with rowCount entries.
+//
+// Decision rationale:
+//   - Reuses genTime to ensure UTC timestamps covering broad ranges.
 func genWriterDataTimestamp(t *rapid.T, rowCount int) WriterData {
 	values := make([]time.Time, rowCount)
 	for i := range values {
@@ -178,6 +265,7 @@ func genWriterDataTimestamp(t *rapid.T, rowCount int) WriterData {
 	return NewWriterDataTimestamp(values)
 }
 
+// genWriterDataBlob builds WriterDataBlob with random byte slices of length 1..64.
 func genWriterDataBlob(t *rapid.T, rowCount int) WriterData {
 	values := make([][]byte, rowCount)
 	for i := range values {
@@ -186,6 +274,7 @@ func genWriterDataBlob(t *rapid.T, rowCount int) WriterData {
 	return NewWriterDataBlob(values)
 }
 
+// genWriterDataString returns a WriterDataString with random UTF-8 strings.
 func genWriterDataString(t *rapid.T, rowCount int) WriterData {
 	values := make([]string, rowCount)
 	for i := range values {
@@ -194,7 +283,11 @@ func genWriterDataString(t *rapid.T, rowCount int) WriterData {
 	return NewWriterDataString(values)
 }
 
-// genWriterData generates WriterData for the specified column type and row count.
+// genWriterData dispatches to the appropriate WriterData generator based on ctype.
+//
+// Key assumptions:
+//   - rowCount ≥ 0.
+//   - ctype matches one of the TsColumn* constants.
 func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) WriterData {
 	switch ctype {
 	case TsColumnInt64:
@@ -211,7 +304,11 @@ func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) WriterData {
 	panic(fmt.Sprintf("unknown column type: %v", ctype))
 }
 
-// genWriterDatas returns WriterData slices matching the provided columns.
+// genWriterDatas produces one WriterData per column using genWriterData.
+//
+// Key assumptions:
+//   - len(columns) > 0.
+//   - rowCount applies uniformly to all columns.
 func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []WriterData {
 	datas := make([]WriterData, len(columns))
 	for i, col := range columns {
@@ -221,9 +318,18 @@ func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []WriterDa
 }
 
 // genPopulatedTables creates tables in the QuasarDB instance and populates them
-// with random data. Because it actually creates tables on the server, the
-// provided handle must be valid. The returned WriterTables can be written using
-// pushWriterTables or further inspected.
+// with random data.
+//
+// Decision rationale:
+//   - Provides end-to-end fixtures for writer and reader property tests.
+//   - Delegates table creation to createTableOfWriterColumnsAndDefaultShardSize
+//     for consistency with production code.
+//
+// Key assumptions:
+//   - handle is valid and connected to a running daemon.
+//
+// Performance trade-offs:
+//   - Table creation involves network I/O; keep tableCount small for speed.
 func genPopulatedTables(t *rapid.T, handle HandleType) []WriterTable {
 	tableCount := rapid.IntRange(1, 4).Draw(t, "tableCount")
 	rowCount := rapid.IntRange(1, 64).Draw(t, "rowCount")
@@ -691,6 +797,29 @@ func genWriterDedupMode(t *rapid.T) WriterDeduplicationMode {
 	return rapid.SampledFrom(writerDedupModes[:]).Draw(t, "writerDedupMode")
 }
 
+// genWriterOptions constructs a WriterOptions value using random combinations
+// of push mode, flags and deduplication settings.
+//
+// Decision rationale:
+//   - Exercises the full WriterOptions API in property tests by varying each
+//     independent parameter.
+//   - Clears dropDuplicateColumns so callers can supply their own columns when
+//     needed.
+//
+// Key assumptions:
+//   - genWriterPushMode, genWriterPushFlag and genWriterDedupMode return valid
+//     enum values.
+//   - The resulting options must satisfy opts.IsValid(); generation panics if it
+//     does not.
+//
+// Performance trade-offs:
+//   - Allocation and assignments only; overhead is negligible relative to test
+//     execution time.
+//
+// Usage example:
+//
+//	rt := rapid.MakeT()
+//	opts := genWriterOptions(rt)
 func genWriterOptions(t *rapid.T) WriterOptions {
 	opts := NewWriterOptions()
 	opts.pushMode = genWriterPushMode(t)
@@ -705,6 +834,20 @@ func genWriterOptions(t *rapid.T) WriterOptions {
 	return opts
 }
 
+// testHelper defines the minimal testing interface implemented by both *testing.T
+// and rapid's property-testing T.
+//
+// Decision rationale:
+//   - Allows helper assertions to accept either testing framework without
+//     duplication.
+//   - Exposes Helper() so error lines reference the caller instead of the helper.
+//
+// Key assumptions:
+//   - Any implementation must satisfy require.TestingT (typically *testing.TB).
+//   - Helper() marks the function as a helper for better test diagnostics.
+//
+// Performance trade-offs:
+//   - None; interface dispatch cost is negligible in unit tests.
 type testHelper interface {
 	require.TestingT
 	Helper()
