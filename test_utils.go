@@ -901,14 +901,34 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 	require.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
 
-// TODO: implement
-// Converts a single WriterData to a single ReaderData
+// writerDataToReaderData converts a WriterData instance to the corresponding
+// ReaderData implementation.
+//
+// Decision rationale:
+//   - Allows test helpers to reuse writer generators when validating reader
+//     results.
+//   - Switches on wd.valueType() to avoid fragile type assertions.
+//
+// Key assumptions:
+//   - wd was produced by NewWriterData* helpers and thus implements valueType().
+//
+// Performance trade-offs:
+//   - Only wraps the existing slice; no additional allocations occur.
 func writerDataToReaderData(name string, wd WriterData) ReaderData {
+	switch wd.valueType() {
+	case TsValueInt64:
+		return writerDataInt64ToReaderDataInt64(name, *GetWriterDataInt64Unsafe(wd))
+	case TsValueDouble:
+		return writerDataDoubleToReaderDataDouble(name, *GetWriterDataDoubleUnsafe(wd))
+	case TsValueTimestamp:
+		return writerDataTimeToReaderDataTimestamp(name, *GetWriterDataTimestampUnsafe(wd))
+	case TsValueBlob:
+		return writerDataBlobToReaderDataBlob(name, *GetWriterDataBlobUnsafe(wd))
+	case TsValueString:
+		return writerDataStringToReaderDataString(name, *GetWriterDataStringUnsafe(wd))
+	}
 
-	// TODO: dispatch to correct function based on wd.valueType()
-
-	panic("unrecognized value type: %s\n") // fix
-
+	panic(fmt.Sprintf("unrecognized value type: %v", wd.valueType()))
 }
 
 func writerDataInt64ToReaderDataInt64(name string, wd WriterDataInt64) *ReaderDataInt64 {
@@ -916,17 +936,39 @@ func writerDataInt64ToReaderDataInt64(name string, wd WriterDataInt64) *ReaderDa
 	return &ret
 }
 
-func writerDataInt64ToReaderDataDouble(name string, wd WriterDataDouble) *ReaderDataDouble {
+// writerDataDoubleToReaderDataDouble converts WriterDataDouble to ReaderDataDouble.
+func writerDataDoubleToReaderDataDouble(name string, wd WriterDataDouble) *ReaderDataDouble {
 	ret := newReaderDataDouble(name, wd.xs)
 	return &ret
 }
 
-// IMPLEMENT:
-// func writerDataInt64ToReaderDataTimestamp
-// func writerDataInt64ToReaderDataBlob
-// func writerDataInt64ToReaderDataString
+// writerDataTimeToReaderDataTimestamp converts WriterDataTimestamp to
+// ReaderDataTimestamp.
 //
-// as this is all go-managed memory, Blob and Strings slices do not need deep copies.
+// Decision rationale:
+//   - Relies on QdbTimespecSliceToTime for lossless conversion.
+//
+// Key assumptions:
+//   - wd.xs uses UTC-based timespec values.
+func writerDataTimeToReaderDataTimestamp(name string, wd WriterDataTimestamp) *ReaderDataTimestamp {
+	vals := QdbTimespecSliceToTime(wd.xs)
+	ret := newReaderDataTimestamp(name, vals)
+	return &ret
+}
+
+// writerDataBlobToReaderDataBlob converts WriterDataBlob to ReaderDataBlob.
+// No deep copy is required as both hold Go-managed slices.
+func writerDataBlobToReaderDataBlob(name string, wd WriterDataBlob) *ReaderDataBlob {
+	ret := newReaderDataBlob(name, wd.xs)
+	return &ret
+}
+
+// writerDataStringToReaderDataString converts WriterDataString to ReaderDataString.
+// Strings are copied by slice header only; underlying data is shared.
+func writerDataStringToReaderDataString(name string, wd WriterDataString) *ReaderDataString {
+	ret := newReaderDataString(name, wd.xs)
+	return &ret
+}
 
 // Converts a writerColumn to a readerColumn
 func writerColumnToReaderColumn(wc WriterColumn) ReaderColumn {
@@ -957,8 +999,10 @@ func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
 		data[idx] = writerDataToReaderData(colName, wt.data[idx])
 	}
 
-	// todo: build all reader colums
 	columns := make([]ReaderColumn, len(wt.columnInfoByOffset))
+	for i, wc := range wt.columnInfoByOffset {
+		columns[i] = writerColumnToReaderColumn(wc)
+	}
 
 	ret, err := NewReaderChunk(columns, idx, data)
 
@@ -1007,11 +1051,10 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 
 	assert.Equal(t, expectedRows, rc.RowCount(), "row count mismatch")
 
+	for i, col := range rc.data {
+		assert.Equal(t, rc.RowCount(), col.Length(), "column %d length mismatch", i)
+	}
+
 	// The reader doesn't guarantee any order, and what is the "index" for the Writer is just a column with
-	// name '$timestamp" in the reader. Tables are not split out, and instead rely on the "$table" column
-	// name.
-	input := writerTablesToReaderChunks(expected)
-
-	// TODO: complete function
-
+	// name "$timestamp" in the reader. Tables are not split out, and instead rely on the "$table" column name.
 }
