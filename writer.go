@@ -380,27 +380,42 @@ func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 	return WriterTable{t, 0, columnInfoByOffset, columnOffsetByName, nil, data}, nil
 }
 
+// GetName returns the table identifier used when pushing data.
 func (t *WriterTable) GetName() string {
 	return t.TableName
 }
 
+// RowCount reports the number of rows currently assigned to the table.
 func (t *WriterTable) RowCount() int {
 	return t.rowCount
 }
 
+// SetIndexFromNative sets the timestamp index using a C-compatible slice.
+//
+// Decision rationale:
+//   - Avoids repeated conversions when the caller already holds native timespec
+//     values (e.g., from another API call).
+//
+// Key assumptions:
+//   - idx represents the exact row count for subsequent column data.
 func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 	t.idx = idx
 	t.rowCount = len(idx)
 }
 
+// SetIndex converts times to qdb_timespec_t and stores them as the index.
+// This helper is convenient for typical Go callers.
 func (t *WriterTable) SetIndex(idx []time.Time) {
 	t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
 }
 
+// GetIndexAsNative exposes the internal index slice in C form.
+// The caller must treat the slice as read-only.
 func (t *WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
 	return t.idx
 }
 
+// GetIndex returns the index converted back to time.Time values.
 func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
@@ -549,6 +564,8 @@ func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_
 	return nil
 }
 
+// releaseBatchPushBlobColumns releases the memory of a slice of qdb_blob_t.
+// Each blob may own individually allocated content buffers.
 func releaseBatchPushBlobColumns(h HandleType, xs []C.qdb_blob_t) {
 	for _, x := range xs {
 		if x.content != nil {
@@ -557,6 +574,7 @@ func releaseBatchPushBlobColumns(h HandleType, xs []C.qdb_blob_t) {
 	}
 }
 
+// releaseBatchPushStringColumns releases memory owned by qdb_string_t elements.
 func releaseBatchPushStringColumns(h HandleType, xs []C.qdb_string_t) {
 	for _, x := range xs {
 		if x.data != nil {
@@ -565,8 +583,11 @@ func releaseBatchPushStringColumns(h HandleType, xs []C.qdb_string_t) {
 	}
 }
 
-// Invokes qdb_release() in all data stored inside a push column, which we previously manually
-// allocated using the qdbAlloc.. set of functions.
+// releaseBatchPushColumn frees all allocations associated with a single push column.
+//
+// Decision rationale:
+//   - Consolidates cleanup logic for WriterTable.releaseNative.
+//   - Handles type-specific allocations for strings and blobs.
 func releaseBatchPushColumn(h HandleType, x C.qdb_exp_batch_push_column_t, rowCount int) error {
 	if x.name != nil {
 		qdbRelease(h, x.name)
@@ -596,6 +617,7 @@ func releaseBatchPushColumn(h HandleType, x C.qdb_exp_batch_push_column_t, rowCo
 	return nil
 }
 
+// releaseBatchPushColumns iterates releaseBatchPushColumn over the provided slice.
 func releaseBatchPushColumns(h HandleType, xs []C.qdb_exp_batch_push_column_t, rowCount int) error {
 	for _, x := range xs {
 		err := releaseBatchPushColumn(h, x, rowCount)
@@ -707,6 +729,7 @@ func (t *WriterTable) SetDatas(xs []WriterData) error {
 	return nil
 }
 
+// GetData retrieves the WriterData at the specified column offset.
 func (t *WriterTable) GetData(offset int) (WriterData, error) {
 	if offset >= len(t.data) {
 		return nil, fmt.Errorf("Column offset out of range: %v", offset)
