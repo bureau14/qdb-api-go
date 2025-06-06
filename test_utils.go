@@ -901,6 +901,88 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 	require.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
 
+// TODO: implement
+// Converts a single WriterData to a single ReaderData
+func writerDataToReaderData(name string, wd WriterData) ReaderData {
+
+	// TODO: dispatch to correct function based on wd.valueType()
+
+	panic("unrecognized value type: %s\n") // fix
+
+}
+
+func writerDataInt64ToReaderDataInt64(name string, wd WriterDataInt64) *ReaderDataInt64 {
+	ret := newReaderDataInt64(name, wd.xs)
+	return &ret
+}
+
+func writerDataInt64ToReaderDataDouble(name string, wd WriterDataDouble) *ReaderDataDouble {
+	ret := newReaderDataDouble(name, wd.xs)
+	return &ret
+}
+
+// IMPLEMENT:
+// func writerDataInt64ToReaderDataTimestamp
+// func writerDataInt64ToReaderDataBlob
+// func writerDataInt64ToReaderDataString
+//
+// as this is all go-managed memory, Blob and Strings slices do not need deep copies.
+
+// Converts a writerColumn to a readerColumn
+func writerColumnToReaderColumn(wc WriterColumn) ReaderColumn {
+	ret, err := NewReaderColumn(wc.ColumnName, wc.ColumnType)
+
+	if err != nil {
+		panic(fmt.Sprintf("unable to convert writer column to reader column: %v", err))
+	}
+
+	return ret
+}
+
+// Converts a WriterTable to a ReaderChunk
+func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
+
+	idx := wt.GetIndex()
+
+	// Pre-allocate all output data
+	data := make([]ReaderData, len(wt.data))
+
+	// pseudo-code:
+	// 1. for each WriterData in wt
+	//   - look up column info of column based on offset
+	//   - get column name from column info
+
+	for idx := range len(wt.data) {
+		colName := wt.columnInfoByOffset[idx].ColumnName
+		data[idx] = writerDataToReaderData(colName, wt.data[idx])
+	}
+
+	// todo: build all reader colums
+	columns := make([]ReaderColumn, len(wt.columnInfoByOffset))
+
+	ret, err := NewReaderChunk(columns, idx, data)
+
+	if err != nil {
+		panic(fmt.Sprintf("unable to convert writer table to reader chunk: %v", err))
+	}
+
+	return ret
+
+}
+
+// Converts the writer table data to reader chunks, groups all reader chunks
+// per table.
+func writerTablesToReaderChunks(xs []WriterTable) map[string]ReaderChunk {
+	ret := make(map[string]ReaderChunk, len(xs))
+
+	for _, wt := range xs {
+		rc := writerTableToReaderChunk(wt)
+		ret[wt.GetName()] = rc
+	}
+
+	return ret
+}
+
 // assertWriterTablesEqualReaderChunks checks that rc contains exactly the rows
 // written in expected tables.
 //
@@ -924,4 +1006,12 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 	}
 
 	assert.Equal(t, expectedRows, rc.RowCount(), "row count mismatch")
+
+	// The reader doesn't guarantee any order, and what is the "index" for the Writer is just a column with
+	// name '$timestamp" in the reader. Tables are not split out, and instead rely on the "$table" column
+	// name.
+	input := writerTablesToReaderChunks(expected)
+
+	// TODO: complete function
+
 }
