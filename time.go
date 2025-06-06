@@ -2,6 +2,7 @@ package qdb
 
 /*
 	#include <qdb/client.h>
+	#include <qdb/ts.h>
 */
 import "C"
 import (
@@ -23,6 +24,13 @@ func toQdbTime(tp time.Time) C.qdb_time_t {
 		return C.qdb_preserve_expiration
 	}
 	return C.qdb_time_t(tp.UnixNano() / int64(time.Millisecond))
+}
+
+func toQdbRange(begin time.Time, end time.Time) C.qdb_ts_range_t {
+	var ret C.qdb_ts_range_t
+	ret.begin = toQdbTimespec(begin)
+	ret.end = toQdbTimespec(end)
+	return ret
 }
 
 func TimespecToStructG(tp C.qdb_timespec_t) time.Time {

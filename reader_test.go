@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -97,14 +98,20 @@ func TestReaderCanReadDataFromTables(t *testing.T) {
 		handle := newTestHandle(t)
 		defer handle.Close()
 
+		fmt.Printf("[DEBUG TestReaderCanReadFromTrables] run\n")
+
 		tables := genPopulatedTables(rt, handle)
+
 		pushWriterTables(t, handle, tables)
 
 		names := writerTableNames(tables)
-		columns := writerTablesColumns(tables)
-		columnNames := columnNamesFromWriterColumns(columns)
 
-		opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
+		fmt.Printf("[DEBUG TestReaderCanReadFromTrables] names: %#v\n", names)
+
+		// columns := writerTablesColumns(tables)
+		// columnNames := columnNamesFromWriterColumns(columns)
+
+		opts := NewReaderOptions().WithTables(names)
 		reader, err := NewReader(handle, opts)
 		require.NoError(rt, err)
 		defer reader.Close()

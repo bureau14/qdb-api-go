@@ -113,6 +113,7 @@ func writerTableNames(tables []WriterTable) []string {
 	names := make([]string, len(tables))
 	for i, wt := range tables {
 		names[i] = wt.GetName()
+		fmt.Printf("[DEBUG writerTableNames] names[i]='%s'\n", names[i])
 	}
 	return names
 }
@@ -793,7 +794,7 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, names []string, rc ReaderChunk) {
 	t.Helper()
 
-	var expectedRows int
+	var expectedRows int = 0
 	for _, wt := range expected {
 		expectedRows += wt.RowCount()
 	}
