@@ -354,11 +354,21 @@ func GetWriterDataBlobUnsafe(x WriterData) *WriterDataBlob {
 	return (*WriterDataBlob)(ifaceDataPtr(x))
 }
 
+// NewWriterTable constructs an empty table definition using the provided columns.
+//
+// Decision rationale:
+//   - Precomputes both column name→offset and offset→column mappings for
+//     efficient validation during SetData and Push.
+//
+// Key assumptions:
+//   - cols contains at least one column and no duplicate names.
+//
+// Performance trade-offs:
+//   - Linear initialization to build the lookup maps; negligible for typical
+//     column counts.
 func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
-	// Pre-allocate our data array, which has exactly 1 entry for every column we intend to write.
 	data := make([]WriterData, len(cols))
 
-	// Build indexes
 	columnInfoByOffset := make([]WriterColumn, len(cols))
 	columnOffsetByName := make(map[string]int)
 
@@ -367,7 +377,6 @@ func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 		columnOffsetByName[col.ColumnName] = i
 	}
 
-	// An index of column offset to name
 	return WriterTable{t, 0, columnInfoByOffset, columnOffsetByName, nil, data}, nil
 }
 
@@ -637,7 +646,23 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 	return nil
 }
 
-// Sets data for a single column
+// SetData assigns values to the column at the specified offset.
+//
+// Decision rationale:
+//   - Centralizes per-column validation before data insertion.
+//   - Allows progressive population of a WriterTable prior to Push.
+//
+// Key assumptions:
+//   - offset refers to an existing column in columnInfoByOffset.
+//   - xs.valueType() matches the column's expected type.
+//
+// Performance trade-offs:
+//   - Only constant-time checks and a slice assignment; overhead is negligible.
+//
+// Usage example:
+//
+//	err := wt.SetData(0, NewWriterDataInt64(vals))
+//	require.NoError(t, err)
 func (t *WriterTable) SetData(offset int, xs WriterData) error {
 	if len(t.columnInfoByOffset) <= offset {
 		return fmt.Errorf("Column offset out of range: %v", offset)
@@ -653,8 +678,23 @@ func (t *WriterTable) SetData(offset int, xs WriterData) error {
 	return nil
 }
 
-// Sets all all column data for a single table into the writer, assumes offsets of provided
-// data are aligned with the table.
+// SetDatas fills all columns of the table using the provided slice.
+//
+// Decision rationale:
+//   - Reuses SetData for each column to keep validation logic centralized.
+//   - Assumes the order of xs matches the table schema.
+//
+// Key assumptions:
+//   - len(xs) equals len(columnInfoByOffset).
+//   - Each xs[i] carries the correct value type for column i.
+//
+// Performance trade-offs:
+//   - Linear in number of columns; each SetData invocation performs simple checks.
+//
+// Usage example:
+//
+//	err := wt.SetDatas([]WriterData{colA, colB})
+//	require.NoError(t, err)
 func (t *WriterTable) SetDatas(xs []WriterData) error {
 	for i, x := range xs {
 		err := t.SetData(i, x)

@@ -623,13 +623,18 @@ type ReaderChunk struct {
 	data []ReaderData
 }
 
+// NewReaderChunk constructs a ReaderChunk from explicit column metadata,
+// index values and column data slices.
+//
+// Decision rationale:
+//   - Separates validation from data copying, enabling reuse in tests and
+//     production code.
+//
+// Key assumptions:
+//   - len(cols) == len(data).
+//   - len(idx) matches data[i].Length() for each column.
+//   - Callers validate these preconditions; TODO above indicates missing checks.
 func NewReaderChunk(cols []ReaderColumn, idx []time.Time, data []ReaderData) (ReaderChunk, error) {
-	// TODO:add error checks, specifically:
-	//  * require cols != nil, require > cols
-	//  * require idx != nil, length > 0
-	//  * require data != nil
-	//  * for each entry in data, verify that data.Length() == len(idx)
-
 	return ReaderChunk{
 		columnInfoByOffset: cols,
 		idx:                idx,
@@ -669,6 +674,16 @@ func (rc *ReaderChunk) RowCount() int {
 }
 
 // mergeReaderChunks merges multiple chunks of the same table into one unified chunk.
+//
+// Decision rationale:
+//   - Consolidates batch iteration results into a single structure for simpler
+//     comparison and verification.
+//
+// Key assumptions:
+//   - xs is non-empty and all chunks share identical schemas.
+//
+// Performance trade-offs:
+//   - Requires copying all row data once; acceptable for test sizes.
 func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	if len(xs) == 0 {
 		return ReaderChunk{}, nil
@@ -734,12 +749,20 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 		columnInfoByOffset: base.columnInfoByOffset}, nil
 }
 
-// Creates new ReaderChunk object out of a qdb_exp_batch_push_table_t struct. Memory-safe,
-// in that it copies all the memory which means these objects are safe to use for a long time.
+// newReaderChunk converts the native C table representation into a Go ReaderChunk.
 //
-// As all schemas for all tables are required to be the same, this function accepts the `columns`
-// parameter that were parsed earlier. For convenience, in our case, we set it as part of each
-// ReaderChunk object.
+// Decision rationale:
+//   - Encapsulates the logic for translating C types and copying data into
+//     Go-managed memory.
+//
+// Key assumptions:
+//   - `columns` describes the schema encoded in `data`.
+//   - `data` originates from qdb_exp_batch_push_table_data_t with valid pointers
+//     and counts.
+//
+// Performance trade-offs:
+//   - Copies all row data into Go slices for safety; incurs O(n) allocation but
+//     ensures lifetime independence from the C buffer.
 func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data_t) (ReaderChunk, error) {
 
 	if data.timestamps == nil {
@@ -1054,10 +1077,24 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	return ret, nil
 }
 
-// Fetches a single batch of data. Returns an array of 'ReaderChunk'
-// objects
+// fetchBatch retrieves up to r.options.batchSize rows from the server.
 //
-// Accepts the number of rows to get
+// Decision rationale:
+//   - Wraps the qdb_bulk_reader_get_data call and converts the native format
+//     to a Go ReaderChunk.
+//
+// Key assumptions:
+//   - r.state is a valid reader handle.
+//   - Caller handles ErrIteratorEnd appropriately.
+//
+// Performance trade-offs:
+//   - Allocates new slices for column data each call; acceptable for test-sized
+//     batches but avoid for extremely large data sets.
+//
+// Usage example:
+//
+//	batch, err := r.fetchBatch()
+//	if err != nil { /* handle */ }
 func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	var ret ReaderChunk
 	var ptr *C.qdb_bulk_reader_table_data_t
