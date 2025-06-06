@@ -331,7 +331,9 @@ func (h HandleType) PrefixCount(prefix string) (uint64, error) {
 func NewHandle() (HandleType, error) {
 	var h HandleType
 	err := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_protocol_t(ProtocolTCP))
-	swapCallback()
+
+	// Temporarily disable logging to reduce debug noise
+	// swapCallback()
 	return h, makeErrorOrNil(err)
 }
 
