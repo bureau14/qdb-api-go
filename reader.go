@@ -883,21 +883,27 @@ func NewReaderDefaultOptions(tables []string) ReaderOptions {
 	return NewReaderOptions().WithTables(tables)
 }
 
+// WithBatchSize specifies the maximum rows returned per fetch.
+// Use smaller sizes to limit memory usage at the cost of more network calls.
 func (ro ReaderOptions) WithBatchSize(batchSize int) ReaderOptions {
 	ro.batchSize = batchSize
 	return ro
 }
 
+// WithTables restricts the reader to the provided table names.
 func (ro ReaderOptions) WithTables(tables []string) ReaderOptions {
 	ro.tables = tables
 	return ro
 }
 
+// WithColumns limits which columns are read from each table.
+// An empty slice implies all columns.
 func (ro ReaderOptions) WithColumns(columns []string) ReaderOptions {
 	ro.columns = columns
 	return ro
 }
 
+// WithTimeRange restricts reads to the given half-open interval [start, end).
 func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOptions {
 	ro.rangeStart = start
 	ro.rangeEnd = end
