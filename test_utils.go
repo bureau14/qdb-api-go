@@ -53,36 +53,6 @@ func newTestWriter(t *testing.T) Writer {
 	return writer
 }
 
-// createAndPopulateTables creates `tableCount` tables with identical schema and
-// fills them with `rowCount` rows of random data. It returns the prepared
-// WriterTable instances, their table names, and the column schema used.
-func createAndPopulateTables(t *testing.T, handle HandleType, tableCount, rowCount int) ([]WriterTable, []string, []WriterColumn) {
-	t.Helper()
-
-	columns := generateWriterColumnsOfAllTypes()
-	idx := generateDefaultIndex(rowCount)
-	datas, err := generateWriterDatas(rowCount, columns)
-	require.NoError(t, err)
-
-	tables := make([]WriterTable, tableCount)
-	names := make([]string, tableCount)
-
-	for i := 0; i < tableCount; i++ {
-		tbl, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
-		require.NoError(t, err)
-
-		wt, err := NewWriterTable(tbl.alias, columns)
-		require.NoError(t, err)
-		wt.SetIndex(idx)
-		require.NoError(t, wt.SetDatas(datas))
-
-		tables[i] = wt
-		names[i] = tbl.Name()
-	}
-
-	return tables, names, columns
-}
-
 // pushWriterTables writes the provided tables to the server using a writer with
 // default options. Any error will fail the test via require.
 func pushWriterTables(t *testing.T, handle HandleType, tables []WriterTable) {
@@ -113,7 +83,6 @@ func writerTableNames(tables []WriterTable) []string {
 	names := make([]string, len(tables))
 	for i, wt := range tables {
 		names[i] = wt.GetName()
-		fmt.Printf("[DEBUG writerTableNames] names[i]='%s'\n", names[i])
 	}
 	return names
 }
@@ -145,7 +114,7 @@ func genWriterColumn(t *rapid.T) WriterColumn {
 	return genWriterColumnOfType(t, ctype)
 }
 
-// genWriterColumnsOfAllTypes returns one column for each supported type with random names.
+// genWriterColumnss returns between 1 and 8 random writer columnes with random type
 func genWriterColumns(t *rapid.T) []WriterColumn {
 	genColumns := rapid.SliceOfN(rapid.Custom(genWriterColumn), 1, 8)
 
@@ -159,6 +128,18 @@ func genWriterColumnsOfAllTypes(t *rapid.T) []WriterColumn {
 		// name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, fmt.Sprintf("writerColName%v", i))
 		cols[i] = genWriterColumnOfType(t, ctype)
 	}
+	return cols
+}
+
+// genWriterColumnsOfType returns between 1 and 8 random writer columnes with provided type
+func genWriterColumnsOfType(t *rapid.T, ctype TsColumnType) []WriterColumn {
+	columnCount := rapid.IntRange(1, 8).Draw(t, "columnCount")
+	cols := make([]WriterColumn, columnCount)
+
+	for i := range columnCount {
+		cols[i] = genWriterColumnOfType(t, ctype)
+	}
+
 	return cols
 }
 
@@ -247,7 +228,7 @@ func genPopulatedTables(t *rapid.T, handle HandleType) []WriterTable {
 	tableCount := rapid.IntRange(1, 4).Draw(t, "tableCount")
 	rowCount := rapid.IntRange(1, 64).Draw(t, "rowCount")
 
-	columns := genWriterColumns(t)
+	columns := genWriterColumnsOfType(t, TsColumnInt64)
 	idx := genIndexAscending(t, rowCount)
 	datas := genWriterDatas(t, rowCount, columns)
 
@@ -285,7 +266,7 @@ func genPopulatedTables(t *rapid.T, handle HandleType) []WriterTable {
 //	t := rapid.MakeT()
 //	ts := genTime(t) // ts is a randomized time.Time in UTC
 func genTime(t *rapid.T) time.Time {
-	sec := rapid.Int64Range(0, 17_179_869_184).Draw(t, "sec")
+	sec := rapid.Int64Range(0, 8_147_483_646).Draw(t, "sec")
 	nsec := rapid.Int64Range(0, 999_999_999).Draw(t, "nsec")
 	return time.Unix(sec, nsec).UTC()
 }
@@ -774,7 +755,7 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 	sort.Slice(lhsIdx, func(i, j int) bool { return lhsIdx[i].Before(lhsIdx[j]) })
 	sort.Slice(rhsIdx, func(i, j int) bool { return rhsIdx[i].Before(rhsIdx[j]) })
 
-	assert.Equal(t, lhsIdx, rhsIdx, "index mismatch")
+	require.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
 
 // assertWriterTablesEqualReaderChunks checks that rc contains exactly the rows

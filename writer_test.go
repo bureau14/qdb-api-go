@@ -1,7 +1,6 @@
 package qdb
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -367,6 +366,7 @@ func TestWriterCanDeduplicate(t *testing.T) {
 		defer reader2.Close()
 		dedupData, err := reader2.FetchAll()
 		require.NoError(err)
+
 		assertWriterTablesEqualReaderChunks(rt, tables, names, dedupData)
 
 		// Push once more without deduplication.
@@ -384,9 +384,6 @@ func TestWriterCanDeduplicate(t *testing.T) {
 			data, err := r.FetchAll()
 			r.Close()
 			require.NoError(err)
-
-			fmt.Printf("got writer table '%s' data with rowCount: %d: %v\n", wt.GetName(), wt.RowCount(), wt)
-			fmt.Printf("got reader data with rowCount: %d: %v\n", data.RowCount(), data)
 
 			assert.Equal(wt.RowCount()*2, data.RowCount())
 		}

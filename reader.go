@@ -978,8 +978,6 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		cRangeCount = 1
 	}
 
-	fmt.Printf("[DEBUG NewReader] cRangePtr=%v, cRangeCount=%d\n", cRangePtr, cRangeCount)
-
 	// Step 3: Initialize `C.qdb_bulk_reader_table_t` structs. Even though our C API allows for using
 	// different ranges per table, we use a fixed range for all tables. As such, we can reuse the
 	// previously constructed time ranges for all tables.  The table array itself is allocated via
@@ -1003,11 +1001,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		tblSlice[i].name = name
 		tblSlice[i].ranges = cRangePtr
 		tblSlice[i].range_count = cRangeCount
-
-		fmt.Printf("[DEBUG NewReader] tblSlice[%d].name = %s\n", i, tbl)
 	}
-
-	fmt.Printf("[DEBUG NewReader] cTables=%v, tableCount=%d\n", cTables, tableCount)
 
 	// Step 4: Initialize `columns` arguments.  Column names are optional.  If provided we allocate
 	// an array of char* pointers and copy each string using qdbCopyString.  The allocated memory is
@@ -1034,8 +1028,6 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		cColumns = nil
 	}
 
-	fmt.Printf("[DEBUG NewReader] cColumns=%v, columnCount=%d\n", cColumns, columnCount)
-
 	// Step 5: invoke qdb_bulk_reader_fetch() which initializes the native reader handle.  After
 	// this call the C API manages its own copy of the provided tables and columns so we can
 	// safely release our temporary allocations via the deferred qdbRelease calls.
@@ -1050,20 +1042,12 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	)
 
 	err = makeErrorOrNil(errCode)
-	fmt.Printf("[DEBUG NewReader] afer invoke of qdb_bulk_reader_fetch: err=%v\n", err)
 
 	if err != nil {
 		return ret, err
 	}
 
 	ret.state = readerHandle
-
-	var ptr *C.qdb_bulk_reader_table_data_t
-	errCode = C.qdb_bulk_reader_get_data(ret.state, &ptr, C.qdb_size_t(ret.options.batchSize))
-	fmt.Printf("[DEBUG NewReader] after invoke of qdb_bulk_reader_get_data, errCode=%v\n", errCode)
-
-	err = makeErrorOrNil(errCode)
-	fmt.Printf("[DEBUG NewReader] after invoke of qdb_bulk_reader_get_data, err=%v\n", err)
 
 	// Done, return state.
 
@@ -1083,10 +1067,7 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	// allocated within this function call is linked to this single object, and a qdbRelease
 	// clears eerything
 	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
-	fmt.Printf("[DEBUG NewReader] after invoke of qdb_bulk_reader_get_data, errCode=%v\n", errCode)
-
 	err := makeErrorOrNil(errCode)
-	fmt.Printf("[DEBUG NewReader] after invoke of qdb_bulk_reader_get_data, err=%v\n", err)
 
 	// Trigger the `defer` statement as there are failure scenarios in both cases where err
 	// is nil or not-nil. That's why we put the ptr-check before checking error return codes.
@@ -1103,6 +1084,8 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 		if ptr != nil {
 			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v\n", ptr)
 		}
+
+		// Return empty batch
 		return ret, nil
 	} else if err != nil {
 		return ret, fmt.Errorf("unable to fetch bulk reader data: %v", err)
@@ -1199,8 +1182,8 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 		batches = append(batches, batch)
 	}
 
-	if err := r.Err(); err != nil {
-		return ret, err
+	if r.Err() != nil {
+		return ret, fmt.Errorf("Reader.FetchAll: error while traversing data: %v\n", r.Err())
 	}
 
 	ret, err = mergeReaderChunks(batches)
@@ -1215,8 +1198,6 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 func (r *Reader) Close() {
 	// if state is non-nil, invoke qdbRelease() on state
 	if r.state != nil {
-
-		fmt.Printf("[DEBUG Reader.Close] releasing reader handle: %v\n", r.state)
 
 		qdbReleasePointer(r.handle, unsafe.Pointer(r.state))
 
