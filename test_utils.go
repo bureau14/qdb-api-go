@@ -1055,6 +1055,17 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 		assert.Equal(t, rc.RowCount(), col.Length(), "column %d length mismatch", i)
 	}
 
+	// Compare timestamp indexes across all expected tables (order-agnostic).
+	expectedIdx := make([]time.Time, 0, expectedRows)
+	for _, wt := range expected {
+		expectedIdx = append(expectedIdx, wt.GetIndex()...)
+	}
+	// Copy and sort both slices before comparing
+	actualIdx := append([]time.Time(nil), rc.idx...)
+	sort.Slice(expectedIdx, func(i, j int) bool { return expectedIdx[i].Before(expectedIdx[j]) })
+	sort.Slice(actualIdx,   func(i, j int) bool { return actualIdx[i].Before(actualIdx[j]) })
+	assert.Equal(t, expectedIdx, actualIdx, "timestamp index mismatch")
+
 	// The reader doesn't guarantee any order, and what is the "index" for the Writer is just a column with
 	// name "$timestamp" in the reader. Tables are not split out, and instead rely on the "$table" column name.
 }
