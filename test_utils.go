@@ -556,7 +556,7 @@ func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ReaderDataInt64 
 		values[i] = rapid.Int64().Draw(t, "int64")
 	}
 
-	ret := newReaderDataInt64(name, values)
+	ret := newReaderDataInt64(values)
 	return &ret
 }
 
@@ -583,7 +583,7 @@ func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ReaderDataDoubl
 		values[i] = rapid.Float64().Draw(t, "float64")
 	}
 
-	ret := newReaderDataDouble(name, values)
+	ret := newReaderDataDouble(values)
 	return &ret
 }
 
@@ -610,7 +610,7 @@ func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ReaderDataTi
 		values[i] = genTime(t)
 	}
 
-	ret := newReaderDataTimestamp(name, values)
+	ret := newReaderDataTimestamp(values)
 	return &ret
 }
 
@@ -637,7 +637,7 @@ func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ReaderDataBlob {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "bytes")
 	}
 
-	ret := newReaderDataBlob(name, values)
+	ret := newReaderDataBlob(values)
 	return &ret
 }
 
@@ -666,7 +666,7 @@ func genReaderDataString(t *rapid.T, name string, rowCount int) *ReaderDataStrin
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string value")
 	}
 
-	ret := newReaderDataString(name, values)
+	ret := newReaderDataString(values)
 	return &ret
 }
 
@@ -932,13 +932,13 @@ func writerDataToReaderData(name string, wd WriterData) ReaderData {
 }
 
 func writerDataInt64ToReaderDataInt64(name string, wd WriterDataInt64) *ReaderDataInt64 {
-	ret := newReaderDataInt64(name, wd.xs)
+	ret := newReaderDataInt64(wd.xs)
 	return &ret
 }
 
 // writerDataDoubleToReaderDataDouble converts WriterDataDouble to ReaderDataDouble.
 func writerDataDoubleToReaderDataDouble(name string, wd WriterDataDouble) *ReaderDataDouble {
-	ret := newReaderDataDouble(name, wd.xs)
+	ret := newReaderDataDouble(wd.xs)
 	return &ret
 }
 
@@ -952,21 +952,21 @@ func writerDataDoubleToReaderDataDouble(name string, wd WriterDataDouble) *Reade
 //   - wd.xs uses UTC-based timespec values.
 func writerDataTimeToReaderDataTimestamp(name string, wd WriterDataTimestamp) *ReaderDataTimestamp {
 	vals := QdbTimespecSliceToTime(wd.xs)
-	ret := newReaderDataTimestamp(name, vals)
+	ret := newReaderDataTimestamp(vals)
 	return &ret
 }
 
 // writerDataBlobToReaderDataBlob converts WriterDataBlob to ReaderDataBlob.
 // No deep copy is required as both hold Go-managed slices.
 func writerDataBlobToReaderDataBlob(name string, wd WriterDataBlob) *ReaderDataBlob {
-	ret := newReaderDataBlob(name, wd.xs)
+	ret := newReaderDataBlob(wd.xs)
 	return &ret
 }
 
 // writerDataStringToReaderDataString converts WriterDataString to ReaderDataString.
 // Strings are copied by slice header only; underlying data is shared.
 func writerDataStringToReaderDataString(name string, wd WriterDataString) *ReaderDataString {
-	ret := newReaderDataString(name, wd.xs)
+	ret := newReaderDataString(wd.xs)
 	return &ret
 }
 

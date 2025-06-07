@@ -15,9 +15,6 @@ import (
 )
 
 type ReaderData interface {
-	// Returns the column name
-	Name() string
-
 	// returns the type of data for this column
 	valueType() TsValueType
 
@@ -35,23 +32,16 @@ type ReaderData interface {
 	// The intent of this function is the "merge" multiple chunks of ReaderData together in case
 	// the user calls FetchAll().
 	//
-	// Returns error if:
-	//  * Name() does not match
-	//  * ReaderData is not of the same type as the struct implementing this function.
+	// Returns error if ReaderData is not of the same concrete type.
 	appendData(data ReaderData) error
 
 	// Unsafe variant of appendData(), undefined behavior in case it's used incorrectly
 	appendDataUnsafe(data ReaderData)
 }
 
-// Int64
+ // Int64
 type ReaderDataInt64 struct {
-	name string
 	xs   []int64
-}
-
-func (rd *ReaderDataInt64) Name() string {
-	return rd.name
 }
 
 func (rd *ReaderDataInt64) Data() []int64 {
@@ -75,10 +65,6 @@ func (rd *ReaderDataInt64) Clear() {
 }
 
 func (rd *ReaderDataInt64) appendData(data ReaderData) error {
-	if rd.name != data.Name() {
-		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
-	}
-
 	other, ok := data.(*ReaderDataInt64)
 	if !ok {
 		return fmt.Errorf("appendData: type mismatch, expected ReaderDataInt64, got %T", data)
@@ -93,8 +79,8 @@ func (rd *ReaderDataInt64) appendDataUnsafe(data ReaderData) {
 	rd.xs = append(rd.xs, other.xs...)
 }
 
-func newReaderDataInt64(name string, xs []int64) ReaderDataInt64 {
-	return ReaderDataInt64{name: name, xs: xs}
+func newReaderDataInt64(xs []int64) ReaderDataInt64 {
+	return ReaderDataInt64{xs: xs}
 }
 
 // Internal function used to convert C.qdb_exp_batch_push_column_t to Go. Memory-safe function
@@ -139,7 +125,7 @@ func newReaderDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t,
 
 	// Wrap the Go-managed []int64 in a ReaderDataInt64 and return.
 	// Using newReaderDataInt64 centralizes ReaderDataInt64 construction logic.
-	return newReaderDataInt64(name, goSlice), nil
+	return newReaderDataInt64(goSlice), nil
 }
 
 // GetReaderDataInt64 safely extracts a slice of int64 values from a ReaderData object.
@@ -159,14 +145,9 @@ func GetReaderDataInt64Unsafe(rd ReaderData) []int64 {
 	return (*ReaderDataInt64)(ifaceDataPtr(rd)).xs
 }
 
-// Double
+ // Double
 type ReaderDataDouble struct {
-	name string
 	xs   []float64
-}
-
-func (rd *ReaderDataDouble) Name() string {
-	return rd.name
 }
 
 func (rd *ReaderDataDouble) Data() []float64 {
@@ -190,10 +171,6 @@ func (rd *ReaderDataDouble) Clear() {
 }
 
 func (rd *ReaderDataDouble) appendData(data ReaderData) error {
-	if rd.name != data.Name() {
-		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
-	}
-
 	other, ok := data.(*ReaderDataDouble)
 	if !ok {
 		return fmt.Errorf("appendData: type mismatch, expected ReaderDataDouble, got %T", data)
@@ -216,8 +193,8 @@ func (rd *ReaderDataDouble) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataDouble(name string, xs []float64) ReaderDataDouble {
-	return ReaderDataDouble{name: name, xs: xs}
+func newReaderDataDouble(xs []float64) ReaderDataDouble {
+	return ReaderDataDouble{xs: xs}
 }
 
 // newReaderDataDoubleFromNative converts the native C representation to a Go-managed
@@ -242,7 +219,7 @@ func newReaderDataDoubleFromNative(name string, xs C.qdb_exp_batch_push_column_t
 		return ReaderDataDouble{}, fmt.Errorf("newReaderDataDoubleFromNative: %v", err)
 	}
 
-	return newReaderDataDouble(name, goSlice), nil
+	return newReaderDataDouble(goSlice), nil
 }
 
 // GetReaderDataDouble safely extracts a slice of float64 values from a ReaderData object.
@@ -262,14 +239,9 @@ func GetReaderDataDoubleUnsafe(rd ReaderData) []float64 {
 	return (*ReaderDataDouble)(ifaceDataPtr(rd)).xs
 }
 
-// Timestamp
+ // Timestamp
 type ReaderDataTimestamp struct {
-	name string
 	xs   []time.Time
-}
-
-func (rd *ReaderDataTimestamp) Name() string {
-	return rd.name
 }
 
 func (rd *ReaderDataTimestamp) Data() []time.Time {
@@ -293,10 +265,6 @@ func (rd *ReaderDataTimestamp) Clear() {
 }
 
 func (rd *ReaderDataTimestamp) appendData(data ReaderData) error {
-	if rd.name != data.Name() {
-		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
-	}
-
 	other, ok := data.(*ReaderDataTimestamp)
 	if !ok {
 		return fmt.Errorf("appendData: type mismatch, expected ReaderDataTimestamp, got %T", data)
@@ -319,8 +287,8 @@ func (rd *ReaderDataTimestamp) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataTimestamp(name string, xs []time.Time) ReaderDataTimestamp {
-	return ReaderDataTimestamp{name: name, xs: xs}
+func newReaderDataTimestamp(xs []time.Time) ReaderDataTimestamp {
+	return ReaderDataTimestamp{xs: xs}
 }
 
 // newReaderDataTimestampFromNative converts the native C representation to a Go-managed
@@ -344,7 +312,7 @@ func newReaderDataTimestampFromNative(name string, xs C.qdb_exp_batch_push_colum
 	}
 
 	goTimes := QdbTimespecSliceToTime(tsSlice)
-	return newReaderDataTimestamp(name, goTimes), nil
+	return newReaderDataTimestamp(goTimes), nil
 }
 
 // GetReaderDataTimestamp safely extracts a slice of time.Time values from a ReaderData object.
@@ -364,14 +332,9 @@ func GetReaderDataTimestampUnsafe(rd ReaderData) []time.Time {
 	return (*ReaderDataTimestamp)(ifaceDataPtr(rd)).xs
 }
 
-// Blob
+ // Blob
 type ReaderDataBlob struct {
-	name string
 	xs   [][]byte
-}
-
-func (rd *ReaderDataBlob) Name() string {
-	return rd.name
 }
 
 func (rd *ReaderDataBlob) Data() [][]byte {
@@ -395,10 +358,6 @@ func (rd *ReaderDataBlob) Clear() {
 }
 
 func (rd *ReaderDataBlob) appendData(data ReaderData) error {
-	if rd.name != data.Name() {
-		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
-	}
-
 	other, ok := data.(*ReaderDataBlob)
 	if !ok {
 		return fmt.Errorf("appendData: type mismatch, expected ReaderDataBlob, got %T", data)
@@ -421,8 +380,8 @@ func (rd *ReaderDataBlob) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataBlob(name string, xs [][]byte) ReaderDataBlob {
-	return ReaderDataBlob{name: name, xs: xs}
+func newReaderDataBlob(xs [][]byte) ReaderDataBlob {
+	return ReaderDataBlob{xs: xs}
 }
 
 // newReaderDataBlobFromNative converts the C.qdb_exp_batch_push_column_t blob representation
@@ -451,7 +410,7 @@ func newReaderDataBlobFromNative(name string, xs C.qdb_exp_batch_push_column_t, 
 		outSlice[i] = C.GoBytes(unsafe.Pointer(v.content), C.int(v.content_length))
 	}
 
-	return newReaderDataBlob(name, outSlice), nil
+	return newReaderDataBlob(outSlice), nil
 }
 
 // GetReaderDataBlob safely extracts a slice of byte slices from a ReaderData object.
@@ -471,14 +430,9 @@ func GetReaderDataBlobUnsafe(rd ReaderData) [][]byte {
 	return (*ReaderDataBlob)(ifaceDataPtr(rd)).xs
 }
 
-// String
+ // String
 type ReaderDataString struct {
-	name string
 	xs   []string
-}
-
-func (rd *ReaderDataString) Name() string {
-	return rd.name
 }
 
 func (rd *ReaderDataString) Data() []string {
@@ -502,10 +456,6 @@ func (rd *ReaderDataString) Clear() {
 }
 
 func (rd *ReaderDataString) appendData(data ReaderData) error {
-	if rd.name != data.Name() {
-		return fmt.Errorf("name mismatch: expected '%s', got '%s'", rd.name, data.Name())
-	}
-
 	other, ok := data.(*ReaderDataString)
 	if !ok {
 		return fmt.Errorf("appendData: type mismatch, expected ReaderDataString, got %T", data)
@@ -528,8 +478,8 @@ func (rd *ReaderDataString) appendDataUnsafe(data ReaderData) {
 // name: column name
 // xs:   C array of reader column data
 // n:    length of `data` inside array
-func newReaderDataString(name string, xs []string) ReaderDataString {
-	return ReaderDataString{name: name, xs: xs}
+func newReaderDataString(xs []string) ReaderDataString {
+	return ReaderDataString{xs: xs}
 }
 
 // newReaderDataStringFromNative converts the C representation of string columns to a
@@ -558,7 +508,7 @@ func newReaderDataStringFromNative(name string, xs C.qdb_exp_batch_push_column_t
 		goSlice[i] = C.GoStringN(v.data, C.int(v.length))
 	}
 
-	return newReaderDataString(name, goSlice), nil
+	return newReaderDataString(goSlice), nil
 }
 
 // GetReaderDataString safely extracts a slice of strings from a ReaderData object.
@@ -702,8 +652,13 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 			return base, fmt.Errorf("column length mismatch at chunk %d: expected %d, got %d", i+1, len(base.data), len(chunk.data))
 		}
 		for ci, c := range chunk.data {
-			if c.Name() != base.data[ci].Name() || c.valueType() != base.data[ci].valueType() {
-				return base, fmt.Errorf("column mismatch at chunk %d, column %d: expected '%s(%v)', got '%s(%v)'", i+1, ci, base.data[ci].Name(), base.data[ci].valueType(), c.Name(), c.valueType())
+			if c.valueType() != base.data[ci].valueType() {
+				// you can also pull the name from base.columnInfoByOffset[ci].Name()
+				return base, fmt.Errorf(
+					"column mismatch at chunk %d, offset %d: expected type %v, got %v",
+					i+1, ci,
+					base.data[ci].valueType(), c.valueType(),
+				)
 			}
 		}
 		totalRows += len(chunk.idx)
