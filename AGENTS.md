@@ -1,8 +1,90 @@
-# Project Agents.md Guide for OpenAI Codex
+---
+Source: .ruler/10-introduction.md
+---
+# QuasarDB Go API
 
-This Agents.md file provides comprehensive guidance for OpenAI Codex and other AI agents working with this codebase.
+This project contains the source code for the QuasarDB Go API, implemented on top of the QuasarDB C API using CGO.
 
-## Project Structure for OpenAI Codex Navigation
+---
+Source: .ruler/20-golang-guidelines.md
+---
+## Golang guidelines
+
+* Version: ≥1.24
+* Use strictly idiomatic, performance-oriented solutions with the standard library.
+* Recommend third-party packages only when they provide documented, measurable advantages.
+* Treat new language features as fully supported; e.g.:
+  * integer range loops:
+    `for i := range n { … }    // valid in Go 1.23+`
+  * cloning slices:
+    `slices.Clone()`
+* Treat new library features as fullky supported; e.g.
+
+---
+Source: .ruler/21-cgo-guidelines.md
+---
+## CGO
+
+This project relies on CGO for interaction with the QuasarDB C API.
+
+In CGO, balance performance, correctness, and memory safety:
+ * Clearly indicate when unsafe CGO variants improve performance by avoiding copies or allocations.
+ * Name such variants using the ...Unsafe suffix to explicitly indicate their risk.
+ * Always strictly adhere to Go 1.23+ runtime CGO pointer-safety constraints:
+  * Never pass Go-managed memory pointers (e.g., pointers to slices or structs allocated by Go) directly into C functions.
+  * Allocate memory intended for direct use by C explicitly via C functions (e.g., C.malloc) or approved Go→C allocation wrappers (such as qdbAllocBytes).
+ * Always document:
+  * Pointer lifetimes, memory ownership, and required release procedures.
+  * Assumptions about type sizes, alignment, endianness, and binary representations, especially when directly copying between Go and C memory (e.g., float64 ↔ C.double).
+ * Explicitly note if any assumption relies on IEEE-754 compliance or platform-specific ABI guarantees.
+ * Provide robust, context-aware error handling, and detailed comments describing memory and performance trade-offs.
+
+---
+Source: .ruler/22-tests.md
+---
+## Testing Requirements
+
+### Test setup
+
+From the project root execute the startup script to launch the test clusters:
+
+```bash
+bash scripts/tests/setup/start-services.sh
+```
+
+### Running tests
+
+To run the entire test suite, execute:
+
+```bash
+direnv exec . go test -v ./...
+```
+
+Because running the full test suite may take several minutes, it is strongly recommended that OpenAI Codex first runs individual test modules related specifically to recent changes, providing quicker feedback.
+
+To run a single test, for example `TestReaderCanReadDataFromTables`, execute:
+
+```bash
+direnv exec . go test -v ./...  -run 'TestReaderCanReadDataFromTables'
+```
+
+To run tests based on prefix, for example all tests with the `TestReader` prefix, execute:
+
+```bash
+direnv exec . go test -v ./...  -run 'TestReader*'
+```
+
+### Tests teardown
+From the project root execute the shutdown script:
+
+```bash
+bash scripts/tests/setup/stop-services.sh
+```
+
+---
+Source: .ruler/30-project-structure.md
+---
+## Project Structure for Code Navigation
 
 - `qdb/`: QuasarDB dependencies: header files, libraries and utilities. Not part of this git repo, never change.
   - `include/qdb/`: C API header files that define types and functions that CGO integrates directly with.
@@ -13,14 +95,12 @@ This Agents.md file provides comprehensive guidance for OpenAI Codex and other A
     - `20.test.sh`: Runs the tests. Expects QuasarDB daemon to run in the background.
  - `/codex/`: Scripts used by OpenAI Codex to download dependencies and prepare the environment.
 
+---
+Source: .ruler/31-command-prefixing.md
+---
 ## Environment Variables and Command Prefixing
 
-This project uses `direnv` to manage environment variables essential for CGo compilation:
-
-- `CGO_CFLAGS`
-- `CGO_LDFLAGS`
-- `DYLD_LIBRARY_PATH` (on macOS)
-
+This project uses `direnv` to manage environment variables essential for CGo compilation.
 When generating any shell commands, **always prefix each command explicitly with**:
 
 ```bash
@@ -56,44 +136,18 @@ After running this, retry the original command:
 direnv exec . <original command>
 ```
 
-## Testing Requirements for OpenAI Codex
+---
+Source: .ruler/40-code-guidelines.md
+---
+## Performance
 
-### Test setup
+Performance is critical. Code will run trillions of times per day in a high-performance timeseries database.
 
-From the project root execute the startup script to launch the test clusters:
+- Avoid copies of arrays, but instead prefer zero-copy pointer-passing where possible
+- Explicitly document trade-offs (complexity, maintainability, readability vs performance).
+- Recommend explicitly when each approach should be chosen.
+- Provide concise, actionable examples of recommended performance techniques.
 
-```bash
-bash scripts/tests/setup/start-services.sh
-```
-
-### Running tests
-
-To run the entire test suite, execute:
-
-```bash
-direnv exec . go test -v ./...
-```
-
-Because running the full test suite may take several minutes, it is strongly recommended that OpenAI Codex first runs individual test modules related specifically to recent changes, providing quicker feedback.
-
-To run a single test, for example `TestReaderCanReadDataFromSingleTable`, execute:
-
-```bash
-direnv exec . go test -v ./...  -run 'TestReaderCanReadDataFromSingleTable'
-```
-
-To run tests based on prefix, for example all tests with the `TestReader` prefix, execute:
-
-```bash
-direnv exec . go test -v ./...  -run 'TestReader*'
-```
-
-### Tests teardown
-From the project root execute the shutdown script:
-
-```bash
-bash scripts/tests/setup/stop-services.sh
-```
 ## Function Documentation Style
 
 When documenting functions, closely follow the commenting approach used at the bottom of `utils.go` and the generators in `test_utils.go`.
