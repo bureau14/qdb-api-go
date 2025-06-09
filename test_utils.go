@@ -5,6 +5,7 @@ import (
 	"sort"
 	"testing"
 	"time"
+	"slices"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -219,76 +220,52 @@ func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
 	return idx
 }
 
-// genWriterDataInt64 produces a WriterDataInt64 with rowCount random values.
-//
-// Decision rationale:
-//   - Separates value generation from table creation helpers.
-//   - Enables targeted testing of column type handling.
-//
-// Key assumptions:
-//   - rowCount ≥ 0.
-//
-// Performance trade-offs:
-//   - O(rowCount) integer generation; trivial for typical test sizes.
-func genWriterDataInt64(t *rapid.T, rowCount int) WriterData {
+func genWriterDataInt64(t *rapid.T, rowCount int) ColumnData {
 	values := make([]int64, rowCount)
 	for i := range values {
 		values[i] = rapid.Int64().Draw(t, "int64")
 	}
-	return NewWriterDataInt64(values)
+	cd := newColumnDataInt64(values)
+	return &cd
 }
 
-// genWriterDataDouble returns a WriterDataDouble populated with random values.
-//
-// Key assumptions:
-//   - rowCount ≥ 0.
-//
-// Performance trade-offs:
-//   - Generates one float64 per row; negligible in tests.
-func genWriterDataDouble(t *rapid.T, rowCount int) WriterData {
+func genWriterDataDouble(t *rapid.T, rowCount int) ColumnData {
 	values := make([]float64, rowCount)
 	for i := range values {
 		values[i] = rapid.Float64().Draw(t, "float64")
 	}
-	return NewWriterDataDouble(values)
+	cd := newColumnDataDouble(values)
+	return &cd
 }
 
-// genWriterDataTimestamp creates timestamp column data with rowCount entries.
-//
-// Decision rationale:
-//   - Reuses genTime to ensure UTC timestamps covering broad ranges.
-func genWriterDataTimestamp(t *rapid.T, rowCount int) WriterData {
+func genWriterDataTimestamp(t *rapid.T, rowCount int) ColumnData {
 	values := make([]time.Time, rowCount)
 	for i := range values {
 		values[i] = genTime(t)
 	}
-	return NewWriterDataTimestamp(values)
+	cd := newColumnDataTimestamp(values)
+	return &cd
 }
 
-// genWriterDataBlob builds WriterDataBlob with random byte slices of length 1..64.
-func genWriterDataBlob(t *rapid.T, rowCount int) WriterData {
+func genWriterDataBlob(t *rapid.T, rowCount int) ColumnData {
 	values := make([][]byte, rowCount)
 	for i := range values {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "blob")
 	}
-	return NewWriterDataBlob(values)
+	cd := newColumnDataBlob(values)
+	return &cd
 }
 
-// genWriterDataString returns a WriterDataString with random UTF-8 strings.
-func genWriterDataString(t *rapid.T, rowCount int) WriterData {
+func genWriterDataString(t *rapid.T, rowCount int) ColumnData {
 	values := make([]string, rowCount)
 	for i := range values {
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string")
 	}
-	return NewWriterDataString(values)
+	cd := newColumnDataString(values)
+	return &cd
 }
 
-// genWriterData dispatches to the appropriate WriterData generator based on ctype.
-//
-// Key assumptions:
-//   - rowCount ≥ 0.
-//   - ctype matches one of the TsColumn* constants.
-func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) WriterData {
+func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) ColumnData {
 	switch ctype {
 	case TsColumnInt64:
 		return genWriterDataInt64(t, rowCount)
@@ -304,13 +281,8 @@ func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) WriterData {
 	panic(fmt.Sprintf("unknown column type: %v", ctype))
 }
 
-// genWriterDatas produces one WriterData per column using genWriterData.
-//
-// Key assumptions:
-//   - len(columns) > 0.
-//   - rowCount applies uniformly to all columns.
-func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []WriterData {
-	datas := make([]WriterData, len(columns))
+func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []ColumnData {
+	datas := make([]ColumnData, len(columns))
 	for i, col := range columns {
 		datas[i] = genWriterData(t, rowCount, col.ColumnType)
 	}
@@ -469,7 +441,7 @@ func genReaderColumns(t *rapid.T) []ReaderColumn {
 //
 //	t := rapid.MakeT()
 //	rd := genReaderData(t) // ReaderData with random schema and data
-func genReaderData(t *rapid.T) ReaderData {
+func genReaderData(t *rapid.T) ColumnData {
 	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
 	return genReaderDataOfRowCount(t, rowCount)
 }
@@ -491,7 +463,7 @@ func genReaderData(t *rapid.T) ReaderData {
 //
 //	t := rapid.MakeT()
 //	rd := genReaderDataOfRowCount(t, 100) // 100 rows of random data for one column
-func genReaderDataOfRowCount(t *rapid.T, rowCount int) ReaderData {
+func genReaderDataOfRowCount(t *rapid.T, rowCount int) ColumnData {
 	column := rapid.Custom(genReaderColumn).Draw(t, "columnType")
 
 	return genReaderDataOfRowCountAndColumn(t, rowCount, column)
@@ -516,7 +488,7 @@ func genReaderDataOfRowCount(t *rapid.T, rowCount int) ReaderData {
 //	t := rapid.MakeT()
 //	col := genReaderColumn(t)
 //	rd := genReaderDataOfRowCountAndColumn(t, 50, col)
-func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ReaderData {
+func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ColumnData {
 	switch column.columnType.AsValueType() {
 	case TsValueInt64:
 		return genReaderDataInt64(t, column.Name(), rowCount)
@@ -550,13 +522,13 @@ func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderCol
 //
 //	t := rapid.MakeT()
 //	rdi := genReaderDataInt64(t, "col_int64", 10) // 10 random int64s
-func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ReaderDataInt64 {
+func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ColumnDataInt64 {
 	values := make([]int64, rowCount)
 	for i := range rowCount {
 		values[i] = rapid.Int64().Draw(t, "int64")
 	}
 
-	ret := newReaderDataInt64(values)
+	ret := newColumnDataInt64(values)
 	return &ret
 }
 
@@ -577,13 +549,13 @@ func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ReaderDataInt64 
 //
 //	t := rapid.MakeT()
 //	rdd := genReaderDataDouble(t, "col_double", 5) // 5 random float64s
-func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ReaderDataDouble {
+func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ColumnDataDouble {
 	values := make([]float64, rowCount)
 	for i := range rowCount {
 		values[i] = rapid.Float64().Draw(t, "float64")
 	}
 
-	ret := newReaderDataDouble(values)
+	ret := newColumnDataDouble(values)
 	return &ret
 }
 
@@ -604,13 +576,13 @@ func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ReaderDataDoubl
 //
 //	t := rapid.MakeT()
 //	rdt := genReaderDataTimestamp(t, "ts_col", 3) // 3 random timestamps
-func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ReaderDataTimestamp {
+func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ColumnDataTimestamp {
 	values := make([]time.Time, rowCount)
 	for i := range rowCount {
 		values[i] = genTime(t)
 	}
 
-	ret := newReaderDataTimestamp(values)
+	ret := newColumnDataTimestamp(values)
 	return &ret
 }
 
@@ -631,13 +603,13 @@ func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ReaderDataTi
 //
 //	t := rapid.MakeT()
 //	rdb := genReaderDataBlob(t, "blob_col", 4) // 4 random blobs
-func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ReaderDataBlob {
+func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ColumnDataBlob {
 	values := make([][]byte, rowCount)
 	for i := range rowCount {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "bytes")
 	}
 
-	ret := newReaderDataBlob(values)
+	ret := newColumnDataBlob(values)
 	return &ret
 }
 
@@ -658,7 +630,7 @@ func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ReaderDataBlob {
 //
 //	t := rapid.MakeT()
 //	rds := genReaderDataString(t, "str_col", 6) // 6 random strings
-func genReaderDataString(t *rapid.T, name string, rowCount int) *ReaderDataString {
+func genReaderDataString(t *rapid.T, name string, rowCount int) *ColumnDataString {
 	values := make([]string, rowCount)
 	for i := range rowCount {
 		// Really random unicode, limit it to 32 characters and 64 bytes (unicode
@@ -666,7 +638,7 @@ func genReaderDataString(t *rapid.T, name string, rowCount int) *ReaderDataStrin
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string value")
 	}
 
-	ret := newReaderDataString(values)
+	ret := newColumnDataString(values)
 	return &ret
 }
 
@@ -697,7 +669,7 @@ func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 		idx[i] = genTime(t)
 	}
 
-	data := make([]ReaderData, len(cols))
+	data := make([]ColumnData, len(cols))
 	for i, col := range cols {
 		data[i] = genReaderDataOfRowCountAndColumn(t, rowCount, col)
 	}
@@ -893,81 +865,12 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 		mergedIdx = append(mergedIdx, c.idx...)
 	}
 
-	lhsIdx := append([]time.Time(nil), mergedIdx...)
-	rhsIdx := append([]time.Time(nil), rhs.idx...)
+	lhsIdx := slices.Clone(mergedIdx)
+	rhsIdx := slices.Clone(rhs.idx)
 	sort.Slice(lhsIdx, func(i, j int) bool { return lhsIdx[i].Before(lhsIdx[j]) })
 	sort.Slice(rhsIdx, func(i, j int) bool { return rhsIdx[i].Before(rhsIdx[j]) })
 
 	require.Equal(t, lhsIdx, rhsIdx, "index mismatch")
-}
-
-// writerDataToReaderData converts a WriterData instance to the corresponding
-// ReaderData implementation.
-//
-// Decision rationale:
-//   - Allows test helpers to reuse writer generators when validating reader
-//     results.
-//   - Switches on wd.valueType() to avoid fragile type assertions.
-//
-// Key assumptions:
-//   - wd was produced by NewWriterData* helpers and thus implements valueType().
-//
-// Performance trade-offs:
-//   - Only wraps the existing slice; no additional allocations occur.
-func writerDataToReaderData(name string, wd WriterData) ReaderData {
-	switch wd.valueType() {
-	case TsValueInt64:
-		return writerDataInt64ToReaderDataInt64(name, *GetWriterDataInt64Unsafe(wd))
-	case TsValueDouble:
-		return writerDataDoubleToReaderDataDouble(name, *GetWriterDataDoubleUnsafe(wd))
-	case TsValueTimestamp:
-		return writerDataTimeToReaderDataTimestamp(name, *GetWriterDataTimestampUnsafe(wd))
-	case TsValueBlob:
-		return writerDataBlobToReaderDataBlob(name, *GetWriterDataBlobUnsafe(wd))
-	case TsValueString:
-		return writerDataStringToReaderDataString(name, *GetWriterDataStringUnsafe(wd))
-	}
-
-	panic(fmt.Sprintf("unrecognized value type: %v", wd.valueType()))
-}
-
-func writerDataInt64ToReaderDataInt64(name string, wd WriterDataInt64) *ReaderDataInt64 {
-	ret := newReaderDataInt64(wd.xs)
-	return &ret
-}
-
-// writerDataDoubleToReaderDataDouble converts WriterDataDouble to ReaderDataDouble.
-func writerDataDoubleToReaderDataDouble(name string, wd WriterDataDouble) *ReaderDataDouble {
-	ret := newReaderDataDouble(wd.xs)
-	return &ret
-}
-
-// writerDataTimeToReaderDataTimestamp converts WriterDataTimestamp to
-// ReaderDataTimestamp.
-//
-// Decision rationale:
-//   - Relies on QdbTimespecSliceToTime for lossless conversion.
-//
-// Key assumptions:
-//   - wd.xs uses UTC-based timespec values.
-func writerDataTimeToReaderDataTimestamp(name string, wd WriterDataTimestamp) *ReaderDataTimestamp {
-	vals := QdbTimespecSliceToTime(wd.xs)
-	ret := newReaderDataTimestamp(vals)
-	return &ret
-}
-
-// writerDataBlobToReaderDataBlob converts WriterDataBlob to ReaderDataBlob.
-// No deep copy is required as both hold Go-managed slices.
-func writerDataBlobToReaderDataBlob(name string, wd WriterDataBlob) *ReaderDataBlob {
-	ret := newReaderDataBlob(wd.xs)
-	return &ret
-}
-
-// writerDataStringToReaderDataString converts WriterDataString to ReaderDataString.
-// Strings are copied by slice header only; underlying data is shared.
-func writerDataStringToReaderDataString(name string, wd WriterDataString) *ReaderDataString {
-	ret := newReaderDataString(wd.xs)
-	return &ret
 }
 
 // Converts a writerColumn to a readerColumn
@@ -987,16 +890,10 @@ func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
 	idx := wt.GetIndex()
 
 	// Pre-allocate all output data
-	data := make([]ReaderData, len(wt.data))
-
-	// pseudo-code:
-	// 1. for each WriterData in wt
-	//   - look up column info of column based on offset
-	//   - get column name from column info
-
-	for idx := range len(wt.data) {
-		colName := wt.columnInfoByOffset[idx].ColumnName
-		data[idx] = writerDataToReaderData(colName, wt.data[idx])
+	data := make([]ColumnData, len(wt.data))
+	for i := range wt.data {
+		// ColumnData is already the same type for reader & writer
+		data[i] = wt.data[i]
 	}
 
 	columns := make([]ReaderColumn, len(wt.columnInfoByOffset))
@@ -1061,9 +958,9 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 		expectedIdx = append(expectedIdx, wt.GetIndex()...)
 	}
 	// Copy and sort both slices before comparing
-	actualIdx := append([]time.Time(nil), rc.idx...)
+	actualIdx := slices.Clone(rc.idx)
 	sort.Slice(expectedIdx, func(i, j int) bool { return expectedIdx[i].Before(expectedIdx[j]) })
-	sort.Slice(actualIdx,   func(i, j int) bool { return actualIdx[i].Before(actualIdx[j]) })
+	sort.Slice(actualIdx, func(i, j int) bool { return actualIdx[i].Before(actualIdx[j]) })
 	assert.Equal(t, expectedIdx, actualIdx, "timestamp index mismatch")
 
 	// The reader doesn't guarantee any order, and what is the "index" for the Writer is just a column with

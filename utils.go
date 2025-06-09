@@ -207,99 +207,42 @@ func createTableOfWriterColumnsAndDefaultShardSize(handle HandleType, columns []
 	return createTableOfWriterColumns(handle, columns, duration)
 }
 
-func generateWriterDataInt64(n int) WriterData {
-	xs := make([]int64, n)
-
-	for i, _ := range xs {
-		xs[i] = rand.Int63()
-	}
-
-	return NewWriterDataInt64(xs)
-}
-
-func generateWriterDataDouble(n int) WriterData {
-	xs := make([]float64, n)
-
-	for i, _ := range xs {
-		xs[i] = rand.NormFloat64()
-	}
-
-	return NewWriterDataDouble(xs)
-}
-
-func generateWriterDataTimestamp(n int) WriterData {
-	// XXX(leon): should be improved to be more random, instead
-	//            we're reusing the code that generates the index here.
-	return NewWriterDataTimestamp(generateDefaultIndex(n))
-}
-
-func generateWriterDataBlob(n int) WriterData {
-	xs := make([][]byte, n)
-
-	for i, _ := range xs {
-		// Hard-coded 16 byte blobs, could be randomized.
-		x := make([]byte, 16)
-		n_, err := rand.Read(x)
-
-		if err != nil {
-			panic(err)
-		}
-
-		if n_ != len(x) {
-			panic(fmt.Sprintf("Random generator did not return the amount of bytes we expected to be read: %v", n_))
-		}
-
-		xs[i] = x
-	}
-
-	return NewWriterDataBlob(xs)
-}
-
-func generateWriterDataString(n int) WriterData {
-	xs := make([]string, n)
-
-	for i, _ := range xs {
-		// We just defer to generateAlias(), which already generates random strings.
-		// As with blobs, we'll use a hardcoded 16 length
-		xs[i] = generateAlias(16)
-	}
-
-	return NewWriterDataString(xs)
-}
 
 // Generates artifical writer data for a single column
-func generateWriterData(n int, column WriterColumn) (WriterData, error) {
+func generateWriterData(n int, column WriterColumn) (ColumnData, error) {
 	switch column.ColumnType {
 	case TsColumnBlob:
-		return generateWriterDataBlob(n), nil
+		cdBlob := newColumnDataBlob(make([][]byte, n))
+		return &cdBlob, nil
 	case TsColumnSymbol:
-		// Symbols are represented as strings to the user
 		fallthrough
 	case TsColumnString:
-		return generateWriterDataString(n), nil
+		cdStr := newColumnDataString(make([]string, n))
+		return &cdStr, nil
 	case TsColumnInt64:
-		return generateWriterDataInt64(n), nil
+		cdInt := newColumnDataInt64(make([]int64, n))
+		return &cdInt, nil
 	case TsColumnDouble:
-		return generateWriterDataDouble(n), nil
+		cdDbl := newColumnDataDouble(make([]float64, n))
+		return &cdDbl, nil
 	case TsColumnTimestamp:
-		return generateWriterDataTimestamp(n), nil
+		cdTs := newColumnDataTimestamp(make([]time.Time, n))
+		return &cdTs, nil
 	}
 
 	return nil, fmt.Errorf("Unrecognized column type: %v", column.ColumnType)
 }
 
 // Generates artificial data to be inserted for each column.
-func generateWriterDatas(n int, columns []WriterColumn) ([]WriterData, error) {
-	var ret []WriterData = make([]WriterData, len(columns))
+func generateWriterDatas(n int, columns []WriterColumn) ([]ColumnData, error) {
+	ret := make([]ColumnData, len(columns))
 
 	for i, column := range columns {
-		data, err := generateWriterData(n, column)
-
+		cd, err := generateWriterData(n, column)
 		if err != nil {
-			return nil, fmt.Errorf("generateWriterData failed for column %d (%v): %w", i, column.ColumnType, err)
+			return nil, fmt.Errorf("generateWriterData failed for column %d: %w", i, err)
 		}
-
-		ret[i] = data
+		ret[i] = cd
 	}
 
 	return ret, nil

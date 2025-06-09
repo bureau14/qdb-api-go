@@ -1,8 +1,6 @@
-// Package qdb provides an api to a quasardb server
 package qdb
 
 /*
-        #include <string.h> // for memcpy
 	#include <qdb/client.h>
 	#include <qdb/ts.h>
 */
@@ -13,203 +11,6 @@ import (
 	"time"
 	"unsafe"
 )
-
-type writerError struct {
-	s string
-}
-
-func (e *writerError) Error() string {
-	return e.s
-}
-
-func New(text string) error {
-	return &writerError{text}
-}
-
-type WriterData interface {
-	// Returns the type of value of this class
-	valueType() TsValueType
-
-	// Returns opaque pointer to internal data array, intended to be set on
-	// the `qdb_exp_batch_push_column_t` `data` field.
-	toNative(h HandleType) (unsafe.Pointer, error)
-}
-
-// Int64
-type WriterDataInt64 struct {
-	xs []int64
-}
-
-// NewWriterDataInt64 constructs a WriterDataInt64 instance, copying the input slice
-// into memory allocated by the QDB C API. The allocated memory must be released with C.qdb_release().
-func NewWriterDataInt64(xs []int64) WriterData {
-	return &WriterDataInt64{xs: xs}
-}
-
-func (wd *WriterDataInt64) valueType() TsValueType {
-	return TsValueInt64
-}
-
-func (wd *WriterDataInt64) toNative(h HandleType) (unsafe.Pointer, error) {
-	ptr, err := qdbAllocAndCopyBuffer[int64, C.qdb_int_t](h, wd.xs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate and copy int64 data: %w", err)
-	}
-
-	return unsafe.Pointer(ptr), nil
-}
-
-// Double
-type WriterDataDouble struct {
-	xs []float64
-}
-
-// NewWriterDataDouble constructs a WriterDataDouble instance, copying the input slice
-// into memory allocated by the QDB C API. The allocated memory must be released with C.qdb_release().
-func NewWriterDataDouble(xs []float64) WriterData {
-	return &WriterDataDouble{xs}
-}
-
-func (wd WriterDataDouble) valueType() TsValueType {
-	return TsValueDouble
-}
-
-func (wd *WriterDataDouble) toNative(h HandleType) (unsafe.Pointer, error) {
-	ptr, err := qdbAllocAndCopyBuffer[float64, C.double](h, wd.xs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate and copy double data: %w", err)
-	}
-
-	return unsafe.Pointer(ptr), nil
-}
-
-// Timestamp
-type WriterDataTimestamp struct {
-	xs []C.qdb_timespec_t
-}
-
-// NewWriterDataTimestampFromTimespec constructs WriterDataTimestamp from a slice of C.qdb_timespec_t,
-// copying the data into a newly allocated buffer via qdbAllocAndCopy.
-func NewWriterDataTimestampFromTimespec(xs []C.qdb_timespec_t) WriterData {
-	return &WriterDataTimestamp{xs: xs}
-}
-
-// Constructor for timestamp data array
-func NewWriterDataTimestamp(xs []time.Time) WriterData {
-	return NewWriterDataTimestampFromTimespec(TimeSliceToQdbTimespec(xs))
-}
-
-func (_ WriterDataTimestamp) valueType() TsValueType {
-	return TsValueTimestamp
-}
-
-func (wd *WriterDataTimestamp) toNative(h HandleType) (unsafe.Pointer, error) {
-	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, wd.xs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate and copy timestamp data: %w", err)
-	}
-
-	return unsafe.Pointer(ptr), nil
-}
-
-// Blob
-type WriterDataBlob struct {
-	xs [][]byte
-}
-
-// Constructor for blob data array
-func NewWriterDataBlob(xs [][]byte) WriterData {
-	return &WriterDataBlob{xs}
-}
-
-func (cd WriterDataBlob) valueType() TsValueType {
-	return TsValueBlob
-}
-
-func (wd *WriterDataBlob) toNative(h HandleType) (unsafe.Pointer, error) {
-	count := len(wd.xs)
-	if count == 0 {
-		return nil, fmt.Errorf("no blobs provided")
-	}
-
-	// Step 1: allocate qdb_blob_t array
-	blobArrayPtr, err := qdbAllocBuffer[C.qdb_blob_t](h, count)
-	if err != nil {
-		return nil, fmt.Errorf("blob struct array allocation failed: %v", err)
-	}
-
-	// Step 2: copy blob contents
-	blobSlice := unsafe.Slice(blobArrayPtr, count)
-	for i, v := range wd.xs {
-		var destPtr unsafe.Pointer
-
-		if len(v) > 0 {
-			// Calculate the correct offset within the large contiguous slab
-			destPtr, err = qdbAllocAndCopyBytes(h, v)
-			if err != nil {
-				return nil, err
-			}
-			blobSlice[i].content = destPtr
-			blobSlice[i].content_length = C.qdb_size_t(len(v))
-		} else {
-			// Explicitly handle empty blobs
-			blobSlice[i].content = nil
-			blobSlice[i].content_length = 0
-		}
-	}
-
-	return unsafe.Pointer(blobArrayPtr), nil
-}
-
-// String
-type WriterDataString struct {
-	xs []string
-}
-
-// Constructor for string data array
-func NewWriterDataString(xs []string) WriterData {
-	return &WriterDataString{xs}
-}
-
-func (cd WriterDataString) valueType() TsValueType {
-	return TsValueString
-}
-
-func (wd *WriterDataString) toNative(h HandleType) (unsafe.Pointer, error) {
-	count := len(wd.xs)
-	if count == 0 {
-		return nil, fmt.Errorf("no strings provided")
-	}
-
-	// Step 1: allocate qdb_string_t array
-	retPtr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
-	if err != nil {
-		return nil, err
-	}
-
-	retSlice := unsafe.Slice(retPtr, count)
-
-	// Step 2: copy string contents
-	for i, v := range wd.xs {
-		var destPtr *C.char
-
-		if len(v) > 0 {
-			// Calculate the correct offset within the large contiguous slab
-			destPtr, err = qdbCopyString(h, v)
-			if err != nil {
-				return nil, err
-			}
-			retSlice[i].data = destPtr
-			retSlice[i].length = C.qdb_size_t(len(v))
-		} else {
-			// Explicitly handle empty blobs
-			retSlice[i].data = nil
-			retSlice[i].length = 0
-		}
-	}
-
-	return unsafe.Pointer(retPtr), nil
-}
 
 // Metadata we need to represent a single column.
 type WriterColumn struct {
@@ -235,7 +36,7 @@ type WriterTable struct {
 	idx []C.qdb_timespec_t
 
 	// Value arrays to write for each column.
-	data []WriterData
+	data []ColumnData
 }
 
 type WriterPushMode C.qdb_exp_batch_push_mode_t
@@ -269,90 +70,6 @@ func ifaceDataPtr(i interface{}) unsafe.Pointer {
 	return (*iface)(unsafe.Pointer(&i)).data
 }
 
-// GetWriterDataInt64 safely converts WriterData to *WriterDataInt64.
-//
-// Returns an error if data is not of type Int64.
-func GetWriterDataInt64(x WriterData) (*WriterDataInt64, error) {
-	v, ok := x.(*WriterDataInt64)
-	if !ok {
-		return nil, fmt.Errorf("GetInt64Array: type mismatch, expected WriterDataInt64, got %T", x)
-	}
-	return v, nil
-}
-
-// GetWriterDataInt64Unsafe is an unsafe version of GetWriterDataInt64. Undefined behavior occurs when
-// invoked on the incorrect type.
-func GetWriterDataInt64Unsafe(x WriterData) *WriterDataInt64 {
-	return (*WriterDataInt64)(ifaceDataPtr(x))
-}
-
-// GetWriterDataDouble safely converts WriterData to *WriterDataDouble.
-//
-// Returns an error if data is not of type Double.
-func GetWriterDataDouble(x WriterData) (*WriterDataDouble, error) {
-	v, ok := x.(*WriterDataDouble)
-	if !ok {
-		return nil, fmt.Errorf("GetDoubleArray: type mismatch, expected WriterDataDouble, got %T", x)
-	}
-	return v, nil
-}
-
-// GetWriterDataDoubleUnsafe is an unsafe version of GetWriterDataDouble. Undefined behavior occurs when
-// invoked on the incorrect type.
-func GetWriterDataDoubleUnsafe(x WriterData) *WriterDataDouble {
-	return (*WriterDataDouble)(ifaceDataPtr(x))
-}
-
-// GetWriterDataTimestamp safely converts WriterData to *WriterDataTimestamp.
-//
-// Returns an error if data is not of type Timestamp.
-func GetWriterDataTimestamp(x WriterData) (*WriterDataTimestamp, error) {
-	v, ok := x.(*WriterDataTimestamp)
-	if !ok {
-		return nil, fmt.Errorf("GetTimestampArray: type mismatch, expected WriterDataTimestamp, got %T", x)
-	}
-	return v, nil
-}
-
-// GetWriterDataTimestampUnsafe is an unsafe version of GetWriterDataTimestamp. Undefined behavior occurs when
-// invoked on the incorrect type.
-func GetWriterDataTimestampUnsafe(x WriterData) *WriterDataTimestamp {
-	return (*WriterDataTimestamp)(ifaceDataPtr(x))
-}
-
-// GetWriterDataString safely converts WriterData to *WriterDataString.
-//
-// Returns an error if data is not of type String.
-func GetWriterDataString(x WriterData) (*WriterDataString, error) {
-	v, ok := x.(*WriterDataString)
-	if !ok {
-		return nil, fmt.Errorf("GetStringArray: type mismatch, expected WriterDataString, got %T", x)
-	}
-	return v, nil
-}
-
-// GetWriterDataStringUnsafe is an unsafe version of GetWriterDataString. Undefined behavior occurs when
-// invoked on the incorrect type.
-func GetWriterDataStringUnsafe(x WriterData) *WriterDataString {
-	return (*WriterDataString)(ifaceDataPtr(x))
-}
-
-// GetWriterDataBlob safely converts WriterData to *WriterDataBlob.
-//
-// Returns an error if data is not of type Blob.
-func GetWriterDataBlob(x WriterData) (*WriterDataBlob, error) {
-	v, ok := x.(*WriterDataBlob)
-	if !ok {
-		return nil, fmt.Errorf("GetBlobArray: type mismatch, expected WriterDataBlob, got %T", x)
-	}
-	return v, nil
-}
-
-// GetWriterDataBlobUnsafe is an unsafe version of GetWriterDataBlob. Undefined behavior occurs when
-// invoked on the incorrect type.
-func GetWriterDataBlobUnsafe(x WriterData) *WriterDataBlob {
-	return (*WriterDataBlob)(ifaceDataPtr(x))
-}
 
 // NewWriterTable constructs an empty table definition using the provided columns.
 //
@@ -367,7 +84,7 @@ func GetWriterDataBlobUnsafe(x WriterData) *WriterDataBlob {
 //   - Linear initialization to build the lookup maps; negligible for typical
 //     column counts.
 func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
-	data := make([]WriterData, len(cols))
+	data := make([]ColumnData, len(cols))
 
 	columnInfoByOffset := make([]WriterColumn, len(cols))
 	columnOffsetByName := make(map[string]int)
@@ -420,8 +137,6 @@ func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
 
-// toNativeTableData converts the "table data" part of the WriterTable to native C type,
-// i.e., it fills the C struct `qdb_exp_batch_push_table_data_t` with the data from the WriterTable.
 func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_table_data_t) error {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
@@ -457,14 +172,9 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		return err
 	}
 
-	// Convert each WriterData to its native counterpart.
+	// Convert each ColumnData to its native counterpart.
 	for i, column := range t.columnInfoByOffset {
 
-		// This is the equivalent to C code:
-		//
-		//   elem = basePtr[i * elemSize]
-		//
-		// plus a whole bunch of casts necessary for Go interaction.
 		elem := (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(
 			uintptr(basePtr) + uintptr(i)*uintptr(elemSize)))
 
@@ -474,24 +184,10 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 			return fmt.Errorf("toNative: failed to copy column name: %w", err)
 		}
 
-		// Initialize struct fields individually to avoid incorrect
-		// pointer conversions with the union field on different
-		// architectures.
 		elem.name = name
 		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
-		ptr, err := t.data[i].toNative(h)
-		if err != nil {
-			return err
-		}
-
-		// Store the pointer to the value array in the union field.
-		// The `data` field is represented as a byte array by cgo.
-		// Writing an unsafe.Pointer fits both 32‑bit and 64‑bit
-		// systems, as the size of unsafe.Pointer matches the
-		// architecture's pointer width.
-		//
-		// `ptr` should be released using qdbRelease() once done
+		ptr := t.data[i].CopyToC(h)
 		*(*unsafe.Pointer)(unsafe.Pointer(&elem.data[0])) = ptr
 	}
 
@@ -668,31 +364,14 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 	return nil
 }
 
-// SetData assigns values to the column at the specified offset.
-//
-// Decision rationale:
-//   - Centralizes per-column validation before data insertion.
-//   - Allows progressive population of a WriterTable prior to Push.
-//
-// Key assumptions:
-//   - offset refers to an existing column in columnInfoByOffset.
-//   - xs.valueType() matches the column's expected type.
-//
-// Performance trade-offs:
-//   - Only constant-time checks and a slice assignment; overhead is negligible.
-//
-// Usage example:
-//
-//	err := wt.SetData(0, NewWriterDataInt64(vals))
-//	require.NoError(t, err)
-func (t *WriterTable) SetData(offset int, xs WriterData) error {
+func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 	if len(t.columnInfoByOffset) <= offset {
 		return fmt.Errorf("Column offset out of range: %v", offset)
 	}
 
 	col := t.columnInfoByOffset[offset]
-	if col.ColumnType.AsValueType() != xs.valueType() {
-		return fmt.Errorf("Column's expected value type does not match provided value type: column type (%v)'s value type %v != %v", col.ColumnType, col.ColumnType.AsValueType(), xs.valueType())
+	if col.ColumnType.AsValueType() != xs.ValueType() {
+		return fmt.Errorf("Column's expected value type does not match provided value type: column type (%v)'s value type %v != %v", col.ColumnType, col.ColumnType.AsValueType(), xs.ValueType())
 	}
 
 	t.data[offset] = xs
@@ -700,24 +379,7 @@ func (t *WriterTable) SetData(offset int, xs WriterData) error {
 	return nil
 }
 
-// SetDatas fills all columns of the table using the provided slice.
-//
-// Decision rationale:
-//   - Reuses SetData for each column to keep validation logic centralized.
-//   - Assumes the order of xs matches the table schema.
-//
-// Key assumptions:
-//   - len(xs) equals len(columnInfoByOffset).
-//   - Each xs[i] carries the correct value type for column i.
-//
-// Performance trade-offs:
-//   - Linear in number of columns; each SetData invocation performs simple checks.
-//
-// Usage example:
-//
-//	err := wt.SetDatas([]WriterData{colA, colB})
-//	require.NoError(t, err)
-func (t *WriterTable) SetDatas(xs []WriterData) error {
+func (t *WriterTable) SetDatas(xs []ColumnData) error {
 	for i, x := range xs {
 		err := t.SetData(i, x)
 
@@ -729,8 +391,7 @@ func (t *WriterTable) SetDatas(xs []WriterData) error {
 	return nil
 }
 
-// GetData retrieves the WriterData at the specified column offset.
-func (t *WriterTable) GetData(offset int) (WriterData, error) {
+func (t *WriterTable) GetData(offset int) (ColumnData, error) {
 	if offset >= len(t.data) {
 		return nil, fmt.Errorf("Column offset out of range: %v", offset)
 	}
