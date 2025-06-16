@@ -58,9 +58,6 @@ type ColumnDataInt64 struct {
 	xs []int64
 }
 
-func (cd *ColumnDataInt64) Data() []int64 {
-	return cd.xs
-}
 
 func (cd *ColumnDataInt64) Length() int {
 	return len(cd.xs)
@@ -212,7 +209,6 @@ func GetColumnDataInt64Unsafe(cd ColumnData) []int64 {
 
 type ColumnDataDouble struct{ xs []float64 }
 
-func (cd *ColumnDataDouble) Data() []float64        { return cd.xs }
 func (cd *ColumnDataDouble) Length() int            { return len(cd.xs) }
 func (cd *ColumnDataDouble) ValueType() TsValueType { return TsValueDouble }
 func (cd *ColumnDataDouble) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
@@ -269,13 +265,12 @@ func GetColumnDataDoubleUnsafe(cd ColumnData) []float64 {
 
 // --- Timestamp ----------------------------------------------------
 
-type ColumnDataTimestamp struct{ xs []time.Time }
+type ColumnDataTimestamp struct{ xs []C.qdb_timespec_t }
 
-func (cd *ColumnDataTimestamp) Data() []time.Time      { return cd.xs }
 func (cd *ColumnDataTimestamp) Length() int            { return len(cd.xs) }
 func (cd *ColumnDataTimestamp) ValueType() TsValueType { return TsValueTimestamp }
 func (cd *ColumnDataTimestamp) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
-func (cd *ColumnDataTimestamp) Clear()                 { cd.xs = make([]time.Time, 0) }
+func (cd *ColumnDataTimestamp) Clear()                 { cd.xs = make([]C.qdb_timespec_t, 0) }
 func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataTimestamp)
 	if !ok {
@@ -289,14 +284,17 @@ func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 func (cd *ColumnDataTimestamp) CopyToC(h HandleType) unsafe.Pointer {
-	tsSlice := TimeSliceToQdbTimespec(cd.xs)
-	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, tsSlice)
+	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, cd.xs)
 	if err != nil {
 		panic(err)
 	}
 	return unsafe.Pointer(ptr)
 }
-func newColumnDataTimestamp(xs []time.Time) ColumnDataTimestamp { return ColumnDataTimestamp{xs: xs} }
+
+func newColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
+	return ColumnDataTimestamp{xs: TimeSliceToQdbTimespec(ts)}
+}
+
 func newColumnDataTimestampFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataTimestamp, error) {
@@ -310,21 +308,35 @@ func newColumnDataTimestampFromNative(
 	if raw == nil {
 		return ColumnDataTimestamp{}, fmt.Errorf("nil data ptr for %q", name)
 	}
-	specSlice, err := cPointerArrayToSlice[C.qdb_timespec_t, C.qdb_timespec_t](raw, int64(n))
+	specs, err := cPointerArrayToSlice[C.qdb_timespec_t, C.qdb_timespec_t](raw, int64(n))
 	if err != nil {
 		return ColumnDataTimestamp{}, err
 	}
-	goTimes := QdbTimespecSliceToTime(specSlice)
-	return newColumnDataTimestamp(goTimes), nil
+	return ColumnDataTimestamp{xs: specs}, nil
 }
+
 func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
+	xs, err := GetColumnDataTimestampNative(cd)
+	if err != nil {
+		return nil, err
+	}
+
+	return QdbTimespecSliceToTime(xs), nil
+}
+
+func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	v, ok := cd.(*ColumnDataTimestamp)
 	if !ok {
 		return nil, fmt.Errorf("GetColumnDataTimestamp: expected ColumnDataTimestamp, got %T", cd)
 	}
 	return v.xs, nil
 }
+
 func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
+	return QdbTimespecSliceToTime(GetColumnDataTimestampNativeUnsafe(cd))
+}
+
+func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 	return (*ColumnDataTimestamp)(ifaceDataPtr(cd)).xs
 }
 
@@ -332,7 +344,6 @@ func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
 
 type ColumnDataBlob struct{ xs [][]byte }
 
-func (cd *ColumnDataBlob) Data() [][]byte         { return cd.xs }
 func (cd *ColumnDataBlob) Length() int            { return len(cd.xs) }
 func (cd *ColumnDataBlob) ValueType() TsValueType { return TsValueBlob }
 func (cd *ColumnDataBlob) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
@@ -407,7 +418,6 @@ func GetColumnDataBlobUnsafe(cd ColumnData) [][]byte {
 
 type ColumnDataString struct{ xs []string }
 
-func (cd *ColumnDataString) Data() []string         { return cd.xs }
 func (cd *ColumnDataString) Length() int            { return len(cd.xs) }
 func (cd *ColumnDataString) ValueType() TsValueType { return TsValueString }
 func (cd *ColumnDataString) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
