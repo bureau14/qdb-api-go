@@ -72,28 +72,38 @@ type ColumnData interface {
 	PinToC(p *runtime.Pinner, h HandleType) (ptr unsafe.Pointer, release func())
 }
 
-// Int64
+// --- Int64 ---------------------------------------------------------
+
 type ColumnDataInt64 struct {
 	xs []int64
 }
 
 
+// Length reports the number of int64 values held in the column.
 func (cd *ColumnDataInt64) Length() int {
 	return len(cd.xs)
 }
 
+// ValueType implements ColumnData.ValueType.
 func (cd *ColumnDataInt64) ValueType() TsValueType {
 	return TsValueInt64
 }
 
+// EnsureCapacity pre-allocates capacity n to reduce reallocations.
 func (cd *ColumnDataInt64) EnsureCapacity(n int) {
 	cd.xs = sliceEnsureCapacity(cd.xs, n)
 }
 
+// Clear resets the slice to length 0 while keeping capacity.
 func (cd *ColumnDataInt64) Clear() {
 	cd.xs = make([]int64, 0)
 }
 
+// CopyToC allocates C memory and deep-copies cd.xs so the buffer
+// outlives the Go slice.
+//
+// Performance trade-offs:
+//   // O(len) copy; required when the caller cannot hold a pinner.
 func (cd *ColumnDataInt64) CopyToC(h HandleType) unsafe.Pointer {
 	ptr, err := qdbAllocAndCopyBuffer[int64, C.qdb_int_t](h, cd.xs)
 	if err != nil {
@@ -103,6 +113,9 @@ func (cd *ColumnDataInt64) CopyToC(h HandleType) unsafe.Pointer {
 	return unsafe.Pointer(ptr)
 }
 
+// PinToC exposes the Go slice to C without copying:
+//   – pins the slice base so it stays immovable
+//   – returns a no-op release closure
 func (cd *ColumnDataInt64) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -112,7 +125,7 @@ func (cd *ColumnDataInt64) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Point
 	return unsafe.Pointer(base), func() {}
 }
 
-
+// appendData concatenates another ColumnDataInt64 after type checking.
 func (cd *ColumnDataInt64) appendData(data ColumnData) error {
 	other, ok := data.(*ColumnDataInt64)
 	if !ok {
@@ -123,11 +136,13 @@ func (cd *ColumnDataInt64) appendData(data ColumnData) error {
 	return nil
 }
 
+// appendDataUnsafe performs the same concatenation without RTTI checks.
 func (cd *ColumnDataInt64) appendDataUnsafe(data ColumnData) {
 	other := (*ColumnDataInt64)(ifaceDataPtr(data))
 	cd.xs = append(cd.xs, other.xs...)
 }
 
+// newColumnDataInt64 wraps an existing []int64 in ColumnDataInt64.
 func newColumnDataInt64(xs []int64) ColumnDataInt64 {
 	return ColumnDataInt64{xs: xs}
 }
@@ -238,10 +253,27 @@ func GetColumnDataInt64Unsafe(cd ColumnData) []int64 {
 
 type ColumnDataDouble struct{ xs []float64 }
 
-func (cd *ColumnDataDouble) Length() int            { return len(cd.xs) }
-func (cd *ColumnDataDouble) ValueType() TsValueType { return TsValueDouble }
-func (cd *ColumnDataDouble) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
-func (cd *ColumnDataDouble) Clear()                 { cd.xs = make([]float64, 0) }
+// Length reports the number of float64 values held in the column.
+func (cd *ColumnDataDouble) Length() int {
+	return len(cd.xs)
+}
+
+// ValueType implements ColumnData.ValueType.
+func (cd *ColumnDataDouble) ValueType() TsValueType {
+	return TsValueDouble
+}
+
+// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+func (cd *ColumnDataDouble) EnsureCapacity(n int) {
+	cd.xs = sliceEnsureCapacity(cd.xs, n)
+}
+
+// Clear resets the slice to length 0 while keeping capacity.
+func (cd *ColumnDataDouble) Clear() {
+	cd.xs = make([]float64, 0)
+}
+
+// appendData concatenates another ColumnDataDouble after type checking.
 func (cd *ColumnDataDouble) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataDouble)
 	if !ok {
@@ -250,10 +282,18 @@ func (cd *ColumnDataDouble) appendData(d ColumnData) error {
 	cd.xs = append(cd.xs, other.xs...)
 	return nil
 }
+
+// appendDataUnsafe performs the same concatenation without RTTI checks.
 func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataDouble)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
 }
+
+// CopyToC allocates C memory and deep-copies cd.xs so the buffer
+// outlives the Go slice.
+//
+// Performance trade-offs:
+//   // O(len) copy; required when the caller cannot hold a pinner.
 func (cd *ColumnDataDouble) CopyToC(h HandleType) unsafe.Pointer {
 	ptr, err := qdbAllocAndCopyBuffer[float64, C.double](h, cd.xs)
 	if err != nil {
@@ -262,6 +302,9 @@ func (cd *ColumnDataDouble) CopyToC(h HandleType) unsafe.Pointer {
 	return unsafe.Pointer(ptr)
 }
 
+// PinToC exposes the Go slice to C without copying:
+//   – pins the slice base so it stays immovable
+//   – returns a no-op release closure
 func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -271,6 +314,7 @@ func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
 	return unsafe.Pointer(base), func() {}
 }
 
+// newColumnDataDouble wraps an existing []float64 in ColumnDataDouble.
 func newColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
 func newColumnDataDoubleFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -306,10 +350,27 @@ func GetColumnDataDoubleUnsafe(cd ColumnData) []float64 {
 
 type ColumnDataTimestamp struct{ xs []C.qdb_timespec_t }
 
-func (cd *ColumnDataTimestamp) Length() int            { return len(cd.xs) }
-func (cd *ColumnDataTimestamp) ValueType() TsValueType { return TsValueTimestamp }
-func (cd *ColumnDataTimestamp) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
-func (cd *ColumnDataTimestamp) Clear()                 { cd.xs = make([]C.qdb_timespec_t, 0) }
+// Length reports the number of timestamp values held in the column.
+func (cd *ColumnDataTimestamp) Length() int {
+	return len(cd.xs)
+}
+
+// ValueType implements ColumnData.ValueType.
+func (cd *ColumnDataTimestamp) ValueType() TsValueType {
+	return TsValueTimestamp
+}
+
+// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+func (cd *ColumnDataTimestamp) EnsureCapacity(n int) {
+	cd.xs = sliceEnsureCapacity(cd.xs, n)
+}
+
+// Clear resets the slice to length 0 while keeping capacity.
+func (cd *ColumnDataTimestamp) Clear() {
+	cd.xs = make([]C.qdb_timespec_t, 0)
+}
+
+// appendData concatenates another ColumnDataTimestamp after type checking.
 func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataTimestamp)
 	if !ok {
@@ -318,10 +379,18 @@ func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
 	cd.xs = append(cd.xs, other.xs...)
 	return nil
 }
+
+// appendDataUnsafe performs the same concatenation without RTTI checks.
 func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataTimestamp)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
 }
+
+// CopyToC allocates C memory and deep-copies cd.xs so the buffer
+// outlives the Go slice.
+//
+// Performance trade-offs:
+//   // O(len) copy; required when the caller cannot hold a pinner.
 func (cd *ColumnDataTimestamp) CopyToC(h HandleType) unsafe.Pointer {
 	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, cd.xs)
 	if err != nil {
@@ -330,6 +399,9 @@ func (cd *ColumnDataTimestamp) CopyToC(h HandleType) unsafe.Pointer {
 	return unsafe.Pointer(ptr)
 }
 
+// PinToC exposes the Go slice to C without copying:
+//   – pins the slice base so it stays immovable
+//   – returns a no-op release closure
 func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -339,10 +411,35 @@ func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.P
 	return unsafe.Pointer(base), func() {}
 }
 
+// newColumnDataTimestamp wraps a []time.Time as ColumnDataTimestamp.
 func newColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
 	return ColumnDataTimestamp{xs: TimeSliceToQdbTimespec(ts)}
 }
 
+/*
+newColumnDataTimestampFromNative constructs a ColumnDataTimestamp by copying
+C.qdb_timespec_t values from a C buffer into Go-managed memory.
+
+Decision rationale:
+  - Copy to Go slice ensures memory safety if C buffer is later released.
+  - Early validation of data_type and length prevents out-of-bounds.
+
+Key assumptions:
+  - xs.data_type == C.qdb_ts_column_timestamp.
+  - n > 0 and xs.data pointer is non-nil.
+
+Performance trade-offs:
+  - O(n) copy cost, acceptable for safety and simplicity.
+
+Usage example:
+
+	// arr is a C.qdb_exp_batch_push_column_t from qdb_ts_read_columns
+	cd, err := newColumnDataTimestampFromNative("myCol", arr, length)
+	if err != nil {
+	    // handle error
+	}
+	data := cd.Data()
+*/
 func newColumnDataTimestampFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataTimestamp, error) {
@@ -363,6 +460,7 @@ func newColumnDataTimestampFromNative(
 	return ColumnDataTimestamp{xs: specs}, nil
 }
 
+// GetColumnDataTimestamp extracts a []time.Time copy from ColumnData.
 func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	xs, err := GetColumnDataTimestampNative(cd)
 	if err != nil {
@@ -372,6 +470,7 @@ func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	return QdbTimespecSliceToTime(xs), nil
 }
 
+// GetColumnDataTimestampNative extracts a []C.qdb_timespec_t from ColumnData.
 func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	v, ok := cd.(*ColumnDataTimestamp)
 	if !ok {
@@ -380,10 +479,12 @@ func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	return v.xs, nil
 }
 
+// GetColumnDataTimestampUnsafe returns a []time.Time without type checks.
 func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
 	return QdbTimespecSliceToTime(GetColumnDataTimestampNativeUnsafe(cd))
 }
 
+// GetColumnDataTimestampNativeUnsafe returns a []C.qdb_timespec_t without type checks.
 func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 	return (*ColumnDataTimestamp)(ifaceDataPtr(cd)).xs
 }
@@ -392,10 +493,27 @@ func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 
 type ColumnDataBlob struct{ xs [][]byte }
 
-func (cd *ColumnDataBlob) Length() int            { return len(cd.xs) }
-func (cd *ColumnDataBlob) ValueType() TsValueType { return TsValueBlob }
-func (cd *ColumnDataBlob) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
-func (cd *ColumnDataBlob) Clear()                 { cd.xs = make([][]byte, 0) }
+// Length reports the number of blob values held in the column.
+func (cd *ColumnDataBlob) Length() int {
+	return len(cd.xs)
+}
+
+// ValueType implements ColumnData.ValueType.
+func (cd *ColumnDataBlob) ValueType() TsValueType {
+	return TsValueBlob
+}
+
+// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+func (cd *ColumnDataBlob) EnsureCapacity(n int) {
+	cd.xs = sliceEnsureCapacity(cd.xs, n)
+}
+
+// Clear resets the slice to length 0 while keeping capacity.
+func (cd *ColumnDataBlob) Clear() {
+	cd.xs = make([][]byte, 0)
+}
+
+// appendData concatenates another ColumnDataBlob after type checking.
 func (cd *ColumnDataBlob) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataBlob)
 	if !ok {
@@ -404,10 +522,17 @@ func (cd *ColumnDataBlob) appendData(d ColumnData) error {
 	cd.xs = append(cd.xs, other.xs...)
 	return nil
 }
+
+// appendDataUnsafe performs the same concatenation without RTTI checks.
 func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataBlob)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
 }
+
+// CopyToC deep-copies every blob into a C-managed buffer.
+//
+// Decision rationale:
+//   – Required when the caller cannot hold pinned Go memory.
 func (cd *ColumnDataBlob) CopyToC(h HandleType) unsafe.Pointer {
 	count := len(cd.xs)
 	arr, err := qdbAllocBuffer[C.qdb_blob_t](h, count)
@@ -428,6 +553,11 @@ func (cd *ColumnDataBlob) CopyToC(h HandleType) unsafe.Pointer {
 	return unsafe.Pointer(arr)
 }
 
+// PinToC builds a C envelope and pins each []byte in cd.xs.
+//
+// Decision rationale:
+//   – Zero-copy path avoids duplicating potentially large blobs.
+//   – release() frees only the envelope; Go memory is unpinned automatically.
 func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	count := len(cd.xs)
 	if count == 0 {
@@ -459,7 +589,7 @@ func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointe
 	return unsafe.Pointer(arr), release
 }
 
-
+// newColumnDataBlob wraps an existing [][]byte in ColumnDataBlob.
 func newColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
 func newColumnDataBlobFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -499,10 +629,27 @@ func GetColumnDataBlobUnsafe(cd ColumnData) [][]byte {
 
 type ColumnDataString struct{ xs []string }
 
-func (cd *ColumnDataString) Length() int            { return len(cd.xs) }
-func (cd *ColumnDataString) ValueType() TsValueType { return TsValueString }
-func (cd *ColumnDataString) EnsureCapacity(n int)   { cd.xs = sliceEnsureCapacity(cd.xs, n) }
-func (cd *ColumnDataString) Clear()                 { cd.xs = make([]string, 0) }
+// Length reports the number of string values held in the column.
+func (cd *ColumnDataString) Length() int {
+	return len(cd.xs)
+}
+
+// ValueType implements ColumnData.ValueType.
+func (cd *ColumnDataString) ValueType() TsValueType {
+	return TsValueString
+}
+
+// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+func (cd *ColumnDataString) EnsureCapacity(n int) {
+	cd.xs = sliceEnsureCapacity(cd.xs, n)
+}
+
+// Clear resets the slice to length 0 while keeping capacity.
+func (cd *ColumnDataString) Clear() {
+	cd.xs = make([]string, 0)
+}
+
+// appendData concatenates another ColumnDataString after type checking.
 func (cd *ColumnDataString) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataString)
 	if !ok {
@@ -511,10 +658,17 @@ func (cd *ColumnDataString) appendData(d ColumnData) error {
 	cd.xs = append(cd.xs, other.xs...)
 	return nil
 }
+
+// appendDataUnsafe performs the same concatenation without RTTI checks.
 func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataString)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
 }
+
+// CopyToC deep-copies every string into a C-managed buffer with explicit length.
+//
+// Decision rationale:
+//   – Each string is copied and NUL-termination is not required (explicit length).
 func (cd *ColumnDataString) CopyToC(h HandleType) unsafe.Pointer {
 	count := len(cd.xs)
 	arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
@@ -538,6 +692,11 @@ func (cd *ColumnDataString) CopyToC(h HandleType) unsafe.Pointer {
 }
 
 
+// PinToC builds a C envelope and pins each string in cd.xs.
+//
+// Decision rationale:
+//   – Zero-copy path avoids duplicating potentially large strings.
+//   – qdb_string_t uses explicit length, so NUL-termination is not required.
 func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
     count := len(cd.xs)
     if count == 0 {
@@ -576,7 +735,7 @@ func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
     return unsafe.Pointer(arr), release
 }
 
-
+// newColumnDataString wraps an existing []string in ColumnDataString.
 func newColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
 func newColumnDataStringFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,

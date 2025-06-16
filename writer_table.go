@@ -100,6 +100,30 @@ func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
 
+ // toNativeTableData initialises `out` so it can be passed directly to
+ // qdb_exp_batch_push_with_options.
+ //
+ // Decision rationale:
+ //   - Avoid copies: the timestamp index and every numeric/timespec column
+ //     are passed zero-copy by pinning the backing Go slices.
+ //   - Keep memory-ownership crystal clear: every temporary C allocation
+ //     made here is registered in a slice and folded into ONE `release`
+ //     closure returned to the caller.
+ //
+ // Key assumptions:
+ //   - t.idx, t.data and t.columnInfoByOffset have already been validated.
+ //   - `pinner` outlives the C call that will consume `out`.
+ //   - Each ColumnData implementation obeys CGO pointer-safety when
+ //     returning from PinToC.
+ //
+ // Performance trade-offs:
+ //   - Exactly one C allocation for the column envelope (O(#columns));
+ //     all row-level data stays in Go memory.
+ //
+ // Usage example:
+ //   rel, err := tbl.toNativeTableData(&pinner, h, &cTbl.data)
+ //   if err != nil { … }
+ //   defer rel()   // single call releases every allocation done here.
 func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, out *C.qdb_exp_batch_push_table_data_t) (func(), error) {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
@@ -160,9 +184,26 @@ func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, ou
 	return releaseAll, nil
 }
 
-// toNative converts WriterTable to native C type and avoids copies where possible.
-// It is the caller's responsibility to ensure that the WriterTable lives at least
-// as long as the native C structure.
+ // toNative converts a WriterTable into the flat
+ // qdb_exp_batch_push_table_t required by the batch writer.
+ //
+ // Decision rationale:
+ //   - Encapsulate every table-level conversion and gather the subordinate
+ //     column release callbacks into a single closure, mirroring the
+ //     semantics of multiple defers while incurring only one.
+ //
+ // Key assumptions:
+ //   - `pinner` survives until the batch push completes.
+ //   - `opts` were validated in Writer.Push.
+ //
+ // Performance trade-offs:
+ //   - No data copies; only minimal envelope allocations done in
+ //     toNativeTableData.
+ //
+ // Usage example:
+ //   rel, err := tbl.toNative(&pinner, h, opts, &cTbl)
+ //   if err != nil { … }
+ //   defer rel()
 func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) (func(), error) {
 	var err error
 
