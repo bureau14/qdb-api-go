@@ -164,19 +164,16 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 	// Allocate native columns array using the QuasarDB allocator so the
 	// memory remains valid after this function returns.
 	columnCount := len(t.data)
-	elemSize := unsafe.Sizeof(C.qdb_exp_batch_push_column_t{})
-	total := uintptr(columnCount) * elemSize
-
-	basePtr, err := qdbAllocBytes(h, int(total))
+	cols, err := qdbAllocBuffer[C.qdb_exp_batch_push_column_t](h, columnCount)
 	if err != nil {
 		return err
 	}
+	colSlice := unsafe.Slice(cols, columnCount)
 
 	// Convert each ColumnData to its native counterpart.
 	for i, column := range t.columnInfoByOffset {
 
-		elem := (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(
-			uintptr(basePtr) + uintptr(i)*uintptr(elemSize)))
+		elem := &colSlice[i]
 
 		// Allocate and copy column name using the QDB allocator.
 		name, err := qdbCopyString(h, column.ColumnName)
@@ -192,7 +189,7 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 	}
 
 	// Store the pointer to the first element.
-	out.columns = (*C.qdb_exp_batch_push_column_t)(basePtr)
+	out.columns = cols
 
 	return nil
 }
@@ -226,21 +223,16 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 
 	if len(opts.dropDuplicateColumns) > 0 {
 		count := len(opts.dropDuplicateColumns)
-		elemSize := C.qdb_size_t(unsafe.Sizeof((*C.char)(nil)))
-		total := C.qdb_size_t(count) * elemSize
-
-		var basePtr unsafe.Pointer
-		err = makeErrorOrNil(C.qdb_alloc_buffer(h.handle, total, &basePtr))
+		ptr, err := qdbAllocBuffer[*C.char](h, count)
 		if err != nil {
 			return err
 		}
-
-		slice := (*[1 << 30]*C.char)(basePtr)[:count:count]
+		dupSlice := unsafe.Slice(ptr, count)
 		for i := range opts.dropDuplicateColumns {
-			slice[i] = pinStringBytes(pinner, &opts.dropDuplicateColumns[i])
+			dupSlice[i] = pinStringBytes(pinner, &opts.dropDuplicateColumns[i])
 		}
 
-		out.where_duplicate = (**C.char)(basePtr)
+		out.where_duplicate = ptr
 		out.where_duplicate_count = C.qdb_size_t(count)
 	} else {
 		out.where_duplicate = nil
@@ -727,16 +719,8 @@ func (w *Writer) Push(h HandleType) error {
 		return fmt.Errorf("No tables to push")
 	}
 
-	tbls, err := qdbAllocBuffer[C.qdb_exp_batch_push_table_t](h, w.Length())
-	if err != nil {
-		return fmt.Errorf("Push failed: %v", err)
-	}
-
-	defer qdbRelease(h, tbls)
+	tblSlice := make([]C.qdb_exp_batch_push_table_t, w.Length())
 	i := 0
-
-	// Convert the raw pointer to a Go slice explicitly for easier access.
-	tblSlice := unsafe.Slice(tbls, w.Length())
 
 	for _, v := range w.tables {
 		err := v.toNative(&pinner, h, w.options, &tblSlice[i])
@@ -758,9 +742,9 @@ func (w *Writer) Push(h HandleType) error {
 	errCode := C.qdb_exp_batch_push_with_options(
 		h.handle,
 		&options,
-		(*C.qdb_exp_batch_push_table_t)(unsafe.Pointer(tbls)),
+		&tblSlice[0],
 		tableSchemas,
-		C.qdb_size_t(w.Length()),
+		C.qdb_size_t(len(tblSlice)),
 	)
 	return makeErrorOrNil(C.qdb_error_t(errCode))
 }
