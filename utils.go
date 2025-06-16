@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"time"
 	"unsafe"
 )
@@ -535,6 +536,32 @@ func qdbCopyString(h HandleType, s string) (*C.char, error) {
 	}
 
 	return (*C.char)(unsafe.Pointer(ptr)), nil
+}
+
+// pinStringBytes appends a NUL terminator to *s (if missing), pins the backing
+// byte array and returns a *C.char pointing at it.
+// Decision rationale:
+//   - Re-uses Go storage → avoids extra C allocation and copy.
+// Key assumptions:
+//   - p lifetime ≥ any C usage of the returned pointer.
+//   - *s is a valid Go string; mutation is limited to optional NUL append.
+// Performance trade-offs:
+//   - One O(len(s)) copy only when the NUL terminator must be appended.
+// Usage example:
+//   // var p runtime.Pinner
+//   cStr := pinStringBytes(&p, &tableName)
+//   defer p.Unpin()
+func pinStringBytes(p *runtime.Pinner, s *string) *C.char {
+	if s == nil {
+		return nil
+	}
+	// Make sure the string ends with '\0'
+	if len(*s) == 0 || (*s)[len(*s)-1] != 0 {
+		*s = *s + "\x00"
+	}
+	ptr := unsafe.StringData(*s) // pointer into Go heap
+	p.Pin(ptr)                   // keep it immovable until Unpin
+	return (*C.char)(unsafe.Pointer(ptr))
 }
 
 // castSlice performs a zero-copy reinterpretation from a slice of type []From to []To.

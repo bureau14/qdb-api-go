@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 	"unsafe"
 )
@@ -69,7 +70,6 @@ func ifaceDataPtr(i interface{}) unsafe.Pointer {
 
 	return (*iface)(unsafe.Pointer(&i)).data
 }
-
 
 // NewWriterTable constructs an empty table definition using the provided columns.
 //
@@ -200,14 +200,12 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 // toNative converts WriterTable to native C type and avoids copies where possible.
 // It is the caller's responsibility to ensure that the WriterTable lives at least
 // as long as the native C structure.
-func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) error {
+func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) error {
+	var err error
 
-	tableName, err := qdbCopyString(h, t.TableName)
-	if err != nil {
-		return err
-	}
-
-	out.name = tableName
+	// Zero-copy: use the Go string bytes directly and pin them so the GC keeps
+	// the backing array alive for the entire push.
+	out.name = pinStringBytes(pinner, &t.TableName)
 
 	// Zero-initialize the rest of the struct. This should already be the case,
 	// but just in case, we are very explicit about all the default values we
@@ -232,14 +230,14 @@ func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_
 		total := C.qdb_size_t(count) * elemSize
 
 		var basePtr unsafe.Pointer
-		errCode := C.qdb_alloc_buffer(h.handle, total, &basePtr)
-		if err := makeErrorOrNil(errCode); err != nil {
+		err = makeErrorOrNil(C.qdb_alloc_buffer(h.handle, total, &basePtr))
+		if err != nil {
 			return err
 		}
 
 		slice := (*[1 << 30]*C.char)(basePtr)[:count:count]
-		for i, c := range opts.dropDuplicateColumns {
-			slice[i] = (*C.char)(unsafe.Pointer(unsafe.StringData(c)))
+		for i := range opts.dropDuplicateColumns {
+			slice[i] = pinStringBytes(pinner, &opts.dropDuplicateColumns[i])
 		}
 
 		out.where_duplicate = (**C.char)(basePtr)
@@ -335,7 +333,7 @@ func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_tabl
 	}
 
 	if tbl.name != nil {
-		qdbRelease(h, tbl.name)
+		// Name points to pinned Go memory – just nil it out.
 		tbl.name = nil
 	}
 
@@ -722,6 +720,9 @@ func (w *Writer) Length() int {
 
 // Pushes all tables to the server according to PushOptions.
 func (w *Writer) Push(h HandleType) error {
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
 	if w.Length() == 0 {
 		return fmt.Errorf("No tables to push")
 	}
@@ -738,7 +739,7 @@ func (w *Writer) Push(h HandleType) error {
 	tblSlice := unsafe.Slice(tbls, w.Length())
 
 	for _, v := range w.tables {
-		err := v.toNative(h, w.options, &tblSlice[i])
+		err := v.toNative(&pinner, h, w.options, &tblSlice[i])
 		if err != nil {
 			// Potential memory leak occurs here, but if we cannot do this conversion,
 			// it means something is very wrong and the user should close the handle
