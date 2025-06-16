@@ -100,38 +100,38 @@ func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
 
-func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, out *C.qdb_exp_batch_push_table_data_t) error {
+func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, out *C.qdb_exp_batch_push_table_data_t) (func(), error) {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
 	out.column_count = C.qdb_size_t(len(t.data))
 
 	// Index ("timestamps") slice: directly reference underlying Go slice memory.
 	if t.idx == nil {
-		return fmt.Errorf("Index is not set")
+		return func() {}, fmt.Errorf("Index is not set")
 	}
 
 	if t.rowCount <= 0 {
-		return fmt.Errorf("Index provided, but number of rows is 0")
+		return func() {}, fmt.Errorf("Index provided, but number of rows is 0")
 	}
 
 	if len(t.data) == 0 {
-		return fmt.Errorf("Index provided, but no column data provided")
+		return func() {}, fmt.Errorf("Index provided, but no column data provided")
 	}
 
-	timestampPtr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, t.idx)
-	if err != nil {
-		return fmt.Errorf("Unable to copy timestamps: %v", err)
-	}
-	out.timestamps = timestampPtr
+	// Zero-copy: pin the existing Go slice; safe because qdb_timespec_t has no Go pointers.
+	pinner.Pin(&t.idx[0])
+	out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
 
 	// Allocate native columns array using the QuasarDB allocator so the
 	// memory remains valid after this function returns.
 	columnCount := len(t.data)
 	cols, err := qdbAllocBuffer[C.qdb_exp_batch_push_column_t](h, columnCount)
 	if err != nil {
-		return err
+		return func() {}, err
 	}
 	colSlice := unsafe.Slice(cols, columnCount)
+
+	var releases []func()
 
 	// Convert each ColumnData to its native counterpart.
 	for i, column := range t.columnInfoByOffset {
@@ -142,20 +142,28 @@ func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, ou
 		elem.name = pinStringBytes(pinner, &column.ColumnName)
 		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
-		ptr := t.data[i].CopyToC(h)
+		ptr, rel := t.data[i].PinToC(pinner, h) // zero-copy
 		*(*unsafe.Pointer)(unsafe.Pointer(&elem.data[0])) = ptr
+		releases = append(releases, rel)
 	}
 
 	// Store the pointer to the first element.
 	out.columns = cols
 
-	return nil
+	releaseAll := func() {
+		for _, f := range releases {
+			f()
+		}
+		// cols was C-allocated, must be freed; timestamps are Go-pinned, no release.
+		qdbRelease(h, cols)
+	}
+	return releaseAll, nil
 }
 
 // toNative converts WriterTable to native C type and avoids copies where possible.
 // It is the caller's responsibility to ensure that the WriterTable lives at least
 // as long as the native C structure.
-func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) error {
+func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) (func(), error) {
 	var err error
 
 	// Zero-copy: use the Go string bytes directly and pin them so the GC keeps
@@ -176,15 +184,22 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 	// Upsert mode requires explicit columns so QuasarDB knows which columns
 	// are compared for duplicates.
 	if opts.dedupMode == WriterDeduplicationModeUpsert && len(opts.dropDuplicateColumns) == 0 {
-		return fmt.Errorf("upsert deduplication mode requires drop duplicate columns to be set")
+		return func() {}, fmt.Errorf("upsert deduplication mode requires drop duplicate columns to be set")
 	}
+
+	var releases []func()
 
 	if len(opts.dropDuplicateColumns) > 0 {
 		count := len(opts.dropDuplicateColumns)
 		ptr, err := qdbAllocBuffer[*C.char](h, count)
 		if err != nil {
-			return err
+			return func() {}, err
 		}
+
+		releases = append(releases, func() {
+			qdbRelease(h, ptr)
+		})
+
 		dupSlice := unsafe.Slice(ptr, count)
 		for i := range opts.dropDuplicateColumns {
 			dupSlice[i] = pinStringBytes(pinner, &opts.dropDuplicateColumns[i])
@@ -200,52 +215,20 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 	// Never automatically create tables
 	out.creation = C.qdb_exp_batch_creation_mode_t(C.qdb_exp_batch_dont_create)
 
-	err = t.toNativeTableData(pinner, h, &out.data)
+	releaseTableData, err := t.toNativeTableData(pinner, h, &out.data)
 	if err != nil {
-		return err
+		return releaseTableData, err
 	}
 
-	return nil
-}
+	release := func() {
+		releaseTableData()
 
-func (t *WriterTable) releaseNative(h HandleType, tbl *C.qdb_exp_batch_push_table_t) error {
-	if tbl == nil {
-		return fmt.Errorf("WriterTable.releaseNative: nil table pointer")
-	}
-
-	columnCount := len(t.data)
-	if columnCount == 0 || tbl.data.columns == nil || tbl.name == nil {
-		return fmt.Errorf("WriterTable.releaseNative: inconsistent state")
-	}
-
-	if tbl.name != nil {
-		// Name points to pinned Go memory – just nil it out.
-		tbl.name = nil
-	}
-
-	if t.idx != nil {
-		qdbRelease(h, tbl.data.timestamps)
-		tbl.data.timestamps = nil
-	}
-
-	if tbl.data.columns != nil {
-		// Release any column names we allocated during toNativeTableData
-		columnSlice := unsafe.Slice(tbl.data.columns, columnCount)
-		err := releaseBatchPushColumns(h, columnSlice, int(tbl.data.row_count))
-		if err != nil {
-			return err
+		for _, f := range releases {
+			f()
 		}
-
-		qdbRelease(h, tbl.data.columns)
-		tbl.data.columns = nil
 	}
 
-	if tbl.where_duplicate != nil {
-		qdbRelease(h, tbl.where_duplicate)
-		tbl.where_duplicate = nil
-	}
-
-	return nil
+	return release, nil
 }
 
 func (t *WriterTable) SetData(offset int, xs ColumnData) error {

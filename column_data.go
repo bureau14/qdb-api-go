@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 	"unsafe"
+	"runtime"
 )
 
 // ColumnData unifies both Reader and Writer data interfaces.
@@ -51,6 +52,24 @@ type ColumnData interface {
 	// CopyToC copies the internal data slice into a C-allocated buffer and returns
 	// a pointer to that buffer. Caller is responsible for releasing it.
 	CopyToC(h HandleType) unsafe.Pointer
+
+	// Zero-copy / pin path.  The returned release-fn **must always be
+	// called** by the caller once the C function that consumed the buffer
+	// has returned (typically right after qdb_exp_batch_push_with_options).
+	//
+	//   p       – caller-owned pinner that outlives the C call.
+	//   h       – handle, in case a tiny C allocation is still required
+	//             (e.g., the []qdb_string_t envelope for strings).
+	//
+	//   ptr     – address to be stored in qdb_exp_batch_push_column_t.data
+	//             (never nil; on error PinToC returns (nil, nil, err)).
+	//
+	//   release – releases any C allocations done inside PinToC;
+	//             it is a no-op for “pure pin” cases.
+	//
+	// Implementations of this function always pin memory to the pinner whenever
+	// possible.
+	PinToC(p *runtime.Pinner, h HandleType) (ptr unsafe.Pointer, release func())
 }
 
 // Int64
@@ -83,6 +102,16 @@ func (cd *ColumnDataInt64) CopyToC(h HandleType) unsafe.Pointer {
 
 	return unsafe.Pointer(ptr)
 }
+
+func (cd *ColumnDataInt64) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+	if len(cd.xs) == 0 {
+		return nil, func() {}
+	}
+	base := &cd.xs[0]
+	p.Pin(base)
+	return unsafe.Pointer(base), func() {}
+}
+
 
 func (cd *ColumnDataInt64) appendData(data ColumnData) error {
 	other, ok := data.(*ColumnDataInt64)
@@ -232,6 +261,16 @@ func (cd *ColumnDataDouble) CopyToC(h HandleType) unsafe.Pointer {
 	}
 	return unsafe.Pointer(ptr)
 }
+
+func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+	if len(cd.xs) == 0 {
+		return nil, func() {}
+	}
+	base := &cd.xs[0]
+	p.Pin(base)
+	return unsafe.Pointer(base), func() {}
+}
+
 func newColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
 func newColumnDataDoubleFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -289,6 +328,15 @@ func (cd *ColumnDataTimestamp) CopyToC(h HandleType) unsafe.Pointer {
 		panic(err)
 	}
 	return unsafe.Pointer(ptr)
+}
+
+func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+	if len(cd.xs) == 0 {
+		return nil, func() {}
+	}
+	base := &cd.xs[0]
+	p.Pin(base)
+	return unsafe.Pointer(base), func() {}
 }
 
 func newColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
@@ -379,6 +427,39 @@ func (cd *ColumnDataBlob) CopyToC(h HandleType) unsafe.Pointer {
 	}
 	return unsafe.Pointer(arr)
 }
+
+func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+	count := len(cd.xs)
+	if count == 0 {
+		// still return a valid no-op release func
+		return nil, func() {}
+	}
+
+	// Envelope allocated once in C memory
+	arr, err := qdbAllocBuffer[C.qdb_blob_t](h, count)
+	if err != nil {
+		panic(err)
+	}
+	slice := unsafe.Slice(arr, count)
+
+	// Point each qdb_blob_t to pinned Go byte slices (zero-copy)
+	for i, b := range cd.xs {
+		if len(b) > 0 {
+			p.Pin(&b[0])                               // keep backing array immovable
+			slice[i].content = unsafe.Pointer(&b[0])   // direct pointer into Go memory
+			slice[i].content_length = C.qdb_size_t(len(b))
+		}
+	}
+
+	// Always return a valid release closure (no-op for the blob contents)
+	release := func() {
+		qdbRelease(h, arr) // free only the envelope allocated above
+	}
+
+	return unsafe.Pointer(arr), release
+}
+
+
 func newColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
 func newColumnDataBlobFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -442,17 +523,60 @@ func (cd *ColumnDataString) CopyToC(h HandleType) unsafe.Pointer {
 	}
 	slice := unsafe.Slice(arr, count)
 	for i, s := range cd.xs {
-		if len(s) > 0 {
-			cstr, err := qdbCopyString(h, s)
-			if err != nil {
-				panic(err)
-			}
-			slice[i].data = cstr
-			slice[i].length = C.qdb_size_t(len(s))
+		if len(s) == 0 {
+			continue // leave data/length = 0
 		}
+
+		cstr, err := qdbCopyString(h, s)
+		if err != nil {
+			panic(err)
+		}
+		slice[i].data = cstr
+		slice[i].length = C.qdb_size_t(len(s))
 	}
 	return unsafe.Pointer(arr)
 }
+
+
+func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+    count := len(cd.xs)
+    if count == 0 {
+        // still return a valid no-op release func
+        return nil, func() {}
+    }
+
+    // Allocate the C envelope once
+    arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
+    if err != nil {
+        panic(err)
+    }
+    slice := unsafe.Slice(arr, count)
+
+    // Fill the envelope with zero-copy, pinned Go strings
+    for i := 0; i < count; i++ {
+        s := &cd.xs[i]
+        if len(*s) == 0 {
+            continue // leave data/length = 0
+        }
+
+        // qdb_string_t already carries an explicit length, therefore no
+        // NUL-terminator is required.  We simply obtain the address of the
+        // existing Go string bytes, pin that memory so the GC can’t move it,
+        // and store the pointer/length in the envelope.
+        dataPtr := unsafe.StringData(*s)      // pointer to first byte
+        p.Pin(dataPtr)                        // keep the bytes immovable
+
+        slice[i].data   = (*C.char)(unsafe.Pointer(dataPtr))
+        slice[i].length = C.qdb_size_t(len(*s))
+    }
+
+    // envelope itself must be freed after the C call
+    release := func() { qdbRelease(h, arr) }
+
+    return unsafe.Pointer(arr), release
+}
+
+
 func newColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
 func newColumnDataStringFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
