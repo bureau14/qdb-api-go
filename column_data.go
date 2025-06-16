@@ -11,15 +11,6 @@ import (
 	"unsafe"
 )
 
-func ifaceDataPtr(i interface{}) unsafe.Pointer {
-	type iface struct {
-		tab  unsafe.Pointer
-		data unsafe.Pointer
-	}
-
-	return (*iface)(unsafe.Pointer(&i)).data
-}
-
 // ColumnData unifies both Reader and Writer data interfaces.
 // It represents any column-typed data that can be both read (into Go slices)
 // and written (to C via toNative).

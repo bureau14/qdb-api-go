@@ -208,7 +208,6 @@ func createTableOfWriterColumnsAndDefaultShardSize(handle HandleType, columns []
 	return createTableOfWriterColumns(handle, columns, duration)
 }
 
-
 // Generates artifical writer data for a single column
 func generateWriterData(n int, column WriterColumn) (ColumnData, error) {
 	switch column.ColumnType {
@@ -542,15 +541,19 @@ func qdbCopyString(h HandleType, s string) (*C.char, error) {
 // byte array and returns a *C.char pointing at it.
 // Decision rationale:
 //   - Re-uses Go storage → avoids extra C allocation and copy.
+//
 // Key assumptions:
 //   - p lifetime ≥ any C usage of the returned pointer.
 //   - *s is a valid Go string; mutation is limited to optional NUL append.
+//
 // Performance trade-offs:
 //   - One O(len(s)) copy only when the NUL terminator must be appended.
+//
 // Usage example:
-//   // var p runtime.Pinner
-//   cStr := pinStringBytes(&p, &tableName)
-//   defer p.Unpin()
+//
+//	// var p runtime.Pinner
+//	cStr := pinStringBytes(&p, &tableName)
+//	defer p.Unpin()
 func pinStringBytes(p *runtime.Pinner, s *string) *C.char {
 	if s == nil {
 		return nil
@@ -777,4 +780,33 @@ func sliceEnsureCapacity[E any](xs []E, n int) []E {
 	ys := make([]E, len(xs), n)
 	copy(ys, xs) // bulk copy of existing elements
 	return ys
+}
+
+// ifaceDataPtr extracts the data-word (pointer to the concrete value) from an
+// interface value and returns it as unsafe.Pointer.
+// Decision rationale:
+//   - Enables zero-allocation fast paths (e.g. appendDataUnsafe) by avoiding
+//     reflect-based conversions.
+//
+// Key assumptions:
+//   - Go interface layout is two machine words: (itab, data); stable for Go ≥1.20.
+//   - i is non-nil; if nil, the returned pointer is nil.
+//   - The concrete value referenced by the returned pointer outlives all uses
+//     and is not moved by the GC (caller responsibility).
+//
+// Performance trade-offs:
+//   - O(1), zero allocations, but completely bypasses the type system; misuse
+//     causes hard-to-debug memory corruption.
+//
+// Usage example:
+//
+//	// Unsafe cast without the runtime type-check:
+//	other := (*ColumnDataInt64)(ifaceDataPtr(cd))
+func ifaceDataPtr(i interface{}) unsafe.Pointer {
+	type iface struct {
+		tab  unsafe.Pointer
+		data unsafe.Pointer
+	}
+
+	return (*iface)(unsafe.Pointer(&i)).data
 }
