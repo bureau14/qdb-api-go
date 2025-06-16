@@ -10,15 +10,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const (
-	clusterPublicKeyFile string = "cluster_public.key"
-	userPrivateKeyFile   string = "user_private.key"
-	usersConfigFile      string = "users.cfg"
-
-	insecureURI string = "qdb://127.0.0.1:2836"
-	secureURI   string = "qdb://127.0.0.1:2838"
-)
-
 var (
 	handle       HandleType
 	secureHandle HandleType
