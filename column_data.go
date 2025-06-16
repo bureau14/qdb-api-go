@@ -49,10 +49,6 @@ type ColumnData interface {
 	// Unsafe variant of appendData(), does not check for type safety
 	appendDataUnsafe(data ColumnData)
 
-	// CopyToC copies the internal data slice into a C-allocated buffer and returns
-	// a pointer to that buffer. Caller is responsible for releasing it.
-	CopyToC(h HandleType) unsafe.Pointer
-
 	// Zero-copy / pin path.  The returned release-fn **must always be
 	// called** by the caller once the C function that consumed the buffer
 	// has returned (typically right after qdb_exp_batch_push_with_options).
@@ -97,20 +93,6 @@ func (cd *ColumnDataInt64) EnsureCapacity(n int) {
 // Clear resets the slice to length 0 while keeping capacity.
 func (cd *ColumnDataInt64) Clear() {
 	cd.xs = make([]int64, 0)
-}
-
-// CopyToC allocates C memory and deep-copies cd.xs so the buffer
-// outlives the Go slice.
-//
-// Performance trade-offs:
-//   // O(len) copy; required when the caller cannot hold a pinner.
-func (cd *ColumnDataInt64) CopyToC(h HandleType) unsafe.Pointer {
-	ptr, err := qdbAllocAndCopyBuffer[int64, C.qdb_int_t](h, cd.xs)
-	if err != nil {
-		panic(err)
-	}
-
-	return unsafe.Pointer(ptr)
 }
 
 // PinToC exposes the Go slice to C without copying:
@@ -289,19 +271,6 @@ func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// CopyToC allocates C memory and deep-copies cd.xs so the buffer
-// outlives the Go slice.
-//
-// Performance trade-offs:
-//   // O(len) copy; required when the caller cannot hold a pinner.
-func (cd *ColumnDataDouble) CopyToC(h HandleType) unsafe.Pointer {
-	ptr, err := qdbAllocAndCopyBuffer[float64, C.double](h, cd.xs)
-	if err != nil {
-		panic(err)
-	}
-	return unsafe.Pointer(ptr)
-}
-
 // PinToC exposes the Go slice to C without copying:
 //   – pins the slice base so it stays immovable
 //   – returns a no-op release closure
@@ -384,19 +353,6 @@ func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
 func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataTimestamp)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
-}
-
-// CopyToC allocates C memory and deep-copies cd.xs so the buffer
-// outlives the Go slice.
-//
-// Performance trade-offs:
-//   // O(len) copy; required when the caller cannot hold a pinner.
-func (cd *ColumnDataTimestamp) CopyToC(h HandleType) unsafe.Pointer {
-	ptr, err := qdbAllocAndCopyBuffer[C.qdb_timespec_t, C.qdb_timespec_t](h, cd.xs)
-	if err != nil {
-		panic(err)
-	}
-	return unsafe.Pointer(ptr)
 }
 
 // PinToC exposes the Go slice to C without copying:
@@ -529,30 +485,6 @@ func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// CopyToC deep-copies every blob into a C-managed buffer.
-//
-// Decision rationale:
-//   – Required when the caller cannot hold pinned Go memory.
-func (cd *ColumnDataBlob) CopyToC(h HandleType) unsafe.Pointer {
-	count := len(cd.xs)
-	arr, err := qdbAllocBuffer[C.qdb_blob_t](h, count)
-	if err != nil {
-		panic(err)
-	}
-	slice := unsafe.Slice(arr, count)
-	for i, b := range cd.xs {
-		if len(b) > 0 {
-			ptr, err := qdbAllocAndCopyBytes(h, b)
-			if err != nil {
-				panic(err)
-			}
-			slice[i].content = ptr
-			slice[i].content_length = C.qdb_size_t(len(b))
-		}
-	}
-	return unsafe.Pointer(arr)
-}
-
 // PinToC builds a C envelope and pins each []byte in cd.xs.
 //
 // Decision rationale:
@@ -664,33 +596,6 @@ func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataString)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
 }
-
-// CopyToC deep-copies every string into a C-managed buffer with explicit length.
-//
-// Decision rationale:
-//   – Each string is copied and NUL-termination is not required (explicit length).
-func (cd *ColumnDataString) CopyToC(h HandleType) unsafe.Pointer {
-	count := len(cd.xs)
-	arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
-	if err != nil {
-		panic(err)
-	}
-	slice := unsafe.Slice(arr, count)
-	for i, s := range cd.xs {
-		if len(s) == 0 {
-			continue // leave data/length = 0
-		}
-
-		cstr, err := qdbCopyString(h, s)
-		if err != nil {
-			panic(err)
-		}
-		slice[i].data = cstr
-		slice[i].length = C.qdb_size_t(len(s))
-	}
-	return unsafe.Pointer(arr)
-}
-
 
 // PinToC builds a C envelope and pins each string in cd.xs.
 //
