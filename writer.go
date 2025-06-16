@@ -48,9 +48,7 @@ func releaseBatchPushStringColumns(h HandleType, xs []C.qdb_string_t) {
 //   - Consolidates cleanup logic for WriterTable.releaseNative.
 //   - Handles type-specific allocations for strings and blobs.
 func releaseBatchPushColumn(h HandleType, x C.qdb_exp_batch_push_column_t, rowCount int) error {
-	if x.name != nil {
-		qdbRelease(h, x.name)
-	}
+	// Name points to pinned Go memory – no release required.
 
 	// Extract the pointer stored in the union field. We must read the pointer
 	// value instead of taking the address of the union field, otherwise we pass

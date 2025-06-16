@@ -100,7 +100,7 @@ func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
 
-func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_table_data_t) error {
+func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, out *C.qdb_exp_batch_push_table_data_t) error {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
 	out.column_count = C.qdb_size_t(len(t.data))
@@ -138,13 +138,8 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 
 		elem := &colSlice[i]
 
-		// Allocate and copy column name using the QDB allocator.
-		name, err := qdbCopyString(h, column.ColumnName)
-		if err != nil {
-			return fmt.Errorf("toNative: failed to copy column name: %w", err)
-		}
-
-		elem.name = name
+		// Pin the Go string backing bytes – zero-copy.
+		elem.name = pinStringBytes(pinner, &column.ColumnName)
 		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
 		ptr := t.data[i].CopyToC(h)
@@ -205,7 +200,7 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 	// Never automatically create tables
 	out.creation = C.qdb_exp_batch_creation_mode_t(C.qdb_exp_batch_dont_create)
 
-	err = t.toNativeTableData(h, &out.data)
+	err = t.toNativeTableData(pinner, h, &out.data)
 	if err != nil {
 		return err
 	}
