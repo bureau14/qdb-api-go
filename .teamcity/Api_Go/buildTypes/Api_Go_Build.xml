@@ -100,6 +100,11 @@
           <param name="matrix.value.goroot.2" value="%system.go1.23-64.goroot%" />
         </parameters>
       </extension>
+      <extension id="golang" type="golang">
+        <parameters>
+          <param name="test.format" value="json" />
+        </parameters>
+      </extension>
     </build-extensions>
   </settings>
 </template>
