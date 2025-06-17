@@ -111,6 +111,11 @@
       </extension>
       <extension id="perfmon" type="perfmon" />
       <extension id="matrix" type="matrix" />
+      <extension id="golang" type="golang">
+        <parameters>
+          <param name="test.format" value="json" />
+        </parameters>
+      </extension>
     </build-extensions>
   </settings>
 </template>
