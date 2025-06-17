@@ -551,7 +551,9 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	// for a number of tables, but it returns just a pointer for a single table. all memory
 	// allocated within this function call is linked to this single object, and a qdbRelease
 	// clears eerything
+	start := time.Now()
 	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
+	elapsed := time.Since(start)
 	err := makeErrorOrNil(errCode)
 
 	// Trigger the `defer` statement as there are failure scenarios in both cases where err
@@ -600,6 +602,11 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	if err != nil {
 		return ret, err
 	}
+
+	L().Info("Batch fetch completed",
+		"duration", elapsed,
+		"table_count", 1,
+		"row_count", ret.RowCount())
 
 	return ret, nil
 }
