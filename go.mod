@@ -1,6 +1,6 @@
 module github.com/bureau14/qdb-api-go/v3
 
-go 1.23
+go 1.23.0
 
 require (
 	github.com/Jeffail/gabs/v2 v2.6.1
@@ -16,7 +16,7 @@ require (
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/net v0.41.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
