@@ -324,10 +324,10 @@ func TestWriterCanPushTables(t *testing.T) {
 	})
 }
 func TestWriterCanDeduplicate(t *testing.T) {
-	handle := newTestHandle(t)
-	defer handle.Close()
 
 	rapid.Check(t, func(rt *rapid.T) {
+		handle := newTestHandle(t)
+		defer handle.Close()
 
 		assert := assert.New(rt)
 		require := require.New(rt)
