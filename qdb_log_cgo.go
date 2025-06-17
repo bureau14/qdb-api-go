@@ -58,6 +58,9 @@ func swapCallback() {
 		L().Warn("unable to remove previous log callback",
 			"code", err, "msg", C.GoString(C.qdb_error(err)))
 	}
+
+	C.qdb_log_option_set_sync(1)
+
 	if err := C.qdb_log_add_callback(C.qdb_log_callback(C.go_callback_log), &gCallbackID); err != 0 {
 		L().Warn("unable to add new log callback",
 			"code", err, "msg", C.GoString(C.qdb_error(err)))
