@@ -9,6 +9,7 @@ import "C"
 import (
 	"fmt"
 	"runtime"
+	"time"
 )
 
 // Metadata we need to represent a single column.
@@ -94,8 +95,10 @@ func (w *Writer) Push(h HandleType) error {
 
 	tblSlice := make([]C.qdb_exp_batch_push_table_t, w.Length())
 	i := 0
+	var totalRowCount int
 
 	for _, v := range w.tables {
+		totalRowCount += v.RowCount()
 		releaseTableData, err := v.toNative(&pinner, h, w.options, &tblSlice[i])
 		if err != nil {
 			return fmt.Errorf("Failed to convert table %q to native: %v", v.GetName(), err)
@@ -109,13 +112,22 @@ func (w *Writer) Push(h HandleType) error {
 	var options C.qdb_exp_batch_options_t
 	options = w.options.setNative(options)
 
+	tableCount := len(tblSlice)
+	start := time.Now()
 	errCode := C.qdb_exp_batch_push_with_options(
 		h.handle,
 		&options,
 		&tblSlice[0],
 		tableSchemas,
-		C.qdb_size_t(len(tblSlice)),
+		C.qdb_size_t(tableCount),
 	)
+	elapsed := time.Since(start)
+
+	L().Info("Batch push completed",
+		"duration", elapsed,
+		"table_count", tableCount,
+		"row_count", totalRowCount)
+
 	return makeErrorOrNil(C.qdb_error_t(errCode))
 }
 
