@@ -1,4 +1,4 @@
-# Technical Memory Protocol
+## Technical Memory Protocol
 
 * Project Identification
   * Retrieve the primary Git remote URL via the MCP Git integration.
@@ -26,7 +26,7 @@
 * Response Policy
    * Provide concise, factual answers.
    * Automatically surface relevant stored information—without waiting for the user to ask—when it improves the reply.
-     * Conventions & style not already specified in the system prompt.
+     * Conventions & style not already specified previously.
      * Preferred libraries and their required versions.
      * Known pitfalls or previously resolved issues that match the current topic.
      * Applicable performance or security constraints.
