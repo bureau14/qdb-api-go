@@ -1251,11 +1251,11 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 // double column.  If count > 0 it pre-inserts <count> deterministic points.
 //
 // Returned values:
-//   • alias      – random alias of the created time-series
-//   • ts         – TimeseriesEntry handle
-//   • column     – typed handle to the single double column
-//   • timestamps – slice of inserted timestamps (nil when count == 0)
-//   • points     – slice of inserted TsDoublePoint values (nil when count == 0)
+//   - alias      – random alias of the created time-series
+//   - ts         – TimeseriesEntry handle
+//   - column     – typed handle to the single double column
+//   - timestamps – slice of inserted timestamps (nil when count == 0)
+//   - points     – slice of inserted TsDoublePoint values (nil when count == 0)
 func createDoubleTimeseriesWithPoints(
 	t *testing.T,
 	handle HandleType,
@@ -1293,11 +1293,11 @@ func createDoubleTimeseriesWithPoints(
 // int64 column. If count > 0 it pre-inserts <count> deterministic points.
 //
 // Returned values:
-//   • alias      – random alias of the created time-series
-//   • ts         – TimeseriesEntry handle
-//   • column     – typed handle to the single int64 column
-//   • timestamps – slice of inserted timestamps (nil when count == 0)
-//   • points     – slice of inserted TsInt64Point values (nil when count == 0)
+//   - alias      – random alias of the created time-series
+//   - ts         – TimeseriesEntry handle
+//   - column     – typed handle to the single int64 column
+//   - timestamps – slice of inserted timestamps (nil when count == 0)
+//   - points     – slice of inserted TsInt64Point values (nil when count == 0)
 func createInt64TimeseriesWithPoints(
 	t *testing.T,
 	handle HandleType,
