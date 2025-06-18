@@ -1,94 +1,165 @@
 package qdb
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"testing"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Describe("Tests", func() {
-	Context("Properties", func() {
-		var (
-			prop  string
-			value string
-		)
-		BeforeEach(func() {
-			prop = generateAlias(16)
-			value = generateAlias(16)
-		})
+func TestPropertiesHaveSystemProperties(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
 
-		It("should have system properties after connect", func() {
-			apiName, err := handle.GetProperties("api")
-			apiVersion, err := handle.GetProperties("api_version")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(apiName).To(Equal("go"))
-			Expect(apiVersion).To(Equal(GitHash))
-		})
-		It("should not be able to update system properties", func() {
-			errNameUpdate := handle.UpdateProperties("api", "fake_api")
-			errVersionUpdate := handle.UpdateProperties("api_version", "fake_api_version")
-			Expect(errNameUpdate).To(HaveOccurred())
-			Expect(errVersionUpdate).To(HaveOccurred())
-		})
-		It("should not be able to put empty property, non empty value", func() {
-			err := handle.PutProperties("", value)
-			Expect(err).To(HaveOccurred())
-		})
-		It("should not be able to put duplicate", func() {
-			err := handle.PutProperties(prop, value)
-			err = handle.PutProperties(prop, value+"_1")
-			Expect(err).To(HaveOccurred())
-		})
-		It("should not be able to put empty value, non-empty property", func() {
-			err := handle.PutProperties(prop, "")
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(ErrInvalidArgument))
-		})
-		It("should get properties", func() {
-			putErr := handle.PutProperties(prop, value)
-			Expect(putErr).ToNot(HaveOccurred())
-			returnedValue, err := handle.GetProperties(prop)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(returnedValue).To(Equal(value))
-		})
-		It("should not get properties by empty name", func() {
-			_, err := handle.GetProperties("")
-			Expect(err).To(HaveOccurred())
-		})
-		It("should remove properties", func() {
-			propName := generateAlias(16)
-			putErr := handle.PutProperties(propName, value)
-			Expect(putErr).ToNot(HaveOccurred())
-			err := handle.RemoveProperties(propName)
-			Expect(err).ToNot(HaveOccurred())
-		})
-		It("should not remove properties with empty name", func() {
-			err := handle.RemoveProperties("")
-			Expect(err).To(HaveOccurred())
-		})
-		It("should not be able to remove system properties", func() {
-			err := handle.RemoveProperties("api")
-			err = handle.RemoveProperties("api_version")
-			Expect(err).To(HaveOccurred())
-		})
-		It("should remove all properties, but keep system", func() {
-			err := handle.RemoveAllProperties()
-			Expect(err).ToNot(HaveOccurred())
-			apiName, _ := handle.GetProperties("api")
-			apiVersion, _ := handle.GetProperties("api_version")
-			Expect(apiName).To(Equal("go"))
-			Expect(apiVersion).To(Equal(GitHash))
-		})
-		It("should be able to update property", func() {
-			err := handle.UpdateProperties(prop, value+"_new")
-			Expect(err).ToNot(HaveOccurred())
-		})
-		It("should be able to update non-existent property", func() {
-			err := handle.UpdateProperties(generateAlias(16), "test")
-			Expect(err).ToNot(HaveOccurred())
-		})
-		It("should not be able to update empty property", func() {
-			err := handle.UpdateProperties("", "test")
-			Expect(err).To(HaveOccurred())
-		})
-	})
-})
+	apiName, err := h.GetProperties("api")
+	require.NoError(t, err)
+
+	apiVers, err := h.GetProperties("api_version")
+	require.NoError(t, err)
+
+	assert.Equal(t, "go", apiName)
+	assert.Equal(t, GitHash, apiVers)
+}
+
+func TestPropertiesCannotUpdateSystemProperties(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	err1 := h.UpdateProperties("api", "fake")
+	err2 := h.UpdateProperties("api_version", "fake")
+
+	assert.Error(t, err1)
+	assert.Error(t, err2)
+}
+
+func TestPropertiesPutEmptyPropertyFails(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	value := generateAlias(16)
+	err := h.PutProperties("", value)
+	assert.Error(t, err)
+}
+
+func TestPropertiesPutDuplicateFails(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	prop := generateAlias(16)
+	value := generateAlias(16)
+	err := h.PutProperties(prop, value)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = h.RemoveProperties(prop) })
+
+	err = h.PutProperties(prop, value+"_1")
+	assert.Error(t, err)
+}
+
+func TestPropertiesPutEmptyValueFails(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	prop := generateAlias(16)
+	err := h.PutProperties(prop, "")
+	assert.Error(t, err)
+	assert.Equal(t, ErrInvalidArgument, err)
+}
+
+func TestPropertiesGetPropertiesSuccess(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	prop := generateAlias(16)
+	value := generateAlias(16)
+	err := h.PutProperties(prop, value)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = h.RemoveProperties(prop) })
+
+	returnedValue, err := h.GetProperties(prop)
+	require.NoError(t, err)
+	assert.Equal(t, value, returnedValue)
+}
+
+func TestPropertiesGetEmptyNameFails(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	_, err := h.GetProperties("")
+	assert.Error(t, err)
+}
+
+func TestPropertiesRemovePropertiesSuccess(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	prop := generateAlias(16)
+	value := generateAlias(16)
+	err := h.PutProperties(prop, value)
+	require.NoError(t, err)
+
+	err = h.RemoveProperties(prop)
+	require.NoError(t, err)
+}
+
+func TestPropertiesRemoveEmptyNameFails(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	err := h.RemoveProperties("")
+	assert.Error(t, err)
+}
+
+func TestPropertiesRemoveSystemPropertiesFails(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	err := h.RemoveProperties("api")
+	assert.Error(t, err)
+	err = h.RemoveProperties("api_version")
+	assert.Error(t, err)
+}
+
+func TestPropertiesRemoveAllKeepsSystem(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	err := h.RemoveAllProperties()
+	require.NoError(t, err)
+
+	apiName, err := h.GetProperties("api")
+	require.NoError(t, err)
+	apiVersion, err := h.GetProperties("api_version")
+	require.NoError(t, err)
+	assert.Equal(t, "go", apiName)
+	assert.Equal(t, GitHash, apiVersion)
+}
+
+func TestPropertiesUpdatePropertySuccess(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	prop := generateAlias(16)
+	value := generateAlias(16)
+	err := h.PutProperties(prop, value)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = h.RemoveProperties(prop) })
+
+	err = h.UpdateProperties(prop, value+"_new")
+	require.NoError(t, err)
+}
+
+func TestPropertiesUpdateNonexistentPropertySuccess(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	prop := generateAlias(16)
+	err := h.UpdateProperties(prop, "test")
+	require.NoError(t, err)
+}
+
+func TestPropertiesUpdateEmptyPropertyFails(t *testing.T) {
+	h := newTestHandle(t)
+	defer h.Close()
+
+	err := h.UpdateProperties("", "test")
+	assert.Error(t, err)
+}

@@ -1,120 +1,133 @@
 package qdb
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"testing"
+	"fmt"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Describe("Tests", func() {
-	var (
-		aliases []string
-		blob1   BlobEntry
-		blob2   BlobEntry
-		integer IntegerEntry
-	)
+// ------ Find-query unit tests (Ginkgo/Gomega removed) ------
 
-	BeforeEach(func() {
-		var err error
-		aliases = append(aliases, "blob first")
-		aliases = append(aliases, "blob second")
-		aliases = append(aliases, "integer first")
+func TestFindTagAllReturnsAllAliases(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
 
-		blob1 = handle.Blob(aliases[0])
-		err = blob1.Put([]byte("asd"), NeverExpires())
-		Expect(err).ToNot(HaveOccurred())
-		err = blob1.AttachTag("all")
-		Expect(err).ToNot(HaveOccurred())
-		err = blob1.AttachTag("first")
-		Expect(err).ToNot(HaveOccurred())
+	aliases, _, _, _, tagAll, _, _, _ := setupFindTestData(t, handle)
 
-		blob2 = handle.Blob(aliases[1])
-		err = blob2.Put([]byte("asd"), NeverExpires())
-		Expect(err).ToNot(HaveOccurred())
-		err = blob2.AttachTag("all")
-		Expect(err).ToNot(HaveOccurred())
-		err = blob2.AttachTag("second")
-		Expect(err).ToNot(HaveOccurred())
+	got, err := handle.Find().Tag(tagAll).Execute()
+	require.NoError(t, err)
+	assert.Len(t, got, 3)
+	assert.ElementsMatch(t, aliases, got)
+}
 
-		integer = handle.Integer(aliases[2])
-		err = integer.Put(32, NeverExpires())
-		Expect(err).ToNot(HaveOccurred())
-		err = integer.AttachTag("all")
-		Expect(err).ToNot(HaveOccurred())
-		err = integer.AttachTag("third")
-		Expect(err).ToNot(HaveOccurred())
-	})
+func TestFindExcludeSecondTag(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
 
-	AfterEach(func() {
-		blob1.Remove()
-		blob2.Remove()
-		integer.Remove()
-		aliases = []string{}
-	})
-	// :: Entry tests ::
-	Context("Find", func() {
-		It("should get all aliases", func() {
-			obtainedAliases, err := handle.Find().Tag("all").Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(3))
-			Expect(obtainedAliases).To(ConsistOf(aliases))
-		})
-		It("should get both first, and third aliases", func() {
-			obtainedAliases, err := handle.Find().Tag("all").NotTag("second").Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(2))
-			Expect(obtainedAliases).To(ConsistOf([]string{blob1.Alias(), integer.Alias()}))
-		})
-		It("should not get the not \"second\" tags", func() {
-			obtainedAliases, err := handle.Find().NotTag("second").Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(0))
-			Expect(obtainedAliases).To(ConsistOf([]string(nil)))
-		})
-		It("should get the third alias by getting both \"all\" and \"third\"", func() {
-			obtainedAliases, err := handle.Find().Tag("all").Tag("third").Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(1))
-			Expect(obtainedAliases).To(ConsistOf([]string{integer.Alias()}))
-		})
-		It("should get no results because tags are not compatible", func() {
-			obtainedAliases, err := handle.Find().Tag("first").Tag("third").Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(0))
-			Expect(obtainedAliases).To(ConsistOf([]string{}))
-		})
-		It("should get both blob elements", func() {
-			obtainedAliases, err := handle.Find().Tag("all").Type("blob").Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(2))
-			Expect(obtainedAliases).To(ConsistOf([]string{blob1.Alias(), blob2.Alias()}))
-		})
-		It("should not be able to simply call with a type", func() {
-			obtainedAliases, err := handle.Find().Type("blob").Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(obtainedAliases).To(Equal([]string(nil)))
-		})
-		It("should get integer element only", func() {
-			obtainedAliases, err := handle.Find().Tag("all").Type("int").Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(1))
-			Expect(obtainedAliases).To(ConsistOf([]string{integer.Alias()}))
-		})
-		It("should not be able to retrieve anything", func() {
-			obtainedAliases, err := handle.Find().Tag("unexisting").Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(0))
-			Expect(obtainedAliases).To(Equal([]string{}))
-		})
-		It("should not be able to use a bad type", func() {
-			obtainedAliases, err := handle.Find().Tag("all").Type("unexisting").Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(obtainedAliases).To(Equal([]string(nil)))
-		})
-		It("should be able to execute a string query with valid input", func() {
-			obtainedAliases, err := handle.Find().ExecuteString("find(tag='all')")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(obtainedAliases)).To(Equal(3))
-			Expect(obtainedAliases).To(ConsistOf(aliases))
-		})
-	})
-})
+	_, blob1, _, integer, tagAll, _, tagSecond, _ := setupFindTestData(t, handle)
+
+	got, err := handle.Find().Tag(tagAll).NotTag(tagSecond).Execute()
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{blob1.Alias(), integer.Alias()}, got)
+}
+
+func TestFindNotTagAloneReturnsError(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	_, _, _, _, _, _, tagSecond, _ := setupFindTestData(t, handle)
+
+	got, err := handle.Find().NotTag(tagSecond).Execute()
+	assert.Error(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFindTagAllAndThird(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	_, _, _, integer, tagAll, _, _, tagThird := setupFindTestData(t, handle)
+
+	got, err := handle.Find().Tag(tagAll).Tag(tagThird).Execute()
+	require.NoError(t, err)
+	assert.Equal(t, []string{integer.Alias()}, got)
+}
+
+func TestFindIncompatibleTagsReturnsEmpty(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	_, _, _, _, _, tagFirst, _, tagThird := setupFindTestData(t, handle)
+
+	got, err := handle.Find().Tag(tagFirst).Tag(tagThird).Execute()
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFindTagAllTypeBlob(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	_, blob1, blob2, _, tagAll, _, _, _ := setupFindTestData(t, handle)
+
+	got, err := handle.Find().Tag(tagAll).Type("blob").Execute()
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{blob1.Alias(), blob2.Alias()}, got)
+}
+
+func TestFindTypeBlobAloneReturnsError(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	setupFindTestData(t, handle)
+
+	got, err := handle.Find().Type("blob").Execute()
+	assert.Error(t, err)
+	assert.Nil(t, got)
+}
+
+func TestFindTagAllTypeInt(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	_, _, _, integer, tagAll, _, _, _ := setupFindTestData(t, handle)
+
+	got, err := handle.Find().Tag(tagAll).Type("int").Execute()
+	require.NoError(t, err)
+	assert.Equal(t, []string{integer.Alias()}, got)
+}
+
+func TestFindUnknownTagReturnsEmpty(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	setupFindTestData(t, handle)
+
+	got, err := handle.Find().Tag("unexisting").Execute()
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFindUnknownTypeReturnsError(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	_, _, _, _, tagAll, _, _, _ := setupFindTestData(t, handle)
+
+	got, err := handle.Find().Tag(tagAll).Type("unexisting").Execute()
+	assert.Error(t, err)
+	assert.Nil(t, got)
+}
+
+func TestFindExecuteStringValidQuery(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	aliases, _, _, _, tagAll, _, _, _ := setupFindTestData(t, handle)
+
+	got, err := handle.Find().ExecuteString(fmt.Sprintf("find(tag='%s')", tagAll))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, aliases, got)
+}
