@@ -8,6 +8,7 @@ import "C"
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"time"
 	"unsafe"
 )
@@ -277,31 +278,40 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, 
 
 // Columns : return the current columns
 func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn, error) {
+	var p runtime.Pinner
+
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
 
 	var metadata *C.qdb_ts_metadata_t
-	err := C.qdb_ts_get_metadata(entry.handle, alias, metadata)
+	p.Pin(&metadata)
+	err := C.qdb_ts_get_metadata(entry.handle, alias, &metadata)
+	p.Unpin()
+
 	var blobColumns []TsBlobColumn
 	var doubleColumns []TsDoubleColumn
 	var int64Columns []TsInt64Column
 	var stringColumns []TsStringColumn
 	var timestampColumns []TsTimestampColumn
 	if err == 0 {
-		blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns = columnArrayToGo(entry, metadata.columns, metadata.columnsCount)
+		blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns = columnArrayToGo(entry, metadata.columns, metadata.column_count)
 	}
 	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, makeErrorOrNil(err)
 }
 
 // ColumnsInfo : return the current columns information
 func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
+	var p runtime.Pinner
+
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
 	var metadata *C.qdb_ts_metadata_t
-	err := C.qdb_ts_get_metadata(entry.handle, alias, metadata)
+	p.Pin(&metadata)
+	err := C.qdb_ts_get_metadata(entry.handle, alias, &metadata)
+	p.Unpin()
 	var columnsInfo []TsColumnInfo
 	if err == 0 {
-		columnsInfo = columnInfoArrayToGo(metadata.columns, metadata.columnsCount)
+		columnsInfo = columnInfoArrayToGo(metadata.columns, metadata.column_count)
 	}
 	return columnsInfo, makeErrorOrNil(err)
 }
