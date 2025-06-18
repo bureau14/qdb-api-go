@@ -343,6 +343,7 @@ func (h HandleType) PrefixCount(prefix string) (uint64, error) {
 func NewHandle() (HandleType, error) {
 	var h HandleType
 	err := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_protocol_t(ProtocolTCP))
+
 	swapCallback()
 	return h, makeErrorOrNil(err)
 }
@@ -461,6 +462,11 @@ func (h HandleType) Integer(alias string) IntegerEntry {
 
 // Timeseries : Create a timeseries entry object
 func (h HandleType) Timeseries(alias string) TimeseriesEntry {
+	return h.Table(alias)
+}
+
+// Timeseries : Reference a timeseries table
+func (h HandleType) Table(alias string) TimeseriesEntry {
 	return TimeseriesEntry{Entry{h, alias}}
 }
 
