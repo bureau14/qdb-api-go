@@ -1,95 +1,174 @@
 package qdb
 
-/*
-	#include <qdb/log.h>
-
-	void go_callback_log(qdb_log_level_t log_level, unsigned long * date, unsigned long pid, unsigned long tid, char * message_buffer, size_t message_size);
-*/
-import "C"
 import (
-	"log"
-	"math"
+	"context"
+	"log/slog"
 	"os"
-	"sync"
-	"unsafe"
+	"sync/atomic"
+	"time"
 )
 
-var (
-	gCallbackID  C.qdb_log_callback_id
-	gLoggerMutex sync.Mutex
-	gLogger      *log.Logger = nil
-	gLogFilePath string      = ""
-)
+// QdbLogTimeKey overrides the Record.Time when present as an attribute.
+// The contract: if callers pass `QdbLogTimeKey, time.Time` (or the Attr
+// equivalent), the slog adapter will use that value as the record’s
+// timestamp and omit the attribute itself.
+const QdbLogTimeKey = "qdb_time"
 
-func getLogLevel(log_level C.qdb_log_level_t) string {
-	switch log_level {
-	case C.qdb_log_detailed:
-		return "[detail]"
-	case C.qdb_log_debug:
-		return "[debug]"
-	case C.qdb_log_info:
-		return "[info]"
-	case C.qdb_log_warning:
-		return "[warning]"
-	case C.qdb_log_error:
-		return "[error]"
-	case C.qdb_log_panic:
-		return "[panic]"
-	}
-	return ""
+// Logger is the project-wide logging façade.
+//
+// Decision rationale:
+//
+//	– Decouples QuasarDB Go API from any concrete logging package.
+//	– Keeps the surface small; only the levels currently needed by the
+//	  codebase are exposed, yet it is open for future extension.
+//
+// Key assumptions:
+//
+//	– Structured logging is preferred; key-value pairs follow slog’s
+//	  “attr” convention (`msg, "k1", v1, …`).
+//	– All methods are safe for concurrent use by multiple goroutines.
+type Logger interface {
+	Detailed(msg string, args ...any) // NEW – maps to slog.Debug
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+	Panic(msg string, args ...any) // NEW – maps to slog.Error
+
+	// With returns a logger that permanently appends the supplied attributes.
+	With(args ...any) Logger
 }
 
-func convertDate(d *C.ulong, length int) []C.ulong {
-	date := make([]C.ulong, 6)
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-	slice := (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.ulong(0))]C.ulong)(unsafe.Pointer(d))[:length:length]
-	for i, s := range slice {
-		date[i] = s
-	}
-	return date
-}
+var globalLogger atomic.Value // stores Logger
 
-//export go_callback_log
-func go_callback_log(log_level C.qdb_log_level_t, d *C.ulong, pid C.ulong, tid C.ulong, message_buffer *C.char, message_size C.size_t) {
-	date := convertDate(d, 6)
-	msg := C.GoStringN(message_buffer, C.int(message_size))
-	gLoggerMutex.Lock()
-	defer gLoggerMutex.Unlock()
-	gLogger.Printf("%d-%02d-%02dT%02d:%02d:%02d\t%d\t%d\t%-10s\t%s\n", date[0], date[1], date[2], date[3], date[4], date[5], pid, tid, getLogLevel(log_level), msg)
-}
+// splitTimestamp scans the variadic slog-arg slice, extracts the first
+// QdbLogTimeKey attribute whose value is a time.Time, and returns that
+// timestamp plus the remaining args.
+//
+// Decision rationale:
+//
+//	– Enables record-level timestamp overrides while preserving slog’s
+//	  zero-alloc attribute API.
+//	– Keeps caller code simple: just append QdbLogTimeKey, t when needed.
+//
+// Key assumptions:
+//
+//	– Only the first occurrence wins; later duplicates are ignored.
+//	– Accepts both slog.Attr and "key", value pairs.
+//	– Non-time.Time values for QdbLogTimeKey are ignored.
+//
+// Performance trade-offs:
+//
+//	– Single linear pass; rest slice reuses input capacity, so no
+//	  additional allocations unless an attr is removed.
+//	– Avoids reflection; uses type switches on concrete types.
+//
+// Inline usage example:
+// // ts, attrs := splitTimestamp([]any{qdb.QdbLogTimeKey, t,
+// //                                   "pid", pid, "user", u})
+// // if !ts.IsZero() { … build custom Record … }
+//
+// (function signature remains unchanged)
+func splitTimestamp(args []any) (ts time.Time, rest []any) {
+	// Pre-size rest so, in the common case (no timestamp found),
+	// we can append without triggering a re-allocation.
+	rest = make([]any, 0, len(args))
 
-func initLogger(filePath string) {
-	gLoggerMutex.Lock()
-	defer gLoggerMutex.Unlock()
-	gLogFilePath = filePath
-	if gLogger == nil {
-		gLogger = log.New(os.Stdout, "[API] ", 0)
-	}
-	if gLogFilePath != "" {
-		f, err := os.OpenFile(gLogFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			gLogger.Printf("Warning: cannot create log file at location '%s', logging to console.\n", gLogFilePath)
-		} else {
-			gLogger.SetOutput(f)
+	// When we detect the key in "key,value" form we must also ignore
+	// the *value* during the next iteration; `skip` flags that intent.
+	skip := false
+
+	for i := range len(args) {
+		// Honour skip request coming from the previous iteration.
+		if skip {
+			skip = false
+			continue
 		}
+
+		// Two syntaxes are possible in slog:
+		//   1. slog.Attr{Key: "k", Value: …}
+		//   2. alternating "key", value pairs
+		// We must support both so callers remain ergonomic.
+		switch v := args[i].(type) {
+		case slog.Attr:
+			// Attr branch – already a fully-formed slog attribute.
+			if v.Key == QdbLogTimeKey {
+				// Only treat it as an override when the value is *exactly* time.Time.
+				if t, ok := v.Value.Any().(time.Time); ok {
+					ts = t
+					// Do NOT add this attr to rest; we’re replacing the record’s timestamp
+					// and purposely omitting the original attribute to avoid duplication.
+					continue
+				}
+			}
+
+		case string:
+			// "key","value" branch – we need one-element look-ahead for the value.
+			if v == QdbLogTimeKey && i+1 < len(args) {
+				if t, ok := args[i+1].(time.Time); ok {
+					ts = t
+					// Skip the value on the next loop iteration.
+					skip = true
+					continue
+				}
+			}
+		}
+
+		// Not a timestamp attribute → copy through unchanged.
+		rest = append(rest, args[i])
 	}
+
+	// ts will be zero when no override was provided; callers test that.
+	return
 }
 
-func swapCallback() {
-	initLogger(gLogFilePath)
-	err := C.qdb_log_remove_callback(gCallbackID)
-	if err != 0 && err != C.qdb_e_invalid_argument {
-		gLogger.Printf("unable to remove previous callback: %s (%#x)\n", C.GoString(C.qdb_error(err)), err)
+type slogAdapter struct{ l *slog.Logger }
+
+func (s *slogAdapter) log(level slog.Level, msg string, args ...any) {
+	ts, rest := splitTimestamp(args)
+
+	// Fast path: no custom timestamp requested.
+	if ts.IsZero() {
+		s.l.Log(context.Background(), level, msg, rest...)
+		return
 	}
 
-	err = C.qdb_log_add_callback(C.qdb_log_callback(C.go_callback_log), &gCallbackID)
-	if err != 0 {
-		gLogger.Printf("unable to add new callback: %s (%#x)\n", C.GoString(C.qdb_error(err)), err)
+	// Manual Record build with overridden time stamp.
+	rec := slog.NewRecord(ts, level, msg, 0)
+	if len(rest) > 0 {
+		rec.Add(rest...)
 	}
+	// Pass straight to the underlying Handler.
+	_ = s.l.Handler().Handle(context.Background(), rec)
 }
 
-// SetLogFile
-// set the log file to use
-func SetLogFile(filePath string) {
-	initLogger(filePath)
+func (s *slogAdapter) Detailed(msg string, args ...any) { s.log(slog.LevelDebug, msg, args...) }
+func (s *slogAdapter) Debug(msg string, args ...any)    { s.log(slog.LevelDebug, msg, args...) }
+func (s *slogAdapter) Info(msg string, args ...any)     { s.log(slog.LevelInfo, msg, args...) }
+func (s *slogAdapter) Warn(msg string, args ...any)     { s.log(slog.LevelWarn, msg, args...) }
+func (s *slogAdapter) Error(msg string, args ...any)    { s.log(slog.LevelError, msg, args...) }
+func (s *slogAdapter) Panic(msg string, args ...any)    { s.log(slog.LevelError, msg, args...) }
+func (s *slogAdapter) With(args ...any) Logger          { return &slogAdapter{l: s.l.With(args...)} }
+
+func init() {
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo, // default level; tweak in tests if needed
+	})
+	globalLogger.Store(Logger(&slogAdapter{l: slog.New(handler)}))
+}
+
+// L returns the current package-level logger.
+func L() Logger { return globalLogger.Load().(Logger) }
+
+// SetLogger replaces the package-level logger.
+//
+// Performance trade-offs:
+//
+//	– Atomic swap is O(1) and contention-free for callers.
+//	– Panics on nil to fail fast in mis-configuration scenarios.
+func SetLogger(l Logger) {
+	if l == nil {
+		panic("SetLogger: logger must not be nil")
+	}
+	globalLogger.Store(l)
 }

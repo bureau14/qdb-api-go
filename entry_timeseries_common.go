@@ -6,6 +6,7 @@ package qdb
 */
 import "C"
 import (
+	"fmt"
 	"math"
 	"time"
 	"unsafe"
@@ -31,6 +32,99 @@ const (
 	TsColumnTimestamp     TsColumnType = C.qdb_ts_column_timestamp
 	TsColumnSymbol        TsColumnType = C.qdb_ts_column_symbol
 )
+
+var TsColumnTypes = []TsColumnType{
+	TsColumnBlob,
+	TsColumnDouble,
+	TsColumnInt64,
+	TsColumnString,
+	TsColumnTimestamp,
+	TsColumnSymbol,
+}
+
+// TsValueType : Timeseries value types
+//
+// Values we're able to represent inside a database, as some values are represented
+// differently as columns. A good example are Symbol columns, where the user interacts
+// with the values as strings, but on-disk are stored as an indexed integer.
+type TsValueType int
+
+const (
+	TsValueNull TsValueType = iota
+
+	TsValueDouble
+	TsValueInt64
+	TsValueTimestamp
+	TsValueBlob
+	TsValueString
+)
+
+var TsValueTypes = []TsValueType{
+	TsValueBlob,
+	TsValueDouble,
+	TsValueInt64,
+	TsValueString,
+	TsValueTimestamp,
+}
+
+func (v TsValueType) AsColumnType() TsColumnType {
+	switch v {
+	case TsValueBlob:
+		return TsColumnBlob
+	case TsValueString:
+		// Can be either String or Symbol, but we'll default to Symbols. This mostly affects
+		// "magic" table creation.
+		return TsColumnString
+	case TsValueDouble:
+		return TsColumnDouble
+	case TsValueInt64:
+		return TsColumnInt64
+	case TsValueNull:
+		break
+	}
+
+	panic(fmt.Sprintf("Unrecognized value type: %v", v))
+}
+
+// Returns true if this column is valid and non-null
+func (v TsColumnType) IsValid() bool {
+	switch v {
+	case TsColumnBlob:
+		fallthrough
+	case TsColumnSymbol:
+		fallthrough
+	case TsColumnString:
+		fallthrough
+	case TsColumnDouble:
+		fallthrough
+	case TsColumnInt64:
+		fallthrough
+	case TsColumnTimestamp:
+		return true
+	}
+
+	return false
+}
+
+func (v TsColumnType) AsValueType() TsValueType {
+	switch v {
+	case TsColumnBlob:
+		return TsValueBlob
+	case TsColumnSymbol:
+		// Both strings and symbols are represented as string values client-side
+		fallthrough
+	case TsColumnString:
+		return TsValueString
+	case TsColumnDouble:
+		return TsValueDouble
+	case TsColumnInt64:
+		return TsValueInt64
+	case TsColumnTimestamp:
+		return TsValueTimestamp
+	}
+
+	panic(fmt.Sprintf("Unrecognized column type: %v", v))
+}
 
 type tsColumn struct {
 	TsColumnInfo
@@ -132,6 +226,11 @@ func columnInfoArrayToGo(columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_
 // TimeseriesEntry : timeseries double entry data type
 type TimeseriesEntry struct {
 	Entry
+}
+
+// Name : Returns the name of the table
+func (t TimeseriesEntry) Name() string {
+	return t.Entry.Alias()
 }
 
 // :: internals
