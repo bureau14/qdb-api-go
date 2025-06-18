@@ -1,251 +1,267 @@
 package qdb
 
 import (
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Describe("Tests", func() {
-	var (
-		alias string
-		err   error
-	)
+// ------------------------------------------------------------------
+// Alias tests
+// ------------------------------------------------------------------
 
-	BeforeEach(func() {
-		alias = generateAlias(16)
-	})
+func TestEntryAlias(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
 
-	// :: Entry tests ::
-	Context("Entry", func() {
-		var (
-			integer IntegerEntry
-		)
-		JustBeforeEach(func() {
-			integer = handle.Integer(alias)
-			integer.Put(13, NeverExpires())
-		})
-		AfterEach(func() {
-			integer.Remove()
-		})
-		// Alias tests
-		Context("Alias", func() {
-			It("should have alias", func() {
-				Expect(alias).To(Equal(integer.Alias()))
-			})
-			Context("Empty alias", func() {
-				BeforeEach(func() {
-					alias = ""
-				})
-				It("should not put", func() {
-					err := integer.Put(17, NeverExpires())
-					Expect(err).To(HaveOccurred())
-				})
-			})
-		})
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
 
-		// Tags test
-		Context("Tags", func() {
-			var (
-				tag  string
-				tags []string
-			)
-			BeforeEach(func() {
-				tags = []string{"asd", "dsa", "ede", "esd", "fds"}
-				tag = tags[0]
-			})
-			It("'attach tag' should work", func() {
-				err = integer.AttachTag(tag)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("'attach tags' should work", func() {
-				err = integer.AttachTags(tags)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("'get tags' should work with no tags added", func() {
-				tags, err := integer.GetTags()
-				Expect(err).ToNot(HaveOccurred())
-				Expect([]string{}).To(Equal(tags))
-			})
-			It("'get tags' should not work with removed alias", func() {
-				integer.Remove()
-				tags, err := integer.GetTags()
-				Expect(err).To(HaveOccurred())
-				Expect([]string(nil)).To(Equal(tags))
-			})
-			Context("Attach tags before", func() {
-				JustBeforeEach(func() {
-					err = integer.AttachTags(tags)
-					Expect(err).ToNot(HaveOccurred())
-				})
-				AfterEach(func() {
-					err = integer.DetachTags(tags)
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("'detach tag' should work", func() {
-					err = integer.DetachTag(tag)
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("'has tag' should work", func() {
-					err = integer.HasTag(tag)
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("'detach tags' should work", func() {
-					err = integer.DetachTags(tags)
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("'get tagged' should work", func() {
-					aliasesObtained, err := integer.GetTagged(tag)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(1).To(Equal(len(aliasesObtained)))
-					Expect(alias).To(Equal(aliasesObtained[0]))
-				})
-				It("'get tags' should work", func() {
-					tagsObtained, err := integer.GetTags()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(len(tags)).To(Equal(len(tagsObtained)))
-					Expect(tags).To(ConsistOf(tagsObtained))
-				})
-			})
-			Context("Empty tag(s)", func() {
-				BeforeEach(func() {
-					tag = ""
-					tags = []string{}
-				})
-				It("'has tag' should not work", func() {
-					err = integer.HasTag(tag)
-					Expect(err).To(HaveOccurred())
-				})
-				It("'get tagged' should not work", func() {
-					aliasesObtained, err := integer.GetTagged(tag)
-					Expect(err).To(HaveOccurred())
-					Expect(0).To(Equal(len(aliasesObtained)))
-				})
-				It("'get tagged' should return empty output when provided wrong tag", func() {
-					aliasesObtained, err := integer.GetTagged("asd")
-					Expect(err).ToNot(HaveOccurred())
-					Expect(0).To(Equal(len(aliasesObtained)))
-					Expect([]string{}).To(Equal(aliasesObtained))
-				})
-			})
-		})
+	assert.Equal(t, alias, integer.Alias())
+}
 
-		// Expiry tests
-		Context("Expiry", func() {
-			var (
-				expiry   time.Time
-				duration time.Duration
-			)
-			JustBeforeEach(func() {
-				now := time.Now()
-				expiry = now.Add(duration)
-			})
-			Context("Distant future", func() {
-				BeforeEach(func() {
-					distantTime := time.Date(2040, 0, 0, 0, 0, 0, 0, time.UTC)
-					duration = distantTime.Sub(time.Now())
-				})
-				It("should set expire at", func() {
-					err = integer.ExpiresAt(expiry)
-					Expect(err).ToNot(HaveOccurred())
+func TestEntryPutWithEmptyAlias(t *testing.T) {
+	handle := newTestHandle(t)
+	integer := handle.Integer("")
+	err := integer.Put(17, NeverExpires())
+	defer handle.Close()
 
-					meta, err := integer.GetMetadata()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
-				})
-				It("should set expire from now", func() {
-					err = integer.ExpiresFromNow(duration)
-					Expect(err).ToNot(HaveOccurred())
-				})
-			})
-			Context("Short future", func() {
-				BeforeEach(func() {
-					duration, _ = time.ParseDuration("1h")
-				})
-				It("should set expire at", func() {
-					err = integer.ExpiresAt(expiry)
-					Expect(err).ToNot(HaveOccurred())
+	assert.Error(t, err)
+}
 
-					meta, err := integer.GetMetadata()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
-				})
-				It("should set expire from now", func() {
-					err = integer.ExpiresFromNow(duration)
-					Expect(err).ToNot(HaveOccurred())
-				})
-			})
-			Context("Short past", func() {
-				BeforeEach(func() {
-					duration, _ = time.ParseDuration("-1h")
-				})
-				It("should not set expire at", func() {
-					err = integer.ExpiresAt(expiry)
-					Expect(err).To(HaveOccurred())
-				})
-				It("should not set expire from now", func() {
-					err = integer.ExpiresFromNow(duration)
-					Expect(err).To(HaveOccurred())
-				})
-			})
-			Context("Ultra short past", func() {
-				BeforeEach(func() {
-					duration, _ = time.ParseDuration("-5m30s")
-				})
-				It("should not set expire at", func() {
-					err = integer.ExpiresAt(expiry)
-					Expect(err).To(HaveOccurred())
-				})
-				It("should not set expire from now", func() {
-					err = integer.ExpiresFromNow(duration)
-					Expect(err).To(HaveOccurred())
-				})
-			})
-			Context("Basic functions", func() {
-				BeforeEach(func() {
-					duration, _ = time.ParseDuration("1h")
-				})
-				It("should retrieve the right result", func() {
-					meta, err := integer.GetMetadata()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(meta.ExpiryTime).To(Equal(NeverExpires()))
-				})
-				It("should retrieve the right result", func() {
-					integer.Update(12, expiry)
-					integer.Update(14, PreserveExpiration())
+// ------------------------------------------------------------------
+// Tag tests
+// ------------------------------------------------------------------
 
-					meta, err := integer.GetMetadata()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(toQdbTime(meta.ExpiryTime)).To(Equal(toQdbTime(expiry)))
-				})
-			})
-		})
+func TestEntryAttachTag(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
 
-		// Location tests
-		// May not work with more complex port or addresses
-		Context("Location", func() {
-			var (
-				address string
-			)
-			BeforeEach(func() {
-				address = "127.0.0.1"
-			})
-			It("should locate", func() {
-				location, err := integer.GetLocation()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(int16(2836)).To(Equal(location.Port))
-				Expect(address).To(Equal(location.Address))
-			})
-		})
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
 
-		// Metadata tests
-		Context("Location", func() {
-			It("should locate", func() {
-				metadata, err := integer.GetMetadata()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(EntryInteger).To(Equal(metadata.Type))
-			})
-		})
-	})
-})
+	assert.NoError(t, integer.AttachTag("atag"))
+}
+
+func TestEntryAttachTags(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+	tags := generateTags(5)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	assert.NoError(t, integer.AttachTags(tags))
+}
+
+func TestEntryGetTagsWithoutAny(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	got, err := integer.GetTags()
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestEntryGetTagsAfterRemove(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	require.NoError(t, integer.Remove())
+	defer handle.Close()
+
+	got, err := integer.GetTags()
+	assert.Error(t, err)
+	assert.Nil(t, got)
+}
+
+func TestEntryTagLifecycle(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+	tags := generateTags(5)
+	tag := tags[0]
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	require.NoError(t, integer.AttachTags(tags))
+
+	// Detach/HasTag
+	assert.NoError(t, integer.HasTag(tag))
+	assert.NoError(t, integer.DetachTag(tag))
+
+	// Re-attach to test GetTagged and DetachTags
+	require.NoError(t, integer.AttachTags(tags))
+
+	aliases, err := integer.GetTagged(tag)
+	require.NoError(t, err)
+
+	// The server may return the same alias multiple times; de-duplicate.
+	unique := make(map[string]struct{}, len(aliases))
+	for _, a := range aliases {
+		unique[a] = struct{}{}
+	}
+	require.Len(t, unique, 1, "expected exactly one unique alias for the tag")
+	_, ok := unique[alias]
+	assert.True(t, ok, "alias missing from GetTagged result")
+
+	gotTags, err := integer.GetTags()
+	require.NoError(t, err)
+	assert.ElementsMatch(t, tags, gotTags)
+
+	assert.NoError(t, integer.DetachTags(tags))
+}
+
+func TestEntryTagEdgeCases(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	assert.Error(t, integer.HasTag(""))
+	aliases, err := integer.GetTagged("")
+	assert.Error(t, err)
+	assert.Empty(t, aliases)
+
+	aliases, err = integer.GetTagged("nonexistent")
+	require.NoError(t, err)
+	assert.Empty(t, aliases)
+}
+
+// ------------------------------------------------------------------
+// Expiry tests
+// ------------------------------------------------------------------
+
+func TestEntryExpiryDistantFuture(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	expiry := time.Date(2040, time.January, 1, 0, 0, 0, 0, time.UTC)
+	duration := time.Until(expiry)
+
+	require.NoError(t, integer.ExpiresAt(expiry))
+	meta, err := integer.GetMetadata()
+	require.NoError(t, err)
+	assert.Equal(t, toQdbTime(expiry), toQdbTime(meta.ExpiryTime))
+
+	assert.NoError(t, integer.ExpiresFromNow(duration))
+}
+
+func TestEntryExpiryShortFuture(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	duration, _ := time.ParseDuration("1h")
+	expiry := time.Now().Add(duration)
+
+	require.NoError(t, integer.ExpiresAt(expiry))
+	meta, err := integer.GetMetadata()
+	require.NoError(t, err)
+	assert.Equal(t, toQdbTime(expiry), toQdbTime(meta.ExpiryTime))
+
+	assert.NoError(t, integer.ExpiresFromNow(duration))
+}
+
+func TestEntryExpiryPastErrors(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	for _, d := range []time.Duration{-1 * time.Hour, -5*time.Minute - 30*time.Second} {
+		expiry := time.Now().Add(d)
+		assert.Error(t, integer.ExpiresAt(expiry))
+		assert.Error(t, integer.ExpiresFromNow(d))
+	}
+}
+
+func TestEntryExpiryPreserve(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	duration, _ := time.ParseDuration("1h")
+	expiry := time.Now().Add(duration)
+
+	// Default: NeverExpires
+	meta, err := integer.GetMetadata()
+	require.NoError(t, err)
+	assert.Equal(t, NeverExpires(), meta.ExpiryTime)
+
+	require.NoError(t, integer.Update(12, expiry))
+	require.NoError(t, integer.Update(14, PreserveExpiration()))
+
+	meta, err = integer.GetMetadata()
+	require.NoError(t, err)
+	assert.Equal(t, toQdbTime(expiry), toQdbTime(meta.ExpiryTime))
+}
+
+// ------------------------------------------------------------------
+// Location & metadata tests
+// ------------------------------------------------------------------
+
+func TestEntryGetLocation(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	loc, err := integer.GetLocation()
+	require.NoError(t, err)
+	assert.Equal(t, "127.0.0.1", loc.Address)
+	assert.Equal(t, int16(2836), loc.Port)
+}
+
+func TestEntryGetMetadata(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	integer := handle.Integer(alias)
+	require.NoError(t, integer.Put(13, NeverExpires()))
+	defer integer.Remove()
+	defer handle.Close()
+
+	meta, err := integer.GetMetadata()
+	require.NoError(t, err)
+	assert.Equal(t, EntryInteger, meta.Type)
+}

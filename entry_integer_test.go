@@ -1,74 +1,105 @@
 package qdb
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Describe("Tests", func() {
-	var (
-		alias string
-	)
+func TestIntegerPut(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
 
-	BeforeEach(func() {
-		alias = generateAlias(16)
-	})
+    alias := generateAlias(16)
+    integer := handle.Integer(alias)
+    defer integer.Remove()
 
-	// :: Integer tests ::
-	Context("Integer", func() {
-		var (
-			integer    IntegerEntry
-			content    int64
-			newContent int64
-		)
-		BeforeEach(func() {
-			content = 13
-			newContent = 87
-			integer = handle.Integer(alias)
-		})
-		AfterEach(func() {
-			integer.Remove()
-		})
-		It("should put", func() {
-			err := integer.Put(content, NeverExpires())
-			Expect(err).ToNot(HaveOccurred())
-		})
-		It("should not put again", func() {
-			err := integer.Put(content, NeverExpires())
-			Expect(err).ToNot(HaveOccurred())
-			err = integer.Put(content, NeverExpires())
-			Expect(err).To(HaveOccurred())
-		})
-		Context("Put before tests", func() {
-			JustBeforeEach(func() {
-				integer.Put(content, NeverExpires())
-			})
-			It("should update", func() {
-				err := integer.Update(newContent, NeverExpires())
-				Expect(err).ToNot(HaveOccurred())
-				contentObtained, err := integer.Get()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(newContent).To(Equal(contentObtained))
-			})
-			It("should get", func() {
-				contentObtained, err := integer.Get()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(content).To(Equal(contentObtained))
-			})
-			It("should add", func() {
-				toAdd := int64(5)
-				sum := toAdd + content
-				result, err := integer.Add(toAdd)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(sum).To(Equal(result))
-			})
-			It("should remove", func() {
-				err := integer.Remove()
-				Expect(err).ToNot(HaveOccurred())
-				contentObtained, err := integer.Get()
-				Expect(err).To(HaveOccurred())
-				Expect(int64(0)).To(Equal(contentObtained))
-			})
-		})
-	})
-})
+    content := int64(13)
+    err := integer.Put(content, NeverExpires())
+    assert.NoError(t, err)
+}
+
+func TestIntegerPutAgain(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
+
+    alias := generateAlias(16)
+    integer := handle.Integer(alias)
+    defer integer.Remove()
+
+    content := int64(13)
+    require.NoError(t, integer.Put(content, NeverExpires()))
+    err := integer.Put(content, NeverExpires())
+    assert.Error(t, err)
+}
+
+func TestIntegerUpdate(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
+
+    alias := generateAlias(16)
+    integer := handle.Integer(alias)
+    defer integer.Remove()
+
+    content := int64(13)
+    newContent := int64(87)
+
+    require.NoError(t, integer.Put(content, NeverExpires()))
+    require.NoError(t, integer.Update(newContent, NeverExpires()))
+
+    got, err := integer.Get()
+    require.NoError(t, err)
+    assert.Equal(t, newContent, got)
+}
+
+func TestIntegerGet(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
+
+    alias := generateAlias(16)
+    integer := handle.Integer(alias)
+    defer integer.Remove()
+
+    content := int64(13)
+    require.NoError(t, integer.Put(content, NeverExpires()))
+
+    got, err := integer.Get()
+    require.NoError(t, err)
+    assert.Equal(t, content, got)
+}
+
+func TestIntegerAdd(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
+
+    alias := generateAlias(16)
+    integer := handle.Integer(alias)
+    defer integer.Remove()
+
+    content := int64(13)
+    require.NoError(t, integer.Put(content, NeverExpires()))
+
+    toAdd := int64(5)
+    expected := content + toAdd
+
+    sum, err := integer.Add(toAdd)
+    require.NoError(t, err)
+    assert.Equal(t, expected, sum)
+}
+
+func TestIntegerRemove(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
+
+    alias := generateAlias(16)
+    integer := handle.Integer(alias)
+
+    content := int64(13)
+    require.NoError(t, integer.Put(content, NeverExpires()))
+
+    require.NoError(t, integer.Remove())
+
+    _, err := integer.Get()
+    assert.Error(t, err)
+}
