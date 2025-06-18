@@ -2,10 +2,11 @@ package qdb
 
 import (
 	"fmt"
+	"os"
+	"slices"
 	"sort"
 	"testing"
 	"time"
-	"slices"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,6 +31,30 @@ func newTestHandle(t *testing.T) HandleType {
 	return handle
 }
 
+// newTestDirectHandle returns a DirectHandle connected to the first
+// cluster endpoint and registers clean-up callbacks for both the
+// direct handle and the underlying HandleType.
+func newTestDirectHandle(t *testing.T) DirectHandleType {
+	t.Helper()
+
+	handle := newTestHandle(t)
+	cluster := handle.Cluster()
+
+	endpoints, err := cluster.Endpoints()
+	require.NoError(t, err)
+	require.NotEmpty(t, endpoints)
+
+	direct, err := handle.DirectConnect(endpoints[0].URI())
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		direct.Close()
+		handle.Close()
+	})
+
+	return direct
+}
+
 // fixture for creating a default test WriterTable
 func newTestWriterTable(t *testing.T) WriterTable {
 	t.Helper()
@@ -52,6 +77,58 @@ func newTestWriter(t *testing.T) Writer {
 	require.NotNil(t, writer)
 
 	return writer
+}
+
+// newTestNode creates a Node instance for testing purposes.
+//
+// Decision rationale:
+//   - Centralizes Node creation to avoid duplicating URI handling across tests.
+//   - Ensures consistent Node setup with the test handle's cluster URI.
+//
+// Key assumptions:
+//   - handle is valid and connected to a running daemon.
+//   - uri is a valid QuasarDB node URI.
+//
+// Performance trade-offs:
+//   - Negligible; just wraps Node constructor.
+//
+// Usage example:
+//
+//	handle := newTestHandle(t)
+//	node := newTestNode(handle, insecureURI)
+func newTestNode(handle HandleType, uri string) *Node {
+	return handle.Node(uri)
+}
+
+// newTestBlobWithContent creates a blob entry with content for testing purposes.
+//
+// Decision rationale:
+//   - Centralizes blob creation logic used across cluster tests.
+//   - Ensures consistent blob setup with content and proper cleanup tracking.
+//
+// Key assumptions:
+//   - handle is valid and connected to a running daemon.
+//   - Caller is responsible for calling Remove() on the returned blob.
+//
+// Performance trade-offs:
+//   - Negligible; just wraps blob creation and put operations.
+//
+// Usage example:
+//
+//	handle := newTestHandle(t)
+//	blob, err := newTestBlobWithContent(t, handle, []byte("test content"))
+//	defer blob.Remove()
+func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (BlobEntry, error) {
+	t.Helper()
+
+	alias := generateAlias(16)
+	blob := handle.Blob(alias)
+	err := blob.Put(content, NeverExpires())
+	if err != nil {
+		return blob, err
+	}
+
+	return blob, nil
 }
 
 // pushWriterTables writes the provided tables to the server using a writer with
@@ -745,8 +822,103 @@ var writerPushModes = []WriterPushMode{
 	WriterPushModeAsync,
 }
 
+// generateTags returns n random tag strings produced via generateAlias.
+//
+// Decision rationale:
+//   - Centralises tag creation so tests don’t rely on hard-coded values.
+//   - Reuses generateAlias to guarantee tag-format consistency.
+//
+// Key assumptions:
+//   - n > 0.
+//   - generateAlias(16) yields sufficiently unique tags for test purposes.
+//
+// Usage example:
+//
+//	tags := generateTags(5)
+func generateTags(n int) []string {
+	if n <= 0 {
+		panic("generateTags called with non-positive count")
+	}
+	ret := make([]string, n)
+	for i := range ret {
+		ret[i] = generateAlias(16)
+	}
+	return ret
+}
+
 func genWriterPushMode(t *rapid.T) WriterPushMode {
 	return rapid.SampledFrom(writerPushModes[:]).Draw(t, "writerPushMode")
+}
+
+// createTempFile writes content to a new file named
+// <prefix>_<random>.tmp, registers automatic cleanup and returns the
+// filename.
+//
+// Decision rationale:
+//   - DRY helper for tests that need short-lived key / credential files.
+//
+// Usage example:
+//
+//	fname := createTempFile(t, "key", "secret")
+func createTempFile(t *testing.T, prefix, content string) string {
+	t.Helper()
+
+	name := fmt.Sprintf("%s_%s.tmp", prefix, generateAlias(8))
+	require.NoError(t, os.WriteFile(name, []byte(content), 0o600))
+	t.Cleanup(func() { os.Remove(name) })
+	return name
+}
+
+// setupFindTestData creates three test entries (2 blobs, 1 integer) with
+// predefined tag combinations and registers automatic cleanup via t.Cleanup.
+//
+// Returned slice layout: []string{blob1Alias, blob2Alias, integerAlias}
+func setupFindTestData(
+	t *testing.T,
+	handle HandleType,
+) (aliases []string,
+	blob1, blob2 BlobEntry,
+	integer IntegerEntry,
+	tagAll, tagFirst, tagSecond, tagThird string) {
+	t.Helper()
+
+	tags := generateTags(4)
+	tagAll, tagFirst = tags[0], tags[1]
+	tagSecond, tagThird = tags[2], tags[3]
+
+	// Generate unique aliases.
+	aliasBlob1 := generateAlias(16)
+	aliasBlob2 := generateAlias(16)
+	aliasInteger := generateAlias(16)
+
+	aliases = []string{aliasBlob1, aliasBlob2, aliasInteger}
+
+	// Blob #1  – tags: all, first
+	blob1 = handle.Blob(aliasBlob1)
+	require.NoError(t, blob1.Put([]byte("asd"), NeverExpires()))
+	require.NoError(t, blob1.AttachTag(tagAll))
+	require.NoError(t, blob1.AttachTag(tagFirst))
+
+	// Blob #2  – tags: all, second
+	blob2 = handle.Blob(aliasBlob2)
+	require.NoError(t, blob2.Put([]byte("asd"), NeverExpires()))
+	require.NoError(t, blob2.AttachTag(tagAll))
+	require.NoError(t, blob2.AttachTag(tagSecond))
+
+	// Integer – tags: all, third
+	integer = handle.Integer(aliasInteger)
+	require.NoError(t, integer.Put(32, NeverExpires()))
+	require.NoError(t, integer.AttachTag(tagAll))
+	require.NoError(t, integer.AttachTag(tagThird))
+
+	// Automatic cleanup.
+	t.Cleanup(func() {
+		blob1.Remove()
+		blob2.Remove()
+		integer.Remove()
+	})
+
+	return aliases, blob1, blob2, integer, tagAll, tagFirst, tagSecond, tagThird
 }
 
 var writerPushFlags = []WriterPushFlag{
@@ -965,4 +1137,196 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 
 	// The reader doesn't guarantee any order, and what is the "index" for the Writer is just a column with
 	// name "$timestamp" in the reader. Tables are not split out, and instead rely on the "$table" column name.
+}
+
+// createTestTimeseries spins up a fresh time-series with the provided
+// schema and shard size, registers automatic cleanup, and returns it.
+//
+// If cols is nil or empty the time-series is created without columns.
+func createTestTimeseries(
+	t *testing.T,
+	handle HandleType,
+	cols []TsColumnInfo,
+	shardSize time.Duration,
+) TimeseriesEntry {
+	t.Helper()
+
+	alias := generateAlias(16)
+	ts := handle.Timeseries(alias)
+
+	require.NoError(t, ts.Create(shardSize, cols...))
+	t.Cleanup(func() { ts.Remove() })
+
+	return ts
+}
+
+// -----------------------------------------------------------------
+// Timeseries fixture used by query_test.go
+// -----------------------------------------------------------------
+
+// TestTimeseriesData bundles the alias and the sample points that
+// newTestTimeseriesAllColumns inserts.
+type TestTimeseriesData struct {
+	Alias           string
+	BlobPoints      []TsBlobPoint
+	DoublePoints    []TsDoublePoint
+	Int64Points     []TsInt64Point
+	StringPoints    []TsStringPoint
+	TimestampPoints []TsTimestampPoint
+	SymbolPoints    []TsStringPoint
+}
+
+// newTestTimeseriesAllColumns creates a time-series that contains one
+// column of every supported type, populates it with <count> rows of
+// deterministic data, and registers automatic cleanup.
+//
+// Returned structure can be used by tests to verify query results.
+func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) TestTimeseriesData {
+	t.Helper()
+
+	alias := generateAlias(16)
+
+	// Random (collision-free) column & symbol table names
+	blobCol := generateColumnName()
+	doubleCol := generateColumnName()
+	int64Col := generateColumnName()
+	stringCol := generateColumnName()
+	timestampCol := generateColumnName()
+	symbolCol := generateColumnName()
+	symTable := generateAlias(16)
+
+	cols := []TsColumnInfo{
+		NewTsColumnInfo(blobCol, TsColumnBlob),
+		NewTsColumnInfo(doubleCol, TsColumnDouble),
+		NewTsColumnInfo(int64Col, TsColumnInt64),
+		NewTsColumnInfo(stringCol, TsColumnString),
+		NewTsColumnInfo(timestampCol, TsColumnTimestamp),
+		NewSymbolColumnInfo(symbolCol, symTable),
+	}
+
+	ts := handle.Timeseries(alias)
+	require.NoError(t, ts.Create(24*time.Hour, cols...))
+
+	// Build sample data
+	timestamps := make([]time.Time, count)
+	blobPoints := make([]TsBlobPoint, count)
+	doublePoints := make([]TsDoublePoint, count)
+	int64Points := make([]TsInt64Point, count)
+	stringPoints := make([]TsStringPoint, count)
+	timestampPoints := make([]TsTimestampPoint, count)
+	symbolPoints := make([]TsStringPoint, count)
+
+	for i := int64(0); i < count; i++ {
+		tsVal := time.Unix((i+1)*10, 0)
+		timestamps[i] = tsVal
+		blobPoints[i] = NewTsBlobPoint(tsVal, []byte(fmt.Sprintf("content_%d", i)))
+		doublePoints[i] = NewTsDoublePoint(tsVal, float64(i))
+		int64Points[i] = NewTsInt64Point(tsVal, i)
+		stringPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
+		timestampPoints[i] = NewTsTimestampPoint(tsVal, tsVal)
+		symbolPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
+	}
+
+	require.NoError(t, ts.BlobColumn(blobCol).Insert(blobPoints...))
+	require.NoError(t, ts.DoubleColumn(doubleCol).Insert(doublePoints...))
+	require.NoError(t, ts.Int64Column(int64Col).Insert(int64Points...))
+	require.NoError(t, ts.StringColumn(stringCol).Insert(stringPoints...))
+	require.NoError(t, ts.TimestampColumn(timestampCol).Insert(timestampPoints...))
+	require.NoError(t, ts.SymbolColumn(symbolCol, symTable).Insert(symbolPoints...))
+
+	t.Cleanup(func() { ts.Remove() })
+
+	return TestTimeseriesData{
+		Alias:           alias,
+		BlobPoints:      blobPoints,
+		DoublePoints:    doublePoints,
+		Int64Points:     int64Points,
+		StringPoints:    stringPoints,
+		TimestampPoints: timestampPoints,
+		SymbolPoints:    symbolPoints,
+	}
+}
+
+// createDoubleTimeseriesWithPoints spins up a fresh time-series containing one
+// double column.  If count > 0 it pre-inserts <count> deterministic points.
+//
+// Returned values:
+//   • alias      – random alias of the created time-series
+//   • ts         – TimeseriesEntry handle
+//   • column     – typed handle to the single double column
+//   • timestamps – slice of inserted timestamps (nil when count == 0)
+//   • points     – slice of inserted TsDoublePoint values (nil when count == 0)
+func createDoubleTimeseriesWithPoints(
+	t *testing.T,
+	handle HandleType,
+	count int64,
+) (alias string, ts TimeseriesEntry, column TsDoubleColumn,
+	timestamps []time.Time, points []TsDoublePoint) {
+
+	t.Helper()
+
+	alias = generateAlias(16)
+	colName := generateColumnName()
+	colInfo := NewTsColumnInfo(colName, TsColumnDouble)
+
+	ts = handle.Timeseries(alias)
+	require.NoError(t, ts.Create(24*time.Hour, colInfo))
+	t.Cleanup(func() { ts.Remove() })
+
+	column = ts.DoubleColumn(colName)
+
+	if count > 0 {
+		timestamps = make([]time.Time, count)
+		points = make([]TsDoublePoint, count)
+		for i := int64(0); i < count; i++ {
+			tsVal := time.Unix((i+1)*10, 0)
+			timestamps[i] = tsVal
+			points[i] = NewTsDoublePoint(tsVal, float64(i))
+		}
+		require.NoError(t, column.Insert(points...))
+	}
+
+	return
+}
+
+// createInt64TimeseriesWithPoints spins up a fresh time-series containing one
+// int64 column. If count > 0 it pre-inserts <count> deterministic points.
+//
+// Returned values:
+//   • alias      – random alias of the created time-series
+//   • ts         – TimeseriesEntry handle
+//   • column     – typed handle to the single int64 column
+//   • timestamps – slice of inserted timestamps (nil when count == 0)
+//   • points     – slice of inserted TsInt64Point values (nil when count == 0)
+func createInt64TimeseriesWithPoints(
+	t *testing.T,
+	handle HandleType,
+	count int64,
+) (alias string, ts TimeseriesEntry, column TsInt64Column,
+	timestamps []time.Time, points []TsInt64Point) {
+
+	t.Helper()
+
+	alias = generateAlias(16)
+	colName := generateColumnName()
+	colInfo := NewTsColumnInfo(colName, TsColumnInt64)
+
+	ts = handle.Timeseries(alias)
+	require.NoError(t, ts.Create(24*time.Hour, colInfo))
+	t.Cleanup(func() { ts.Remove() })
+
+	column = ts.Int64Column(colName)
+
+	if count > 0 {
+		timestamps = make([]time.Time, count)
+		points = make([]TsInt64Point, count)
+		for i := int64(0); i < count; i++ {
+			tsVal := time.Unix((i+1)*10, 0)
+			timestamps[i] = tsVal
+			points[i] = NewTsInt64Point(tsVal, i)
+		}
+		require.NoError(t, column.Insert(points...))
+	}
+
+	return
 }

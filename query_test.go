@@ -2,219 +2,150 @@ package qdb
 
 import (
 	"fmt"
-	"time"
+	"testing"
 	"unsafe"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Describe("Tests", func() {
-	var (
-		alias string
+const (
+    blobIndex      = 0
+    doubleIndex    = 1
+    int64Index     = 2
+    stringIndex    = 3
+    timestampIndex = 4
+    symbolIndex    = 5
+)
 
-		timeseries TimeseriesEntry
+func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
 
-		blobColumn      TsBlobColumn
-		doubleColumn    TsDoubleColumn
-		int64Column     TsInt64Column
-		stringColumn    TsStringColumn
-		timestampColumn TsTimestampColumn
-		symbolColumn    TsStringColumn
-		columnsInfo     []TsColumnInfo
+    td := newTestTimeseriesAllColumns(t, handle, 8)
 
-		timestamps      []time.Time
-		blobPoints      []TsBlobPoint
-		doublePoints    []TsDoublePoint
-		int64Points     []TsInt64Point
-		stringPoints    []TsStringPoint
-		timestampPoints []TsTimestampPoint
-		symbolPoints    []TsStringPoint
-	)
-	const (
-		count int64 = 8
-		start int64 = 0
-		end   int64 = count - 1
+    query := fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
+    result, err := handle.Query(query).Execute()
+    require.NoError(t, err)
+    require.NotNil(t, result)
+    defer handle.Release(unsafe.Pointer(result))
 
-		blobIndex      int64 = 0
-		doubleIndex    int64 = 1
-		int64Index     int64 = 2
-		stringIndex    int64 = 3
-		timestampIndex int64 = 4
-		symbolIndex    int64 = 5
+    for rowIdx, row := range result.Rows() {
+        cols := result.Columns(row)
 
-		blobColName      string = "blob_col"
-		stringColName    string = "string_col"
-		doubleColName    string = "double_col"
-		int64ColName     string = "int64_col"
-		timestampColName string = "timestamp_col"
-		symbolColName    string = "symbol_col"
+        blob, err := cols[blobIndex+2].GetBlob()
+        require.NoError(t, err)
+        assert.Equal(t, td.BlobPoints[rowIdx].Content(), blob)
 
-		symtableName string = "symbol_table"
-	)
-	BeforeEach(func() {
-		alias = generateAlias(16)
+        dbl, err := cols[doubleIndex+2].GetDouble()
+        require.NoError(t, err)
+        assert.Equal(t, td.DoublePoints[rowIdx].Content(), dbl)
 
-		columnsInfo = []TsColumnInfo{}
-		columnsInfo = append(columnsInfo, NewTsColumnInfo(blobColName, TsColumnBlob), NewTsColumnInfo(doubleColName, TsColumnDouble), NewTsColumnInfo(int64ColName, TsColumnInt64), NewTsColumnInfo(stringColName, TsColumnString), NewTsColumnInfo(timestampColName, TsColumnTimestamp), NewSymbolColumnInfo(symbolColName, symtableName))
+        i64, err := cols[int64Index+2].GetInt64()
+        require.NoError(t, err)
+        assert.Equal(t, td.Int64Points[rowIdx].Content(), i64)
 
-		timeseries = handle.Timeseries(alias)
+        str, err := cols[stringIndex+2].GetString()
+        require.NoError(t, err)
+        assert.Equal(t, td.StringPoints[rowIdx].Content(), str)
 
-		timestamps = make([]time.Time, count)
-		blobPoints = make([]TsBlobPoint, count)
-		doublePoints = make([]TsDoublePoint, count)
-		int64Points = make([]TsInt64Point, count)
-		stringPoints = make([]TsStringPoint, count)
-		timestampPoints = make([]TsTimestampPoint, count)
-		symbolPoints = make([]TsStringPoint, count)
-		for idx := int64(0); idx < count; idx++ {
-			timestamps[idx] = time.Unix((idx+1)*10, 0)
-			blobPoints[idx] = NewTsBlobPoint(timestamps[idx], []byte(fmt.Sprintf("content_%d", idx)))
-			doublePoints[idx] = NewTsDoublePoint(timestamps[idx], float64(idx))
-			int64Points[idx] = NewTsInt64Point(timestamps[idx], idx)
-			stringPoints[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
-			timestampPoints[idx] = NewTsTimestampPoint(timestamps[idx], timestamps[idx])
-			symbolPoints[idx] = NewTsStringPoint(timestamps[idx], fmt.Sprintf("content_%d", idx))
-		}
+        ts, err := cols[timestampIndex+2].GetTimestamp()
+        require.NoError(t, err)
+        assert.Equal(t, td.TimestampPoints[rowIdx].Content(), ts)
 
-		err := timeseries.Create(24*time.Hour, columnsInfo...)
-		Expect(err).ToNot(HaveOccurred())
-		blobColumn = timeseries.BlobColumn(columnsInfo[blobIndex].Name())
-		doubleColumn = timeseries.DoubleColumn(columnsInfo[doubleIndex].Name())
-		int64Column = timeseries.Int64Column(columnsInfo[int64Index].Name())
-		stringColumn = timeseries.StringColumn(columnsInfo[stringIndex].Name())
-		timestampColumn = timeseries.TimestampColumn(columnsInfo[timestampIndex].Name())
-		symbolColumn = timeseries.SymbolColumn(columnsInfo[symbolIndex].Name(), symtableName)
+        sym, err := cols[symbolIndex+2].GetString()
+        require.NoError(t, err)
+        assert.Equal(t, td.SymbolPoints[rowIdx].Content(), sym)
 
-		blobColumn.Insert(blobPoints...)
-		doubleColumn.Insert(doublePoints...)
-		int64Column.Insert(int64Points...)
-		stringColumn.Insert(stringPoints...)
-		timestampColumn.Insert(timestampPoints...)
-		symbolColumn.Insert(symbolPoints...)
-	})
-	AfterEach(func() {
-		timeseries.Remove()
-	})
-	Context("Query", func() {
-		It("should work", func() {
-			fmt.Fprintf(GinkgoWriter, "Meh %s", alias)
-			query := fmt.Sprintf("select * from %s in range(1970, +10d)", alias)
-			q := handle.Query(query)
-			result, err := q.Execute()
-			defer handle.Release(unsafe.Pointer(result))
-			Expect(err).ToNot(HaveOccurred())
+        // Universal getter validation
+        for i, c := range cols {
+            if i == 1 { // skip $table
+                continue
+            }
+            p := c.Get()
+            switch p.Type() {
+            case QueryResultBlob:
+                assert.Equal(t, td.BlobPoints[rowIdx].Content(), p.Value())
+            case QueryResultDouble:
+                assert.Equal(t, td.DoublePoints[rowIdx].Content(), p.Value())
+            case QueryResultInt64:
+                assert.Equal(t, td.Int64Points[rowIdx].Content(), p.Value())
+            case QueryResultString:
+                v := p.Value().(string)
+                exp1 := td.StringPoints[rowIdx].Content()
+                exp2 := td.SymbolPoints[rowIdx].Content()
+                assert.True(t, v == exp1 || v == exp2)
+            case QueryResultTimestamp:
+                assert.Equal(t, td.TimestampPoints[rowIdx].Content(), p.Value())
+            }
+        }
+    }
+}
 
-			fmt.Fprintf(GinkgoWriter, "err: %v", err)
+func TestQueryInvalidQueryReturnsError(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
 
-			for rowIdx, row := range result.Rows() {
-				columns := result.Columns(row)
-				// first column is the timestamps of the row
-				// second column is the table name
-				// values begin at 2
-				blobValue, err := columns[blobIndex+2].GetBlob()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(blobValue).To(Equal(blobPoints[rowIdx].Content()))
+    _, err := handle.Query("select").Execute()
+    assert.Error(t, err)
+}
 
-				doubleValue, err := columns[doubleIndex+2].GetDouble()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(doubleValue).To(Equal(doublePoints[rowIdx].Content()))
+func TestQueryWrongTypeReturnsError(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
 
-				int64Value, err := columns[int64Index+2].GetInt64()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(int64Value).To(Equal(int64Points[rowIdx].Content()))
+    td := newTestTimeseriesAllColumns(t, handle, 1) // just 1 row needed
+    query := fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
+    result, err := handle.Query(query).Execute()
+    require.NoError(t, err)
+    defer handle.Release(unsafe.Pointer(result))
 
-				stringValue, err := columns[stringIndex+2].GetString()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(stringValue).To(Equal(stringPoints[rowIdx].Content()))
+    for _, row := range result.Rows() {
+        cols := result.Columns(row)
+        _, err := cols[blobIndex].GetDouble() // blob as double → error
+        assert.Error(t, err)
+    }
+}
 
-				timestampValue, err := columns[timestampIndex+2].GetTimestamp()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(timestampValue).To(Equal(timestampPoints[rowIdx].Content()))
+func TestQueryReturnsNoResults(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
 
-				symbolValue, err := columns[symbolIndex+2].GetString()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(symbolValue).To(Equal(symbolPoints[rowIdx].Content()))
+    td := newTestTimeseriesAllColumns(t, handle, 4)
+    query := fmt.Sprintf("select * from %s in range(1971, +10d)", td.Alias)
+    result, err := handle.Query(query).Execute()
+    require.NoError(t, err)
+    assert.Equal(t, int64(0), result.ScannedPoints())
+    assert.Equal(t, int64(0), result.RowCount())
+}
 
-				for i, column := range result.Columns(row) {
-					if i == 1 {
-						// Skip $table
-						continue
-					}
-					// get values with universal getter
-					point := column.Get()
-					switch point.Type() {
-					case QueryResultBlob:
-						value := point.Value()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(value).To(Equal(blobPoints[rowIdx].Content()))
-					case QueryResultDouble:
-						value := point.Value()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(value).To(Equal(doublePoints[rowIdx].Content()))
-					case QueryResultInt64:
-						value := point.Value()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(value).To(Equal(int64Points[rowIdx].Content()))
-					case QueryResultString:
-						value := point.Value()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(value).To(Equal(stringPoints[rowIdx].Content()))
-					case QueryResultTimestamp:
-						value := point.Value()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(value).To(Equal(timestampPoints[rowIdx].Content()))
-					}
-				}
-			}
-		})
-		It("should not work to do a wrong query", func() {
-			query := fmt.Sprintf("select")
-			q := handle.Query(query)
-			_, err := q.Execute()
-			Expect(err).To(HaveOccurred())
-		})
+func TestQueryCreateTableReturnsNil(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
 
-		It("should not work to do get the wrong type for a value", func() {
-			query := fmt.Sprintf("select * from %s in range(1970, +10d)", alias)
-			q := handle.Query(query)
-			result, err := q.Execute()
-			defer handle.Release(unsafe.Pointer(result))
-			Expect(err).ToNot(HaveOccurred())
+    alias := generateAlias(16)
+    result, err := handle.Query(
+        fmt.Sprintf("create table %s (id INT64, price DOUBLE)", alias),
+    ).Execute()
+    require.NoError(t, err)
+    assert.Nil(t, result)
 
-			for _, row := range result.Rows() {
-				columns := result.Columns(row)
-				_, err := columns[blobIndex].GetDouble()
-				Expect(err).To(HaveOccurred())
-			}
-		})
-		It("should get no results", func() {
-			query := fmt.Sprintf("select * from %s in range(1971, +10d)", alias)
-			q := handle.Query(query)
-			result, err := q.Execute()
-			defer handle.Release(unsafe.Pointer(result))
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result.ScannedPoints()).To(Equal(int64(0)))
-			Expect(result.RowCount()).To(Equal(int64(0)))
-		})
+    // cleanup
+    handle.Query(fmt.Sprintf("drop table %s", alias)).Execute()
+}
 
-		It("create table should return 0 results", func() {
-			new_alias := generateAlias(16)
-			query := fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)
-			q := handle.Query(query)
-			result, err := q.Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(BeNil())
-			handle.Query(fmt.Sprintf("drop table %s", new_alias)).Execute()
-		})
-		It("drop table should return 0 results", func() {
-			new_alias := generateAlias(16)
-			handle.Query(fmt.Sprintf("create table %s (stock_id INT64, price DOUBLE)", new_alias)).Execute()
-			query := fmt.Sprintf("drop table %s", new_alias)
-			q := handle.Query(query)
-			result, err := q.Execute()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(BeNil())
-		})
-	})
-})
+func TestQueryDropTableReturnsNil(t *testing.T) {
+    handle := newTestHandle(t)
+    defer handle.Close()
+
+    alias := generateAlias(16)
+    handle.Query(
+        fmt.Sprintf("create table %s (id INT64, price DOUBLE)", alias),
+    ).Execute()
+
+    result, err := handle.Query(
+        fmt.Sprintf("drop table %s", alias),
+    ).Execute()
+    require.NoError(t, err)
+    assert.Nil(t, result)
+}

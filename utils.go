@@ -7,11 +7,13 @@ package qdb
 */
 import "C"
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -809,4 +811,122 @@ func ifaceDataPtr(i interface{}) unsafe.Pointer {
 	}
 
 	return (*iface)(unsafe.Pointer(&i)).data
+}
+
+// JSONPath wraps parsed JSON data and provides dot-notation path navigation.
+// Designed as a minimal replacement for gabs.Container to eliminate external dependencies.
+//
+// Decision rationale:
+// - Avoids external dependency on gabs library for simple JSON path navigation.
+// - Provides familiar API to minimize migration effort.
+//
+// Key assumptions:
+// - JSON is already parsed into map[string]interface{} or compatible structure.
+// - Path strings use dot notation (e.g., "parent.child.value").
+// - Type assertions are caller's responsibility after navigation.
+//
+// Performance trade-offs:
+// - Path parsing allocates a string slice for split segments.
+// - Each navigation step performs type assertion and map lookup.
+// - Suitable for config/metadata access, not hot paths.
+type JSONPath struct {
+	data interface{}
+}
+
+// parseJSON parses JSON bytes and returns a JSONPath wrapper for navigation.
+// Mirrors gabs.ParseJSON functionality to ease migration from external dependency.
+//
+// Decision rationale:
+// - Provides drop-in replacement for gabs.ParseJSON in existing code.
+// - Uses standard library json.Unmarshal for robust parsing.
+//
+// Key assumptions:
+// - Input is valid JSON; malformed JSON returns error.
+// - Root is typically object (map) or array; primitives are valid but less useful.
+//
+// Performance trade-offs:
+// - Standard json.Unmarshal performance characteristics apply.
+// - Allocates interface{} tree structure proportional to JSON complexity.
+//
+// Usage example:
+// // Parse config JSON and navigate to nested field:
+// parsed, err := parseJSON(configBytes)
+// if err != nil {
+//     return err
+// }
+// listenAddr := parsed.Path("local.network.listen_on").Data().(string)
+func parseJSON(data []byte) (*JSONPath, error) {
+	var result interface{}
+	err := json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, err
+	}
+	return &JSONPath{data: result}, nil
+}
+
+// Path navigates to a nested field using dot notation and returns a new JSONPath.
+// Returns JSONPath with nil data if path cannot be resolved.
+//
+// Decision rationale:
+// - Matches gabs.Path behavior for compatibility.
+// - Returns wrapper even on failure to allow safe chaining.
+//
+// Key assumptions:
+// - Path segments separated by dots map to object keys.
+// - Intermediate values must be map[string]interface{} to continue traversal.
+// - Arrays/slices not supported in path notation (differs from full gabs).
+//
+// Performance trade-offs:
+// - O(n) where n is number of path segments.
+// - String split allocates; consider caching if called repeatedly with same paths.
+//
+// Usage example:
+// // Navigate nested config:
+// dbPath := config.Path("local.depot.rocksdb.root").Data()
+// if dbPath == nil {
+//     // handle missing config key
+// }
+func (j *JSONPath) Path(path string) *JSONPath {
+	if j.data == nil {
+		return &JSONPath{data: nil}
+	}
+	
+	current := j.data
+	segments := strings.Split(path, ".")
+	
+	for _, segment := range segments {
+		switch v := current.(type) {
+		case map[string]interface{}:
+			next, exists := v[segment]
+			if !exists {
+				return &JSONPath{data: nil}
+			}
+			current = next
+		default:
+			// Cannot traverse non-map types
+			return &JSONPath{data: nil}
+		}
+	}
+	
+	return &JSONPath{data: current}
+}
+
+// Data returns the underlying data at this path location.
+// Returns nil if path was not found during navigation.
+//
+// Decision rationale:
+// - Matches gabs.Data API for drop-in compatibility.
+// - Allows caller to perform type assertions as needed.
+//
+// Key assumptions:
+// - Caller handles nil checks before type assertion.
+// - Type assertion panics are caller's responsibility.
+//
+// Usage example:
+// // Get string value with type assertion:
+// if value := parsed.Path("key").Data(); value != nil {
+//     strValue := value.(string)
+// }
+func (j *JSONPath) Data() interface{} {
+	return j.data
 }

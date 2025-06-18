@@ -1,77 +1,97 @@
 package qdb
 
 import (
-	"time"
+	"testing"
 
-	"github.com/Jeffail/gabs/v2"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var _ = Describe("Tests", func() {
-	var (
-		handle HandleType
-		err    error
-	)
+func TestNodeStatusWithEmptyURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
 
-	BeforeEach(func() {
-		handle, err = SetupHandle(insecureURI, 120*time.Second)
-		Expect(err).ToNot(HaveOccurred())
-	})
+	node := newTestNode(handle, "")
+	_, err := node.Status()
+	assert.Error(t, err)
+}
 
-	AfterEach(func() {
-		handle.Close()
-	})
+func TestNodeStatusWithInvalidURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
 
-	Context("Node", func() {
-		Context("Status", func() {
-			It("should not retrieve status with empty uri", func() {
-				_, err = handle.Node("").Status()
-				Expect(err).To(HaveOccurred())
-			})
-			It("should not retrieve status with invalid uri", func() {
-				_, err = handle.Node("qdb://127.0.0.1:36321").Status()
-				Expect(err).To(HaveOccurred())
-			})
-			It("should retrieve status with valid uri", func() {
-				status, err := handle.Node(insecureURI).Status()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(status.Network.ListeningEndpoint).To(Equal("127.0.0.1:2836"))
-			})
-		})
+	node := newTestNode(handle, "qdb://127.0.0.1:36321")
+	_, err := node.Status()
+	assert.Error(t, err)
+}
 
-		Context("Config", func() {
-			It("should not retrieve config with empty uri", func() {
-				_, err = handle.Node("").Config()
-				Expect(err).To(HaveOccurred())
-			})
-			It("should not retrieve config with invalid uri", func() {
-				_, err = handle.Node("qdb://127.0.0.1:36321").Config()
-				Expect(err).To(HaveOccurred())
-			})
-			It("should retrieve config with valid uri", func() {
-				config_bytes, err := handle.Node(insecureURI).Config()
-				Expect(err).ToNot(HaveOccurred())
-				config, err := gabs.ParseJSON(config_bytes)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(config.Path("local.depot.rocksdb.root").Data().(string)).To(Equal("insecure/db/0-0-0-1"))
-			})
-		})
+func TestNodeStatusWithValidURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
 
-		Context("Topology", func() {
-			It("should not retrieve topology with empty uri", func() {
-				_, err = handle.Node("").Topology()
-				Expect(err).To(HaveOccurred())
-			})
-			It("should not retrieve topology with invalid uri", func() {
-				_, err = handle.Node("qdb://127.0.0.1:36321").Topology()
-				Expect(err).To(HaveOccurred())
-			})
-			It("should retrieve topology with valid uri", func() {
-				topology, err := handle.Node(insecureURI).Topology()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(topology.Successor.Endpoint).To(Equal(topology.Predecessor.Endpoint))
-			})
-		})
-	})
-})
+	node := newTestNode(handle, insecureURI)
+	status, err := node.Status()
+	require.NoError(t, err)
+	assert.Equal(t, "127.0.0.1:2836", status.Network.ListeningEndpoint)
+}
+
+func TestNodeConfigWithEmptyURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	node := newTestNode(handle, "")
+	_, err := node.Config()
+	assert.Error(t, err)
+}
+
+func TestNodeConfigWithInvalidURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	node := newTestNode(handle, "qdb://127.0.0.1:36321")
+	_, err := node.Config()
+	assert.Error(t, err)
+}
+
+func TestNodeConfigWithValidURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	node := newTestNode(handle, insecureURI)
+	configBytes, err := node.Config()
+	require.NoError(t, err)
+
+	config, err := parseJSON(configBytes)
+	require.NoError(t, err)
+
+	rootPath := config.Path("local.depot.rocksdb.root").Data().(string)
+	assert.Equal(t, "insecure/db/0-0-0-1", rootPath)
+}
+
+func TestNodeTopologyWithEmptyURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	node := newTestNode(handle, "")
+	_, err := node.Topology()
+	assert.Error(t, err)
+}
+
+func TestNodeTopologyWithInvalidURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	node := newTestNode(handle, "qdb://127.0.0.1:36321")
+	_, err := node.Topology()
+	assert.Error(t, err)
+}
+
+func TestNodeTopologyWithValidURI(t *testing.T) {
+	handle := newTestHandle(t)
+	defer handle.Close()
+
+	node := newTestNode(handle, insecureURI)
+	topology, err := node.Topology()
+	require.NoError(t, err)
+	assert.Equal(t, topology.Predecessor.Endpoint, topology.Successor.Endpoint)
+}
