@@ -288,6 +288,10 @@ func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsIn
 	err := C.qdb_ts_get_metadata(entry.handle, alias, &metadata)
 	p.Unpin()
 
+	if metadata != nil {
+		defer C.qdb_release(entry.handle, unsafe.Pointer(metadata))
+	}
+
 	var blobColumns []TsBlobColumn
 	var doubleColumns []TsDoubleColumn
 	var int64Columns []TsInt64Column
@@ -309,6 +313,11 @@ func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
 	p.Pin(&metadata)
 	err := C.qdb_ts_get_metadata(entry.handle, alias, &metadata)
 	p.Unpin()
+
+	if metadata != nil {
+		defer C.qdb_release(entry.handle, unsafe.Pointer(metadata))
+	}
+
 	var columnsInfo []TsColumnInfo
 	if err == 0 {
 		columnsInfo = columnInfoArrayToGo(metadata.columns, metadata.column_count)
