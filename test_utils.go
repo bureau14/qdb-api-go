@@ -2,10 +2,10 @@ package qdb
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"testing"
 	"time"
-	"slices"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,6 +52,27 @@ func newTestWriter(t *testing.T) Writer {
 	require.NotNil(t, writer)
 
 	return writer
+}
+
+// newTestNode creates a Node instance for testing purposes.
+//
+// Decision rationale:
+//   - Centralizes Node creation to avoid duplicating URI handling across tests.
+//   - Ensures consistent Node setup with the test handle's cluster URI.
+//
+// Key assumptions:
+//   - handle is valid and connected to a running daemon.
+//   - uri is a valid QuasarDB node URI.
+//
+// Performance trade-offs:
+//   - Negligible; just wraps Node constructor.
+//
+// Usage example:
+//
+//	handle := newTestHandle(t)
+//	node := newTestNode(handle, insecureURI)
+func newTestNode(handle HandleType, uri string) *Node {
+	return handle.Node(uri)
 }
 
 // pushWriterTables writes the provided tables to the server using a writer with

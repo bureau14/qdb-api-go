@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jeffail/gabs/v2"
 )
 
 var (
@@ -580,7 +579,7 @@ func ExampleNode() {
 	fmt.Println("Status - Network.ListeningEndpoint:", status.Network.ListeningEndpoint)
 
 	config_bytes, _ := node.Config()
-	config, _ := gabs.ParseJSON(config_bytes)
+	config, _ := parseJSON(config_bytes)
 	fmt.Println("Config - Listen On:", config.Path("local.network.listen_on").Data().(string))
 
 	topology, _ := node.Topology()
