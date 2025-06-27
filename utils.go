@@ -214,21 +214,21 @@ func createTableOfWriterColumnsAndDefaultShardSize(handle HandleType, columns []
 func generateWriterData(n int, column WriterColumn) (ColumnData, error) {
 	switch column.ColumnType {
 	case TsColumnBlob:
-		cdBlob := newColumnDataBlob(make([][]byte, n))
+		cdBlob := NewColumnDataBlob(make([][]byte, n))
 		return &cdBlob, nil
 	case TsColumnSymbol:
 		fallthrough
 	case TsColumnString:
-		cdStr := newColumnDataString(make([]string, n))
+		cdStr := NewColumnDataString(make([]string, n))
 		return &cdStr, nil
 	case TsColumnInt64:
-		cdInt := newColumnDataInt64(make([]int64, n))
+		cdInt := NewColumnDataInt64(make([]int64, n))
 		return &cdInt, nil
 	case TsColumnDouble:
-		cdDbl := newColumnDataDouble(make([]float64, n))
+		cdDbl := NewColumnDataDouble(make([]float64, n))
 		return &cdDbl, nil
 	case TsColumnTimestamp:
-		cdTs := newColumnDataTimestamp(make([]time.Time, n))
+		cdTs := NewColumnDataTimestamp(make([]time.Time, n))
 		return &cdTs, nil
 	}
 
@@ -851,9 +851,11 @@ type JSONPath struct {
 // Usage example:
 // // Parse config JSON and navigate to nested field:
 // parsed, err := parseJSON(configBytes)
-// if err != nil {
-//     return err
-// }
+//
+//	if err != nil {
+//	    return err
+//	}
+//
 // listenAddr := parsed.Path("local.network.listen_on").Data().(string)
 func parseJSON(data []byte) (*JSONPath, error) {
 	var result interface{}
@@ -883,17 +885,18 @@ func parseJSON(data []byte) (*JSONPath, error) {
 // Usage example:
 // // Navigate nested config:
 // dbPath := config.Path("local.depot.rocksdb.root").Data()
-// if dbPath == nil {
-//     // handle missing config key
-// }
+//
+//	if dbPath == nil {
+//	    // handle missing config key
+//	}
 func (j *JSONPath) Path(path string) *JSONPath {
 	if j.data == nil {
 		return &JSONPath{data: nil}
 	}
-	
+
 	current := j.data
 	segments := strings.Split(path, ".")
-	
+
 	for _, segment := range segments {
 		switch v := current.(type) {
 		case map[string]interface{}:
@@ -907,7 +910,7 @@ func (j *JSONPath) Path(path string) *JSONPath {
 			return &JSONPath{data: nil}
 		}
 	}
-	
+
 	return &JSONPath{data: current}
 }
 
@@ -924,9 +927,10 @@ func (j *JSONPath) Path(path string) *JSONPath {
 //
 // Usage example:
 // // Get string value with type assertion:
-// if value := parsed.Path("key").Data(); value != nil {
-//     strValue := value.(string)
-// }
+//
+//	if value := parsed.Path("key").Data(); value != nil {
+//	    strValue := value.(string)
+//	}
 func (j *JSONPath) Data() interface{} {
 	return j.data
 }
