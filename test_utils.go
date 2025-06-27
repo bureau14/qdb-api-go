@@ -302,7 +302,7 @@ func genWriterDataInt64(t *rapid.T, rowCount int) ColumnData {
 	for i := range values {
 		values[i] = rapid.Int64().Draw(t, "int64")
 	}
-	cd := newColumnDataInt64(values)
+	cd := NewColumnDataInt64(values)
 	return &cd
 }
 
@@ -311,7 +311,7 @@ func genWriterDataDouble(t *rapid.T, rowCount int) ColumnData {
 	for i := range values {
 		values[i] = rapid.Float64().Draw(t, "float64")
 	}
-	cd := newColumnDataDouble(values)
+	cd := NewColumnDataDouble(values)
 	return &cd
 }
 
@@ -320,7 +320,7 @@ func genWriterDataTimestamp(t *rapid.T, rowCount int) ColumnData {
 	for i := range values {
 		values[i] = genTime(t)
 	}
-	cd := newColumnDataTimestamp(values)
+	cd := NewColumnDataTimestamp(values)
 	return &cd
 }
 
@@ -329,7 +329,7 @@ func genWriterDataBlob(t *rapid.T, rowCount int) ColumnData {
 	for i := range values {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "blob")
 	}
-	cd := newColumnDataBlob(values)
+	cd := NewColumnDataBlob(values)
 	return &cd
 }
 
@@ -338,7 +338,7 @@ func genWriterDataString(t *rapid.T, rowCount int) ColumnData {
 	for i := range values {
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string")
 	}
-	cd := newColumnDataString(values)
+	cd := NewColumnDataString(values)
 	return &cd
 }
 
@@ -605,7 +605,7 @@ func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ColumnDataInt64 
 		values[i] = rapid.Int64().Draw(t, "int64")
 	}
 
-	ret := newColumnDataInt64(values)
+	ret := NewColumnDataInt64(values)
 	return &ret
 }
 
@@ -632,7 +632,7 @@ func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ColumnDataDoubl
 		values[i] = rapid.Float64().Draw(t, "float64")
 	}
 
-	ret := newColumnDataDouble(values)
+	ret := NewColumnDataDouble(values)
 	return &ret
 }
 
@@ -659,7 +659,7 @@ func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ColumnDataTi
 		values[i] = genTime(t)
 	}
 
-	ret := newColumnDataTimestamp(values)
+	ret := NewColumnDataTimestamp(values)
 	return &ret
 }
 
@@ -686,7 +686,7 @@ func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ColumnDataBlob {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "bytes")
 	}
 
-	ret := newColumnDataBlob(values)
+	ret := NewColumnDataBlob(values)
 	return &ret
 }
 
@@ -715,7 +715,7 @@ func genReaderDataString(t *rapid.T, name string, rowCount int) *ColumnDataStrin
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string value")
 	}
 
-	ret := newColumnDataString(values)
+	ret := NewColumnDataString(values)
 	return &ret
 }
 

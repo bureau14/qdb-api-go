@@ -124,8 +124,8 @@ func (cd *ColumnDataInt64) appendDataUnsafe(data ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// newColumnDataInt64 wraps an existing []int64 in ColumnDataInt64.
-func newColumnDataInt64(xs []int64) ColumnDataInt64 {
+// NewColumnDataInt64 wraps an existing []int64 in ColumnDataInt64.
+func NewColumnDataInt64(xs []int64) ColumnDataInt64 {
 	return ColumnDataInt64{xs: xs}
 }
 
@@ -186,8 +186,8 @@ func newColumnDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t,
 	}
 
 	// Wrap the Go-managed []int64 in a ColumnDataInt64 and return.
-	// Using newColumnDataInt64 centralizes ColumnDataInt64 construction logic.
-	return newColumnDataInt64(goSlice), nil
+	// Using NewColumnDataInt64 centralizes ColumnDataInt64 construction logic.
+	return NewColumnDataInt64(goSlice), nil
 }
 
 /*
@@ -283,8 +283,8 @@ func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
 	return unsafe.Pointer(base), func() {}
 }
 
-// newColumnDataDouble wraps an existing []float64 in ColumnDataDouble.
-func newColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
+// NewColumnDataDouble wraps an existing []float64 in ColumnDataDouble.
+func NewColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
 func newColumnDataDoubleFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataDouble, error) {
@@ -302,7 +302,7 @@ func newColumnDataDoubleFromNative(
 	if err != nil {
 		return ColumnDataDouble{}, err
 	}
-	return newColumnDataDouble(goSlice), nil
+	return NewColumnDataDouble(goSlice), nil
 }
 func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	v, ok := cd.(*ColumnDataDouble)
@@ -367,8 +367,8 @@ func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.P
 	return unsafe.Pointer(base), func() {}
 }
 
-// newColumnDataTimestamp wraps a []time.Time as ColumnDataTimestamp.
-func newColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
+// NewColumnDataTimestamp wraps a []time.Time as ColumnDataTimestamp.
+func NewColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
 	return ColumnDataTimestamp{xs: TimeSliceToQdbTimespec(ts)}
 }
 
@@ -521,8 +521,8 @@ func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointe
 	return unsafe.Pointer(arr), release
 }
 
-// newColumnDataBlob wraps an existing [][]byte in ColumnDataBlob.
-func newColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
+// NewColumnDataBlob wraps an existing [][]byte in ColumnDataBlob.
+func NewColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
 func newColumnDataBlobFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataBlob, error) {
@@ -544,7 +544,7 @@ func newColumnDataBlobFromNative(
 	for i, b := range blobs {
 		out[i] = C.GoBytes(unsafe.Pointer(b.content), C.int(b.content_length))
 	}
-	return newColumnDataBlob(out), nil
+	return NewColumnDataBlob(out), nil
 }
 func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	v, ok := cd.(*ColumnDataBlob)
@@ -640,8 +640,8 @@ func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
     return unsafe.Pointer(arr), release
 }
 
-// newColumnDataString wraps an existing []string in ColumnDataString.
-func newColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
+// NewColumnDataString wraps an existing []string in ColumnDataString.
+func NewColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
 func newColumnDataStringFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataString, error) {
@@ -663,7 +663,7 @@ func newColumnDataStringFromNative(
 	for i, v := range strs {
 		out[i] = C.GoStringN(v.data, C.int(v.length))
 	}
-	return newColumnDataString(out), nil
+	return NewColumnDataString(out), nil
 }
 func GetColumnDataString(cd ColumnData) ([]string, error) {
 	v, ok := cd.(*ColumnDataString)
