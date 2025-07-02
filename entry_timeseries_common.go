@@ -337,6 +337,9 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_create_ex(entry.handle, alias, duration, columns, columnsCount, C.qdb_never_expires)
+	if err == C.qdb_e_ok {
+		L().Debug("successfully created table", "name", entry.alias, "shard_size", shardSize)
+	}
 	return makeErrorOrNil(err)
 }
 
@@ -496,7 +499,10 @@ func (t *TsBulk) Release() {
 	t.h.Release(unsafe.Pointer(t.table))
 }
 
-// TsBatch : A structure that permits to append data to a timeseries
+// TsBatch represents a batch writer for efficient bulk insertion into timeseries tables.
+//
+// Batch operations significantly improve performance when inserting large amounts of data.
+// All columns must be specified at initialization and cannot be changed afterward.
 type TsBatch struct {
 	h     HandleType
 	err   error

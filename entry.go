@@ -133,6 +133,13 @@ func (e Entry) GetMetadata() (Metadata, error) {
 	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), TimespecToStructG(m.modification_time), TimespecToStructG(m.expiry_time)}, makeErrorOrNil(err)
 }
 
+// Exists : Returns true if the entry exists
+func (e Entry) Exists() bool {
+	_, err := e.GetMetadata()
+
+	return err == nil
+}
+
 // ::: TAGS RELATED FUNCTIONS :::
 
 // AttachTag : Adds a tag entry.

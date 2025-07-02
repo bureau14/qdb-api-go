@@ -22,6 +22,10 @@ const (
 	secureURI   string = "qdb://127.0.0.1:2838"
 )
 
+// newTestHandle creates test cluster handle
+// In: t *testing.T - test context
+// Out: HandleType - connected handle
+// Ex: h := newTestHandle(t) → HandleType
 func newTestHandle(t *testing.T) HandleType {
 	t.Helper()
 
@@ -55,7 +59,10 @@ func newTestDirectHandle(t *testing.T) DirectHandleType {
 	return direct
 }
 
-// fixture for creating a default test WriterTable
+// newTestWriterTable creates test table fixture
+// In: t *testing.T - test context
+// Out: WriterTable - table with all types
+// Ex: wt := newTestWriterTable(t) → WriterTable
 func newTestWriterTable(t *testing.T) WriterTable {
 	t.Helper()
 
@@ -69,7 +76,10 @@ func newTestWriterTable(t *testing.T) WriterTable {
 	return writerTable
 }
 
-// fixture for Writer creation with default options
+// newTestWriter creates writer fixture
+// In: t *testing.T - test context
+// Out: Writer - default writer
+// Ex: w := newTestWriter(t) → Writer
 func newTestWriter(t *testing.T) Writer {
 	t.Helper()
 
@@ -131,8 +141,11 @@ func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (Bl
 	return blob, nil
 }
 
-// pushWriterTables writes the provided tables to the server using a writer with
-// default options. Any error will fail the test via require.
+// pushWriterTables writes tables to server
+// In: t *testing.T - test context
+//     handle HandleType - connection
+//     tables []WriterTable - data to push
+// Ex: pushWriterTables(t, h, tables)
 func pushWriterTables(t *testing.T, handle HandleType, tables []WriterTable) {
 	t.Helper()
 
@@ -146,8 +159,10 @@ func pushWriterTables(t *testing.T, handle HandleType, tables []WriterTable) {
 	require.NoError(t, writer.Push(handle))
 }
 
-// columnNamesFromWriterColumns extracts the column names from the provided
-// WriterColumn definitions.
+// columnNamesFromWriterColumns extracts names
+// In: cols []WriterColumn - columns
+// Out: []string - column names
+// Ex: columnNamesFromWriterColumns(cols) → ["a","b"]
 func columnNamesFromWriterColumns(cols []WriterColumn) []string {
 	names := make([]string, len(cols))
 	for i, c := range cols {
@@ -156,7 +171,10 @@ func columnNamesFromWriterColumns(cols []WriterColumn) []string {
 	return names
 }
 
-// writerTableNames returns the table names for the provided WriterTables.
+// writerTableNames extracts table names
+// In: tables []WriterTable - tables
+// Out: []string - table names
+// Ex: writerTableNames(tables) → ["t1","t2"]
 func writerTableNames(tables []WriterTable) []string {
 	names := make([]string, len(tables))
 	for i, wt := range tables {
@@ -165,15 +183,20 @@ func writerTableNames(tables []WriterTable) []string {
 	return names
 }
 
-// writerTableColumns returns the column schema for the provided WriterTable.
+// writerTableColumns gets table schema
+// In: table WriterTable - table
+// Out: []WriterColumn - columns
+// Ex: writerTableColumns(t) → []WriterColumn
 func writerTableColumns(table WriterTable) []WriterColumn {
 	cols := make([]WriterColumn, len(table.columnInfoByOffset))
 	copy(cols, table.columnInfoByOffset)
 	return cols
 }
 
-// writerTablesColumns assumes all tables share the same schema and returns that
-// schema. Panics if tables is empty.
+// writerTablesColumns gets shared schema
+// In: tables []WriterTable - tables
+// Out: []WriterColumn - common schema
+// Ex: writerTablesColumns(tables) → []WriterColumn
 func writerTablesColumns(tables []WriterTable) []WriterColumn {
 	if len(tables) == 0 {
 		panic("writerTablesColumns called with no tables")

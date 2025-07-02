@@ -39,7 +39,12 @@ type Logger interface {
 	With(args ...any) Logger
 }
 
-var globalLogger atomic.Value // stores Logger
+// loggerHolder wraps a Logger to ensure atomic.Value type consistency
+type loggerHolder struct {
+	logger Logger
+}
+
+var globalLogger atomic.Value // stores *loggerHolder
 
 // splitTimestamp scans the variadic slog-arg slice, extracts the first
 // QdbLogTimeKey attribute whose value is a time.Time, and returns that
@@ -150,15 +155,61 @@ func (s *slogAdapter) Error(msg string, args ...any)    { s.log(slog.LevelError,
 func (s *slogAdapter) Panic(msg string, args ...any)    { s.log(slog.LevelError, msg, args...) }
 func (s *slogAdapter) With(args ...any) Logger          { return &slogAdapter{l: s.l.With(args...)} }
 
-func init() {
+// NilLogger provides a Logger implementation that silences all log output.
+//
+// Decision rationale:
+//
+//	– Enables users to completely disable QuasarDB logging when needed.
+//	– Useful for production environments where QuasarDB logs should be suppressed.
+//	– Zero-allocation implementation for optimal performance.
+//
+// Key assumptions:
+//
+//	– All logging methods are no-ops and return immediately.
+//	– With() returns a new NilLogger instance for consistency.
+//	– Safe for concurrent use by multiple goroutines.
+//
+// Usage example:
+//
+//	qdb.SetLogger(&qdb.NilLogger{})
+type NilLogger struct{}
+
+func (*NilLogger) Detailed(msg string, args ...any) {}
+func (*NilLogger) Debug(msg string, args ...any)    {}
+func (*NilLogger) Info(msg string, args ...any)     {}
+func (*NilLogger) Warn(msg string, args ...any)     {}
+func (*NilLogger) Error(msg string, args ...any)    {}
+func (*NilLogger) Panic(msg string, args ...any)    {}
+func (*NilLogger) With(args ...any) Logger          { return &NilLogger{} }
+
+// defaultLogger creates the default logger instance that writes to stderr.
+//
+// Decision rationale:
+//
+//	– Extracted from init() to enable test cases to reset to default state.
+//	– Uses stderr by default to avoid interfering with stdout-based tools.
+//	– Info level provides reasonable verbosity without debug noise.
+func defaultLogger() Logger {
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo, // default level; tweak in tests if needed
 	})
-	globalLogger.Store(Logger(&slogAdapter{l: slog.New(handler)}))
+	return &slogAdapter{l: slog.New(handler)}
+}
+
+// NewSlogAdapter creates a Logger from a slog.Handler.
+// This is primarily intended for testing purposes.
+func NewSlogAdapter(h slog.Handler) Logger {
+	return &slogAdapter{l: slog.New(h)}
+}
+
+func init() {
+	globalLogger.Store(&loggerHolder{logger: defaultLogger()})
 }
 
 // L returns the current package-level logger.
-func L() Logger { return globalLogger.Load().(Logger) }
+func L() Logger { 
+	return globalLogger.Load().(*loggerHolder).logger
+}
 
 // SetLogger replaces the package-level logger.
 //
@@ -170,5 +221,5 @@ func SetLogger(l Logger) {
 	if l == nil {
 		panic("SetLogger: logger must not be nil")
 	}
-	globalLogger.Store(l)
+	globalLogger.Store(&loggerHolder{logger: l})
 }

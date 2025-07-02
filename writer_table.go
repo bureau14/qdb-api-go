@@ -13,7 +13,8 @@ import (
 	"unsafe"
 )
 
-// Single table to be provided to the batch writer.
+// WriterTable: table data for batch push.
+// Invariants: len(idx)=rowCount, len(data[i])=rowCount
 type WriterTable struct {
 	TableName string
 
@@ -60,42 +61,57 @@ func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 	return WriterTable{t, 0, columnInfoByOffset, columnOffsetByName, nil, data}, nil
 }
 
-// GetName returns the table identifier used when pushing data.
+// GetName returns table identifier.
+// Returns:
+//   string: table name
+// Example:
+//   name := t.GetName() // → "metrics"
 func (t *WriterTable) GetName() string {
 	return t.TableName
 }
 
-// RowCount reports the number of rows currently assigned to the table.
+// RowCount returns row count.
+// Returns:
+//   int: number of rows
+// Example:
+//   n := t.RowCount() // → 1000
 func (t *WriterTable) RowCount() int {
 	return t.rowCount
 }
 
-// SetIndexFromNative sets the timestamp index using a C-compatible slice.
-//
-// Decision rationale:
-//   - Avoids repeated conversions when the caller already holds native timespec
-//     values (e.g., from another API call).
-//
-// Key assumptions:
-//   - idx represents the exact row count for subsequent column data.
+// SetIndexFromNative sets native timestamps.
+// Args:
+//   idx: C timespec array
+// Example:
+//   t.SetIndexFromNative(cTimes) // sets index
 func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 	t.idx = idx
 	t.rowCount = len(idx)
 }
 
-// SetIndex converts times to qdb_timespec_t and stores them as the index.
-// This helper is convenient for typical Go callers.
+// SetIndex sets timestamp index.
+// Args:
+//   idx: timestamps
+// Example:
+//   t.SetIndex(times) // sets row timestamps
 func (t *WriterTable) SetIndex(idx []time.Time) {
 	t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
 }
 
-// GetIndexAsNative exposes the internal index slice in C form.
-// The caller must treat the slice as read-only.
+// GetIndexAsNative returns native timestamps.
+// Returns:
+//   []C.qdb_timespec_t: C format times
+// Example:
+//   cTimes := t.GetIndexAsNative() // → []timespec
 func (t *WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
 	return t.idx
 }
 
-// GetIndex returns the index converted back to time.Time values.
+// GetIndex returns timestamp index.
+// Returns:
+//   []time.Time: row timestamps
+// Example:
+//   times := t.GetIndex() // → []time.Time
 func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
@@ -272,6 +288,14 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 	return release, nil
 }
 
+// SetData assigns column data by offset.
+// Args:
+//   offset: column index
+//   xs: data to set
+// Returns:
+//   error: if offset invalid or type mismatch
+// Example:
+//   err := t.SetData(0, colData) // → nil or error
 func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 	if len(t.columnInfoByOffset) <= offset {
 		return fmt.Errorf("Column offset out of range: %v", offset)
@@ -287,6 +311,13 @@ func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 	return nil
 }
 
+// SetDatas assigns all column data.
+// Args:
+//   xs: data for each column
+// Returns:
+//   error: if any assignment fails
+// Example:
+//   err := t.SetDatas(allData) // → nil or error
 func (t *WriterTable) SetDatas(xs []ColumnData) error {
 	for i, x := range xs {
 		err := t.SetData(i, x)
@@ -299,6 +330,14 @@ func (t *WriterTable) SetDatas(xs []ColumnData) error {
 	return nil
 }
 
+// GetData retrieves column data by offset.
+// Args:
+//   offset: column index
+// Returns:
+//   ColumnData: column data
+//   error: if offset invalid
+// Example:
+//   data, err := t.GetData(0) // → ColumnData or error
 func (t *WriterTable) GetData(offset int) (ColumnData, error) {
 	if offset >= len(t.data) {
 		return nil, fmt.Errorf("Column offset out of range: %v", offset)
