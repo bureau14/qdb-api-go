@@ -332,16 +332,30 @@ func NewHandle() (HandleType, error) {
 	var h HandleType
 	err := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_protocol_t(ProtocolTCP))
 
-	swapCallback()
 	return h, makeErrorOrNil(err)
+}
+
+// NewHandleWithNativeLogs : Create a new handle with native C++ logging enabled, return error if needed
+//
+//	The handle is already opened (not connected) with tcp protocol
+//	Native QuasarDB C++ logs will be routed through the Go logging system
+func NewHandleWithNativeLogs() (HandleType, error) {
+	h, err := NewHandle()
+	if err != nil {
+		return h, err
+	}
+	
+	swapCallback()
+	return h, nil
 }
 
 // SetupHandle : Setup a handle, return error if needed
 //
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
+//	Native QuasarDB C++ logs will be routed through the Go logging system
 func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
-	h, err := NewHandle()
+	h, err := NewHandleWithNativeLogs()
 	if err != nil {
 		return h, err
 	}
@@ -373,8 +387,9 @@ func MustSetupHandle(clusterURI string, timeout time.Duration) HandleType {
 //	The handle is already secured with the cluster public key and the user credential files provided
 //	(Note: the filenames are needed, not the content of the files)
 //	The handle is already connected with the clusterURI string
+//	Native QuasarDB C++ logs will be routed through the Go logging system
 func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string, timeout time.Duration, encryption Encryption) (HandleType, error) {
-	h, err := NewHandle()
+	h, err := NewHandleWithNativeLogs()
 	if err != nil {
 		return h, err
 	}
