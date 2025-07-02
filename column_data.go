@@ -70,6 +70,7 @@ type ColumnData interface {
 
 // --- Int64 ---------------------------------------------------------
 
+// ColumnDataInt64: int64 column storage
 type ColumnDataInt64 struct {
 	xs []int64
 }
@@ -233,6 +234,7 @@ func GetColumnDataInt64Unsafe(cd ColumnData) []int64 {
 
 // --- Double -------------------------------------------------------
 
+// ColumnDataDouble: float64 column storage
 type ColumnDataDouble struct{ xs []float64 }
 
 // Length reports the number of float64 values held in the column.
@@ -283,7 +285,13 @@ func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
 	return unsafe.Pointer(base), func() {}
 }
 
-// NewColumnDataDouble wraps an existing []float64 in ColumnDataDouble.
+// NewColumnDataDouble wraps float64 slice.
+// Args:
+//   xs: values to wrap
+// Returns:
+//   ColumnDataDouble: column data
+// Example:
+//   cd := NewColumnDataDouble(values) // → ColumnDataDouble
 func NewColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
 func newColumnDataDoubleFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -304,6 +312,14 @@ func newColumnDataDoubleFromNative(
 	}
 	return NewColumnDataDouble(goSlice), nil
 }
+// GetColumnDataDouble extracts float64 values.
+// Args:
+//   cd: column data
+// Returns:
+//   []float64: values
+//   error: if wrong type
+// Example:
+//   vals, err := GetColumnDataDouble(cd) // → []float64
 func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	v, ok := cd.(*ColumnDataDouble)
 	if !ok {
@@ -311,12 +327,20 @@ func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	}
 	return v.xs, nil
 }
+// GetColumnDataDoubleUnsafe extracts values unsafely.
+// Args:
+//   cd: column data
+// Returns:
+//   []float64: values
+// Example:
+//   vals := GetColumnDataDoubleUnsafe(cd) // → []float64
 func GetColumnDataDoubleUnsafe(cd ColumnData) []float64 {
 	return (*ColumnDataDouble)(ifaceDataPtr(cd)).xs
 }
 
 // --- Timestamp ----------------------------------------------------
 
+// ColumnDataTimestamp: time column storage
 type ColumnDataTimestamp struct{ xs []C.qdb_timespec_t }
 
 // Length reports the number of timestamp values held in the column.
@@ -416,7 +440,14 @@ func newColumnDataTimestampFromNative(
 	return ColumnDataTimestamp{xs: specs}, nil
 }
 
-// GetColumnDataTimestamp extracts a []time.Time copy from ColumnData.
+// GetColumnDataTimestamp extracts time values.
+// Args:
+//   cd: column data
+// Returns:
+//   []time.Time: timestamps
+//   error: if wrong type
+// Example:
+//   times, err := GetColumnDataTimestamp(cd) // → []time.Time
 func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	xs, err := GetColumnDataTimestampNative(cd)
 	if err != nil {
@@ -426,7 +457,14 @@ func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	return QdbTimespecSliceToTime(xs), nil
 }
 
-// GetColumnDataTimestampNative extracts a []C.qdb_timespec_t from ColumnData.
+// GetColumnDataTimestampNative extracts native times.
+// Args:
+//   cd: column data
+// Returns:
+//   []C.qdb_timespec_t: native times
+//   error: if wrong type
+// Example:
+//   specs, err := GetColumnDataTimestampNative(cd) // → []timespec
 func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	v, ok := cd.(*ColumnDataTimestamp)
 	if !ok {
@@ -435,18 +473,31 @@ func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	return v.xs, nil
 }
 
-// GetColumnDataTimestampUnsafe returns a []time.Time without type checks.
+// GetColumnDataTimestampUnsafe extracts times unsafely.
+// Args:
+//   cd: column data
+// Returns:
+//   []time.Time: timestamps
+// Example:
+//   times := GetColumnDataTimestampUnsafe(cd) // → []time.Time
 func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
 	return QdbTimespecSliceToTime(GetColumnDataTimestampNativeUnsafe(cd))
 }
 
-// GetColumnDataTimestampNativeUnsafe returns a []C.qdb_timespec_t without type checks.
+// GetColumnDataTimestampNativeUnsafe extracts native unsafely.
+// Args:
+//   cd: column data
+// Returns:
+//   []C.qdb_timespec_t: native times
+// Example:
+//   specs := GetColumnDataTimestampNativeUnsafe(cd) // → []timespec
 func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 	return (*ColumnDataTimestamp)(ifaceDataPtr(cd)).xs
 }
 
 // --- Blob ---------------------------------------------------------
 
+// ColumnDataBlob: binary column storage
 type ColumnDataBlob struct{ xs [][]byte }
 
 // Length reports the number of blob values held in the column.
@@ -521,7 +572,13 @@ func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointe
 	return unsafe.Pointer(arr), release
 }
 
-// NewColumnDataBlob wraps an existing [][]byte in ColumnDataBlob.
+// NewColumnDataBlob wraps blob slice.
+// Args:
+//   xs: binary values
+// Returns:
+//   ColumnDataBlob: column data
+// Example:
+//   cd := NewColumnDataBlob(blobs) // → ColumnDataBlob
 func NewColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
 func newColumnDataBlobFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -546,6 +603,14 @@ func newColumnDataBlobFromNative(
 	}
 	return NewColumnDataBlob(out), nil
 }
+// GetColumnDataBlob extracts blob values.
+// Args:
+//   cd: column data
+// Returns:
+//   [][]byte: blobs
+//   error: if wrong type
+// Example:
+//   blobs, err := GetColumnDataBlob(cd) // → [][]byte
 func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	v, ok := cd.(*ColumnDataBlob)
 	if !ok {
@@ -553,12 +618,20 @@ func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	}
 	return v.xs, nil
 }
+// GetColumnDataBlobUnsafe extracts blobs unsafely.
+// Args:
+//   cd: column data
+// Returns:
+//   [][]byte: blobs
+// Example:
+//   blobs := GetColumnDataBlobUnsafe(cd) // → [][]byte
 func GetColumnDataBlobUnsafe(cd ColumnData) [][]byte {
 	return (*ColumnDataBlob)(ifaceDataPtr(cd)).xs
 }
 
 // --- String -------------------------------------------------------
 
+// ColumnDataString: text column storage
 type ColumnDataString struct{ xs []string }
 
 // Length reports the number of string values held in the column.
@@ -640,7 +713,13 @@ func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
     return unsafe.Pointer(arr), release
 }
 
-// NewColumnDataString wraps an existing []string in ColumnDataString.
+// NewColumnDataString wraps string slice.
+// Args:
+//   xs: string values
+// Returns:
+//   ColumnDataString: column data
+// Example:
+//   cd := NewColumnDataString(strs) // → ColumnDataString
 func NewColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
 func newColumnDataStringFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -665,6 +744,14 @@ func newColumnDataStringFromNative(
 	}
 	return NewColumnDataString(out), nil
 }
+// GetColumnDataString extracts string values.
+// Args:
+//   cd: column data
+// Returns:
+//   []string: strings
+//   error: if wrong type
+// Example:
+//   strs, err := GetColumnDataString(cd) // → []string
 func GetColumnDataString(cd ColumnData) ([]string, error) {
 	v, ok := cd.(*ColumnDataString)
 	if !ok {
@@ -672,6 +759,13 @@ func GetColumnDataString(cd ColumnData) ([]string, error) {
 	}
 	return v.xs, nil
 }
+// GetColumnDataStringUnsafe extracts strings unsafely.
+// Args:
+//   cd: column data
+// Returns:
+//   []string: strings
+// Example:
+//   strs := GetColumnDataStringUnsafe(cd) // → []string
 func GetColumnDataStringUnsafe(cd ColumnData) []string {
 	return (*ColumnDataString)(ifaceDataPtr(cd)).xs
 }
