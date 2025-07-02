@@ -1,4 +1,7 @@
-// Package qdb provides an api to a quasardb server
+// Copyright (c) 2025 QuasarDB SAS
+// All rights reserved.
+//
+// Package qdb provides an API to a QuasarDB server.
 package qdb
 
 /*
@@ -18,12 +21,12 @@ import (
 	"unsafe"
 )
 
-// HandleType : An opaque handle to internal API-allocated structures needed for maintaining connection to a cluster.
+// HandleType is an opaque handle to internal API-allocated structures needed for maintaining connection to a cluster.
 type HandleType struct {
 	handle C.qdb_handle_t
 }
 
-// Protocol : A network protocol.
+// Protocol is a network protocol.
 type Protocol C.qdb_protocol_t
 
 // Protocol values:
@@ -33,7 +36,7 @@ const (
 	ProtocolTCP Protocol = C.qdb_p_tcp
 )
 
-// Compression : compression parameter
+// Compression is a compression parameter.
 type Compression C.qdb_compression_t
 
 // Compression values:
@@ -49,39 +52,91 @@ const (
 	CompBalanced Compression = C.qdb_comp_balanced
 )
 
-// APIVersion : Returns a string describing the API version.
+// APIVersion returns the QuasarDB API version string.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	string: API version (e.g. "3.14.0")
+//
+// Example:
+//
+//	version := h.APIVersion() // → "3.14.0"
 func (h HandleType) APIVersion() string {
 	version := C.qdb_version()
 	defer h.Release(unsafe.Pointer(version))
 	return C.GoString(version)
 }
 
-// APIBuild : Returns a string describing the exact API build.
+// APIBuild returns the QuasarDB API build information.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	string: Build information including version, compiler, and platform
+//
+// Example:
+//
+//	build := h.APIBuild() // → "3.14.0-gcc-11.2.0-linux-x86_64"
 func (h HandleType) APIBuild() string {
 	build := C.qdb_build()
 	defer h.Release(unsafe.Pointer(build))
 	return C.GoString(build)
 }
 
-// Open : Creates a handle.
+// Open initializes a handle with the specified protocol.
 //
-//	No connection will be established.
-//	Not needed if you created your handle with NewHandle.
+// Args:
+//
+//	protocol: Network protocol to use (e.g. ProtocolTCP)
+//
+// Returns:
+//
+//	error: Initialization error if any
+//
+// Note: No connection will be established. Not needed if you created your handle with NewHandle.
+//
+// Example:
+//
+//	err := h.Open(qdb.ProtocolTCP)
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) Open(protocol Protocol) error {
 	err := C.qdb_open(&h.handle, C.qdb_protocol_t(protocol))
 	return makeErrorOrNil(err)
 }
 
-// SetTimeout : Sets the timeout of all network operations.
+// SetTimeout sets the timeout for all network operations.
 //
-//	The lower the timeout, the higher the risk of having timeout errors.
-//	Keep in mind that the server-side timeout might be shorter.
+// Args:
+//
+//	timeout: Duration for network operations timeout
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Lower timeouts increase risk of timeout errors. Server-side timeout might be shorter.
+//
+// Example:
+//
+//	err := h.SetTimeout(30 * time.Second)
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) SetTimeout(timeout time.Duration) error {
 	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
 	return makeErrorOrNil(err)
 }
 
-// Encryption : encryption option
+// Encryption is an encryption option.
 type Encryption C.qdb_encryption_t
 
 // Encryption values:
@@ -93,21 +148,53 @@ const (
 	EncryptAES  Encryption = C.qdb_crypt_aes_gcm_256
 )
 
-// SetEncryption : Creates a handle.
+// SetEncryption sets the encryption method for the handle.
 //
-//	No connection will be established.
-//	Not needed if you created your handle with NewHandle.
+// Args:
+//
+//	encryption: Encryption type (EncryptNone or EncryptAES)
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Must be called before Connect. See AddClusterPublicKey for adding public key.
+//
+// Example:
+//
+//	err := h.SetEncryption(qdb.EncryptAES)
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) SetEncryption(encryption Encryption) error {
 	err := C.qdb_option_set_encryption(h.handle, C.qdb_encryption_t(encryption))
 	return makeErrorOrNil(err)
 }
 
+// jSONCredentialConfig holds username and secret key from JSON credential files.
 type jSONCredentialConfig struct {
 	Username  string `json:"username"`
 	SecretKey string `json:"secret_key"`
 }
 
-// UserCredentialFromFile : retrieve user credentials from a file
+// UserCredentialFromFile retrieves user credentials from a JSON file.
+//
+// Args:
+//
+//	userCredentialFile: Path to JSON file containing username and secret_key
+//
+// Returns:
+//
+//	string: Username from the file
+//	string: Secret key from the file
+//	error: File read or JSON parsing error if any
+//
+// Example:
+//
+//	user, secret, err := qdb.UserCredentialFromFile("/path/to/user.json")
+//	if err != nil {
+//	    return err
+//	}
 func UserCredentialFromFile(userCredentialFile string) (string, string, error) {
 	fileConfig, err := ioutil.ReadFile(userCredentialFile)
 	if err != nil {
@@ -121,7 +208,23 @@ func UserCredentialFromFile(userCredentialFile string) (string, string, error) {
 	return jsonConfig.Username, jsonConfig.SecretKey, nil
 }
 
-// ClusterKeyFromFile : retrieve cluster key from a file
+// ClusterKeyFromFile retrieves cluster public key from a file.
+//
+// Args:
+//
+//	clusterPublicKeyFile: Path to file containing cluster public key in PEM format
+//
+// Returns:
+//
+//	string: Cluster public key content
+//	error: File read error if any
+//
+// Example:
+//
+//	key, err := qdb.ClusterKeyFromFile("/path/to/cluster.key")
+//	if err != nil {
+//	    return err
+//	}
 func ClusterKeyFromFile(clusterPublicKeyFile string) (string, error) {
 	clusterPublicKey, err := ioutil.ReadFile(clusterPublicKeyFile)
 	if err != nil {
@@ -130,7 +233,23 @@ func ClusterKeyFromFile(clusterPublicKeyFile string) (string, error) {
 	return string(clusterPublicKey), nil
 }
 
-// AddUserCredentials : add a username and key from a user name and secret.
+// AddUserCredentials adds a username and secret key for authentication.
+//
+// Args:
+//
+//	name: Username for authentication
+//	secret: User secret key/private key
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Example:
+//
+//	err := handle.AddUserCredentials("myuser", "mysecretkey")
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) AddUserCredentials(name, secret string) error {
 	username := convertToCharStar(name)
 	defer releaseCharStar(username)
@@ -140,7 +259,24 @@ func (h HandleType) AddUserCredentials(name, secret string) error {
 	return makeErrorOrNil(qdbErr)
 }
 
-// AddClusterPublicKey : add the cluster public key from a cluster config file.
+// AddClusterPublicKey adds the cluster public key for secure communication.
+//
+// Args:
+//
+//	secret: Cluster public key in PEM format
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Must be called before Connect.
+//
+// Example:
+//
+//	err := handle.AddClusterPublicKey(clusterKey)
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) AddClusterPublicKey(secret string) error {
 	clusterPublicKey := convertToCharStar(secret)
 	defer releaseCharStar(clusterPublicKey)
@@ -148,67 +284,185 @@ func (h HandleType) AddClusterPublicKey(secret string) error {
 	return makeErrorOrNil(qdbErr)
 }
 
-// SetMaxCardinality : Sets the maximum allowed cardinality of a quasardb query.
+// SetMaxCardinality sets the maximum allowed cardinality for queries.
 //
-//	The default value is 10,007. The minimum allowed values is 100.
+// Args:
+//
+//	maxCardinality: Maximum cardinality value (minimum: 100)
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Default value is 10,007. Minimum allowed value is 100.
+//
+// Example:
+//
+//	err := h.SetMaxCardinality(50000)
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
 	err := C.qdb_option_set_max_cardinality(h.handle, C.qdb_uint_t(maxCardinality))
 	return makeErrorOrNil(err)
 }
 
-// SetCompression : Set the compression level for all future messages emitted by the specified handle.
+// SetCompression sets the compression level for outgoing messages.
 //
-//	Regardless of this parameter, the API will be able to read whatever compression the server uses.
+// Args:
+//
+//	compressionLevel: Compression type (CompNone, CompFast, CompBest, CompBalanced)
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: API can read any compression used by server regardless of this setting.
+//
+// Example:
+//
+//	err := h.SetCompression(qdb.CompBalanced)
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) SetCompression(compressionLevel Compression) error {
 	err := C.qdb_option_set_compression(h.handle, C.qdb_compression_t(compressionLevel))
 	return makeErrorOrNil(err)
 }
 
-// SetClientMaxInBufSize : Set the Sets the maximum incoming buffer size for all network operations of the client.
+// SetClientMaxInBufSize sets the maximum incoming buffer size for client network operations.
 //
-//	Only modify this setting if you expect to receive very large answers from the server.
+// Args:
+//
+//	bufSize: Maximum buffer size in bytes
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Only modify if expecting very large responses from server.
+//
+// Example:
+//
+//	err := h.SetClientMaxInBufSize(64 * 1024 * 1024) // 64MB
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
 	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
 	return makeErrorOrNil(err)
 }
 
-// GetClientMaxInBufSize : Gets the maximum incoming buffer size for all network operations of the client.
+// GetClientMaxInBufSize gets the maximum incoming buffer size for client network operations.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	uint: Current maximum buffer size in bytes
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	size, err := h.GetClientMaxInBufSize() // → 16777216
+//	if err != nil {
+//	    return 0, err
+//	}
 func (h HandleType) GetClientMaxInBufSize() (uint, error) {
 	var bufSize C.size_t
 	err := C.qdb_option_get_client_max_in_buf_size(h.handle, &bufSize)
 	return uint(bufSize), makeErrorOrNil(err)
 }
 
-// GetClusterMaxInBufSize : Gets the maximum incoming buffer size for all network operations of the client.
+// GetClusterMaxInBufSize gets the maximum incoming buffer size allowed by the cluster.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	uint: Maximum buffer size allowed by cluster in bytes
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	size, err := h.GetClusterMaxInBufSize() // → 67108864
+//	if err != nil {
+//	    return 0, err
+//	}
 func (h HandleType) GetClusterMaxInBufSize() (uint, error) {
 	var bufSize C.size_t
 	err := C.qdb_option_get_cluster_max_in_buf_size(h.handle, &bufSize)
 	return uint(bufSize), makeErrorOrNil(err)
 }
 
-// GetClientMaxParallelism : Gets the maximum parallelism option of the client.
+// GetClientMaxParallelism gets the maximum parallelism option of the client.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	uint: Current maximum parallelism thread count
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	count, err := h.GetClientMaxParallelism() // → 16
+//	if err != nil {
+//	    return 0, err
+//	}
 func (h HandleType) GetClientMaxParallelism() (uint, error) {
 	var threadCount C.size_t
 	err := C.qdb_option_get_client_max_parallelism(h.handle, &threadCount)
 	return uint(threadCount), makeErrorOrNil(err)
 }
 
-// SetClientMaxParallelism : Gets the maximum parallelism option of the client.
+// SetClientMaxParallelism sets the maximum parallelism level for the client.
+//
+// Args:
+//
+//	threadCount: Number of threads for concurrent operations
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Higher values may improve throughput but consume more resources.
+//
+// Example:
+//
+//	err := h.SetClientMaxParallelism(16)
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
 	err := C.qdb_option_set_client_max_parallelism(h.handle, C.size_t(threadCount))
 	return makeErrorOrNil(err)
 }
 
-// Connect : connect a previously opened handle
+// Connect connects a previously opened handle to a QuasarDB cluster.
 //
-//	Binds the client instance to a quasardb cluster and connect to at least one node within.
-//	Quasardb URI are in the form qdb://<address>:<port> where <address> is either an IPv4 or IPv6 (surrounded with square brackets), or a domain name. It is recommended to specify multiple addresses should the designated node be unavailable.
+// Args:
 //
-//	URI examples:
-//		qdb://myserver.org:2836 - Connects to myserver.org on the port 2836
-//		qdb://127.0.0.1:2836 - Connects to the local IPv4 loopback on the port 2836
-//		qdb://myserver1.org:2836,myserver2.org:2836 - Connects to myserver1.org or myserver2.org on the port 2836
-//		qdb://[::1]:2836 - Connects to the local IPv6 loopback on the port 2836
+//	clusterURI: URI in format qdb://<address>:<port> (IPv4/IPv6/domain)
+//
+// Returns:
+//
+//	error: Connection error if any
+//
+// Example:
+//
+//	err := h.Connect("qdb://localhost:2836")
+//	if err != nil {
+//	    return err
+//	}
+//	// Multiple nodes: "qdb://node1:2836,node2:2836"
+//	// IPv6: "qdb://[::1]:2836"
 func (h HandleType) Connect(clusterURI string) error {
 	uri := convertToCharStar(clusterURI)
 	defer releaseCharStar(uri)
@@ -219,30 +473,69 @@ func (h HandleType) Connect(clusterURI string) error {
 	return makeErrorOrNil(err)
 }
 
-// Close : Closes the handle previously opened.
+// Close closes the handle and releases all resources.
 //
-//	This results in terminating all connections and releasing all internal buffers,
-//	including buffers which may have been allocated as or a result of batch operations or get operations.
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	error: Closing error if any
+//
+// Note: Terminates connections and releases all internal buffers.
+//
+// Example:
+//
+//	err := h.Close()
+//	if err != nil {
+//	    return err
+//	}
 func (h HandleType) Close() error {
 	err := C.qdb_close(h.handle)
 	return makeErrorOrNil(err)
 }
 
-// Release : Releases an API-allocated buffer.
+// Release releases an API-allocated buffer.
 //
-//	Failure to properly call this function may result in excessive memory usage.
-//	Most operations that return a content (e.g. batch operations, qdb_blob_get, qdb_blob_get_and_update, qdb_blob_compare_and_swap...)
-//	will allocate a buffer for the content and will not release the allocated buffer until you either call this function or close the handle.
+// Args:
 //
-//	The function will be able to release any kind of buffer allocated by a quasardb API call, whether it’s a single buffer, an array or an array of buffers.
+//	buffer: Pointer to buffer allocated by QuasarDB API
+//
+// Returns:
+//
+//	None
+//
+// Note: Failure to call may cause memory leaks. Works with any API-allocated buffer type.
+//
+// Example:
+//
+//	var tags **C.char
+//	err := C.qdb_get_tags(h.handle, alias, &tags, &tagCount)
+//	defer h.Release(unsafe.Pointer(tags))
 func (h HandleType) Release(buffer unsafe.Pointer) {
 	C.qdb_release(h.handle, buffer)
 }
 
-// GetTags : Retrieves all the tags of an entry.
+// GetTags retrieves all tags of an entry.
 //
-//	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
-//	The entry must exist.
+// Args:
+//
+//	entryAlias: Name of the entry to get tags from
+//
+// Returns:
+//
+//	[]string: List of tag names
+//	error: Retrieval error if any
+//
+// Note: Entry must exist. Tags scale across nodes.
+//
+// Example:
+//
+//	tags, err := h.GetTags("myentry") // → ["important", "data"]
+//	if err != nil {
+//	    return nil, err
+//	}
 func (h HandleType) GetTags(entryAlias string) ([]string, error) {
 	alias := convertToCharStar(entryAlias)
 	defer releaseCharStar(alias)
@@ -265,11 +558,25 @@ func (h HandleType) GetTags(entryAlias string) ([]string, error) {
 	return nil, ErrorType(err)
 }
 
-// GetTagged : Retrieves all entries that have the specified tag.
+// GetTagged retrieves all entries that have the specified tag.
 //
-//	Tagging an entry enables you to search for entries based on their tags. Tags scale across nodes.
-//	The tag must exist.
-//	The complexity of this function is constant.
+// Args:
+//
+//	tag: Tag name to search for
+//
+// Returns:
+//
+//	[]string: List of entry aliases with this tag
+//	error: Retrieval error if any
+//
+// Note: Tag must exist. Constant time complexity.
+//
+// Example:
+//
+//	entries, err := h.GetTagged("important") // → ["entry1", "entry2"]
+//	if err != nil {
+//	    return nil, err
+//	}
 func (h HandleType) GetTagged(tag string) ([]string, error) {
 	cTag := convertToCharStar(tag)
 	defer releaseCharStar(cTag)
@@ -292,10 +599,24 @@ func (h HandleType) GetTagged(tag string) ([]string, error) {
 	return nil, ErrorType(err)
 }
 
-// PrefixGet : Retrieves the list of all entries matching the provided prefix.
+// PrefixGet retrieves all entries matching the provided prefix.
 //
-//	A prefix-based search will enable you to find all entries matching a provided prefix.
-//	This function returns the list of aliases. It’s up to the user to query the content associated with every entry, if needed.
+// Args:
+//
+//	prefix: Prefix string to match
+//	limit: Maximum number of results to return
+//
+// Returns:
+//
+//	[]string: List of entry aliases matching the prefix
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	entries, err := h.PrefixGet("user:", 100) // → ["user:1", "user:2"]
+//	if err != nil {
+//	    return nil, err
+//	}
 func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
 	cPrefix := convertToCharStar(prefix)
 	defer releaseCharStar(cPrefix)
@@ -318,9 +639,23 @@ func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
 	return []string{}, ErrorType(err)
 }
 
-// PrefixCount : Retrieves the count of all entries matching the provided prefix.
+// PrefixCount retrieves the count of entries matching the provided prefix.
 //
-//	A prefix-based count counts all entries matching a provided prefix.
+// Args:
+//
+//	prefix: Prefix string to match
+//
+// Returns:
+//
+//	uint64: Number of entries matching the prefix
+//	error: Counting error if any
+//
+// Example:
+//
+//	count, err := h.PrefixCount("user:") // → 42
+//	if err != nil {
+//	    return 0, err
+//	}
 func (h HandleType) PrefixCount(prefix string) (uint64, error) {
 	cPrefix := convertToCharStar(prefix)
 	defer releaseCharStar(cPrefix)
@@ -332,9 +667,24 @@ func (h HandleType) PrefixCount(prefix string) (uint64, error) {
 
 // Handles Creators
 
-// NewHandle : Create a new handle, return error if needed
+// NewHandle creates a new handle.
 //
-//	The handle is already opened (not connected) with tcp protocol
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	HandleType: Opened handle (not connected) with TCP protocol
+//	error: Creation error if any
+//
+// Example:
+//
+//	h, err := qdb.NewHandle()
+//	if err != nil {
+//	    return err
+//	}
+//	defer h.Close()
 func NewHandle() (HandleType, error) {
 	var h HandleType
 	err := C.qdb_open((*C.qdb_handle_t)(&h.handle), C.qdb_protocol_t(ProtocolTCP))
@@ -342,10 +692,24 @@ func NewHandle() (HandleType, error) {
 	return h, makeErrorOrNil(err)
 }
 
-// NewHandleWithNativeLogs : Create a new handle with native C++ logging enabled, return error if needed
+// NewHandleWithNativeLogs creates a new handle with native C++ logging enabled.
 //
-//	The handle is already opened (not connected) with tcp protocol
-//	Native QuasarDB C++ logs will be routed through the Go logging system
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	HandleType: Opened handle with native logging enabled
+//	error: Creation error if any
+//
+// Example:
+//
+//	h, err := qdb.NewHandleWithNativeLogs()
+//	if err != nil {
+//	    return err
+//	}
+//	defer h.Close()
 func NewHandleWithNativeLogs() (HandleType, error) {
 	h, err := NewHandle()
 	if err != nil {
@@ -356,7 +720,27 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 	return h, nil
 }
 
-// NewHandleFromOptions creates and configures a new handle using the provided options
+// NewHandleFromOptions creates and configures a new handle using the provided options.
+//
+// Args:
+//
+//	options: Configuration options for the handle
+//
+// Returns:
+//
+//	HandleType: Configured and connected handle
+//	error: Creation or configuration error if any
+//
+// Example:
+//
+//	opts := qdb.NewHandleOptions().
+//	    WithClusterUri("qdb://localhost:2836").
+//	    WithTimeout(30 * time.Second)
+//	h, err := qdb.NewHandleFromOptions(opts)
+//	if err != nil {
+//	    return err
+//	}
+//	defer h.Close()
 func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 	// Validate options
 	if err := options.validate(); err != nil {
@@ -452,11 +836,25 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 	return h, nil
 }
 
-// SetupHandle : Setup a handle, return error if needed
+// SetupHandle creates and connects a handle to a QuasarDB cluster.
 //
-//	The handle is already opened with tcp protocol
-//	The handle is already connected with the clusterURI string
-//	Native QuasarDB C++ logs will be routed through the Go logging system
+// Args:
+//
+//	clusterURI: URI of the QuasarDB cluster (e.g. "qdb://localhost:2836")
+//	timeout: Network operation timeout
+//
+// Returns:
+//
+//	HandleType: Connected handle
+//	error: Creation or connection error if any
+//
+// Example:
+//
+//	h, err := qdb.SetupHandle("qdb://localhost:2836", 30*time.Second)
+//	if err != nil {
+//	    return err
+//	}
+//	defer h.Close()
 func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 	h, err := NewHandle()
 	if err != nil {
@@ -470,12 +868,21 @@ func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 	return h, err
 }
 
-// MustSetupHandle : Setup a handle, panic on error
+// MustSetupHandle creates and connects a handle, panics on error.
 //
-//	The handle is already opened with tcp protocol
-//	The handle is already connected with the clusterURI string
+// Args:
 //
-//	Panic on error
+//	clusterURI: URI of the QuasarDB cluster (e.g. "qdb://localhost:2836")
+//	timeout: Network operation timeout
+//
+// Returns:
+//
+//	HandleType: Connected handle
+//
+// Example:
+//
+//	h := qdb.MustSetupHandle("qdb://localhost:2836", 30*time.Second)
+//	defer h.Close()
 func MustSetupHandle(clusterURI string, timeout time.Duration) HandleType {
 	h, err := SetupHandle(clusterURI, timeout)
 	if err != nil {
@@ -484,13 +891,33 @@ func MustSetupHandle(clusterURI string, timeout time.Duration) HandleType {
 	return h
 }
 
-// SetupSecuredHandle : Setup a secured handle, return error if needed
+// SetupSecuredHandle creates and connects a secured handle with authentication.
 //
-//	The handle is already opened with tcp protocol
-//	The handle is already secured with the cluster public key and the user credential files provided
-//	(Note: the filenames are needed, not the content of the files)
-//	The handle is already connected with the clusterURI string
-//	Native QuasarDB C++ logs will be routed through the Go logging system
+// Args:
+//
+//	clusterURI: URI of the QuasarDB cluster
+//	clusterPublicKeyFile: Path to cluster public key file
+//	userCredentialFile: Path to user credentials JSON file
+//	timeout: Network operation timeout
+//	encryption: Encryption type to use
+//
+// Returns:
+//
+//	HandleType: Secured and connected handle
+//	error: Creation, security setup, or connection error if any
+//
+// Example:
+//
+//	h, err := qdb.SetupSecuredHandle(
+//	    "qdb://secure-cluster:2838",
+//	    "/path/to/cluster.key",
+//	    "/path/to/user.json",
+//	    30*time.Second,
+//	    qdb.EncryptAES)
+//	if err != nil {
+//	    return err
+//	}
+//	defer h.Close()
 func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string, timeout time.Duration, encryption Encryption) (HandleType, error) {
 	h, err := NewHandle()
 	if err != nil {
@@ -524,12 +951,29 @@ func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile str
 	return h, err
 }
 
-// MustSetupSecuredHandle : Setup a secured handle, panic on error
+// MustSetupSecuredHandle creates and connects a secured handle, panics on error.
 //
-//	The handle is already opened with tcp protocol
-//	The handle is already secured with the cluster public key and the user credential files provided
-//	(Note: the filenames are needed, not the content of the files)
-//	The handle is already connected with the clusterURI string
+// Args:
+//
+//	clusterURI: URI of the QuasarDB cluster
+//	clusterPublicKeyFile: Path to cluster public key file
+//	userCredentialFile: Path to user credentials JSON file
+//	timeout: Network operation timeout
+//	encryption: Encryption type to use
+//
+// Returns:
+//
+//	HandleType: Secured and connected handle
+//
+// Example:
+//
+//	h := qdb.MustSetupSecuredHandle(
+//	    "qdb://secure-cluster:2838",
+//	    "/path/to/cluster.key",
+//	    "/path/to/user.json",
+//	    30*time.Second,
+//	    qdb.EncryptAES)
+//	defer h.Close()
 func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string, timeout time.Duration, encryption Encryption) HandleType {
 	h, err := SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile, timeout, encryption)
 	if err != nil {
@@ -540,47 +984,171 @@ func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile
 
 // Entries creators
 
-// Blob : Create a blob entry object
+// Blob creates an entry accessor for blob operations.
+//
+// Args:
+//
+//	alias: Name of the blob entry
+//
+// Returns:
+//
+//	BlobEntry: Blob entry accessor
+//
+// Example:
+//
+//	blob := h.Blob("my_data")
+//	err := blob.Put([]byte("Hello World"))
 func (h HandleType) Blob(alias string) BlobEntry {
 	return BlobEntry{Entry{h, alias}}
 }
 
-// Integer : Create an integer entry object
+// Integer creates an entry accessor for integer operations.
+//
+// Args:
+//
+//	alias: Name of the integer entry
+//
+// Returns:
+//
+//	IntegerEntry: Integer entry accessor
+//
+// Example:
+//
+//	counter := h.Integer("my_counter")
+//	err := counter.Put(42)
 func (h HandleType) Integer(alias string) IntegerEntry {
 	return IntegerEntry{Entry{h, alias}}
 }
 
-// Timeseries : Create a timeseries entry object
+// Timeseries creates an entry accessor for timeseries operations.
+//
+// Args:
+//
+//	alias: Name of the timeseries table
+//
+// Returns:
+//
+//	TimeseriesEntry: Timeseries table accessor
+//
+// Deprecated: Use Table instead.
+//
+// Example:
+//
+//	ts := h.Timeseries("measurements")
 func (h HandleType) Timeseries(alias string) TimeseriesEntry {
 	return h.Table(alias)
 }
 
-// Timeseries : Reference a timeseries table
+// Table creates an entry accessor for timeseries table operations.
+//
+// Args:
+//
+//	alias: Name of the timeseries table
+//
+// Returns:
+//
+//	TimeseriesEntry: Timeseries table accessor
+//
+// Example:
+//
+//	table := h.Table("measurements")
+//	err := table.Create(columns...)
 func (h HandleType) Table(alias string) TimeseriesEntry {
 	return TimeseriesEntry{Entry{h, alias}}
 }
 
-// Node : Create a node object
+// Node creates an entry accessor for node operations.
+//
+// Args:
+//
+//	uri: URI of the node (e.g. "qdb://localhost:2836")
+//
+// Returns:
+//
+//	*Node: Node accessor
+//
+// Example:
+//
+//	node := h.Node("qdb://localhost:2836")
+//	status, err := node.Status()
 func (h HandleType) Node(uri string) *Node {
 	return &Node{h, uri}
 }
 
-// Find : Create a query object to execute
+// Find creates an entry accessor for find query operations.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	*Find: Find query builder
+//
+// Example:
+//
+//	results, err := h.Find().
+//	    Tag("important").
+//	    Type(qdb.EntryBlob).
+//	    Execute()
 func (h HandleType) Find() *Find {
 	return &Find{h, []string{}, []string{}, []string{}}
 }
 
-// Cluster : Create a cluster object to execute commands on a cluster
+// Cluster creates an entry accessor for cluster operations.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	*Cluster: Cluster operations accessor
+//
+// Example:
+//
+//	cluster := h.Cluster()
+//	err := cluster.TrimAll()
 func (h HandleType) Cluster() *Cluster {
 	return &Cluster{h}
 }
 
-// Query : Create an query object to execute
+// Query creates an entry accessor for query operations.
+//
+// Args:
+//
+//	query: SQL-like query string
+//
+// Returns:
+//
+//	*Query: Query executor
+//
+// Example:
+//
+//	q := h.Query("SELECT * FROM measurements WHERE value > 100")
+//	result, err := q.Execute()
 func (h HandleType) Query(query string) *Query {
 	return &Query{h, query}
 }
 
-// TsBatch : create a batch object for the specified columns
+// TsBatch creates an entry accessor for batch timeseries operations.
+//
+// Args:
+//
+//	cols: Column information for batch operations
+//
+// Returns:
+//
+//	*TsBatch: Batch operations accessor
+//	error: Creation error if any
+//
+// Example:
+//
+//	batch, err := h.TsBatch(columns...)
+//	if err != nil {
+//	    return nil, err
+//	}
+//	defer batch.Release()
 func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
 	columns := tsBatchColumnInfoArrayToC(cols...)
 	defer releaseTsBatchColumnInfoArray(columns, len(cols))
@@ -592,10 +1160,15 @@ func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
 }
 
 // GetLastError retrieves last operation error.
+//
+// Args:
+//
+//	None
+//
 // Returns:
 //
-//	string: error message
-//	error: error code
+//	string: Error message text
+//	error: Error code
 //
 // Example:
 //

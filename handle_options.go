@@ -1,3 +1,7 @@
+// Copyright (c) 2025 QuasarDB SAS
+// All rights reserved.
+//
+// Package qdb provides an API to a QuasarDB server.
 package qdb
 
 import (
@@ -9,8 +13,43 @@ import (
 )
 
 // HandleOptions holds all configuration options for creating a handle.
+type HandleOptions struct {
+	// Connection
+	clusterURI string
+
+	// Security - Cluster
+	clusterPublicKeyFile string
+	clusterPublicKey     string
+
+	// Security - User
+	userSecurityFile string
+	userName         string
+	userSecret       string
+
+	// Network & Performance
+	encryption           Encryption
+	compression          Compression
+	clientMaxParallelism int
+	clientMaxInBufSize   uint
+	timeout              time.Duration
+}
+
+// NewHandleOptions creates a new HandleOptions builder.
 //
-// Example usage:
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	*HandleOptions: Builder for configuring handle options
+//
+// Default values:
+//   - Compression: CompBalanced (changed from CompFast in v3.x)
+//   - Encryption: EncryptNone
+//   - Timeout: 120 seconds
+//
+// Example:
 //
 //	// Simple unsecured connection
 //	opts := NewHandleOptions().
@@ -33,33 +72,6 @@ import (
 //	    WithClientMaxParallelism(16).
 //	    WithClientMaxInBufSize(64 * 1024 * 1024)
 //	handle, err := qdb.NewHandleFromOptions(opts)
-type HandleOptions struct {
-	// Connection
-	clusterURI string
-
-	// Security - Cluster
-	clusterPublicKeyFile string
-	clusterPublicKey     string
-
-	// Security - User
-	userSecurityFile string
-	userName         string
-	userSecret       string
-
-	// Network & Performance
-	encryption           Encryption
-	compression          Compression
-	clientMaxParallelism int
-	clientMaxInBufSize   uint
-	timeout              time.Duration
-}
-
-// NewHandleOptions creates a new HandleOptions with default values.
-//
-// Default values:
-//   - Compression: CompBalanced (changed from CompFast in v3.x)
-//   - Encryption: EncryptNone
-//   - Timeout: 120 seconds
 func NewHandleOptions() *HandleOptions {
 	return &HandleOptions{
 		compression: CompBalanced,
@@ -68,7 +80,7 @@ func NewHandleOptions() *HandleOptions {
 	}
 }
 
-// WithClusterUri sets the cluster URI to connect to
+// WithClusterUri sets the cluster URI option.
 func (o *HandleOptions) WithClusterUri(uri string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -76,7 +88,7 @@ func (o *HandleOptions) WithClusterUri(uri string) *HandleOptions {
 	return &opts
 }
 
-// WithClusterPublicKeyFile sets the path to the cluster public key file
+// WithClusterPublicKeyFile sets the cluster public key file path option.
 func (o *HandleOptions) WithClusterPublicKeyFile(path string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -84,7 +96,7 @@ func (o *HandleOptions) WithClusterPublicKeyFile(path string) *HandleOptions {
 	return &opts
 }
 
-// WithClusterPublicKey sets the cluster public key directly
+// WithClusterPublicKey sets the cluster public key option.
 func (o *HandleOptions) WithClusterPublicKey(key string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -92,7 +104,7 @@ func (o *HandleOptions) WithClusterPublicKey(key string) *HandleOptions {
 	return &opts
 }
 
-// WithUserSecurityFile sets the path to the user security file containing credentials
+// WithUserSecurityFile sets the user security file path option.
 func (o *HandleOptions) WithUserSecurityFile(path string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -100,7 +112,7 @@ func (o *HandleOptions) WithUserSecurityFile(path string) *HandleOptions {
 	return &opts
 }
 
-// WithUserName sets the username for authentication
+// WithUserName sets the username option.
 func (o *HandleOptions) WithUserName(name string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -108,7 +120,7 @@ func (o *HandleOptions) WithUserName(name string) *HandleOptions {
 	return &opts
 }
 
-// WithUserSecret sets the user secret/private key for authentication
+// WithUserSecret sets the user secret option.
 func (o *HandleOptions) WithUserSecret(secret string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -116,7 +128,7 @@ func (o *HandleOptions) WithUserSecret(secret string) *HandleOptions {
 	return &opts
 }
 
-// WithEncryption sets the encryption type
+// WithEncryption sets the encryption option.
 func (o *HandleOptions) WithEncryption(encryption Encryption) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -124,7 +136,7 @@ func (o *HandleOptions) WithEncryption(encryption Encryption) *HandleOptions {
 	return &opts
 }
 
-// WithCompression sets the compression type
+// WithCompression sets the compression option.
 func (o *HandleOptions) WithCompression(compression Compression) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -132,7 +144,7 @@ func (o *HandleOptions) WithCompression(compression Compression) *HandleOptions 
 	return &opts
 }
 
-// WithClientMaxParallelism sets the maximum parallelism for the client
+// WithClientMaxParallelism sets the client max parallelism option.
 func (o *HandleOptions) WithClientMaxParallelism(n int) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -140,7 +152,7 @@ func (o *HandleOptions) WithClientMaxParallelism(n int) *HandleOptions {
 	return &opts
 }
 
-// WithClientMaxInBufSize sets the maximum incoming buffer size
+// WithClientMaxInBufSize sets the client max input buffer size option.
 func (o *HandleOptions) WithClientMaxInBufSize(size uint) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -148,7 +160,7 @@ func (o *HandleOptions) WithClientMaxInBufSize(size uint) *HandleOptions {
 	return &opts
 }
 
-// WithTimeout sets the network operation timeout
+// WithTimeout sets the timeout option.
 func (o *HandleOptions) WithTimeout(timeout time.Duration) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
@@ -156,63 +168,66 @@ func (o *HandleOptions) WithTimeout(timeout time.Duration) *HandleOptions {
 	return &opts
 }
 
-// GetClusterURI returns the cluster URI
+// GetClusterURI returns the current cluster URI value.
 func (o *HandleOptions) GetClusterURI() string {
 	return o.clusterURI
 }
 
-// GetClusterPublicKeyFile returns the cluster public key file path
+// GetClusterPublicKeyFile returns the current cluster public key file path value.
 func (o *HandleOptions) GetClusterPublicKeyFile() string {
 	return o.clusterPublicKeyFile
 }
 
-// GetClusterPublicKey returns the cluster public key
+// GetClusterPublicKey returns the current cluster public key value.
 func (o *HandleOptions) GetClusterPublicKey() string {
 	return o.clusterPublicKey
 }
 
-// GetUserSecurityFile returns the user security file path
+// GetUserSecurityFile returns the current user security file path value.
 func (o *HandleOptions) GetUserSecurityFile() string {
 	return o.userSecurityFile
 }
 
-// GetUserName returns the user name
+// GetUserName returns the current username value.
 func (o *HandleOptions) GetUserName() string {
 	return o.userName
 }
 
-// GetUserSecret returns the user secret
-// Note: This method is kept for internal use but should be used carefully for security reasons
+// GetUserSecret returns the current user secret value.
+// Note: This method is kept for internal use but should be used carefully for security reasons.
 func (o *HandleOptions) GetUserSecret() string {
 	return o.userSecret
 }
 
-// GetEncryption returns the encryption type
+// GetEncryption returns the current encryption value.
 func (o *HandleOptions) GetEncryption() Encryption {
 	return o.encryption
 }
 
-// GetCompression returns the compression type
+// GetCompression returns the current compression value.
 func (o *HandleOptions) GetCompression() Compression {
 	return o.compression
 }
 
-// GetClientMaxParallelism returns the client max parallelism setting
+// GetClientMaxParallelism returns the current client max parallelism value.
 func (o *HandleOptions) GetClientMaxParallelism() int {
 	return o.clientMaxParallelism
 }
 
-// GetClientMaxInBufSize returns the client max input buffer size
+// GetClientMaxInBufSize returns the current client max input buffer size value.
 func (o *HandleOptions) GetClientMaxInBufSize() uint {
 	return o.clientMaxInBufSize
 }
 
-// GetTimeout returns the timeout duration
+// GetTimeout returns the current timeout value.
 func (o *HandleOptions) GetTimeout() time.Duration {
 	return o.timeout
 }
 
-// validate checks that the options are consistent and applies sanitization
+// validate checks options consistency
+// In: HandleOptions to validate
+// Out: error if invalid
+// Ex: validate() → nil|error
 func (o *HandleOptions) validate() error {
 	// Trim all string fields first and apply them back
 	o.clusterURI = strings.TrimSpace(o.clusterURI)
@@ -307,9 +322,24 @@ type HandleOptionsProvider interface {
 	GetTimeout() time.Duration
 }
 
-// FromHandleOptionsProvider creates HandleOptions from a HandleOptionsProvider.
-// Note: User secrets cannot be copied through this method for security reasons.
-// If user credentials are needed, use WithUserSecurityFile or set them directly.
+// FromHandleOptionsProvider creates HandleOptions from a provider.
+//
+// Args:
+//
+//	provider: HandleOptionsProvider interface implementation
+//
+// Returns:
+//
+//	*HandleOptions: New options instance, nil if provider is nil
+//
+// Note: User secrets cannot be copied for security reasons.
+//
+// Example:
+//
+//	newOpts := qdb.FromHandleOptionsProvider(existingOpts)
+//	if newOpts != nil {
+//	    newOpts.WithUserSecurityFile("/path/to/user.json")
+//	}
 func FromHandleOptionsProvider(provider HandleOptionsProvider) *HandleOptions {
 	if provider == nil {
 		return nil

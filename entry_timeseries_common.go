@@ -499,7 +499,10 @@ func (t *TsBulk) Release() {
 	t.h.Release(unsafe.Pointer(t.table))
 }
 
-// TsBatch : A structure that permits to append data to a timeseries
+// TsBatch represents a batch writer for efficient bulk insertion into timeseries tables.
+//
+// Batch operations significantly improve performance when inserting large amounts of data.
+// All columns must be specified at initialization and cannot be changed afterward.
 type TsBatch struct {
 	h     HandleType
 	err   error
