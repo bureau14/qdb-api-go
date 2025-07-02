@@ -337,6 +337,9 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_create_ex(entry.handle, alias, duration, columns, columnsCount, C.qdb_never_expires)
+	if err == C.qdb_e_ok {
+		L().Debug("successfully created table", "name", entry.alias, "shard_size", shardSize)
+	}
 	return makeErrorOrNil(err)
 }
 

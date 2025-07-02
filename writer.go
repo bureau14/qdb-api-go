@@ -9,6 +9,7 @@ import "C"
 import (
 	"fmt"
 	"runtime"
+	"time"
 )
 
 // Metadata we need to represent a single column.
@@ -109,6 +110,15 @@ func (w *Writer) Push(h HandleType) error {
 	var options C.qdb_exp_batch_options_t
 	options = w.options.setNative(options)
 
+	// Count total rows across all tables
+	totalRows := 0
+	for _, table := range w.tables {
+		if table.RowCount() > totalRows {
+			totalRows = table.RowCount()
+		}
+	}
+
+	start := time.Now()
 	errCode := C.qdb_exp_batch_push_with_options(
 		h.handle,
 		&options,
@@ -116,6 +126,12 @@ func (w *Writer) Push(h HandleType) error {
 		tableSchemas,
 		C.qdb_size_t(len(tblSlice)),
 	)
+	elapsed := time.Since(start)
+	
+	if errCode == 0 {
+		L().Info("wrote rows", "count", totalRows, "duration", elapsed)
+	}
+	
 	return makeErrorOrNil(C.qdb_error_t(errCode))
 }
 

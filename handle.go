@@ -209,6 +209,9 @@ func (h HandleType) Connect(clusterURI string) error {
 	uri := convertToCharStar(clusterURI)
 	defer releaseCharStar(uri)
 	err := C.qdb_connect(h.handle, uri)
+	if err == C.qdb_e_ok {
+		L().Info("successfully connected", "cluster", clusterURI)
+	}
 	return makeErrorOrNil(err)
 }
 

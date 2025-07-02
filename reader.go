@@ -547,12 +547,17 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	var ret ReaderChunk
 	var ptr *C.qdb_bulk_reader_table_data_t
 
+	// Time the C API call
+	start := time.Now()
+	
 	// qdb_bulk_reader_get_data "fills" a pointer in style of when you would get data back
 	// for a number of tables, but it returns just a pointer for a single table. all memory
 	// allocated within this function call is linked to this single object, and a qdbRelease
 	// clears eerything
 	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
 	err := makeErrorOrNil(errCode)
+	
+	elapsed := time.Since(start)
 
 	// Trigger the `defer` statement as there are failure scenarios in both cases where err
 	// is nil or not-nil. That's why we put the ptr-check before checking error return codes.
@@ -601,6 +606,10 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 		return ret, err
 	}
 
+	// Log the batch read performance
+	rowCount := ret.RowCount()
+	L().Debug("read batch of rows", "count", rowCount, "duration", elapsed)
+	
 	return ret, nil
 }
 
