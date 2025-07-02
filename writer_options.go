@@ -6,6 +6,7 @@ package qdb
 */
 import "C"
 
+// WriterPushFlag: batch push behavior flags
 type WriterPushFlag C.qdb_exp_batch_push_flags_t
 
 const (
@@ -14,6 +15,7 @@ const (
 	WriterPushFlagAsyncClientPush WriterPushFlag = C.qdb_exp_batch_push_flag_asynchronous_client_push
 )
 
+// WriterPushMode: batch push consistency mode
 type WriterPushMode C.qdb_exp_batch_push_mode_t
 
 const (
@@ -22,6 +24,7 @@ const (
 	WriterPushModeAsync         WriterPushMode = C.qdb_exp_batch_push_async
 )
 
+// WriterDeduplicationMode: duplicate handling strategy
 type WriterDeduplicationMode C.qdb_exp_batch_deduplication_mode_t
 
 const (
@@ -30,6 +33,13 @@ const (
 	WriterDeduplicationModeUpsert   WriterDeduplicationMode = C.qdb_exp_batch_deduplication_mode_upsert
 )
 
+// WriterOptions: batch push configuration.
+// Fields:
+//   pushMode: consistency level
+//   dropDuplicates: enable dedup
+//   dropDuplicateColumns: dedup keys
+//   dedupMode: dedup strategy
+//   pushFlags: behavior flags
 type WriterOptions struct {
 	pushMode             WriterPushMode
 	dropDuplicates       bool

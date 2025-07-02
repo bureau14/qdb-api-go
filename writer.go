@@ -12,33 +12,60 @@ import (
 	"time"
 )
 
-// Metadata we need to represent a single column.
+// WriterColumn: metadata for single column.
+// Fields:
+//   ColumnName: identifier
+//   ColumnType: data type
 type WriterColumn struct {
 	ColumnName string
 	ColumnType TsColumnType
 }
 
+// Writer: batches tables for push.
+// Fields:
+//   options: push configuration
+//   tables: name→WriterTable map
 type Writer struct {
 	options WriterOptions
 	tables  map[string]WriterTable
 }
 
-// Creates a new Writer with the provided options
+// NewWriter creates writer with options.
+// Args:
+//   options: push configuration
+// Returns:
+//   Writer: configured writer
+// Example:
+//   w := NewWriter(opts) // → Writer{opts, empty map}
 func NewWriter(options WriterOptions) Writer {
 	return Writer{options: options, tables: make(map[string]WriterTable)}
 }
 
-// Creates a new Writer with default options
+// NewWriterWithDefaultOptions creates writer with defaults.
+// Returns:
+//   Writer: default configuration
+// Example:
+//   w := NewWriterWithDefaultOptions() // → Writer{default opts}
 func NewWriterWithDefaultOptions() Writer {
 	return NewWriter(NewWriterOptions())
 }
 
-// Returns the writer's options
+// GetOptions returns push configuration.
+// Returns:
+//   WriterOptions: current options
+// Example:
+//   opts := w.GetOptions() // → WriterOptions
 func (w *Writer) GetOptions() WriterOptions {
 	return w.options
 }
 
-// Sets the data of a table. Returns error if table already exists.
+// SetTable adds table to batch.
+// Args:
+//   t: table to add
+// Returns:
+//   error: if exists or schema mismatch
+// Example:
+//   err := w.SetTable(tbl) // → nil or error
 func (w *Writer) SetTable(t WriterTable) error {
 	tableName := t.GetName()
 
@@ -62,7 +89,14 @@ func (w *Writer) SetTable(t WriterTable) error {
 	return nil
 }
 
-// Returns the table with the provided name
+// GetTable retrieves table by name.
+// Args:
+//   name: table identifier
+// Returns:
+//   WriterTable: found table
+//   error: if not found
+// Example:
+//   tbl, err := w.GetTable("my_table") // → WriterTable or error
 func (w *Writer) GetTable(name string) (WriterTable, error) {
 	t, ok := w.tables[name]
 	if !ok {
@@ -72,12 +106,22 @@ func (w *Writer) GetTable(name string) (WriterTable, error) {
 	return t, nil
 }
 
-// Returns the number of tables the writer currently holds.
+// Length returns table count.
+// Returns:
+//   int: number of tables
+// Example:
+//   n := w.Length() // → 3
 func (w *Writer) Length() int {
 	return len(w.tables)
 }
 
-// Pushes all tables to the server according to PushOptions.
+// Push writes all tables to server.
+// Args:
+//   h: connection handle
+// Returns:
+//   error: push failure
+// Example:
+//   err := w.Push(handle) // → nil or error
 func (w *Writer) Push(h HandleType) error {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -135,8 +179,10 @@ func (w *Writer) Push(h HandleType) error {
 	return makeErrorOrNil(C.qdb_error_t(errCode))
 }
 
-// writerTableSchemasEqual returns true when both tables have the same column
-// names and types in identical order.
+// writerTableSchemasEqual compares table schemas.
+// In: a, b WriterTable - tables to compare
+// Out: bool - true if identical
+// Ex: writerTableSchemasEqual(t1, t2) → true
 func writerTableSchemasEqual(a, b WriterTable) bool {
 	if len(a.columnInfoByOffset) != len(b.columnInfoByOffset) {
 		return false

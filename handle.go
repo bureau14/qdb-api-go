@@ -9,8 +9,10 @@ package qdb
 	#include <qdb/prefix.h>
 */
 import "C"
+
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"time"
 	"unsafe"
@@ -39,10 +41,12 @@ type Compression C.qdb_compression_t
 //	CompNone : No compression.
 //	CompFast : Maximum compression speed, potentially minimum compression ratio. This is currently the default.
 //	CompBest : Maximum compression ratio, potentially minimum compression speed. This is currently not implemented.
+//	CompBalanced : Balanced compression for speed and efficiency, recommended value.
 const (
-	CompNone Compression = C.qdb_comp_none
-	CompFast Compression = C.qdb_comp_fast
-	CompBest Compression = C.qdb_comp_best
+	CompNone     Compression = C.qdb_comp_none
+	CompFast     Compression = C.qdb_comp_fast
+	CompBest     Compression = C.qdb_comp_best
+	CompBalanced Compression = C.qdb_comp_balanced
 )
 
 // APIVersion : Returns a string describing the API version.
@@ -347,7 +351,7 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 	if err != nil {
 		return h, err
 	}
-	
+
 	swapCallback()
 	return h, nil
 }
@@ -587,6 +591,15 @@ func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
 	return batch, makeErrorOrNil(err)
 }
 
+// GetLastError retrieves last operation error.
+// Returns:
+//
+//	string: error message
+//	error: error code
+//
+// Example:
+//
+//	msg, err := h.GetLastError() // → "Connection timeout"
 func (h HandleType) GetLastError() (string, error) {
 	var err C.qdb_error_t
 	var message *C.qdb_string_t = nil

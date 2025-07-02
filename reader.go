@@ -15,13 +15,21 @@ import (
 )
 
 
-// Metadata we need to represent a single column.
+// ReaderColumn: column metadata for reading
 type ReaderColumn struct {
 	columnName string
 	columnType TsColumnType
 }
 
-// ReaderColumn constructor
+// NewReaderColumn creates column metadata.
+// Args:
+//   n: column name
+//   t: column type
+// Returns:
+//   ReaderColumn: metadata
+//   error: if invalid type
+// Example:
+//   col, err := NewReaderColumn("temp", TsColumnDouble)
 func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
 	if t.IsValid() == false {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumn: invalid column: %v", t)
@@ -29,7 +37,15 @@ func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
 	return ReaderColumn{columnName: n, columnType: t}, nil
 }
 
-// ReaderColumn constructor from native types.
+// NewReaderColumnFromNative creates column from C types.
+// Args:
+//   n: C string name
+//   t: C column type
+// Returns:
+//   ReaderColumn: metadata
+//   error: if null name
+// Example:
+//   col, err := NewReaderColumnFromNative(cName, cType)
 func NewReaderColumnFromNative(n *C.char, t C.qdb_ts_column_type_t) (ReaderColumn, error) {
 	if n == nil {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumnFromNative: got null string reference for column name: %v", n)
@@ -41,14 +57,25 @@ func NewReaderColumnFromNative(n *C.char, t C.qdb_ts_column_type_t) (ReaderColum
 	}, nil
 }
 
+// Name returns column identifier.
+// Returns:
+//   string: column name
+// Example:
+//   name := col.Name() // → "temperature"
 func (rc ReaderColumn) Name() string {
 	return rc.columnName
 }
 
+// Type returns column data type.
+// Returns:
+//   TsColumnType: data type
+// Example:
+//   typ := col.Type() // → TsColumnDouble
 func (rc ReaderColumn) Type() TsColumnType {
 	return rc.columnType
 }
 
+// ReaderChunk: batch of rows read from table
 type ReaderChunk struct {
 	// An index that enables looking up of a column's name by its offset within the table.
 	columnInfoByOffset []ReaderColumn
@@ -79,12 +106,19 @@ func NewReaderChunk(cols []ReaderColumn, idx []time.Time, data []ColumnData) (Re
 	}, nil
 }
 
+// Empty checks if chunk has no data.
+// Returns:
+//   bool: true if empty
+// Example:
+//   isEmpty := chunk.Empty() // → false
 func (rc *ReaderChunk) Empty() bool {
 	// Returns true if no data
 	return rc.idx == nil || len(rc.idx) == 0 || rc.data == nil || len(rc.data) == 0
 }
 
-// Clears all column data and index
+// Clear resets chunk to empty state.
+// Example:
+//   chunk.Clear() // all data removed
 func (rc *ReaderChunk) Clear() {
 	// Empty slice
 	rc.idx = make([]time.Time, 0)
@@ -94,7 +128,11 @@ func (rc *ReaderChunk) Clear() {
 	}
 }
 
-// Ensures index and all data arrays have a certain capacity
+// EnsureCapacity pre-allocates space.
+// Args:
+//   n: minimum capacity
+// Example:
+//   chunk.EnsureCapacity(1000) // ready for 1000 rows
 func (rc *ReaderChunk) EnsureCapacity(n int) {
 	rc.idx = sliceEnsureCapacity(rc.idx, n)
 
@@ -105,7 +143,11 @@ func (rc *ReaderChunk) EnsureCapacity(n int) {
 	}
 }
 
-// Returns number of rows in this chunk / table
+// RowCount returns rows in chunk.
+// Returns:
+//   int: row count
+// Example:
+//   n := chunk.RowCount() // → 1000
 func (rc *ReaderChunk) RowCount() int {
 	return len(rc.idx)
 }
@@ -285,6 +327,7 @@ func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data
 	return out, nil
 }
 
+// ReaderOptions: bulk read configuration
 type ReaderOptions struct {
 	batchSize  int
 	tables     []string
@@ -320,7 +363,13 @@ func NewReaderOptions() ReaderOptions {
 	return ReaderOptions{batchSize: defaultBatchSize}
 }
 
-// Creates ReaderOptions object that fetches all data for all columns for a set of tables
+// NewReaderDefaultOptions creates options for full table read.
+// Args:
+//   tables: table names to read
+// Returns:
+//   ReaderOptions: configured for all data
+// Example:
+//   opts := NewReaderDefaultOptions([]string{"metrics"})
 func NewReaderDefaultOptions(tables []string) ReaderOptions {
 	return NewReaderOptions().WithTables(tables)
 }
@@ -353,7 +402,7 @@ func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOpti
 	return ro
 }
 
-// Represents a Reader that enables traversing over all data.
+// Reader: iterator for bulk data retrieval
 type Reader struct {
 	// Handle that was used to create the reader, and should be reused accross all additional
 	// calls (specifically all memory allocations and/or qdb_release() invocations) in the scope
@@ -688,7 +737,9 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 	return ret, nil
 }
 
-// Releases underlying memory
+// Close releases reader resources.
+// Example:
+//   defer reader.Close()
 func (r *Reader) Close() {
 	// if state is non-nil, invoke qdbRelease() on state
 	if r.state != nil {

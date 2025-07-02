@@ -21,6 +21,10 @@ import (
 // All available columns we support
 var columnTypes = [...]TsColumnType{TsColumnInt64, TsColumnDouble, TsColumnTimestamp, TsColumnBlob, TsColumnString}
 
+// convertToCharStarStar converts []string to C char**
+// In: toConvert []string - strings to convert
+// Out: unsafe.Pointer - C char** array
+// Ex: convertToCharStarStar([]string{"a","b"}) → char**
 func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	var v *C.char
 	ptrSize := unsafe.Sizeof(v)
@@ -33,6 +37,10 @@ func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	return data
 }
 
+// releaseCharStarStar frees C char** array
+// In: data unsafe.Pointer - char** to free
+//     size int - array length
+// Ex: releaseCharStarStar(ptr, 2)
 func releaseCharStarStar(data unsafe.Pointer, size int) {
 	var v *C.char
 	ptrSize := unsafe.Sizeof(v)
@@ -43,6 +51,10 @@ func releaseCharStarStar(data unsafe.Pointer, size int) {
 	C.free(data)
 }
 
+// convertToCharStar converts Go string to C char*
+// In: toConvert string - string to convert
+// Out: *C.char - C string or nil
+// Ex: convertToCharStar("hello") → *C.char
 func convertToCharStar(toConvert string) *C.char {
 	if len(toConvert) == 0 {
 		return nil
@@ -50,6 +62,9 @@ func convertToCharStar(toConvert string) *C.char {
 	return C.CString(toConvert)
 }
 
+// releaseCharStar frees C string
+// In: data *C.char - string to free
+// Ex: releaseCharStar(cStr)
 func releaseCharStar(data *C.char) {
 	if data != nil {
 		C.free(unsafe.Pointer(data))
@@ -63,6 +78,10 @@ const (
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
+// generateAlias creates random string ID
+// In: n int - length
+// Out: string - random alias
+// Ex: generateAlias(16) → "aBcDeFgHiJkLmNoP"
 func generateAlias(n int) string {
 	b := make([]byte, n)
 
@@ -82,16 +101,23 @@ func generateAlias(n int) string {
 	return string(b)
 }
 
-// Returns a default-size alias (16 characters
+// generateDefaultAlias creates 16-char alias
+// Out: string - 16-char random ID
+// Ex: generateDefaultAlias() → "aBcDeFgHiJkLmNoP"
 func generateDefaultAlias() string {
 	return generateAlias(16)
 }
 
+// generateColumnName creates random column name
+// Out: string - 16-char name
+// Ex: generateColumnName() → "tempColABCDEFGH"
 func generateColumnName() string {
 	return generateAlias(16)
 }
 
-// Returns a random column type
+// randomColumnType picks random column type
+// Out: TsColumnType - random type
+// Ex: randomColumnType() → TsColumnDouble
 func randomColumnType() TsColumnType {
 	n := rand.Intn(len(columnTypes))
 
@@ -99,7 +125,10 @@ func randomColumnType() TsColumnType {
 
 }
 
-// Generates names for exactly `n` column names
+// generateColumnNames creates n column names
+// In: n int - count
+// Out: []string - unique names
+// Ex: generateColumnNames(3) → ["col1","col2","col3"]
 func generateColumnNames(n int) []string {
 	var ret []string = make([]string, n)
 
