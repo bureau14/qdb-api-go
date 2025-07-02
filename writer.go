@@ -157,9 +157,7 @@ func (w *Writer) Push(h HandleType) error {
 	// Count total rows across all tables
 	totalRows := 0
 	for _, table := range w.tables {
-		if table.RowCount() > totalRows {
-			totalRows = table.RowCount()
-		}
+		totalRows += table.RowCount()
 	}
 
 	start := time.Now()
