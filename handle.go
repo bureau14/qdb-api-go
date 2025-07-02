@@ -352,13 +352,109 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 	return h, nil
 }
 
+// NewHandleFromOptions creates and configures a new handle using the provided options
+func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
+	// Validate options
+	if err := options.validate(); err != nil {
+		return HandleType{}, fmt.Errorf("invalid options: %w", err)
+	}
+
+	// Create new handle
+	h, err := NewHandle()
+	if err != nil {
+		return HandleType{}, fmt.Errorf("failed to create handle: %w", err)
+	}
+
+	// Setup cleanup on error
+	var setupErr error
+	defer func() {
+		if setupErr != nil {
+			// Log close error but don't override the original error
+			if closeErr := h.Close(); closeErr != nil {
+				L().Debug("failed to close handle during cleanup", "error", closeErr)
+			}
+		}
+	}()
+
+	// Set compression (must be before Connect)
+	if setupErr = h.SetCompression(options.compression); setupErr != nil {
+		return HandleType{}, fmt.Errorf("failed to set compression: %w", setupErr)
+	}
+
+	// Set encryption (must be before Connect)
+	if setupErr = h.SetEncryption(options.encryption); setupErr != nil {
+		return HandleType{}, fmt.Errorf("failed to set encryption: %w", setupErr)
+	}
+
+	// Set timeout
+	if setupErr = h.SetTimeout(options.timeout); setupErr != nil {
+		return HandleType{}, fmt.Errorf("failed to set timeout: %w", setupErr)
+	}
+
+	// Set client max parallelism if specified
+	if options.clientMaxParallelism > 0 {
+		// Ensure the value fits in uint (validation already checks this)
+		if setupErr = h.SetClientMaxParallelism(uint(options.clientMaxParallelism)); setupErr != nil {
+			return HandleType{}, fmt.Errorf("failed to set client max parallelism: %w", setupErr)
+		}
+	}
+
+	// Set client max in buffer size if specified
+	if options.clientMaxInBufSize > 0 {
+		if setupErr = h.SetClientMaxInBufSize(options.clientMaxInBufSize); setupErr != nil {
+			return HandleType{}, fmt.Errorf("failed to set client max in buffer size: %w", setupErr)
+		}
+	}
+
+	// Handle cluster public key
+	if options.clusterPublicKeyFile != "" {
+		clusterKey, err := ClusterKeyFromFile(options.clusterPublicKeyFile)
+		if err != nil {
+			setupErr = err
+			return HandleType{}, fmt.Errorf("failed to load cluster public key from file: %w", err)
+		}
+		if setupErr = h.AddClusterPublicKey(clusterKey); setupErr != nil {
+			return HandleType{}, fmt.Errorf("failed to add cluster public key: %w", setupErr)
+		}
+	} else if options.clusterPublicKey != "" {
+		if setupErr = h.AddClusterPublicKey(options.clusterPublicKey); setupErr != nil {
+			return HandleType{}, fmt.Errorf("failed to add cluster public key: %w", setupErr)
+		}
+	}
+
+	// Handle user credentials
+	if options.userSecurityFile != "" {
+		userName, userSecret, err := UserCredentialFromFile(options.userSecurityFile)
+		if err != nil {
+			setupErr = err
+			return HandleType{}, fmt.Errorf("failed to load user credentials from file: %w", err)
+		}
+		if setupErr = h.AddUserCredentials(userName, userSecret); setupErr != nil {
+			return HandleType{}, fmt.Errorf("failed to add user credentials: %w", setupErr)
+		}
+	} else if options.userName != "" && options.userSecret != "" {
+		if setupErr = h.AddUserCredentials(options.userName, options.userSecret); setupErr != nil {
+			return HandleType{}, fmt.Errorf("failed to add user credentials: %w", setupErr)
+		}
+	}
+
+	// Connect to cluster
+	if setupErr = h.Connect(options.clusterURI); setupErr != nil {
+		return HandleType{}, fmt.Errorf("failed to connect to cluster: %w", setupErr)
+	}
+
+	// Success - clear setupErr to prevent cleanup
+	setupErr = nil
+	return h, nil
+}
+
 // SetupHandle : Setup a handle, return error if needed
 //
 //	The handle is already opened with tcp protocol
 //	The handle is already connected with the clusterURI string
 //	Native QuasarDB C++ logs will be routed through the Go logging system
 func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
-	h, err := NewHandleWithNativeLogs()
+	h, err := NewHandle()
 	if err != nil {
 		return h, err
 	}
@@ -392,7 +488,7 @@ func MustSetupHandle(clusterURI string, timeout time.Duration) HandleType {
 //	The handle is already connected with the clusterURI string
 //	Native QuasarDB C++ logs will be routed through the Go logging system
 func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile string, timeout time.Duration, encryption Encryption) (HandleType, error) {
-	h, err := NewHandleWithNativeLogs()
+	h, err := NewHandle()
 	if err != nil {
 		return h, err
 	}
