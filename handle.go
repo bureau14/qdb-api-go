@@ -42,13 +42,9 @@ type Compression C.qdb_compression_t
 // Compression values:
 //
 //	CompNone : No compression.
-//	CompFast : Maximum compression speed, potentially minimum compression ratio. This is currently the default.
-//	CompBest : Maximum compression ratio, potentially minimum compression speed. This is currently not implemented.
 //	CompBalanced : Balanced compression for speed and efficiency, recommended value.
 const (
 	CompNone     Compression = C.qdb_comp_none
-	CompFast     Compression = C.qdb_comp_fast
-	CompBest     Compression = C.qdb_comp_best
 	CompBalanced Compression = C.qdb_comp_balanced
 )
 
@@ -311,7 +307,7 @@ func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
 //
 // Args:
 //
-//	compressionLevel: Compression type (CompNone, CompFast, CompBest, CompBalanced)
+//	compressionLevel: Compression type (CompNone, CompBalanced)
 //
 // Returns:
 //

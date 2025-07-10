@@ -218,13 +218,6 @@ func TestHandleSetMaxCardinalityTooSmall(t *testing.T) {
 	assert.Error(t, h.SetMaxCardinality(99))
 }
 
-func TestHandleSetCompressionFastFails(t *testing.T) {
-	h := newTestHandle(t)
-	defer h.Close()
-
-	assert.Error(t, h.SetCompression(CompFast))
-}
-
 func TestHandleSetCompressionRandomValueFails(t *testing.T) {
 	h := newTestHandle(t)
 	defer h.Close()
