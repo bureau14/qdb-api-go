@@ -45,7 +45,7 @@ type HandleOptions struct {
 //	*HandleOptions: Builder for configuring handle options
 //
 // Default values:
-//   - Compression: CompBalanced (changed from CompFast in v3.x)
+//   - Compression: CompBalanced
 //   - Encryption: EncryptNone
 //   - Timeout: 120 seconds
 //
