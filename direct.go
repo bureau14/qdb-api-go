@@ -102,7 +102,7 @@ func (h DirectHandleType) PrefixGet(prefix string, limit int) ([]string, error) 
 		}
 		return output, nil
 	}
-	return []string{}, ErrorType(err)
+	return []string{}, wrapError(err, "direct_prefix_get", "prefix", prefix, "limit", limit)
 }
 
 // Alias returns an alias name
@@ -122,7 +122,7 @@ func (e DirectEntry) Remove() error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_direct_remove(e.handle, alias)
-	return makeErrorOrNil(err)
+	return wrapError(err, "direct_remove", "alias", e.alias)
 }
 
 // Get returns an entry's contents
@@ -137,7 +137,7 @@ func (e DirectBlobEntry) Get() ([]byte, error) {
 	err := C.qdb_direct_blob_get(e.handle, alias, &content, &contentLength)
 
 	output := C.GoBytes(content, C.int(contentLength))
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "direct_blob_get", "alias", e.alias)
 }
 
 // Put creates a new entry and sets its content to the provided blob
@@ -152,7 +152,7 @@ func (e DirectBlobEntry) Put(content []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
 	err := C.qdb_direct_blob_put(e.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
-	return makeErrorOrNil(err)
+	return wrapError(err, "direct_blob_put", "alias", e.alias, "content_size", len(content))
 }
 
 // Update creates or updates an entry and sets its content to the provided blob.
@@ -167,7 +167,7 @@ func (e *DirectBlobEntry) Update(newContent []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&newContent[0])
 	}
 	err := C.qdb_direct_blob_update(e.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
-	return makeErrorOrNil(err)
+	return wrapError(err, "direct_blob_update", "alias", e.alias, "content_size", len(newContent))
 }
 
 // Get returns the value of a signed 64-bit integer
@@ -177,7 +177,7 @@ func (e DirectIntegerEntry) Get() (int64, error) {
 	var content C.qdb_int_t
 	err := C.qdb_direct_int_get(e.handle, alias, &content)
 	output := int64(content)
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "direct_int_get", "alias", e.alias)
 }
 
 // Put creates a new signed 64-bit integer.
@@ -193,7 +193,7 @@ func (e DirectIntegerEntry) Put(content int64, expiry time.Time) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_direct_int_put(e.handle, alias, C.qdb_int_t(content), toQdbTime(expiry))
-	return makeErrorOrNil(err)
+	return wrapError(err, "direct_int_put", "alias", e.alias, "content", content)
 }
 
 // Update creates or updates a signed 64-bit integer.
@@ -206,7 +206,7 @@ func (e DirectIntegerEntry) Update(newContent int64, expiry time.Time) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_direct_int_update(e.handle, alias, C.qdb_int_t(newContent), toQdbTime(expiry))
-	return makeErrorOrNil(err)
+	return wrapError(err, "direct_int_update", "alias", e.alias, "content", newContent)
 }
 
 // Add : Atomically increases or decreases a signed 64-bit integer.
@@ -223,5 +223,5 @@ func (e DirectIntegerEntry) Add(added int64) (int64, error) {
 	var result C.qdb_int_t
 	err := C.qdb_direct_int_add(e.handle, alias, C.qdb_int_t(added), &result)
 	output := int64(result)
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "direct_int_add", "alias", e.alias, "added", added)
 }

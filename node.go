@@ -49,7 +49,7 @@ func (n Node) RawStatus() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "node_raw_status", "uri", n.uri)
 }
 
 // Config :
@@ -78,7 +78,7 @@ func (n Node) RawConfig() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "node_config", "uri", n.uri)
 }
 
 // Topology :
@@ -112,5 +112,5 @@ func (n Node) RawTopology() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "node_topology", "uri", n.uri)
 }

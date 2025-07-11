@@ -88,7 +88,7 @@ func (column TsInt64Column) Insert(points ...TsInt64Point) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := int64PointArrayToC(points...)
 	err := C.qdb_ts_int64_insert(column.parent.handle, alias, columnName, content, contentCount)
-	return makeErrorOrNil(err)
+	return wrapError(err, "timeseries_int64_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
 // EraseRanges : erase all points in the specified ranges
@@ -101,7 +101,7 @@ func (column TsInt64Column) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
-	return uint64(erasedCount), makeErrorOrNil(err)
+	return uint64(erasedCount), wrapError(err, "ts_int64_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // GetRanges : Retrieves int64s in the specified range of the time series column.
@@ -122,7 +122,7 @@ func (column TsInt64Column) GetRanges(rgs ...TsRange) ([]TsInt64Point, error) {
 		defer column.parent.Release(unsafe.Pointer(points))
 		return int64PointArrayToGo(points, pointsCount), nil
 	}
-	return nil, ErrorType(err)
+	return nil, wrapError(err, "ts_int64_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // TsInt64Aggregation : Aggregation of int64 type
@@ -220,11 +220,11 @@ func (t *TsBulk) GetInt64() (int64, error) {
 	var content C.qdb_int_t
 	err := C.qdb_ts_row_get_int64(t.table, C.qdb_size_t(t.index), &content)
 	t.index++
-	return int64(content), makeErrorOrNil(err)
+	return int64(content), wrapError(err, "ts_bulk_get_int64")
 }
 
 // RowSetInt64 : Set int64 at specified index in current row
 func (t *TsBatch) RowSetInt64(index, value int64) error {
 	valueIndex := C.qdb_size_t(index)
-	return makeErrorOrNil(C.qdb_ts_batch_row_set_int64(t.table, valueIndex, C.qdb_int_t(value)))
+	return wrapError(C.qdb_ts_batch_row_set_int64(t.table, valueIndex, C.qdb_int_t(value)), "ts_batch_row_set_int64", "index", valueIndex, "value", value)
 }

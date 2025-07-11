@@ -106,7 +106,7 @@ func (h HandleType) APIBuild() string {
 //	}
 func (h HandleType) Open(protocol Protocol) error {
 	err := C.qdb_open(&h.handle, C.qdb_protocol_t(protocol))
-	return makeErrorOrNil(err)
+	return wrapError(err, "handle_open", "protocol", protocol)
 }
 
 // SetTimeout sets the timeout for all network operations.
@@ -129,7 +129,7 @@ func (h HandleType) Open(protocol Protocol) error {
 //	}
 func (h HandleType) SetTimeout(timeout time.Duration) error {
 	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
-	return makeErrorOrNil(err)
+	return wrapError(err, "handle_set_timeout", "timeout_ms", timeout/time.Millisecond)
 }
 
 // Encryption is an encryption option.
@@ -164,7 +164,7 @@ const (
 //	}
 func (h HandleType) SetEncryption(encryption Encryption) error {
 	err := C.qdb_option_set_encryption(h.handle, C.qdb_encryption_t(encryption))
-	return makeErrorOrNil(err)
+	return wrapError(err, "set_encryption", "type", encryption)
 }
 
 // jSONCredentialConfig holds username and secret key from JSON credential files.
@@ -252,7 +252,7 @@ func (h HandleType) AddUserCredentials(name, secret string) error {
 	userSecret := convertToCharStar(secret)
 	defer releaseCharStar(userSecret)
 	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, userSecret)
-	return makeErrorOrNil(qdbErr)
+	return wrapError(qdbErr, "add_user_credentials")
 }
 
 // AddClusterPublicKey adds the cluster public key for secure communication.
@@ -277,7 +277,7 @@ func (h HandleType) AddClusterPublicKey(secret string) error {
 	clusterPublicKey := convertToCharStar(secret)
 	defer releaseCharStar(clusterPublicKey)
 	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
-	return makeErrorOrNil(qdbErr)
+	return wrapError(qdbErr, "add_cluster_public_key")
 }
 
 // SetMaxCardinality sets the maximum allowed cardinality for queries.
@@ -300,7 +300,7 @@ func (h HandleType) AddClusterPublicKey(secret string) error {
 //	}
 func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
 	err := C.qdb_option_set_max_cardinality(h.handle, C.qdb_uint_t(maxCardinality))
-	return makeErrorOrNil(err)
+	return wrapError(err, "handle_set_max_cardinality", "max_cardinality", maxCardinality)
 }
 
 // SetCompression sets the compression level for outgoing messages.
@@ -369,7 +369,7 @@ func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
 func (h HandleType) GetClientMaxInBufSize() (uint, error) {
 	var bufSize C.size_t
 	err := C.qdb_option_get_client_max_in_buf_size(h.handle, &bufSize)
-	return uint(bufSize), makeErrorOrNil(err)
+	return uint(bufSize), wrapError(err, "get_client_max_in_buf_size")
 }
 
 // GetClusterMaxInBufSize gets the maximum incoming buffer size allowed by the cluster.
@@ -392,7 +392,7 @@ func (h HandleType) GetClientMaxInBufSize() (uint, error) {
 func (h HandleType) GetClusterMaxInBufSize() (uint, error) {
 	var bufSize C.size_t
 	err := C.qdb_option_get_cluster_max_in_buf_size(h.handle, &bufSize)
-	return uint(bufSize), makeErrorOrNil(err)
+	return uint(bufSize), wrapError(err, "get_cluster_max_in_buf_size")
 }
 
 // GetClientMaxParallelism gets the maximum parallelism option of the client.
@@ -466,7 +466,7 @@ func (h HandleType) Connect(clusterURI string) error {
 	if err == C.qdb_e_ok {
 		L().Info("successfully connected", "cluster", clusterURI)
 	}
-	return makeErrorOrNil(err)
+	return wrapError(err, "connect", "uri", clusterURI)
 }
 
 // Close closes the handle and releases all resources.
@@ -592,7 +592,7 @@ func (h HandleType) GetTagged(tag string) ([]string, error) {
 		}
 		return output, nil
 	}
-	return nil, ErrorType(err)
+	return nil, wrapError(err, "get_tagged", "tag", tag)
 }
 
 // PrefixGet retrieves all entries matching the provided prefix.
@@ -1152,7 +1152,7 @@ func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
 	batch := &TsBatch{}
 	batch.h = h
 	err := C.qdb_ts_batch_table_init(h.handle, columns, columnsCount, &batch.table)
-	return batch, makeErrorOrNil(err)
+	return batch, wrapError(err, "ts_batch_init", "columns", len(cols))
 }
 
 // GetLastError retrieves last operation error.

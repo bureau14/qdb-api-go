@@ -363,6 +363,7 @@ func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 			setup: func(alias string) (Entry, error) {
 				blob := handle.Blob(alias)
 				err := blob.Put([]byte("test content"), NeverExpires())
+
 				return blob.Entry, err
 			},
 			cleanup: func(e Entry) { e.Remove() },
@@ -372,6 +373,7 @@ func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 			setup: func(alias string) (Entry, error) {
 				integer := handle.Integer(alias)
 				err := integer.Put(42, NeverExpires())
+
 				return integer.Entry, err
 			},
 			cleanup: func(e Entry) { e.Remove() },
@@ -422,7 +424,7 @@ func TestEntryExistsConcurrentAccess(t *testing.T) {
 
 	// Test concurrent access to Exists() - should be safe
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			assert.True(t, integer.Exists())
 			done <- true
@@ -430,7 +432,7 @@ func TestEntryExistsConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 }

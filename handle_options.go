@@ -85,6 +85,7 @@ func (o *HandleOptions) WithClusterUri(uri string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.clusterURI = uri
+
 	return &opts
 }
 
@@ -93,6 +94,7 @@ func (o *HandleOptions) WithClusterPublicKeyFile(path string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.clusterPublicKeyFile = path
+
 	return &opts
 }
 
@@ -101,6 +103,7 @@ func (o *HandleOptions) WithClusterPublicKey(key string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.clusterPublicKey = key
+
 	return &opts
 }
 
@@ -109,6 +112,7 @@ func (o *HandleOptions) WithUserSecurityFile(path string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.userSecurityFile = path
+
 	return &opts
 }
 
@@ -117,6 +121,7 @@ func (o *HandleOptions) WithUserName(name string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.userName = name
+
 	return &opts
 }
 
@@ -125,6 +130,7 @@ func (o *HandleOptions) WithUserSecret(secret string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.userSecret = secret
+
 	return &opts
 }
 
@@ -133,6 +139,7 @@ func (o *HandleOptions) WithEncryption(encryption Encryption) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.encryption = encryption
+
 	return &opts
 }
 
@@ -141,6 +148,7 @@ func (o *HandleOptions) WithCompression(compression Compression) *HandleOptions 
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.compression = compression
+
 	return &opts
 }
 
@@ -149,6 +157,7 @@ func (o *HandleOptions) WithClientMaxParallelism(n int) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.clientMaxParallelism = n
+
 	return &opts
 }
 
@@ -157,6 +166,7 @@ func (o *HandleOptions) WithClientMaxInBufSize(size uint) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.clientMaxInBufSize = size
+
 	return &opts
 }
 
@@ -165,6 +175,7 @@ func (o *HandleOptions) WithTimeout(timeout time.Duration) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.timeout = timeout
+
 	return &opts
 }
 

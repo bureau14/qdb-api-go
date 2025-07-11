@@ -257,7 +257,7 @@ func columnRead(handle *qdb.HandleType) error {
 		return err
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		timestamp := openResults[i].Timestamp()
 		open := openResults[i].Content()
 		close := closeResults[i].Content()

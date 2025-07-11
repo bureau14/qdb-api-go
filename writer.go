@@ -205,7 +205,7 @@ func (w *Writer) Push(h HandleType) error {
 		L().Info("wrote rows", "count", totalRows, "duration", elapsed)
 	}
 
-	return makeErrorOrNil(C.qdb_error_t(errCode))
+	return wrapError(C.qdb_error_t(errCode), "writer_write", "tables", len(tblSlice))
 }
 
 // writerTableSchemasEqual compares table schemas.

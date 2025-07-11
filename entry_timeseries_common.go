@@ -342,7 +342,7 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 	if err == C.qdb_e_ok {
 		L().Debug("successfully created table", "name", entry.alias, "shard_size", shardSize)
 	}
-	return makeErrorOrNil(err)
+	return wrapError(err, "timeseries_create", "alias", entry.alias, "shard_size", shardSize, "columns", len(cols))
 }
 
 // InsertColumns : insert columns in a existing timeseries
@@ -353,7 +353,7 @@ func (entry TimeseriesEntry) InsertColumns(cols ...TsColumnInfo) error {
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_insert_columns_ex(entry.handle, alias, columns, columnsCount)
-	return makeErrorOrNil(err)
+	return wrapError(err, "timeseries_insert_columns", "alias", entry.alias, "columns", len(cols))
 }
 
 // TsRange : timeseries range with begin and end timestamp
@@ -456,7 +456,7 @@ func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	bulk := &TsBulk{}
 	bulk.h = entry.HandleType
 	err := C.qdb_ts_local_table_init(entry.handle, alias, columns, columnsCount, &bulk.table)
-	return bulk, makeErrorOrNil(err)
+	return bulk, wrapError(err, "ts_local_table_init", "alias", entry.alias, "columns", len(cols))
 }
 
 // Row : initialize a row append
@@ -484,7 +484,7 @@ func (t *TsBulk) GetRanges(rgs ...TsRange) error {
 	err := C.qdb_ts_table_stream_ranges(t.table, ranges, rangesCount)
 	t.rowCount = -1
 	t.index = 0
-	return makeErrorOrNil(err)
+	return wrapError(err, "ts_table_stream_ranges", "ranges", len(rgs))
 }
 
 // NextRow : advance to the next row, or the first one if not already used
@@ -493,7 +493,7 @@ func (t *TsBulk) NextRow() (time.Time, error) {
 	err := C.qdb_ts_table_next_row(t.table, &timestamp)
 	t.rowCount++
 	t.index = 0
-	return TimespecToStructG(timestamp), makeErrorOrNil(err)
+	return TimespecToStructG(timestamp), wrapError(err, "ts_table_next_row")
 }
 
 // Release : release the memory of the local table
@@ -577,23 +577,23 @@ func (t *TsBatch) ExtraColumns(cols ...TsBatchColumnInfo) error {
 	defer releaseTsBatchColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
 	err := C.qdb_ts_batch_table_extra_columns(t.table, columns, columnsCount)
-	return makeErrorOrNil(err)
+	return wrapError(err, "ts_batch_extra_columns", "columns", len(cols))
 }
 
 // StartRow : Start a new row
 func (t *TsBatch) StartRow(timestamp time.Time) error {
 	cTimestamp := toQdbTimespec(timestamp)
-	return makeErrorOrNil(C.qdb_ts_batch_start_row(t.table, &cTimestamp))
+	return wrapError(C.qdb_ts_batch_start_row(t.table, &cTimestamp), "ts_batch_start_row")
 }
 
 // Push : Push the inserted data
 func (t *TsBatch) Push() error {
-	return makeErrorOrNil(C.qdb_ts_batch_push(t.table))
+	return wrapError(C.qdb_ts_batch_push(t.table), "ts_batch_push")
 }
 
 // PushFast : Fast, in-place batch push that is efficient when doing lots of small, incremental pushes.
 func (t *TsBatch) PushFast() error {
-	return makeErrorOrNil(C.qdb_ts_batch_push_fast(t.table))
+	return wrapError(C.qdb_ts_batch_push_fast(t.table), "ts_batch_push_fast")
 }
 
 // Release : release the memory of the batch table

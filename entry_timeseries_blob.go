@@ -104,7 +104,7 @@ func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
 	content := blobPointArrayToC(points...)
 	defer releaseBlobPointArray(content, len(points))
 	err := C.qdb_ts_blob_insert(column.parent.handle, alias, columnName, content, contentCount)
-	return makeErrorOrNil(err)
+	return wrapError(err, "ts_blob_insert", "table", column.parent.alias, "column", column.name, "points", len(points))
 }
 
 // EraseRanges : erase all points in the specified ranges
@@ -117,7 +117,7 @@ func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
-	return uint64(erasedCount), makeErrorOrNil(err)
+	return uint64(erasedCount), wrapError(err, "ts_blob_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // GetRanges : Retrieves blobs in the specified range of the time series column.
@@ -138,7 +138,7 @@ func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 		defer column.parent.Release(unsafe.Pointer(points))
 		return blobPointArrayToGo(points, pointsCount), nil
 	}
-	return nil, ErrorType(err)
+	return nil, wrapError(err, "ts_blob_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // TsBlobAggregation : Aggregation of double type
@@ -237,7 +237,7 @@ func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggreg
 	if err == 0 {
 		output = blobAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "ts_blob_aggregate", "alias", column.parent.alias, "column", column.name, "aggregations", len(aggs))
 }
 
 // GetBlob : gets a blob in row
@@ -249,7 +249,7 @@ func (t *TsBulk) GetBlob() ([]byte, error) {
 
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 	t.index++
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "ts_bulk_get_blob")
 }
 
 // RowSetBlob : Set blob at specified index in current row
@@ -260,7 +260,7 @@ func (t *TsBatch) RowSetBlob(index int64, content []byte) error {
 	if contentSize != 0 {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
-	return makeErrorOrNil(C.qdb_ts_batch_row_set_blob(t.table, valueIndex, contentPtr, contentSize))
+	return wrapError(C.qdb_ts_batch_row_set_blob(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_blob", "index", valueIndex, "content_size", len(content))
 }
 
 // RowSetBlobNoCopy : Set blob at specified index in current row without copying it
@@ -271,5 +271,5 @@ func (t *TsBatch) RowSetBlobNoCopy(index int64, content []byte) error {
 	if contentSize != 0 {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
-	return makeErrorOrNil(C.qdb_ts_batch_row_set_blob_no_copy(t.table, valueIndex, contentPtr, contentSize))
+	return wrapError(C.qdb_ts_batch_row_set_blob_no_copy(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_blob_no_copy", "index", valueIndex, "content_size", len(content))
 }

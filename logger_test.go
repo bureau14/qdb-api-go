@@ -280,7 +280,7 @@ func TestLoggerConcurrency(t *testing.T) {
 
 	// Run concurrent operations
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(id int) {
 			defer func() { done <- true }()
 
@@ -298,7 +298,7 @@ func TestLoggerConcurrency(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 

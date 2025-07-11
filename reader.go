@@ -592,7 +592,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		&readerHandle,
 	)
 
-	err = makeErrorOrNil(errCode)
+	err = wrapError(errCode, "reader_init", "tables", tableCount)
 	if err != nil {
 		return ret, err
 	}
@@ -634,7 +634,7 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	// allocated within this function call is linked to this single object, and a qdbRelease
 	// clears eerything
 	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
-	err := makeErrorOrNil(errCode)
+	err := wrapError(errCode, "reader_fetch_batch", "batch_size", r.options.batchSize)
 
 	elapsed := time.Since(start)
 
