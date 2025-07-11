@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"fmt"
 	"time"
@@ -79,6 +80,7 @@ func (h DirectHandleType) Integer(alias string) DirectIntegerEntry {
 }
 
 // PrefixGet : Retrieves the list of all entries matching the provided prefix.
+//
 //	A prefix-based search will enable you to find all entries matching a provided prefix.
 //	This function returns the list of aliases. It’s up to the user to query the content associated with every entry, if needed.
 func (h DirectHandleType) PrefixGet(prefix string, limit int) ([]string, error) {
@@ -179,6 +181,7 @@ func (e DirectIntegerEntry) Get() (int64, error) {
 }
 
 // Put creates a new signed 64-bit integer.
+//
 //	Atomically creates an entry of the given alias and sets it to a cross-platform signed 64-bit integer.
 //	If the entry already exists, the function returns an error.
 //
@@ -194,6 +197,7 @@ func (e DirectIntegerEntry) Put(content int64, expiry time.Time) error {
 }
 
 // Update creates or updates a signed 64-bit integer.
+//
 //	Atomically updates an entry of the given alias to the provided value.
 //	If the entry doesn’t exist, it will be created.
 //
@@ -206,6 +210,7 @@ func (e DirectIntegerEntry) Update(newContent int64, expiry time.Time) error {
 }
 
 // Add : Atomically increases or decreases a signed 64-bit integer.
+//
 //	The specified entry will be atomically increased (or decreased) according to the given addend value:
 //		To increase the value, specify a positive added
 //		To decrease the value, specify a negative added

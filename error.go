@@ -5,6 +5,11 @@ package qdb
 */
 import "C"
 
+import (
+	"fmt"
+	"strings"
+)
+
 // ErrorType obfuscating qdb_error_t
 type ErrorType C.qdb_error_t
 
@@ -140,9 +145,49 @@ const (
 
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
 
+// Is implements Go 1.13+ error support for errors.Is() comparison
+func (e ErrorType) Is(target error) bool {
+	if t, ok := target.(ErrorType); ok {
+		return e == t
+	}
+	return false
+}
+
 func makeErrorOrNil(err C.qdb_error_t) error {
 	if err != 0 && err != C.qdb_e_ok_created {
 		return ErrorType(err)
 	}
 	return nil
+}
+
+// wrapError creates a contextual error from C.qdb_error_t with operation info and key-value pairs
+// Returns nil for success codes (0 and qdb_e_ok_created)
+// Example: wrapError(err, "connect", "uri", clusterURI)
+func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
+	if err == 0 || err == C.qdb_e_ok_created {
+		return nil
+	}
+
+	baseErr := ErrorType(err)
+	var contextParts []string
+
+	if operation != "" {
+		contextParts = append(contextParts, fmt.Sprintf("operation=%s", operation))
+	}
+
+	// Process key-value pairs
+	for i := 0; i < len(keyValues); i += 2 {
+		if i+1 < len(keyValues) {
+			key := fmt.Sprintf("%v", keyValues[i])
+			value := fmt.Sprintf("%v", keyValues[i+1])
+			contextParts = append(contextParts, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	if len(contextParts) > 0 {
+		context := strings.Join(contextParts, ", ")
+		return fmt.Errorf("%s (%s): %w", operation, context, baseErr)
+	}
+
+	return fmt.Errorf("%s: %w", operation, baseErr)
 }

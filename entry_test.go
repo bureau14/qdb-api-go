@@ -299,9 +299,9 @@ func TestEntryExistsAfterRemove(t *testing.T) {
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(42, NeverExpires()))
-	
+
 	assert.True(t, integer.Exists())
-	
+
 	require.NoError(t, integer.Remove())
 	assert.False(t, integer.Exists())
 }
@@ -335,7 +335,7 @@ func TestEntryExistsWithSpecialCharacters(t *testing.T) {
 			integer := handle.Integer(tc.alias)
 			// Should not exist initially
 			assert.False(t, integer.Exists())
-			
+
 			// Try to create entry - this may fail for some special characters
 			err := integer.Put(42, NeverExpires())
 			if err == nil {

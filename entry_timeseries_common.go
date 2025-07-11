@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"fmt"
 	"math"
@@ -158,7 +159,8 @@ func (t TsColumnInfo) Symtable() string {
 func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
 	return TsColumnInfo{columnName, columnType, ""}
 }
-func NewSymbolColumnInfo(columnName string, symtableName string) TsColumnInfo {
+
+func NewSymbolColumnInfo(columnName, symtableName string) TsColumnInfo {
 	return TsColumnInfo{columnName, TsColumnSymbol, symtableName}
 }
 
@@ -525,6 +527,7 @@ func (t TsBatchColumnInfo) toStructC() C.qdb_ts_batch_column_info_t {
 func TsBatchColumnInfoToStructInfoG(t C.qdb_ts_batch_column_info_t) TsBatchColumnInfo {
 	return TsBatchColumnInfo{C.GoString(t.timeseries), C.GoString(t.column), int64(t.elements_count_hint)}
 }
+
 func tsBatchColumnInfoArrayToC(cols ...TsBatchColumnInfo) *C.qdb_ts_batch_column_info_t {
 	if len(cols) == 0 {
 		return nil
@@ -564,7 +567,7 @@ func tsBatchColumnInfoArrayToGo(columns *C.qdb_ts_batch_column_info_t, columnsCo
 }
 
 // NewTsBatchColumnInfo : Creates a new TsBatchColumnInfo
-func NewTsBatchColumnInfo(timeseries string, column string, hint int64) TsBatchColumnInfo {
+func NewTsBatchColumnInfo(timeseries, column string, hint int64) TsBatchColumnInfo {
 	return TsBatchColumnInfo{timeseries, column, hint}
 }
 

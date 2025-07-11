@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"time"
 )
@@ -15,6 +16,7 @@ type IntegerEntry struct {
 }
 
 // Put : Creates a new signed 64-bit integer.
+//
 //	Atomically creates an entry of the given alias and sets it to a cross-platform signed 64-bit integer.
 //	If the entry already exists, the function returns an error.
 //
@@ -30,6 +32,7 @@ func (entry IntegerEntry) Put(content int64, expiry time.Time) error {
 }
 
 // Update : Creates or updates a signed 64-bit integer.
+//
 //	Atomically updates an entry of the given alias to the provided value.
 //	If the entry doesn’t exist, it will be created.
 //
@@ -42,6 +45,7 @@ func (entry *IntegerEntry) Update(newContent int64, expiry time.Time) error {
 }
 
 // Get : Atomically retrieves the value of a signed 64-bit integer.
+//
 //	Atomically retrieves the value of an existing 64-bit integer.
 func (entry IntegerEntry) Get() (int64, error) {
 	alias := convertToCharStar(entry.alias)
@@ -53,6 +57,7 @@ func (entry IntegerEntry) Get() (int64, error) {
 }
 
 // Add : Atomically increases or decreases a signed 64-bit integer.
+//
 //	The specified entry will be atomically increased (or decreased) according to the given addend value:
 //		To increase the value, specify a positive added
 //		To decrease the value, specify a negative added

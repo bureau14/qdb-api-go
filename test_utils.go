@@ -143,8 +143,10 @@ func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (Bl
 
 // pushWriterTables writes tables to server
 // In: t *testing.T - test context
-//     handle HandleType - connection
-//     tables []WriterTable - data to push
+//
+//	handle HandleType - connection
+//	tables []WriterTable - data to push
+//
 // Ex: pushWriterTables(t, h, tables)
 func pushWriterTables(t *testing.T, handle HandleType, tables []WriterTable) {
 	t.Helper()
@@ -492,7 +494,7 @@ func genTimes(t *rapid.T) []time.Time {
 func genReaderColumn(t *rapid.T) ReaderColumn {
 	// Column names are just a-zA-Z
 	columnName := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "columnName")
-	columnType := rapid.SampledFrom(TsColumnTypes[:]).Draw(t, "columnType")
+	columnType := rapid.SampledFrom(TsColumnTypes).Draw(t, "columnType")
 
 	return ReaderColumn{
 		columnName: columnName,
@@ -761,7 +763,6 @@ func genReaderDataString(t *rapid.T, name string, rowCount int) *ColumnDataStrin
 //	schema := genReaderColumns(t)
 //	rc := genReaderChunkOfSchema(t, schema)
 func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
-
 	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
 
 	idx := make([]time.Time, rowCount)
@@ -778,7 +779,6 @@ func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 		cols,
 		idx,
 		data)
-
 	if err != nil {
 		panic(err)
 	}
@@ -804,7 +804,6 @@ func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 //	t := rapid.MakeT()
 //	rc := genReaderChunk(t) // ReaderChunk with random schema and rows
 func genReaderChunk(t *rapid.T) ReaderChunk {
-
 	columns := genReaderColumns(t)
 
 	return genReaderChunkOfSchema(t, columns)
@@ -828,7 +827,6 @@ func genReaderChunk(t *rapid.T) ReaderChunk {
 //	t := rapid.MakeT()
 //	chunks := genReaderChunks(t) // []ReaderChunk length ∈ [1,8]
 func genReaderChunks(t *rapid.T) []ReaderChunk {
-
 	cols := genReaderColumns(t)
 
 	genChunk := rapid.Custom(func(t *rapid.T) ReaderChunk {
@@ -870,7 +868,7 @@ func generateTags(n int) []string {
 }
 
 func genWriterPushMode(t *rapid.T) WriterPushMode {
-	return rapid.SampledFrom(writerPushModes[:]).Draw(t, "writerPushMode")
+	return rapid.SampledFrom(writerPushModes).Draw(t, "writerPushMode")
 }
 
 // createTempFile writes content to a new file named
@@ -902,7 +900,8 @@ func setupFindTestData(
 ) (aliases []string,
 	blob1, blob2 BlobEntry,
 	integer IntegerEntry,
-	tagAll, tagFirst, tagSecond, tagThird string) {
+	tagAll, tagFirst, tagSecond, tagThird string,
+) {
 	t.Helper()
 
 	tags := generateTags(4)
@@ -952,7 +951,7 @@ var writerPushFlags = []WriterPushFlag{
 }
 
 func genWriterPushFlag(t *rapid.T) WriterPushFlag {
-	return rapid.SampledFrom(writerPushFlags[:]).Draw(t, "writerPushFlag")
+	return rapid.SampledFrom(writerPushFlags).Draw(t, "writerPushFlag")
 }
 
 var writerDedupModes = []WriterDeduplicationMode{
@@ -961,7 +960,7 @@ var writerDedupModes = []WriterDeduplicationMode{
 }
 
 func genWriterDedupMode(t *rapid.T) WriterDeduplicationMode {
-	return rapid.SampledFrom(writerDedupModes[:]).Draw(t, "writerDedupMode")
+	return rapid.SampledFrom(writerDedupModes).Draw(t, "writerDedupMode")
 }
 
 // genWriterOptions constructs a WriterOptions value using random combinations
@@ -1071,7 +1070,6 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 // Converts a writerColumn to a readerColumn
 func writerColumnToReaderColumn(wc WriterColumn) ReaderColumn {
 	ret, err := NewReaderColumn(wc.ColumnName, wc.ColumnType)
-
 	if err != nil {
 		panic(fmt.Sprintf("unable to convert writer column to reader column: %v", err))
 	}
@@ -1081,15 +1079,11 @@ func writerColumnToReaderColumn(wc WriterColumn) ReaderColumn {
 
 // Converts a WriterTable to a ReaderChunk
 func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
-
 	idx := wt.GetIndex()
 
 	// Pre-allocate all output data
 	data := make([]ColumnData, len(wt.data))
-	for i := range wt.data {
-		// ColumnData is already the same type for reader & writer
-		data[i] = wt.data[i]
-	}
+	copy(data, wt.data)
 
 	columns := make([]ReaderColumn, len(wt.columnInfoByOffset))
 	for i, wc := range wt.columnInfoByOffset {
@@ -1097,13 +1091,11 @@ func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
 	}
 
 	ret, err := NewReaderChunk(columns, idx, data)
-
 	if err != nil {
 		panic(fmt.Sprintf("unable to convert writer table to reader chunk: %v", err))
 	}
 
 	return ret
-
 }
 
 // Converts the writer table data to reader chunks, groups all reader chunks
@@ -1136,7 +1128,7 @@ func writerTablesToReaderChunks(xs []WriterTable) map[string]ReaderChunk {
 func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, names []string, rc ReaderChunk) {
 	t.Helper()
 
-	var expectedRows int = 0
+	expectedRows := 0
 	for _, wt := range expected {
 		expectedRows += wt.RowCount()
 	}
@@ -1284,8 +1276,8 @@ func createDoubleTimeseriesWithPoints(
 	handle HandleType,
 	count int64,
 ) (alias string, ts TimeseriesEntry, column TsDoubleColumn,
-	timestamps []time.Time, points []TsDoublePoint) {
-
+	timestamps []time.Time, points []TsDoublePoint,
+) {
 	t.Helper()
 
 	alias = generateAlias(16)
@@ -1326,8 +1318,8 @@ func createInt64TimeseriesWithPoints(
 	handle HandleType,
 	count int64,
 ) (alias string, ts TimeseriesEntry, column TsInt64Column,
-	timestamps []time.Time, points []TsInt64Point) {
-
+	timestamps []time.Time, points []TsInt64Point,
+) {
 	t.Helper()
 
 	alias = generateAlias(16)

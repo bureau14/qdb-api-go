@@ -5,11 +5,12 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"fmt"
+	"runtime"
 	"time"
 	"unsafe"
-	"runtime"
 )
 
 // ColumnData unifies both Reader and Writer data interfaces.
@@ -75,7 +76,6 @@ type ColumnDataInt64 struct {
 	xs []int64
 }
 
-
 // Length reports the number of int64 values held in the column.
 func (cd *ColumnDataInt64) Length() int {
 	return len(cd.xs)
@@ -97,8 +97,9 @@ func (cd *ColumnDataInt64) Clear() {
 }
 
 // PinToC exposes the Go slice to C without copying:
-//   – pins the slice base so it stays immovable
-//   – returns a no-op release closure
+//
+//	– pins the slice base so it stays immovable
+//	– returns a no-op release closure
 func (cd *ColumnDataInt64) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -155,7 +156,6 @@ Usage example:
 	data := cd.Data()
 */
 func newColumnDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ColumnDataInt64, error) {
-
 	// Ensure the column type matches int64; mismatches lead to invalid reads.
 	if xs.data_type != C.qdb_ts_column_int64 {
 		return ColumnDataInt64{},
@@ -274,8 +274,9 @@ func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
 }
 
 // PinToC exposes the Go slice to C without copying:
-//   – pins the slice base so it stays immovable
-//   – returns a no-op release closure
+//
+//	– pins the slice base so it stays immovable
+//	– returns a no-op release closure
 func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -287,12 +288,18 @@ func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
 
 // NewColumnDataDouble wraps float64 slice.
 // Args:
-//   xs: values to wrap
+//
+//	xs: values to wrap
+//
 // Returns:
-//   ColumnDataDouble: column data
+//
+//	ColumnDataDouble: column data
+//
 // Example:
-//   cd := NewColumnDataDouble(values) // → ColumnDataDouble
+//
+//	cd := NewColumnDataDouble(values) // → ColumnDataDouble
 func NewColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
+
 func newColumnDataDoubleFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataDouble, error) {
@@ -312,14 +319,20 @@ func newColumnDataDoubleFromNative(
 	}
 	return NewColumnDataDouble(goSlice), nil
 }
+
 // GetColumnDataDouble extracts float64 values.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []float64: values
-//   error: if wrong type
+//
+//	[]float64: values
+//	error: if wrong type
+//
 // Example:
-//   vals, err := GetColumnDataDouble(cd) // → []float64
+//
+//	vals, err := GetColumnDataDouble(cd) // → []float64
 func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	v, ok := cd.(*ColumnDataDouble)
 	if !ok {
@@ -327,13 +340,19 @@ func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	}
 	return v.xs, nil
 }
+
 // GetColumnDataDoubleUnsafe extracts values unsafely.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []float64: values
+//
+//	[]float64: values
+//
 // Example:
-//   vals := GetColumnDataDoubleUnsafe(cd) // → []float64
+//
+//	vals := GetColumnDataDoubleUnsafe(cd) // → []float64
 func GetColumnDataDoubleUnsafe(cd ColumnData) []float64 {
 	return (*ColumnDataDouble)(ifaceDataPtr(cd)).xs
 }
@@ -380,8 +399,9 @@ func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
 }
 
 // PinToC exposes the Go slice to C without copying:
-//   – pins the slice base so it stays immovable
-//   – returns a no-op release closure
+//
+//	– pins the slice base so it stays immovable
+//	– returns a no-op release closure
 func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -442,12 +462,17 @@ func newColumnDataTimestampFromNative(
 
 // GetColumnDataTimestamp extracts time values.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []time.Time: timestamps
-//   error: if wrong type
+//
+//	[]time.Time: timestamps
+//	error: if wrong type
+//
 // Example:
-//   times, err := GetColumnDataTimestamp(cd) // → []time.Time
+//
+//	times, err := GetColumnDataTimestamp(cd) // → []time.Time
 func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	xs, err := GetColumnDataTimestampNative(cd)
 	if err != nil {
@@ -459,12 +484,17 @@ func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 
 // GetColumnDataTimestampNative extracts native times.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []C.qdb_timespec_t: native times
-//   error: if wrong type
+//
+//	[]C.qdb_timespec_t: native times
+//	error: if wrong type
+//
 // Example:
-//   specs, err := GetColumnDataTimestampNative(cd) // → []timespec
+//
+//	specs, err := GetColumnDataTimestampNative(cd) // → []timespec
 func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	v, ok := cd.(*ColumnDataTimestamp)
 	if !ok {
@@ -475,22 +505,32 @@ func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 
 // GetColumnDataTimestampUnsafe extracts times unsafely.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []time.Time: timestamps
+//
+//	[]time.Time: timestamps
+//
 // Example:
-//   times := GetColumnDataTimestampUnsafe(cd) // → []time.Time
+//
+//	times := GetColumnDataTimestampUnsafe(cd) // → []time.Time
 func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
 	return QdbTimespecSliceToTime(GetColumnDataTimestampNativeUnsafe(cd))
 }
 
 // GetColumnDataTimestampNativeUnsafe extracts native unsafely.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []C.qdb_timespec_t: native times
+//
+//	[]C.qdb_timespec_t: native times
+//
 // Example:
-//   specs := GetColumnDataTimestampNativeUnsafe(cd) // → []timespec
+//
+//	specs := GetColumnDataTimestampNativeUnsafe(cd) // → []timespec
 func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 	return (*ColumnDataTimestamp)(ifaceDataPtr(cd)).xs
 }
@@ -539,8 +579,9 @@ func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
 // PinToC builds a C envelope and pins each []byte in cd.xs.
 //
 // Decision rationale:
-//   – Zero-copy path avoids duplicating potentially large blobs.
-//   – release() frees only the envelope; Go memory is unpinned automatically.
+//
+//	– Zero-copy path avoids duplicating potentially large blobs.
+//	– release() frees only the envelope; Go memory is unpinned automatically.
 func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	count := len(cd.xs)
 	if count == 0 {
@@ -558,8 +599,8 @@ func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointe
 	// Point each qdb_blob_t to pinned Go byte slices (zero-copy)
 	for i, b := range cd.xs {
 		if len(b) > 0 {
-			p.Pin(&b[0])                               // keep backing array immovable
-			slice[i].content = unsafe.Pointer(&b[0])   // direct pointer into Go memory
+			p.Pin(&b[0])                             // keep backing array immovable
+			slice[i].content = unsafe.Pointer(&b[0]) // direct pointer into Go memory
 			slice[i].content_length = C.qdb_size_t(len(b))
 		}
 	}
@@ -574,12 +615,18 @@ func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointe
 
 // NewColumnDataBlob wraps blob slice.
 // Args:
-//   xs: binary values
+//
+//	xs: binary values
+//
 // Returns:
-//   ColumnDataBlob: column data
+//
+//	ColumnDataBlob: column data
+//
 // Example:
-//   cd := NewColumnDataBlob(blobs) // → ColumnDataBlob
+//
+//	cd := NewColumnDataBlob(blobs) // → ColumnDataBlob
 func NewColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
+
 func newColumnDataBlobFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataBlob, error) {
@@ -603,14 +650,20 @@ func newColumnDataBlobFromNative(
 	}
 	return NewColumnDataBlob(out), nil
 }
+
 // GetColumnDataBlob extracts blob values.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   [][]byte: blobs
-//   error: if wrong type
+//
+//	[][]byte: blobs
+//	error: if wrong type
+//
 // Example:
-//   blobs, err := GetColumnDataBlob(cd) // → [][]byte
+//
+//	blobs, err := GetColumnDataBlob(cd) // → [][]byte
 func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	v, ok := cd.(*ColumnDataBlob)
 	if !ok {
@@ -618,13 +671,19 @@ func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	}
 	return v.xs, nil
 }
+
 // GetColumnDataBlobUnsafe extracts blobs unsafely.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   [][]byte: blobs
+//
+//	[][]byte: blobs
+//
 // Example:
-//   blobs := GetColumnDataBlobUnsafe(cd) // → [][]byte
+//
+//	blobs := GetColumnDataBlobUnsafe(cd) // → [][]byte
 func GetColumnDataBlobUnsafe(cd ColumnData) [][]byte {
 	return (*ColumnDataBlob)(ifaceDataPtr(cd)).xs
 }
@@ -673,54 +732,61 @@ func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 // PinToC builds a C envelope and pins each string in cd.xs.
 //
 // Decision rationale:
-//   – Zero-copy path avoids duplicating potentially large strings.
-//   – qdb_string_t uses explicit length, so NUL-termination is not required.
+//
+//	– Zero-copy path avoids duplicating potentially large strings.
+//	– qdb_string_t uses explicit length, so NUL-termination is not required.
 func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
-    count := len(cd.xs)
-    if count == 0 {
-        // still return a valid no-op release func
-        return nil, func() {}
-    }
+	count := len(cd.xs)
+	if count == 0 {
+		// still return a valid no-op release func
+		return nil, func() {}
+	}
 
-    // Allocate the C envelope once
-    arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
-    if err != nil {
-        panic(err)
-    }
-    slice := unsafe.Slice(arr, count)
+	// Allocate the C envelope once
+	arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
+	if err != nil {
+		panic(err)
+	}
+	slice := unsafe.Slice(arr, count)
 
-    // Fill the envelope with zero-copy, pinned Go strings
-    for i := 0; i < count; i++ {
-        s := &cd.xs[i]
-        if len(*s) == 0 {
-            continue // leave data/length = 0
-        }
+	// Fill the envelope with zero-copy, pinned Go strings
+	for i := 0; i < count; i++ {
+		s := &cd.xs[i]
+		if len(*s) == 0 {
+			continue // leave data/length = 0
+		}
 
-        // qdb_string_t already carries an explicit length, therefore no
-        // NUL-terminator is required.  We simply obtain the address of the
-        // existing Go string bytes, pin that memory so the GC can’t move it,
-        // and store the pointer/length in the envelope.
-        dataPtr := unsafe.StringData(*s)      // pointer to first byte
-        p.Pin(dataPtr)                        // keep the bytes immovable
+		// qdb_string_t already carries an explicit length, therefore no
+		// NUL-terminator is required.  We simply obtain the address of the
+		// existing Go string bytes, pin that memory so the GC can’t move it,
+		// and store the pointer/length in the envelope.
+		dataPtr := unsafe.StringData(*s) // pointer to first byte
+		p.Pin(dataPtr)                   // keep the bytes immovable
 
-        slice[i].data   = (*C.char)(unsafe.Pointer(dataPtr))
-        slice[i].length = C.qdb_size_t(len(*s))
-    }
+		slice[i].data = (*C.char)(unsafe.Pointer(dataPtr))
+		slice[i].length = C.qdb_size_t(len(*s))
+	}
 
-    // envelope itself must be freed after the C call
-    release := func() { qdbRelease(h, arr) }
+	// envelope itself must be freed after the C call
+	release := func() { qdbRelease(h, arr) }
 
-    return unsafe.Pointer(arr), release
+	return unsafe.Pointer(arr), release
 }
 
 // NewColumnDataString wraps string slice.
 // Args:
-//   xs: string values
+//
+//	xs: string values
+//
 // Returns:
-//   ColumnDataString: column data
+//
+//	ColumnDataString: column data
+//
 // Example:
-//   cd := NewColumnDataString(strs) // → ColumnDataString
+//
+//	cd := NewColumnDataString(strs) // → ColumnDataString
 func NewColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
+
 func newColumnDataStringFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataString, error) {
@@ -744,14 +810,20 @@ func newColumnDataStringFromNative(
 	}
 	return NewColumnDataString(out), nil
 }
+
 // GetColumnDataString extracts string values.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []string: strings
-//   error: if wrong type
+//
+//	[]string: strings
+//	error: if wrong type
+//
 // Example:
-//   strs, err := GetColumnDataString(cd) // → []string
+//
+//	strs, err := GetColumnDataString(cd) // → []string
 func GetColumnDataString(cd ColumnData) ([]string, error) {
 	v, ok := cd.(*ColumnDataString)
 	if !ok {
@@ -759,13 +831,19 @@ func GetColumnDataString(cd ColumnData) ([]string, error) {
 	}
 	return v.xs, nil
 }
+
 // GetColumnDataStringUnsafe extracts strings unsafely.
 // Args:
-//   cd: column data
+//
+//	cd: column data
+//
 // Returns:
-//   []string: strings
+//
+//	[]string: strings
+//
 // Example:
-//   strs := GetColumnDataStringUnsafe(cd) // → []string
+//
+//	strs := GetColumnDataStringUnsafe(cd) // → []string
 func GetColumnDataStringUnsafe(cd ColumnData) []string {
 	return (*ColumnDataString)(ifaceDataPtr(cd)).xs
 }

@@ -4,6 +4,7 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"math"
 	"time"
@@ -27,7 +28,7 @@ func (t TsTimestampPoint) Content() time.Time {
 }
 
 // NewTsTimestampPoint : Create new timeseries timestamp point
-func NewTsTimestampPoint(timestamp time.Time, value time.Time) TsTimestampPoint {
+func NewTsTimestampPoint(timestamp, value time.Time) TsTimestampPoint {
 	return TsTimestampPoint{timestamp, value}
 }
 

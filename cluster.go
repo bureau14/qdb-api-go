@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"fmt"
 	"math"

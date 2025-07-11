@@ -8,12 +8,12 @@ package qdb
    #include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"fmt"
 	"time"
 	"unsafe"
 )
-
 
 // ReaderColumn: column metadata for reading
 type ReaderColumn struct {
@@ -23,13 +23,18 @@ type ReaderColumn struct {
 
 // NewReaderColumn creates column metadata.
 // Args:
-//   n: column name
-//   t: column type
+//
+//	n: column name
+//	t: column type
+//
 // Returns:
-//   ReaderColumn: metadata
-//   error: if invalid type
+//
+//	ReaderColumn: metadata
+//	error: if invalid type
+//
 // Example:
-//   col, err := NewReaderColumn("temp", TsColumnDouble)
+//
+//	col, err := NewReaderColumn("temp", TsColumnDouble)
 func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
 	if t.IsValid() == false {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumn: invalid column: %v", t)
@@ -39,13 +44,18 @@ func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
 
 // NewReaderColumnFromNative creates column from C types.
 // Args:
-//   n: C string name
-//   t: C column type
+//
+//	n: C string name
+//	t: C column type
+//
 // Returns:
-//   ReaderColumn: metadata
-//   error: if null name
+//
+//	ReaderColumn: metadata
+//	error: if null name
+//
 // Example:
-//   col, err := NewReaderColumnFromNative(cName, cType)
+//
+//	col, err := NewReaderColumnFromNative(cName, cType)
 func NewReaderColumnFromNative(n *C.char, t C.qdb_ts_column_type_t) (ReaderColumn, error) {
 	if n == nil {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumnFromNative: got null string reference for column name: %v", n)
@@ -59,18 +69,24 @@ func NewReaderColumnFromNative(n *C.char, t C.qdb_ts_column_type_t) (ReaderColum
 
 // Name returns column identifier.
 // Returns:
-//   string: column name
+//
+//	string: column name
+//
 // Example:
-//   name := col.Name() // → "temperature"
+//
+//	name := col.Name() // → "temperature"
 func (rc ReaderColumn) Name() string {
 	return rc.columnName
 }
 
 // Type returns column data type.
 // Returns:
-//   TsColumnType: data type
+//
+//	TsColumnType: data type
+//
 // Example:
-//   typ := col.Type() // → TsColumnDouble
+//
+//	typ := col.Type() // → TsColumnDouble
 func (rc ReaderColumn) Type() TsColumnType {
 	return rc.columnType
 }
@@ -108,9 +124,12 @@ func NewReaderChunk(cols []ReaderColumn, idx []time.Time, data []ColumnData) (Re
 
 // Empty checks if chunk has no data.
 // Returns:
-//   bool: true if empty
+//
+//	bool: true if empty
+//
 // Example:
-//   isEmpty := chunk.Empty() // → false
+//
+//	isEmpty := chunk.Empty() // → false
 func (rc *ReaderChunk) Empty() bool {
 	// Returns true if no data
 	return rc.idx == nil || len(rc.idx) == 0 || rc.data == nil || len(rc.data) == 0
@@ -118,7 +137,8 @@ func (rc *ReaderChunk) Empty() bool {
 
 // Clear resets chunk to empty state.
 // Example:
-//   chunk.Clear() // all data removed
+//
+//	chunk.Clear() // all data removed
 func (rc *ReaderChunk) Clear() {
 	// Empty slice
 	rc.idx = make([]time.Time, 0)
@@ -130,9 +150,12 @@ func (rc *ReaderChunk) Clear() {
 
 // EnsureCapacity pre-allocates space.
 // Args:
-//   n: minimum capacity
+//
+//	n: minimum capacity
+//
 // Example:
-//   chunk.EnsureCapacity(1000) // ready for 1000 rows
+//
+//	chunk.EnsureCapacity(1000) // ready for 1000 rows
 func (rc *ReaderChunk) EnsureCapacity(n int) {
 	rc.idx = sliceEnsureCapacity(rc.idx, n)
 
@@ -145,9 +168,12 @@ func (rc *ReaderChunk) EnsureCapacity(n int) {
 
 // RowCount returns rows in chunk.
 // Returns:
-//   int: row count
+//
+//	int: row count
+//
 // Example:
-//   n := chunk.RowCount() // → 1000
+//
+//	n := chunk.RowCount() // → 1000
 func (rc *ReaderChunk) RowCount() int {
 	return len(rc.idx)
 }
@@ -230,7 +256,8 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	return ReaderChunk{
 		idx:                mergedIdx,
 		data:               mergedData,
-		columnInfoByOffset: base.columnInfoByOffset}, nil
+		columnInfoByOffset: base.columnInfoByOffset,
+	}, nil
 }
 
 // newReaderChunk converts the native C table representation into a Go ReaderChunk.
@@ -248,7 +275,6 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 //   - Copies all row data into Go slices for safety; incurs O(n) allocation but
 //     ensures lifetime independence from the C buffer.
 func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data_t) (ReaderChunk, error) {
-
 	if data.timestamps == nil {
 		return ReaderChunk{}, fmt.Errorf("Internal error: nil timestamps")
 	}
@@ -365,11 +391,16 @@ func NewReaderOptions() ReaderOptions {
 
 // NewReaderDefaultOptions creates options for full table read.
 // Args:
-//   tables: table names to read
+//
+//	tables: table names to read
+//
 // Returns:
-//   ReaderOptions: configured for all data
+//
+//	ReaderOptions: configured for all data
+//
 // Example:
-//   opts := NewReaderDefaultOptions([]string{"metrics"})
+//
+//	opts := NewReaderDefaultOptions([]string{"metrics"})
 func NewReaderDefaultOptions(tables []string) ReaderOptions {
 	return NewReaderOptions().WithTables(tables)
 }
@@ -395,7 +426,7 @@ func (ro ReaderOptions) WithColumns(columns []string) ReaderOptions {
 }
 
 // WithTimeRange restricts reads to the given half-open interval [start, end).
-func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOptions {
+func (ro ReaderOptions) WithTimeRange(start, end time.Time) ReaderOptions {
 	ro.rangeStart = start
 	ro.rangeEnd = end
 
@@ -562,7 +593,6 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	)
 
 	err = makeErrorOrNil(errCode)
-
 	if err != nil {
 		return ret, err
 	}
@@ -598,14 +628,14 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 
 	// Time the C API call
 	start := time.Now()
-	
+
 	// qdb_bulk_reader_get_data "fills" a pointer in style of when you would get data back
 	// for a number of tables, but it returns just a pointer for a single table. all memory
 	// allocated within this function call is linked to this single object, and a qdbRelease
 	// clears eerything
 	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
 	err := makeErrorOrNil(errCode)
-	
+
 	elapsed := time.Since(start)
 
 	// Trigger the `defer` statement as there are failure scenarios in both cases where err
@@ -644,7 +674,6 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	cols := make([]ReaderColumn, colCount)
 	for j := range colCount {
 		cols[j], err = NewReaderColumnFromNative(colSlice[j].name, colSlice[j].data_type)
-
 		if err != nil {
 			return ret, err
 		}
@@ -658,7 +687,7 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	// Log the batch read performance
 	rowCount := ret.RowCount()
 	L().Debug("read batch of rows", "count", rowCount, "duration", elapsed)
-	
+
 	return ret, nil
 }
 
@@ -739,7 +768,8 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 
 // Close releases reader resources.
 // Example:
-//   defer reader.Close()
+//
+//	defer reader.Close()
 func (r *Reader) Close() {
 	// if state is non-nil, invoke qdbRelease() on state
 	if r.state != nil {
@@ -748,5 +778,4 @@ func (r *Reader) Close() {
 
 		r.state = nil
 	}
-
 }

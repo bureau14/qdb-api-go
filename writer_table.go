@@ -63,27 +63,36 @@ func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 
 // GetName returns table identifier.
 // Returns:
-//   string: table name
+//
+//	string: table name
+//
 // Example:
-//   name := t.GetName() // → "metrics"
+//
+//	name := t.GetName() // → "metrics"
 func (t *WriterTable) GetName() string {
 	return t.TableName
 }
 
 // RowCount returns row count.
 // Returns:
-//   int: number of rows
+//
+//	int: number of rows
+//
 // Example:
-//   n := t.RowCount() // → 1000
+//
+//	n := t.RowCount() // → 1000
 func (t *WriterTable) RowCount() int {
 	return t.rowCount
 }
 
 // SetIndexFromNative sets native timestamps.
 // Args:
-//   idx: C timespec array
+//
+//	idx: C timespec array
+//
 // Example:
-//   t.SetIndexFromNative(cTimes) // sets index
+//
+//	t.SetIndexFromNative(cTimes) // sets index
 func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 	t.idx = idx
 	t.rowCount = len(idx)
@@ -91,55 +100,65 @@ func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 
 // SetIndex sets timestamp index.
 // Args:
-//   idx: timestamps
+//
+//	idx: timestamps
+//
 // Example:
-//   t.SetIndex(times) // sets row timestamps
+//
+//	t.SetIndex(times) // sets row timestamps
 func (t *WriterTable) SetIndex(idx []time.Time) {
 	t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
 }
 
 // GetIndexAsNative returns native timestamps.
 // Returns:
-//   []C.qdb_timespec_t: C format times
+//
+//	[]C.qdb_timespec_t: C format times
+//
 // Example:
-//   cTimes := t.GetIndexAsNative() // → []timespec
+//
+//	cTimes := t.GetIndexAsNative() // → []timespec
 func (t *WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
 	return t.idx
 }
 
 // GetIndex returns timestamp index.
 // Returns:
-//   []time.Time: row timestamps
+//
+//	[]time.Time: row timestamps
+//
 // Example:
-//   times := t.GetIndex() // → []time.Time
+//
+//	times := t.GetIndex() // → []time.Time
 func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
 
- // toNativeTableData initialises `out` so it can be passed directly to
- // qdb_exp_batch_push_with_options.
- //
- // Decision rationale:
- //   - Avoid copies: the timestamp index and every numeric/timespec column
- //     are passed zero-copy by pinning the backing Go slices.
- //   - Keep memory-ownership crystal clear: every temporary C allocation
- //     made here is registered in a slice and folded into ONE `release`
- //     closure returned to the caller.
- //
- // Key assumptions:
- //   - t.idx, t.data and t.columnInfoByOffset have already been validated.
- //   - `pinner` outlives the C call that will consume `out`.
- //   - Each ColumnData implementation obeys CGO pointer-safety when
- //     returning from PinToC.
- //
- // Performance trade-offs:
- //   - Exactly one C allocation for the column envelope (O(#columns));
- //     all row-level data stays in Go memory.
- //
- // Usage example:
- //   rel, err := tbl.toNativeTableData(&pinner, h, &cTbl.data)
- //   if err != nil { … }
- //   defer rel()   // single call releases every allocation done here.
+// toNativeTableData initialises `out` so it can be passed directly to
+// qdb_exp_batch_push_with_options.
+//
+// Decision rationale:
+//   - Avoid copies: the timestamp index and every numeric/timespec column
+//     are passed zero-copy by pinning the backing Go slices.
+//   - Keep memory-ownership crystal clear: every temporary C allocation
+//     made here is registered in a slice and folded into ONE `release`
+//     closure returned to the caller.
+//
+// Key assumptions:
+//   - t.idx, t.data and t.columnInfoByOffset have already been validated.
+//   - `pinner` outlives the C call that will consume `out`.
+//   - Each ColumnData implementation obeys CGO pointer-safety when
+//     returning from PinToC.
+//
+// Performance trade-offs:
+//   - Exactly one C allocation for the column envelope (O(#columns));
+//     all row-level data stays in Go memory.
+//
+// Usage example:
+//
+//	rel, err := tbl.toNativeTableData(&pinner, h, &cTbl.data)
+//	if err != nil { … }
+//	defer rel()   // single call releases every allocation done here.
 func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, out *C.qdb_exp_batch_push_table_data_t) (func(), error) {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
@@ -200,26 +219,27 @@ func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, ou
 	return releaseAll, nil
 }
 
- // toNative converts a WriterTable into the flat
- // qdb_exp_batch_push_table_t required by the batch writer.
- //
- // Decision rationale:
- //   - Encapsulate every table-level conversion and gather the subordinate
- //     column release callbacks into a single closure, mirroring the
- //     semantics of multiple defers while incurring only one.
- //
- // Key assumptions:
- //   - `pinner` survives until the batch push completes.
- //   - `opts` were validated in Writer.Push.
- //
- // Performance trade-offs:
- //   - No data copies; only minimal envelope allocations done in
- //     toNativeTableData.
- //
- // Usage example:
- //   rel, err := tbl.toNative(&pinner, h, opts, &cTbl)
- //   if err != nil { … }
- //   defer rel()
+// toNative converts a WriterTable into the flat
+// qdb_exp_batch_push_table_t required by the batch writer.
+//
+// Decision rationale:
+//   - Encapsulate every table-level conversion and gather the subordinate
+//     column release callbacks into a single closure, mirroring the
+//     semantics of multiple defers while incurring only one.
+//
+// Key assumptions:
+//   - `pinner` survives until the batch push completes.
+//   - `opts` were validated in Writer.Push.
+//
+// Performance trade-offs:
+//   - No data copies; only minimal envelope allocations done in
+//     toNativeTableData.
+//
+// Usage example:
+//
+//	rel, err := tbl.toNative(&pinner, h, opts, &cTbl)
+//	if err != nil { … }
+//	defer rel()
 func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) (func(), error) {
 	var err error
 
@@ -290,12 +310,17 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 
 // SetData assigns column data by offset.
 // Args:
-//   offset: column index
-//   xs: data to set
+//
+//	offset: column index
+//	xs: data to set
+//
 // Returns:
-//   error: if offset invalid or type mismatch
+//
+//	error: if offset invalid or type mismatch
+//
 // Example:
-//   err := t.SetData(0, colData) // → nil or error
+//
+//	err := t.SetData(0, colData) // → nil or error
 func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 	if len(t.columnInfoByOffset) <= offset {
 		return fmt.Errorf("Column offset out of range: %v", offset)
@@ -313,15 +338,19 @@ func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 
 // SetDatas assigns all column data.
 // Args:
-//   xs: data for each column
+//
+//	xs: data for each column
+//
 // Returns:
-//   error: if any assignment fails
+//
+//	error: if any assignment fails
+//
 // Example:
-//   err := t.SetDatas(allData) // → nil or error
+//
+//	err := t.SetDatas(allData) // → nil or error
 func (t *WriterTable) SetDatas(xs []ColumnData) error {
 	for i, x := range xs {
 		err := t.SetData(i, x)
-
 		if err != nil {
 			return err
 		}
@@ -332,12 +361,17 @@ func (t *WriterTable) SetDatas(xs []ColumnData) error {
 
 // GetData retrieves column data by offset.
 // Args:
-//   offset: column index
+//
+//	offset: column index
+//
 // Returns:
-//   ColumnData: column data
-//   error: if offset invalid
+//
+//	ColumnData: column data
+//	error: if offset invalid
+//
 // Example:
-//   data, err := t.GetData(0) // → ColumnData or error
+//
+//	data, err := t.GetData(0) // → ColumnData or error
 func (t *WriterTable) GetData(offset int) (ColumnData, error) {
 	if offset >= len(t.data) {
 		return nil, fmt.Errorf("Column offset out of range: %v", offset)

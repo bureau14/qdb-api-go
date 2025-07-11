@@ -37,6 +37,7 @@ package qdb
 	}
 */
 import "C"
+
 import (
 	"math"
 	"time"

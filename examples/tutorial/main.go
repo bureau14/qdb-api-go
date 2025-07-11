@@ -12,7 +12,6 @@ import (
 // import-end
 
 func main() {
-
 	handle, err := connect()
 	if err != nil {
 		fmt.Printf("Failed to connect to QuasarDB: %s", err.Error())
@@ -70,7 +69,6 @@ func connect() (*qdb.HandleType, error) {
 	timeoutDuration := time.Duration(120) * time.Second
 	handle, err := qdb.SetupHandle(clusterURI, timeoutDuration)
 	// connect-end
-
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +90,6 @@ func secureConnect() (*qdb.HandleType, error) {
 		qdb.EncryptNone,
 	)
 	// secure-connect-end
-
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +274,7 @@ func columnRead(handle *qdb.HandleType) error {
 func query(handle *qdb.HandleType) error {
 	// query-start
 
-	query := handle.Query(fmt.Sprintf("SELECT SUM(volume) FROM stocks"))
+	query := handle.Query("SELECT SUM(volume) FROM stocks")
 	table, err := query.Execute()
 	if err != nil {
 		return err

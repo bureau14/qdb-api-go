@@ -35,11 +35,12 @@ const (
 
 // WriterOptions: batch push configuration.
 // Fields:
-//   pushMode: consistency level
-//   dropDuplicates: enable dedup
-//   dropDuplicateColumns: dedup keys
-//   dedupMode: dedup strategy
-//   pushFlags: behavior flags
+//
+//	pushMode: consistency level
+//	dropDuplicates: enable dedup
+//	dropDuplicateColumns: dedup keys
+//	dedupMode: dedup strategy
+//	pushFlags: behavior flags
 type WriterOptions struct {
 	pushMode             WriterPushMode
 	dropDuplicates       bool
@@ -296,5 +297,4 @@ func (options WriterOptions) WithTransactionalPush() WriterOptions {
 func (options WriterOptions) setNative(opts C.qdb_exp_batch_options_t) C.qdb_exp_batch_options_t {
 	opts.mode = C.qdb_exp_batch_push_mode_t(options.pushMode)
 	return opts
-
 }

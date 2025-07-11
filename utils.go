@@ -6,6 +6,7 @@ package qdb
 	#include <qdb/client.h>
 */
 import "C"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -39,7 +40,9 @@ func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 
 // releaseCharStarStar frees C char** array
 // In: data unsafe.Pointer - char** to free
-//     size int - array length
+//
+//	size int - array length
+//
 // Ex: releaseCharStarStar(ptr, 2)
 func releaseCharStarStar(data unsafe.Pointer, size int) {
 	var v *C.char
@@ -122,7 +125,6 @@ func randomColumnType() TsColumnType {
 	n := rand.Intn(len(columnTypes))
 
 	return columnTypes[n]
-
 }
 
 // generateColumnNames creates n column names
@@ -132,7 +134,7 @@ func randomColumnType() TsColumnType {
 func generateColumnNames(n int) []string {
 	var ret []string = make([]string, n)
 
-	for i, _ := range ret {
+	for i := range ret {
 		ret[i] = generateColumnName()
 	}
 
@@ -141,10 +143,9 @@ func generateColumnNames(n int) []string {
 
 // Generate writer column info for exactly `n` columns.
 func generateWriterColumns(n int) []WriterColumn {
-
 	var ret []WriterColumn = make([]WriterColumn, n)
 
-	for i, _ := range ret {
+	for i := range ret {
 		cname := generateColumnName()
 		ctype := randomColumnType()
 		ret[i] = WriterColumn{cname, ctype}
@@ -168,11 +169,10 @@ func generateWriterColumnsOfAllTypes() []WriterColumn {
 // Similar to `generateWriterColumns`, but ensures all columns are of the specified
 // type.
 func generateWriterColumnsOfType(n int, ctype TsColumnType) []WriterColumn {
-
 	// Lazy approach: just generate using random column types, then overwrite
 	ret := generateWriterColumns(n)
 
-	for i, _ := range ret {
+	for i := range ret {
 		ret[i].ColumnType = ctype
 	}
 
@@ -184,7 +184,7 @@ func generateWriterColumnsOfType(n int, ctype TsColumnType) []WriterColumn {
 func convertWriterColumnsToColumnInfo(xs []WriterColumn) []TsColumnInfo {
 	ret := make([]TsColumnInfo, len(xs))
 
-	for i, _ := range xs {
+	for i := range xs {
 		if xs[i].ColumnType == TsColumnSymbol {
 			// We just generate a random alias for the symbol table name
 			ret[i] = NewSymbolColumnInfo(xs[i].ColumnName, generateDefaultAlias())
@@ -213,7 +213,6 @@ func createTableOfColumnInfos(handle HandleType, columnInfos []TsColumnInfo, sha
 
 	table := handle.Table(tableName)
 	err := table.Create(shardSize, columnInfos...)
-
 	if err != nil {
 		return TimeseriesEntry{}, err
 	}
@@ -283,7 +282,7 @@ func generateWriterDatas(n int, columns []WriterColumn) ([]ColumnData, error) {
 func generateIndex(n int, start time.Time, step time.Duration) []time.Time {
 	var ret []time.Time = make([]time.Time, n)
 
-	for i, _ := range ret {
+	for i := range ret {
 		nsec := step.Nanoseconds() * int64(i)
 		ret[i] = start.Add(time.Duration(nsec))
 	}
@@ -293,7 +292,6 @@ func generateIndex(n int, start time.Time, step time.Duration) []time.Time {
 
 // Generates an index with a default start date and step
 func generateDefaultIndex(n int) []time.Time {
-
 	var start time.Time = time.Unix(1745514000, 0).UTC() // 2025-04-25
 	var duration time.Duration = 100 * 1000 * 1000       // 100ms
 
@@ -336,7 +334,6 @@ func qdbAllocBytes(h HandleType, totalBytes int) (unsafe.Pointer, error) {
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_alloc_buffer(h.handle, C.qdb_size_t(totalBytes), &basePtr)
 	err := makeErrorOrNil(errCode)
-
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +377,6 @@ func qdbAllocBytes(h HandleType, totalBytes int) (unsafe.Pointer, error) {
 func qdbAllocBuffer[T any](h HandleType, count int) (*T, error) {
 	totalSize := int(unsafe.Sizeof(*new(T))) * count
 	ptr, err := qdbAllocBytes(h, totalSize)
-
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +423,6 @@ func qdbAllocAndCopyBytes[T any](h HandleType, src []T) (unsafe.Pointer, error) 
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_copy_alloc_buffer(h.handle, unsafe.Pointer(&src[0]), C.qdb_size_t(totalSize), &basePtr)
 	err := makeErrorOrNil(errCode)
-
 	if err != nil {
 		return nil, err
 	}
@@ -467,8 +462,7 @@ func qdbAllocAndCopyBytes[T any](h HandleType, src []T) (unsafe.Pointer, error) 
 //
 //      qdbRelease(h, ptr)
 
-func qdbAllocAndCopyBuffer[Src any, Dst any](h HandleType, src []Src) (*Dst, error) {
-
+func qdbAllocAndCopyBuffer[Src, Dst any](h HandleType, src []Src) (*Dst, error) {
 	basePtr, err := qdbAllocAndCopyBytes(h, src)
 	if err != nil {
 		return nil, err
@@ -631,7 +625,7 @@ func pinStringBytes(p *runtime.Pinner, s *string) *C.char {
 //
 //	// goInts directly references the original memory. If the memory lifetime is uncertain,
 //	// explicitly copy the data with copySlice(goInts) to guarantee memory safety.
-func castSlice[From any, To any](input []From) ([]To, error) {
+func castSlice[From, To any](input []From) ([]To, error) {
 	var from From
 	var to To
 
@@ -714,7 +708,7 @@ func copySlice[T any](xs []T) []T {
 //
 //	// Use `unsafeSlice` directly, ensuring the original C memory remains valid throughout.
 //	// If independent Go memory is later needed, explicitly invoke copySlice(unsafeSlice).
-func cPointerArrayToSliceUnsafe[From any, To any](xs unsafe.Pointer, n int64) ([]To, error) {
+func cPointerArrayToSliceUnsafe[From, To any](xs unsafe.Pointer, n int64) ([]To, error) {
 	if xs == nil {
 		return nil, fmt.Errorf("cPointerArrayToSliceUnsafe: input pointer is nil")
 	}
@@ -757,7 +751,7 @@ func cPointerArrayToSliceUnsafe[From any, To any](xs unsafe.Pointer, n int64) ([
 //
 //	// safeSlice is now fully Go-managed, independent of original C memory allocation.
 //	// Original memory can safely be released after conversion.
-func cPointerArrayToSlice[From any, To any](xs unsafe.Pointer, n int64) ([]To, error) {
+func cPointerArrayToSlice[From, To any](xs unsafe.Pointer, n int64) ([]To, error) {
 	ret, err := cPointerArrayToSliceUnsafe[From, To](xs, n)
 	if err != nil {
 		return nil, fmt.Errorf("cPointerArrayToSlice: %v", err)

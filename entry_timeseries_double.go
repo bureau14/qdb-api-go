@@ -4,6 +4,7 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"math"
 	"time"

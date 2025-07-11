@@ -207,7 +207,7 @@ func init() {
 }
 
 // L returns the current package-level logger.
-func L() Logger { 
+func L() Logger {
 	return globalLogger.Load().(*loggerHolder).logger
 }
 

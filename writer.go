@@ -14,8 +14,9 @@ import (
 
 // WriterColumn: metadata for single column.
 // Fields:
-//   ColumnName: identifier
-//   ColumnType: data type
+//
+//	ColumnName: identifier
+//	ColumnType: data type
 type WriterColumn struct {
 	ColumnName string
 	ColumnType TsColumnType
@@ -23,8 +24,9 @@ type WriterColumn struct {
 
 // Writer: batches tables for push.
 // Fields:
-//   options: push configuration
-//   tables: name→WriterTable map
+//
+//	options: push configuration
+//	tables: name→WriterTable map
 type Writer struct {
 	options WriterOptions
 	tables  map[string]WriterTable
@@ -32,40 +34,56 @@ type Writer struct {
 
 // NewWriter creates writer with options.
 // Args:
-//   options: push configuration
+//
+//	options: push configuration
+//
 // Returns:
-//   Writer: configured writer
+//
+//	Writer: configured writer
+//
 // Example:
-//   w := NewWriter(opts) // → Writer{opts, empty map}
+//
+//	w := NewWriter(opts) // → Writer{opts, empty map}
 func NewWriter(options WriterOptions) Writer {
 	return Writer{options: options, tables: make(map[string]WriterTable)}
 }
 
 // NewWriterWithDefaultOptions creates writer with defaults.
 // Returns:
-//   Writer: default configuration
+//
+//	Writer: default configuration
+//
 // Example:
-//   w := NewWriterWithDefaultOptions() // → Writer{default opts}
+//
+//	w := NewWriterWithDefaultOptions() // → Writer{default opts}
 func NewWriterWithDefaultOptions() Writer {
 	return NewWriter(NewWriterOptions())
 }
 
 // GetOptions returns push configuration.
 // Returns:
-//   WriterOptions: current options
+//
+//	WriterOptions: current options
+//
 // Example:
-//   opts := w.GetOptions() // → WriterOptions
+//
+//	opts := w.GetOptions() // → WriterOptions
 func (w *Writer) GetOptions() WriterOptions {
 	return w.options
 }
 
 // SetTable adds table to batch.
 // Args:
-//   t: table to add
+//
+//	t: table to add
+//
 // Returns:
-//   error: if exists or schema mismatch
+//
+//	error: if exists or schema mismatch
+//
 // Example:
-//   err := w.SetTable(tbl) // → nil or error
+//
+//	err := w.SetTable(tbl) // → nil or error
 func (w *Writer) SetTable(t WriterTable) error {
 	tableName := t.GetName()
 
@@ -91,12 +109,17 @@ func (w *Writer) SetTable(t WriterTable) error {
 
 // GetTable retrieves table by name.
 // Args:
-//   name: table identifier
+//
+//	name: table identifier
+//
 // Returns:
-//   WriterTable: found table
-//   error: if not found
+//
+//	WriterTable: found table
+//	error: if not found
+//
 // Example:
-//   tbl, err := w.GetTable("my_table") // → WriterTable or error
+//
+//	tbl, err := w.GetTable("my_table") // → WriterTable or error
 func (w *Writer) GetTable(name string) (WriterTable, error) {
 	t, ok := w.tables[name]
 	if !ok {
@@ -108,20 +131,28 @@ func (w *Writer) GetTable(name string) (WriterTable, error) {
 
 // Length returns table count.
 // Returns:
-//   int: number of tables
+//
+//	int: number of tables
+//
 // Example:
-//   n := w.Length() // → 3
+//
+//	n := w.Length() // → 3
 func (w *Writer) Length() int {
 	return len(w.tables)
 }
 
 // Push writes all tables to server.
 // Args:
-//   h: connection handle
+//
+//	h: connection handle
+//
 // Returns:
-//   error: push failure
+//
+//	error: push failure
+//
 // Example:
-//   err := w.Push(handle) // → nil or error
+//
+//	err := w.Push(handle) // → nil or error
 func (w *Writer) Push(h HandleType) error {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -149,7 +180,7 @@ func (w *Writer) Push(h HandleType) error {
 		i++
 	}
 
-	var tableSchemas = (**C.qdb_exp_batch_push_table_schema_t)(nil)
+	tableSchemas := (**C.qdb_exp_batch_push_table_schema_t)(nil)
 
 	var options C.qdb_exp_batch_options_t
 	options = w.options.setNative(options)
@@ -169,11 +200,11 @@ func (w *Writer) Push(h HandleType) error {
 		C.qdb_size_t(len(tblSlice)),
 	)
 	elapsed := time.Since(start)
-	
+
 	if errCode == 0 {
 		L().Info("wrote rows", "count", totalRows, "duration", elapsed)
 	}
-	
+
 	return makeErrorOrNil(C.qdb_error_t(errCode))
 }
 

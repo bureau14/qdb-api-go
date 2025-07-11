@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"math"
 	"time"
@@ -91,7 +92,7 @@ func (entry TimeseriesEntry) StringColumn(columnName string) TsStringColumn {
 }
 
 // SymbolColumn : create a column object (the symbol table name is not set)
-func (entry TimeseriesEntry) SymbolColumn(columnName string, symtableName string) TsStringColumn {
+func (entry TimeseriesEntry) SymbolColumn(columnName, symtableName string) TsStringColumn {
 	return TsStringColumn{tsColumn{NewSymbolColumnInfo(columnName, symtableName), entry}}
 }
 

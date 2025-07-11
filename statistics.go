@@ -4,6 +4,7 @@ package qdb
 	#include <qdb/client.h>
 */
 import "C"
+
 import (
 	"bytes"
 	"fmt"
@@ -29,7 +30,7 @@ type Statistics struct {
 	} `json:"memory"`
 	Network struct {
 		CurrentUsersCount int64 `json:"current_users_count"`
-		PartitionsCount int64  `json:"partitions_count"`
+		PartitionsCount   int64 `json:"partitions_count"`
 		Sessions          struct {
 			AvailableCount   int64 `json:"available_count"`
 			UnavailableCount int64 `json:"unavailable_count"`
@@ -39,8 +40,8 @@ type Statistics struct {
 	NodeID          string `json:"chord.node_id"`
 	OperatingSystem string `json:"operating_system"`
 	Persistence     struct {
-		BytesRead     int64 `json:"read_bytes"`
-		BytesWritten  int64 `json:"written_bytes"`
+		BytesRead    int64 `json:"read_bytes"`
+		BytesWritten int64 `json:"written_bytes"`
 	} `json:"persistence"`
 	Requests struct {
 		BytesOut       int64 `json:"out_bytes"`
@@ -107,7 +108,6 @@ func (h HandleType) Statistics() (map[string]Statistics, error) {
 	results := map[string]Statistics{}
 
 	endpoints, err := h.Cluster().Endpoints()
-
 	if err != nil {
 		return results, err
 	}
@@ -115,13 +115,11 @@ func (h HandleType) Statistics() (map[string]Statistics, error) {
 	for _, endpoint := range endpoints {
 		uri := endpoint.URI()
 		dh, err := h.DirectConnect(uri)
-
 		if err != nil {
 			return results, err
 		}
 
 		stats, err := dh.nodeStatistics()
-
 		if err != nil {
 			return results, err
 		}
