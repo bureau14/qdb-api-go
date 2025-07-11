@@ -280,15 +280,6 @@ func IsRetryable(err error) bool {
 	case ErrNoSpaceLeft, ErrQuotaExceeded:
 		return false
 
-	// Transient errors - retry may succeed after condition clears
-	case ErrUninitialized, ErrSkipped, ErrTimeout, ErrConnectionRefused, ErrConnectionReset,
-		ErrUnstableCluster, ErrTryAgain, ErrConflict, ErrNotConnected, ErrResourceLocked,
-		ErrSystemRemote, ErrSystemLocal, ErrInternalRemote, ErrInternalLocal,
-		ErrNoMemoryRemote, ErrNoMemoryLocal, ErrTransactionPartialFailure, ErrClockSkew,
-		ErrInterrupted, ErrNetworkInbufTooSmall, ErrNetworkError, ErrPartialFailure,
-		ErrAsyncPipeFull:
-		return true
-
 	// Unknown errors assumed retryable - prevents data loss from new errors
 	default:
 		return true
