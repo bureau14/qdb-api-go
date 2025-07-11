@@ -1,3 +1,7 @@
+// Copyright (c) 2009-2025, quasardb SAS. All rights reserved.
+// Package qdb: QuasarDB Go client API
+// Types: Reader, Writer, ColumnData, HandleType
+// Ex: h.NewReader(opts).FetchAll() → batch
 package qdb
 
 /*
@@ -13,8 +17,7 @@ import (
 	"unsafe"
 )
 
-// WriterTable: table data for batch push.
-// Invariants: len(idx)=rowCount, len(data[i])=rowCount
+// WriterTable holds table data for batch push.
 type WriterTable struct {
 	TableName string
 
@@ -35,18 +38,7 @@ type WriterTable struct {
 	data []ColumnData
 }
 
-// NewWriterTable constructs an empty table definition using the provided columns.
-//
-// Decision rationale:
-//   - Precomputes both column name→offset and offset→column mappings for
-//     efficient validation during SetData and Push.
-//
-// Key assumptions:
-//   - cols contains at least one column and no duplicate names.
-//
-// Performance trade-offs:
-//   - Linear initialization to build the lookup maps; negligible for typical
-//     column counts.
+// NewWriterTable creates a table with the given columns.
 func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 	data := make([]ColumnData, len(cols))
 
@@ -61,75 +53,33 @@ func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 	return WriterTable{t, 0, columnInfoByOffset, columnOffsetByName, nil, data}, nil
 }
 
-// GetName returns table identifier.
-// Returns:
-//
-//	string: table name
-//
-// Example:
-//
-//	name := t.GetName() // → "metrics"
+// GetName returns the table name.
 func (t *WriterTable) GetName() string {
 	return t.TableName
 }
 
-// RowCount returns row count.
-// Returns:
-//
-//	int: number of rows
-//
-// Example:
-//
-//	n := t.RowCount() // → 1000
+// RowCount returns the number of rows in the table.
 func (t *WriterTable) RowCount() int {
 	return t.rowCount
 }
 
-// SetIndexFromNative sets native timestamps.
-// Args:
-//
-//	idx: C timespec array
-//
-// Example:
-//
-//	t.SetIndexFromNative(cTimes) // sets index
+// SetIndexFromNative sets the table's timestamp index from C timespecs.
 func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 	t.idx = idx
 	t.rowCount = len(idx)
 }
 
-// SetIndex sets timestamp index.
-// Args:
-//
-//	idx: timestamps
-//
-// Example:
-//
-//	t.SetIndex(times) // sets row timestamps
+// SetIndex sets the table's timestamp index.
 func (t *WriterTable) SetIndex(idx []time.Time) {
 	t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
 }
 
-// GetIndexAsNative returns native timestamps.
-// Returns:
-//
-//	[]C.qdb_timespec_t: C format times
-//
-// Example:
-//
-//	cTimes := t.GetIndexAsNative() // → []timespec
+// GetIndexAsNative returns the timestamp index as C timespecs.
 func (t *WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
 	return t.idx
 }
 
-// GetIndex returns timestamp index.
-// Returns:
-//
-//	[]time.Time: row timestamps
-//
-// Example:
-//
-//	times := t.GetIndex() // → []time.Time
+// GetIndex returns the table's timestamp index.
 func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
@@ -308,19 +258,7 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 	return release, nil
 }
 
-// SetData assigns column data by offset.
-// Args:
-//
-//	offset: column index
-//	xs: data to set
-//
-// Returns:
-//
-//	error: if offset invalid or type mismatch
-//
-// Example:
-//
-//	err := t.SetData(0, colData) // → nil or error
+// SetData sets column data at the given offset.
 func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 	if len(t.columnInfoByOffset) <= offset {
 		return fmt.Errorf("Column offset out of range: %v", offset)
@@ -336,18 +274,7 @@ func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 	return nil
 }
 
-// SetDatas assigns all column data.
-// Args:
-//
-//	xs: data for each column
-//
-// Returns:
-//
-//	error: if any assignment fails
-//
-// Example:
-//
-//	err := t.SetDatas(allData) // → nil or error
+// SetDatas sets data for all columns.
 func (t *WriterTable) SetDatas(xs []ColumnData) error {
 	for i, x := range xs {
 		err := t.SetData(i, x)
@@ -359,19 +286,7 @@ func (t *WriterTable) SetDatas(xs []ColumnData) error {
 	return nil
 }
 
-// GetData retrieves column data by offset.
-// Args:
-//
-//	offset: column index
-//
-// Returns:
-//
-//	ColumnData: column data
-//	error: if offset invalid
-//
-// Example:
-//
-//	data, err := t.GetData(0) // → ColumnData or error
+// GetData retrieves column data at the given offset.
 func (t *WriterTable) GetData(offset int) (ColumnData, error) {
 	if offset >= len(t.data) {
 		return nil, fmt.Errorf("Column offset out of range: %v", offset)
