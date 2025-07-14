@@ -1,3 +1,7 @@
+// Copyright (c) 2009-2025, quasardb SAS. All rights reserved.
+// Package qdb: high-performance time series database client
+// Types: ErrorType, Handle, Entry, Cluster
+// Ex: qdb.Connect(uri).GetBlob(alias) → data
 package qdb
 
 /*
@@ -5,71 +9,69 @@ package qdb
 */
 import "C"
 
-// ErrorType obfuscating qdb_error_t
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+// Error handling patterns for qdb-api-go:
+//
+// 1. Check retryability with exponential backoff:
+//
+//	err := handle.PutBlob(alias, data)
+//	for attempt := 0; err != nil && IsRetryable(err) && attempt < 3; attempt++ {
+//	    time.Sleep(time.Second * time.Duration(1<<attempt))
+//	    err = handle.PutBlob(alias, data)
+//	}
+//
+// 2. Use errors.Is() for specific error checks:
+//
+//	if errors.Is(err, qdb.ErrAliasNotFound) {
+//	    // Create new entry
+//	} else if errors.Is(err, qdb.ErrAccessDenied) {
+//	    // Handle auth failure
+//	}
+//
+// 3. Extract ErrorType from wrapped errors:
+//
+//	var qdbErr qdb.ErrorType
+//	if errors.As(err, &qdbErr) {
+//	    switch qdbErr {
+//	    case qdb.ErrTimeout:
+//	        // Handle timeout
+//	    case qdb.ErrQuotaExceeded:
+//	        // Handle quota
+//	    }
+//	}
+
+// ErrorType: QuasarDB error codes, wraps C.qdb_error_t
 type ErrorType C.qdb_error_t
 
-// Success : Success.
-// Created : Success. A new entry has been created.
-// ErrUninitialized : Uninitialized error.
-// ErrAliasNotFound : Entry alias/key was not found.
-// ErrAliasAlreadyExists : Entry alias/key already exists.
-// ErrOutOfBounds : Index out of bounds.
-// ErrSkipped : Skipped operation. Used in batches and transactions.
-// ErrIncompatibleType : Entry or column is incompatible with the operation.
-// ErrContainerEmpty : Container is empty.
-// ErrContainerFull : Container is full.
-// ErrElementNotFound : Element was not found.
-// ErrElementAlreadyExists : Element already exists.
-// ErrOverflow : Arithmetic operation overflows.
-// ErrUnderflow : Arithmetic operation underflows.
-// ErrTagAlreadySet : Tag is already set.
-// ErrTagNotSet : Tag is not set.
-// ErrTimeout : Operation timed out.
-// ErrConnectionRefused : Connection was refused.
-// ErrConnectionReset : Connection was reset.
-// ErrUnstableCluster : Cluster is unstable.
-// ErrTryAgain : Please retry.
-// ErrConflict : There is another ongoing conflicting operation.
-// ErrNotConnected : Handle is not connected.
-// ErrResourceLocked : Resource is locked.
-// ErrSystemRemote : System error on remote node (server-side). Please check errno or GetLastError() for actual error.
-// ErrSystemLocal : System error on local system (client-side). Please check errno or GetLastError() for actual error.
-// ErrInternalRemote : Internal error on remote node (server-side).
-// ErrInternalLocal : Internal error on local system (client-side).
-// ErrNoMemoryRemote : No memory on remote node (server-side).
-// ErrNoMemoryLocal : No memory on local system (client-side).
-// ErrInvalidProtocol : Protocol is invalid.
-// ErrHostNotFound : Host was not found.
-// ErrBufferTooSmall : Buffer is too small.
-// ErrNotImplemented : Operation is not implemented.
-// ErrInvalidVersion : Version is invalid.
-// ErrInvalidArgument : Argument is invalid.
-// ErrInvalidHandle : Handle is invalid.
-// ErrReservedAlias : Alias/key is reserved.
-// ErrUnmatchedContent : Content did not match.
-// ErrInvalidIterator : Iterator is invalid.
-// ErrEntryTooLarge : Entry is too large.
-// ErrTransactionPartialFailure : Transaction failed partially.
-// ErrOperationDisabled : Operation has not been enabled in cluster configuration.
-// ErrOperationNotPermitted : Operation is not permitted.
-// ErrIteratorEnd :	Iterator reached the end.
-// ErrInvalidReply : Cluster sent an invalid reply.
-// ErrNoSpaceLeft : No more space on disk.
-// ErrQuotaExceeded : Disk space quota has been reached.
-// ErrAliasTooLong : Alias is too long.
-// ErrClockSkew : Cluster nodes have important clock differences.
-// ErrAccessDenied : Access is denied.
-// ErrLoginFailed : Login failed.
-// ErrColumnNotFound : Column was not found.
-// ErrQueryTooComplex : Find is too complex.
-// ErrInvalidCryptoKey : Security key is invalid.
-// ErrInvalidQuery : Query is invalid.
-// ErrInvalidRegex : Regular expression is invalid.
-// ErrUnknownUser : Unknown user.
-// ErrInterrupted : Operation has been interrupted.
-// ErrNetworkInbufTooSmall : Network input buffer is too small to complete the operation.
-// ErrNetworkError : Network error.
-// ErrDataCorruption : Data corruption has been detected.
+// Error codes: retryable errors default true except logic/constraint/permission failures
+//
+// Network/transient (retryable):
+// - ErrTimeout: network timeout
+// - ErrConnectionRefused/Reset: connection failed
+// - ErrUnstableCluster: temporary cluster issue
+// - ErrTryAgain: explicit retry request
+// - ErrResourceLocked: concurrent access conflict
+// - ErrNetworkError: generic network failure
+//
+// Logic/programming (non-retryable):
+// - ErrInvalidArgument: bad parameter
+// - ErrIncompatibleType: type mismatch
+// - ErrInvalidQuery: malformed query
+// - ErrBufferTooSmall: insufficient buffer
+//
+// Constraints (non-retryable):
+// - ErrAliasAlreadyExists: duplicate key
+// - ErrEntryTooLarge: size limit exceeded
+// - ErrQuotaExceeded: storage quota reached
+//
+// Permissions (non-retryable):
+// - ErrAccessDenied: insufficient privileges
+// - ErrOperationNotPermitted: forbidden operation
 const (
 	Success                      ErrorType = C.qdb_e_ok
 	Created                      ErrorType = C.qdb_e_ok_created
@@ -140,9 +142,146 @@ const (
 
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
 
+// Is enables errors.Is() comparison for wrapped errors.
+// Returns:
+//
+//	true: target is same ErrorType
+//	false: different type
+//
+// Example:
+//
+//	errors.Is(err, qdb.ErrTimeout) // → true if timeout
+func (e ErrorType) Is(target error) bool {
+	t, ok := target.(ErrorType)
+	if ok {
+		return e == t
+	}
+
+	return false
+}
+
 func makeErrorOrNil(err C.qdb_error_t) error {
 	if err != 0 && err != C.qdb_e_ok_created {
 		return ErrorType(err)
 	}
+
 	return nil
+}
+
+// wrapError wraps C error with context
+// In: err C.qdb_error_t, op string, kv pairs
+// Out: error with context, nil if success
+// Ex: wrapError(err, "connect", "uri", uri) → "connect (operation=connect, uri=qdb://host): timeout"
+func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
+	if err == 0 || err == C.qdb_e_ok_created {
+		return nil
+	}
+
+	// Panic on odd kv args - prevents subtle bugs from missing values
+	if len(keyValues)%2 != 0 {
+		panic(fmt.Sprintf("wrapError: odd number of key-value arguments provided (%d). Keys and values must be provided in pairs.", len(keyValues)))
+	}
+
+	baseErr := ErrorType(err)
+
+	// Pre-allocate builder capacity to avoid reallocation
+	// because error formatting is on hot path for failures
+	var sb strings.Builder
+	sb.Grow(len(operation) + len(keyValues)*20 + 10)
+
+	sb.WriteString(operation)
+
+	if len(keyValues) > 0 {
+		sb.WriteString(" (operation=")
+		sb.WriteString(operation)
+
+		// Format context pairs - allows debugging failures with full context
+		for i := 0; i < len(keyValues); i += 2 {
+			sb.WriteString(", ")
+			sb.WriteString(fmt.Sprintf("%v", keyValues[i]))
+			sb.WriteString("=")
+			sb.WriteString(fmt.Sprintf("%v", keyValues[i+1]))
+		}
+
+		sb.WriteString(")")
+	}
+
+	sb.WriteString(": ")
+
+	return fmt.Errorf("%s%w", sb.String(), baseErr)
+}
+
+// IsRetryable checks if error is transient/retryable.
+// Args:
+//
+//	err: any error (wrapped or direct)
+//
+// Returns:
+//
+//	true: network/resource errors → retry
+//	false: logic/permission errors → fail fast
+//
+// Example:
+//
+//	if IsRetryable(err) { time.Sleep(backoff); retry() }
+func IsRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Extract ErrorType from wrapped errors - enables retry logic
+	// to work with contextual errors from wrapError()
+	var errorType ErrorType
+	if !errors.As(err, &errorType) {
+		return true // Unknown errors assumed retryable to avoid data loss
+	}
+
+	// Retry decision matrix - prevents infinite loops on permanent failures
+	// while allowing recovery from transient issues
+	switch errorType {
+	// Success - no retry needed
+	case Success, Created:
+		return false
+
+	// Logic errors - retrying won't fix bad code
+	case ErrInvalidArgument, ErrInvalidHandle, ErrInvalidIterator, ErrInvalidVersion,
+		ErrInvalidProtocol, ErrInvalidReply, ErrInvalidQuery, ErrInvalidRegex,
+		ErrInvalidCryptoKey, ErrBufferTooSmall, ErrNotImplemented, ErrIteratorEnd:
+		return false
+
+	// Schema errors - retrying won't change schema
+	case ErrIncompatibleType, ErrColumnNotFound, ErrQueryTooComplex:
+		return false
+
+	// Constraint violations - retrying won't resolve conflicts
+	case ErrAliasAlreadyExists, ErrElementAlreadyExists, ErrTagAlreadySet,
+		ErrOutOfBounds, ErrOverflow, ErrUnderflow, ErrEntryTooLarge,
+		ErrAliasTooLong, ErrUnmatchedContent, ErrReservedAlias:
+		return false
+
+	// Auth failures - retrying won't fix credentials
+	case ErrAccessDenied, ErrLoginFailed, ErrOperationNotPermitted, ErrUnknownUser:
+		return false
+
+	// Config errors - retrying won't enable features
+	case ErrOperationDisabled:
+		return false
+
+	// State errors - retrying won't create missing data
+	case ErrContainerEmpty, ErrContainerFull, ErrElementNotFound, ErrTagNotSet,
+		ErrAliasNotFound, ErrHostNotFound:
+		return false
+
+	// Data integrity - retrying won't fix corruption
+	case ErrDataCorruption:
+		return false
+
+	// Resource exhaustion - retrying won't free disk space
+	case ErrNoSpaceLeft, ErrQuotaExceeded:
+		return false
+
+	// Unknown errors assumed retryable - prevents data loss from new errors
+	default:
+		return true
+	}
 }

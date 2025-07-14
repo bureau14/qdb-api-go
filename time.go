@@ -5,6 +5,7 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"time"
 )
@@ -29,7 +30,7 @@ func toQdbTime(tp time.Time) C.qdb_time_t {
 }
 
 // toQdbRange builds a qdb_ts_range_t from begin and end times.
-func toQdbRange(begin time.Time, end time.Time) C.qdb_ts_range_t {
+func toQdbRange(begin, end time.Time) C.qdb_ts_range_t {
 	var ret C.qdb_ts_range_t
 	ret.begin = toQdbTimespec(begin)
 	ret.end = toQdbTimespec(end)

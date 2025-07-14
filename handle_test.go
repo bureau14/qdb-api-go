@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -115,7 +116,7 @@ func TestHandleGetLastErrorAfterFailedConnect(t *testing.T) {
 	err = h.Connect("")
 	msg, last := h.GetLastError()
 
-	assert.Equal(t, err, last)
+	assert.True(t, errors.Is(err, last), "Connect error should contain GetLastError")
 	assert.Equal(t, "at qdb_connect: Got NULL uri", msg)
 }
 

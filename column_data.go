@@ -1,3 +1,7 @@
+// Copyright (c) 2009-2025, quasardb SAS. All rights reserved.
+// Package qdb: QuasarDB Go client API  
+// Types: Reader, Writer, ColumnData, HandleType
+// Ex: h.NewReader(opts).FetchAll() → batch
 package qdb
 
 /*
@@ -5,25 +9,15 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"fmt"
+	"runtime"
 	"time"
 	"unsafe"
-	"runtime"
 )
 
-// ColumnData unifies both Reader and Writer data interfaces.
-// It represents any column-typed data that can be both read (into Go slices)
-// and written (to C via toNative).
-//
-// This mirrors what the QuasarDB C API does, except that the QuasarDB C API
-// just aliases reader to writer:
-//
-//	typedef qdb_exp_batch_push_table_data_t qdb_bulk_reader_table_data_t;
-//
-// As seen in `qdb/include/qdb/ts.h`. As such, you'll see implementations of
-// this interface use `qdb_exp_batch_push...`-types, but they work for both
-// reader and writer.
+// ColumnData represents column data for reading/writing.
 type ColumnData interface {
 	// Returns the type of data for this column
 	ValueType() TsValueType
@@ -70,35 +64,32 @@ type ColumnData interface {
 
 // --- Int64 ---------------------------------------------------------
 
-// ColumnDataInt64: int64 column storage
+// ColumnDataInt64 stores int64 column data.
 type ColumnDataInt64 struct {
 	xs []int64
 }
 
-
-// Length reports the number of int64 values held in the column.
+// Length returns the number of values.
 func (cd *ColumnDataInt64) Length() int {
 	return len(cd.xs)
 }
 
-// ValueType implements ColumnData.ValueType.
+// ValueType returns TsValueInt64.
 func (cd *ColumnDataInt64) ValueType() TsValueType {
 	return TsValueInt64
 }
 
-// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+// EnsureCapacity pre-allocates space for n values.
 func (cd *ColumnDataInt64) EnsureCapacity(n int) {
 	cd.xs = sliceEnsureCapacity(cd.xs, n)
 }
 
-// Clear resets the slice to length 0 while keeping capacity.
+// Clear resets to empty.
 func (cd *ColumnDataInt64) Clear() {
 	cd.xs = make([]int64, 0)
 }
 
-// PinToC exposes the Go slice to C without copying:
-//   – pins the slice base so it stays immovable
-//   – returns a no-op release closure
+// PinToC pins slice for C access.
 func (cd *ColumnDataInt64) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -108,7 +99,7 @@ func (cd *ColumnDataInt64) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Point
 	return unsafe.Pointer(base), func() {}
 }
 
-// appendData concatenates another ColumnDataInt64 after type checking.
+// appendData appends another ColumnDataInt64.
 func (cd *ColumnDataInt64) appendData(data ColumnData) error {
 	other, ok := data.(*ColumnDataInt64)
 	if !ok {
@@ -119,13 +110,13 @@ func (cd *ColumnDataInt64) appendData(data ColumnData) error {
 	return nil
 }
 
-// appendDataUnsafe performs the same concatenation without RTTI checks.
+// appendDataUnsafe appends without type check.
 func (cd *ColumnDataInt64) appendDataUnsafe(data ColumnData) {
 	other := (*ColumnDataInt64)(ifaceDataPtr(data))
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// NewColumnDataInt64 wraps an existing []int64 in ColumnDataInt64.
+// NewColumnDataInt64 creates int64 column data.
 func NewColumnDataInt64(xs []int64) ColumnDataInt64 {
 	return ColumnDataInt64{xs: xs}
 }
@@ -155,7 +146,6 @@ Usage example:
 	data := cd.Data()
 */
 func newColumnDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t, n int) (ColumnDataInt64, error) {
-
 	// Ensure the column type matches int64; mismatches lead to invalid reads.
 	if xs.data_type != C.qdb_ts_column_int64 {
 		return ColumnDataInt64{},
@@ -191,22 +181,7 @@ func newColumnDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t,
 	return NewColumnDataInt64(goSlice), nil
 }
 
-/*
-GetColumnDataInt64 performs a safe extraction of []int64 from ColumnData.
-
-Decision rationale:
-  - Runtime type assertion prevents misuse on wrong ColumnData implementations.
-
-Key assumptions:
-  - cd is of concrete type *ColumnDataInt64.
-
-Usage example:
-
-	xs, err := GetColumnDataInt64(cd)
-	if err != nil {
-	    // handle type mismatch
-	}
-*/
+// GetColumnDataInt64 extracts []int64 from ColumnData.
 func GetColumnDataInt64(cd ColumnData) ([]int64, error) {
 	v, ok := cd.(*ColumnDataInt64)
 	if !ok {
@@ -215,49 +190,37 @@ func GetColumnDataInt64(cd ColumnData) ([]int64, error) {
 	return v.xs, nil
 }
 
-/*
-GetColumnDataInt64Unsafe returns the []int64 without any type checks.
-
-Decision rationale:
-  - Bypasses runtime assertion for hot paths where type is guaranteed by caller.
-
-Key assumptions:
-  - cd must be a *ColumnDataInt64, otherwise behaviour is undefined.
-
-Usage example:
-
-	xs := GetColumnDataInt64Unsafe(cd)
-*/
+// GetColumnDataInt64Unsafe extracts []int64 without type check.
 func GetColumnDataInt64Unsafe(cd ColumnData) []int64 {
 	return (*ColumnDataInt64)(ifaceDataPtr(cd)).xs
 }
 
 // --- Double -------------------------------------------------------
 
-// ColumnDataDouble: float64 column storage
+// ColumnDataDouble stores float64 column data.
 type ColumnDataDouble struct{ xs []float64 }
 
-// Length reports the number of float64 values held in the column.
+// Length returns the number of values.
 func (cd *ColumnDataDouble) Length() int {
 	return len(cd.xs)
 }
 
-// ValueType implements ColumnData.ValueType.
+// ValueType returns TsValueDouble.
 func (cd *ColumnDataDouble) ValueType() TsValueType {
 	return TsValueDouble
 }
 
-// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+// EnsureCapacity pre-allocates space for n values.
 func (cd *ColumnDataDouble) EnsureCapacity(n int) {
 	cd.xs = sliceEnsureCapacity(cd.xs, n)
 }
 
-// Clear resets the slice to length 0 while keeping capacity.
+// Clear resets to empty.
 func (cd *ColumnDataDouble) Clear() {
 	cd.xs = make([]float64, 0)
 }
 
-// appendData concatenates another ColumnDataDouble after type checking.
+// appendData appends another ColumnDataDouble.
 func (cd *ColumnDataDouble) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataDouble)
 	if !ok {
@@ -267,15 +230,13 @@ func (cd *ColumnDataDouble) appendData(d ColumnData) error {
 	return nil
 }
 
-// appendDataUnsafe performs the same concatenation without RTTI checks.
+// appendDataUnsafe appends without type check.
 func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataDouble)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// PinToC exposes the Go slice to C without copying:
-//   – pins the slice base so it stays immovable
-//   – returns a no-op release closure
+// PinToC pins slice for C access.
 func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -285,14 +246,9 @@ func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Poin
 	return unsafe.Pointer(base), func() {}
 }
 
-// NewColumnDataDouble wraps float64 slice.
-// Args:
-//   xs: values to wrap
-// Returns:
-//   ColumnDataDouble: column data
-// Example:
-//   cd := NewColumnDataDouble(values) // → ColumnDataDouble
+// NewColumnDataDouble creates float64 column data.
 func NewColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
+
 func newColumnDataDoubleFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataDouble, error) {
@@ -312,14 +268,8 @@ func newColumnDataDoubleFromNative(
 	}
 	return NewColumnDataDouble(goSlice), nil
 }
-// GetColumnDataDouble extracts float64 values.
-// Args:
-//   cd: column data
-// Returns:
-//   []float64: values
-//   error: if wrong type
-// Example:
-//   vals, err := GetColumnDataDouble(cd) // → []float64
+
+// GetColumnDataDouble extracts []float64 from ColumnData.
 func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	v, ok := cd.(*ColumnDataDouble)
 	if !ok {
@@ -327,43 +277,38 @@ func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	}
 	return v.xs, nil
 }
-// GetColumnDataDoubleUnsafe extracts values unsafely.
-// Args:
-//   cd: column data
-// Returns:
-//   []float64: values
-// Example:
-//   vals := GetColumnDataDoubleUnsafe(cd) // → []float64
+
+// GetColumnDataDoubleUnsafe extracts []float64 without type check.
 func GetColumnDataDoubleUnsafe(cd ColumnData) []float64 {
 	return (*ColumnDataDouble)(ifaceDataPtr(cd)).xs
 }
 
 // --- Timestamp ----------------------------------------------------
 
-// ColumnDataTimestamp: time column storage
+// ColumnDataTimestamp stores timestamp column data.
 type ColumnDataTimestamp struct{ xs []C.qdb_timespec_t }
 
-// Length reports the number of timestamp values held in the column.
+// Length returns the number of values.
 func (cd *ColumnDataTimestamp) Length() int {
 	return len(cd.xs)
 }
 
-// ValueType implements ColumnData.ValueType.
+// ValueType returns TsValueTimestamp.
 func (cd *ColumnDataTimestamp) ValueType() TsValueType {
 	return TsValueTimestamp
 }
 
-// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+// EnsureCapacity pre-allocates space for n values.
 func (cd *ColumnDataTimestamp) EnsureCapacity(n int) {
 	cd.xs = sliceEnsureCapacity(cd.xs, n)
 }
 
-// Clear resets the slice to length 0 while keeping capacity.
+// Clear resets to empty.
 func (cd *ColumnDataTimestamp) Clear() {
 	cd.xs = make([]C.qdb_timespec_t, 0)
 }
 
-// appendData concatenates another ColumnDataTimestamp after type checking.
+// appendData appends another ColumnDataTimestamp.
 func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataTimestamp)
 	if !ok {
@@ -373,15 +318,13 @@ func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
 	return nil
 }
 
-// appendDataUnsafe performs the same concatenation without RTTI checks.
+// appendDataUnsafe appends without type check.
 func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataTimestamp)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// PinToC exposes the Go slice to C without copying:
-//   – pins the slice base so it stays immovable
-//   – returns a no-op release closure
+// PinToC pins slice for C access.
 func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	if len(cd.xs) == 0 {
 		return nil, func() {}
@@ -391,7 +334,7 @@ func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.P
 	return unsafe.Pointer(base), func() {}
 }
 
-// NewColumnDataTimestamp wraps a []time.Time as ColumnDataTimestamp.
+// NewColumnDataTimestamp creates timestamp column data.
 func NewColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
 	return ColumnDataTimestamp{xs: TimeSliceToQdbTimespec(ts)}
 }
@@ -440,14 +383,7 @@ func newColumnDataTimestampFromNative(
 	return ColumnDataTimestamp{xs: specs}, nil
 }
 
-// GetColumnDataTimestamp extracts time values.
-// Args:
-//   cd: column data
-// Returns:
-//   []time.Time: timestamps
-//   error: if wrong type
-// Example:
-//   times, err := GetColumnDataTimestamp(cd) // → []time.Time
+// GetColumnDataTimestamp extracts []time.Time from ColumnData.
 func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	xs, err := GetColumnDataTimestampNative(cd)
 	if err != nil {
@@ -457,14 +393,7 @@ func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	return QdbTimespecSliceToTime(xs), nil
 }
 
-// GetColumnDataTimestampNative extracts native times.
-// Args:
-//   cd: column data
-// Returns:
-//   []C.qdb_timespec_t: native times
-//   error: if wrong type
-// Example:
-//   specs, err := GetColumnDataTimestampNative(cd) // → []timespec
+// GetColumnDataTimestampNative extracts []C.qdb_timespec_t from ColumnData.
 func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	v, ok := cd.(*ColumnDataTimestamp)
 	if !ok {
@@ -473,54 +402,42 @@ func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	return v.xs, nil
 }
 
-// GetColumnDataTimestampUnsafe extracts times unsafely.
-// Args:
-//   cd: column data
-// Returns:
-//   []time.Time: timestamps
-// Example:
-//   times := GetColumnDataTimestampUnsafe(cd) // → []time.Time
+// GetColumnDataTimestampUnsafe extracts []time.Time without type check.
 func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
 	return QdbTimespecSliceToTime(GetColumnDataTimestampNativeUnsafe(cd))
 }
 
-// GetColumnDataTimestampNativeUnsafe extracts native unsafely.
-// Args:
-//   cd: column data
-// Returns:
-//   []C.qdb_timespec_t: native times
-// Example:
-//   specs := GetColumnDataTimestampNativeUnsafe(cd) // → []timespec
+// GetColumnDataTimestampNativeUnsafe extracts []C.qdb_timespec_t without type check.
 func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 	return (*ColumnDataTimestamp)(ifaceDataPtr(cd)).xs
 }
 
 // --- Blob ---------------------------------------------------------
 
-// ColumnDataBlob: binary column storage
+// ColumnDataBlob stores binary column data.
 type ColumnDataBlob struct{ xs [][]byte }
 
-// Length reports the number of blob values held in the column.
+// Length returns the number of values.
 func (cd *ColumnDataBlob) Length() int {
 	return len(cd.xs)
 }
 
-// ValueType implements ColumnData.ValueType.
+// ValueType returns TsValueBlob.
 func (cd *ColumnDataBlob) ValueType() TsValueType {
 	return TsValueBlob
 }
 
-// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+// EnsureCapacity pre-allocates space for n values.
 func (cd *ColumnDataBlob) EnsureCapacity(n int) {
 	cd.xs = sliceEnsureCapacity(cd.xs, n)
 }
 
-// Clear resets the slice to length 0 while keeping capacity.
+// Clear resets to empty.
 func (cd *ColumnDataBlob) Clear() {
 	cd.xs = make([][]byte, 0)
 }
 
-// appendData concatenates another ColumnDataBlob after type checking.
+// appendData appends another ColumnDataBlob.
 func (cd *ColumnDataBlob) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataBlob)
 	if !ok {
@@ -530,7 +447,7 @@ func (cd *ColumnDataBlob) appendData(d ColumnData) error {
 	return nil
 }
 
-// appendDataUnsafe performs the same concatenation without RTTI checks.
+// appendDataUnsafe appends without type check.
 func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataBlob)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
@@ -539,8 +456,9 @@ func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
 // PinToC builds a C envelope and pins each []byte in cd.xs.
 //
 // Decision rationale:
-//   – Zero-copy path avoids duplicating potentially large blobs.
-//   – release() frees only the envelope; Go memory is unpinned automatically.
+//
+//	– Zero-copy path avoids duplicating potentially large blobs.
+//	– release() frees only the envelope; Go memory is unpinned automatically.
 func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
 	count := len(cd.xs)
 	if count == 0 {
@@ -558,8 +476,8 @@ func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointe
 	// Point each qdb_blob_t to pinned Go byte slices (zero-copy)
 	for i, b := range cd.xs {
 		if len(b) > 0 {
-			p.Pin(&b[0])                               // keep backing array immovable
-			slice[i].content = unsafe.Pointer(&b[0])   // direct pointer into Go memory
+			p.Pin(&b[0])                             // keep backing array immovable
+			slice[i].content = unsafe.Pointer(&b[0]) // direct pointer into Go memory
 			slice[i].content_length = C.qdb_size_t(len(b))
 		}
 	}
@@ -572,14 +490,9 @@ func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointe
 	return unsafe.Pointer(arr), release
 }
 
-// NewColumnDataBlob wraps blob slice.
-// Args:
-//   xs: binary values
-// Returns:
-//   ColumnDataBlob: column data
-// Example:
-//   cd := NewColumnDataBlob(blobs) // → ColumnDataBlob
+// NewColumnDataBlob creates binary column data.
 func NewColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
+
 func newColumnDataBlobFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataBlob, error) {
@@ -603,14 +516,8 @@ func newColumnDataBlobFromNative(
 	}
 	return NewColumnDataBlob(out), nil
 }
-// GetColumnDataBlob extracts blob values.
-// Args:
-//   cd: column data
-// Returns:
-//   [][]byte: blobs
-//   error: if wrong type
-// Example:
-//   blobs, err := GetColumnDataBlob(cd) // → [][]byte
+
+// GetColumnDataBlob extracts [][]byte from ColumnData.
 func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	v, ok := cd.(*ColumnDataBlob)
 	if !ok {
@@ -618,43 +525,38 @@ func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	}
 	return v.xs, nil
 }
-// GetColumnDataBlobUnsafe extracts blobs unsafely.
-// Args:
-//   cd: column data
-// Returns:
-//   [][]byte: blobs
-// Example:
-//   blobs := GetColumnDataBlobUnsafe(cd) // → [][]byte
+
+// GetColumnDataBlobUnsafe extracts [][]byte without type check.
 func GetColumnDataBlobUnsafe(cd ColumnData) [][]byte {
 	return (*ColumnDataBlob)(ifaceDataPtr(cd)).xs
 }
 
 // --- String -------------------------------------------------------
 
-// ColumnDataString: text column storage
+// ColumnDataString stores text column data.
 type ColumnDataString struct{ xs []string }
 
-// Length reports the number of string values held in the column.
+// Length returns the number of values.
 func (cd *ColumnDataString) Length() int {
 	return len(cd.xs)
 }
 
-// ValueType implements ColumnData.ValueType.
+// ValueType returns TsValueString.
 func (cd *ColumnDataString) ValueType() TsValueType {
 	return TsValueString
 }
 
-// EnsureCapacity pre-allocates capacity n to reduce reallocations.
+// EnsureCapacity pre-allocates space for n values.
 func (cd *ColumnDataString) EnsureCapacity(n int) {
 	cd.xs = sliceEnsureCapacity(cd.xs, n)
 }
 
-// Clear resets the slice to length 0 while keeping capacity.
+// Clear resets to empty.
 func (cd *ColumnDataString) Clear() {
 	cd.xs = make([]string, 0)
 }
 
-// appendData concatenates another ColumnDataString after type checking.
+// appendData appends another ColumnDataString.
 func (cd *ColumnDataString) appendData(d ColumnData) error {
 	other, ok := d.(*ColumnDataString)
 	if !ok {
@@ -664,7 +566,7 @@ func (cd *ColumnDataString) appendData(d ColumnData) error {
 	return nil
 }
 
-// appendDataUnsafe performs the same concatenation without RTTI checks.
+// appendDataUnsafe appends without type check.
 func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 	other := (*ColumnDataString)(ifaceDataPtr(d))
 	cd.xs = append(cd.xs, other.xs...)
@@ -673,54 +575,50 @@ func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 // PinToC builds a C envelope and pins each string in cd.xs.
 //
 // Decision rationale:
-//   – Zero-copy path avoids duplicating potentially large strings.
-//   – qdb_string_t uses explicit length, so NUL-termination is not required.
+//
+//	– Zero-copy path avoids duplicating potentially large strings.
+//	– qdb_string_t uses explicit length, so NUL-termination is not required.
 func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
-    count := len(cd.xs)
-    if count == 0 {
-        // still return a valid no-op release func
-        return nil, func() {}
-    }
+	count := len(cd.xs)
+	if count == 0 {
+		// still return a valid no-op release func
+		return nil, func() {}
+	}
 
-    // Allocate the C envelope once
-    arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
-    if err != nil {
-        panic(err)
-    }
-    slice := unsafe.Slice(arr, count)
+	// Allocate the C envelope once
+	arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
+	if err != nil {
+		panic(err)
+	}
+	slice := unsafe.Slice(arr, count)
 
-    // Fill the envelope with zero-copy, pinned Go strings
-    for i := 0; i < count; i++ {
-        s := &cd.xs[i]
-        if len(*s) == 0 {
-            continue // leave data/length = 0
-        }
+	// Fill the envelope with zero-copy, pinned Go strings
+	for i := 0; i < count; i++ {
+		s := &cd.xs[i]
+		if len(*s) == 0 {
+			continue // leave data/length = 0
+		}
 
-        // qdb_string_t already carries an explicit length, therefore no
-        // NUL-terminator is required.  We simply obtain the address of the
-        // existing Go string bytes, pin that memory so the GC can’t move it,
-        // and store the pointer/length in the envelope.
-        dataPtr := unsafe.StringData(*s)      // pointer to first byte
-        p.Pin(dataPtr)                        // keep the bytes immovable
+		// qdb_string_t already carries an explicit length, therefore no
+		// NUL-terminator is required.  We simply obtain the address of the
+		// existing Go string bytes, pin that memory so the GC can’t move it,
+		// and store the pointer/length in the envelope.
+		dataPtr := unsafe.StringData(*s) // pointer to first byte
+		p.Pin(dataPtr)                   // keep the bytes immovable
 
-        slice[i].data   = (*C.char)(unsafe.Pointer(dataPtr))
-        slice[i].length = C.qdb_size_t(len(*s))
-    }
+		slice[i].data = (*C.char)(unsafe.Pointer(dataPtr))
+		slice[i].length = C.qdb_size_t(len(*s))
+	}
 
-    // envelope itself must be freed after the C call
-    release := func() { qdbRelease(h, arr) }
+	// envelope itself must be freed after the C call
+	release := func() { qdbRelease(h, arr) }
 
-    return unsafe.Pointer(arr), release
+	return unsafe.Pointer(arr), release
 }
 
-// NewColumnDataString wraps string slice.
-// Args:
-//   xs: string values
-// Returns:
-//   ColumnDataString: column data
-// Example:
-//   cd := NewColumnDataString(strs) // → ColumnDataString
+// NewColumnDataString creates string column data.
 func NewColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
+
 func newColumnDataStringFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
 ) (ColumnDataString, error) {
@@ -744,14 +642,8 @@ func newColumnDataStringFromNative(
 	}
 	return NewColumnDataString(out), nil
 }
-// GetColumnDataString extracts string values.
-// Args:
-//   cd: column data
-// Returns:
-//   []string: strings
-//   error: if wrong type
-// Example:
-//   strs, err := GetColumnDataString(cd) // → []string
+
+// GetColumnDataString extracts []string from ColumnData.
 func GetColumnDataString(cd ColumnData) ([]string, error) {
 	v, ok := cd.(*ColumnDataString)
 	if !ok {
@@ -759,13 +651,8 @@ func GetColumnDataString(cd ColumnData) ([]string, error) {
 	}
 	return v.xs, nil
 }
-// GetColumnDataStringUnsafe extracts strings unsafely.
-// Args:
-//   cd: column data
-// Returns:
-//   []string: strings
-// Example:
-//   strs := GetColumnDataStringUnsafe(cd) // → []string
+
+// GetColumnDataStringUnsafe extracts []string without type check.
 func GetColumnDataStringUnsafe(cd ColumnData) []string {
 	return (*ColumnDataString)(ifaceDataPtr(cd)).xs
 }

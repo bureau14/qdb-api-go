@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"encoding/json"
 	"unsafe"
@@ -17,6 +18,7 @@ type Node struct {
 }
 
 // Status :
+//
 //	Returns the status of a node.
 //
 //	The status is a JSON object and contains current information of the node state, as described in the documentation.
@@ -32,6 +34,7 @@ func (n Node) Status() (NodeStatus, error) {
 }
 
 // RawStatus :
+//
 //	Returns the status of a node.
 //
 //	The status is a JSON object as a byte array and contains current information of the node state, as described in the documentation.
@@ -46,10 +49,11 @@ func (n Node) RawStatus() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "node_raw_status", "uri", n.uri)
 }
 
 // Config :
+//
 //	Returns the configuration as a byte array of a json object, you can use a method of your choice to unmarshall it.
 //	An example is available using the gabs library
 //
@@ -59,6 +63,7 @@ func (n Node) Config() ([]byte, error) {
 }
 
 // RawConfig :
+//
 //	Returns the configuration of a node.
 //
 //	The configuration is a JSON object as a byte array, as described in the documentation.
@@ -73,10 +78,11 @@ func (n Node) RawConfig() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "node_config", "uri", n.uri)
 }
 
 // Topology :
+//
 //	Returns the topology of a node.
 //
 //	The topology is a JSON object containing the node address, and the addresses of its successor and predecessor.
@@ -91,6 +97,7 @@ func (n Node) Topology() (NodeTopology, error) {
 }
 
 // RawTopology :
+//
 //	Returns the topology of a node.
 //
 //	The topology is a JSON object as a byte array containing the node address, and the addresses of its successor and predecessor.
@@ -105,5 +112,5 @@ func (n Node) RawTopology() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
-	return output, makeErrorOrNil(err)
+	return output, wrapError(err, "node_topology", "uri", n.uri)
 }

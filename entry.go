@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"time"
 	"unsafe"
@@ -33,7 +34,7 @@ func (e Entry) Remove() error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_remove(e.handle, alias)
-	return makeErrorOrNil(err)
+	return wrapError(err, "entry_remove", "alias", e.alias)
 }
 
 // ::: EXPIRY RELATED FUNCTIONS :::
@@ -51,7 +52,7 @@ func (e Entry) ExpiresAt(expiry time.Time) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_expires_at(e.handle, alias, toQdbTime(expiry))
-	return makeErrorOrNil(err)
+	return wrapError(err, "entry_expires_at", "alias", e.alias)
 }
 
 // ExpiresFromNow : Sets the expiration time of an entry, relative to the current time of the client.
@@ -64,7 +65,7 @@ func (e Entry) ExpiresFromNow(expiry time.Duration) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_expires_from_now(e.handle, alias, C.qdb_time_t(expiry/time.Millisecond))
-	return makeErrorOrNil(err)
+	return wrapError(err, "entry_expires_from_now", "alias", e.alias, "expiry_ms", expiry/time.Millisecond)
 }
 
 // ::: END OF EXPIRY RELATED FUNCTIONS :::
@@ -130,7 +131,7 @@ func (e Entry) GetMetadata() (Metadata, error) {
 	defer releaseCharStar(alias)
 	var m C.qdb_entry_metadata_t
 	err := C.qdb_get_metadata(e.handle, alias, &m)
-	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), TimespecToStructG(m.modification_time), TimespecToStructG(m.expiry_time)}, makeErrorOrNil(err)
+	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), TimespecToStructG(m.modification_time), TimespecToStructG(m.expiry_time)}, wrapError(err, "entry_get_metadata", "alias", e.alias)
 }
 
 // Exists : Returns true if the entry exists

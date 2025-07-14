@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"math"
 	"time"
@@ -91,7 +92,7 @@ func (entry TimeseriesEntry) StringColumn(columnName string) TsStringColumn {
 }
 
 // SymbolColumn : create a column object (the symbol table name is not set)
-func (entry TimeseriesEntry) SymbolColumn(columnName string, symtableName string) TsStringColumn {
+func (entry TimeseriesEntry) SymbolColumn(columnName, symtableName string) TsStringColumn {
 	return TsStringColumn{tsColumn{NewSymbolColumnInfo(columnName, symtableName), entry}}
 }
 
@@ -105,7 +106,7 @@ func (column TsStringColumn) Insert(points ...TsStringPoint) error {
 	content := stringPointArrayToC(points...)
 	defer releaseStringPointArray(content, len(points))
 	err := C.qdb_ts_string_insert(column.parent.handle, alias, columnName, content, contentCount)
-	return makeErrorOrNil(err)
+	return wrapError(err, "timeseries_string_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
 // EraseRanges : erase all points in the specified ranges
@@ -118,7 +119,7 @@ func (column TsStringColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
-	return uint64(erasedCount), makeErrorOrNil(err)
+	return uint64(erasedCount), wrapError(err, "ts_string_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // GetRanges : Retrieves strings in the specified range of the time series column.
@@ -139,7 +140,7 @@ func (column TsStringColumn) GetRanges(rgs ...TsRange) ([]TsStringPoint, error) 
 		defer column.parent.Release(unsafe.Pointer(points))
 		return stringPointArrayToGo(points, pointsCount), nil
 	}
-	return nil, ErrorType(err)
+	return nil, wrapError(err, "ts_string_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // TsStringAggregation : Aggregation of double type
@@ -249,7 +250,7 @@ func (t *TsBulk) GetString() (string, error) {
 	err := C.qdb_ts_row_get_string(t.table, C.qdb_size_t(t.index), &content, &contentLength)
 
 	t.index++
-	return C.GoStringN(content, C.int(contentLength)), makeErrorOrNil(err)
+	return C.GoStringN(content, C.int(contentLength)), wrapError(err, "ts_bulk_get_string")
 }
 
 // RowSetString : Set string at specified index in current row
@@ -258,7 +259,7 @@ func (t *TsBatch) RowSetString(index int64, content string) error {
 	contentSize := C.qdb_size_t(len(content))
 	contentPtr := convertToCharStar(content)
 	defer releaseCharStar(contentPtr)
-	return makeErrorOrNil(C.qdb_ts_batch_row_set_string(t.table, valueIndex, contentPtr, contentSize))
+	return wrapError(C.qdb_ts_batch_row_set_string(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_string", "index", valueIndex, "value_size", len(content))
 }
 
 // RowSetStringNoCopy : Set string at specified index in current row without copying it
@@ -267,5 +268,5 @@ func (t *TsBatch) RowSetStringNoCopy(index int64, content string) error {
 	contentSize := C.qdb_size_t(len(content))
 	contentPtr := convertToCharStar(content)
 	defer releaseCharStar(contentPtr)
-	return makeErrorOrNil(C.qdb_ts_batch_row_set_string_no_copy(t.table, valueIndex, contentPtr, contentSize))
+	return wrapError(C.qdb_ts_batch_row_set_string_no_copy(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_string_no_copy", "index", valueIndex, "value_size", len(content))
 }

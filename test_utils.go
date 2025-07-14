@@ -143,8 +143,10 @@ func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (Bl
 
 // pushWriterTables writes tables to server
 // In: t *testing.T - test context
-//     handle HandleType - connection
-//     tables []WriterTable - data to push
+//
+//	handle HandleType - connection
+//	tables []WriterTable - data to push
+//
 // Ex: pushWriterTables(t, h, tables)
 func pushWriterTables(t *testing.T, handle HandleType, tables []WriterTable) {
 	t.Helper()
@@ -168,6 +170,7 @@ func columnNamesFromWriterColumns(cols []WriterColumn) []string {
 	for i, c := range cols {
 		names[i] = c.ColumnName
 	}
+
 	return names
 }
 
@@ -180,6 +183,7 @@ func writerTableNames(tables []WriterTable) []string {
 	for i, wt := range tables {
 		names[i] = wt.GetName()
 	}
+
 	return names
 }
 
@@ -190,6 +194,7 @@ func writerTableNames(tables []WriterTable) []string {
 func writerTableColumns(table WriterTable) []WriterColumn {
 	cols := make([]WriterColumn, len(table.columnInfoByOffset))
 	copy(cols, table.columnInfoByOffset)
+
 	return cols
 }
 
@@ -201,6 +206,7 @@ func writerTablesColumns(tables []WriterTable) []WriterColumn {
 	if len(tables) == 0 {
 		panic("writerTablesColumns called with no tables")
 	}
+
 	return writerTableColumns(tables[0])
 }
 
@@ -222,6 +228,7 @@ func writerTablesColumns(tables []WriterTable) []WriterColumn {
 //	col := genWriterColumnOfType(rt, TsColumnInt64)
 func genWriterColumnOfType(t *rapid.T, ctype TsColumnType) WriterColumn {
 	name := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "writerColumnName")
+
 	return WriterColumn{ColumnName: name, ColumnType: ctype}
 }
 
@@ -240,6 +247,7 @@ func genWriterColumnOfType(t *rapid.T, ctype TsColumnType) WriterColumn {
 //	col := genWriterColumn(rt)
 func genWriterColumn(t *rapid.T) WriterColumn {
 	ctype := rapid.SampledFrom(columnTypes[:]).Draw(t, "writerColumnType")
+
 	return genWriterColumnOfType(t, ctype)
 }
 
@@ -281,6 +289,7 @@ func genWriterColumnsOfAllTypes(t *rapid.T) []WriterColumn {
 	for i, ctype := range columnTypes {
 		cols[i] = genWriterColumnOfType(t, ctype)
 	}
+
 	return cols
 }
 
@@ -317,6 +326,7 @@ func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
 	for i := range rowCount {
 		idx[i] = start.Add(time.Duration(stepNs * int64(i)))
 	}
+
 	return idx
 }
 
@@ -326,6 +336,7 @@ func genWriterDataInt64(t *rapid.T, rowCount int) ColumnData {
 		values[i] = rapid.Int64().Draw(t, "int64")
 	}
 	cd := NewColumnDataInt64(values)
+
 	return &cd
 }
 
@@ -335,6 +346,7 @@ func genWriterDataDouble(t *rapid.T, rowCount int) ColumnData {
 		values[i] = rapid.Float64().Draw(t, "float64")
 	}
 	cd := NewColumnDataDouble(values)
+
 	return &cd
 }
 
@@ -344,6 +356,7 @@ func genWriterDataTimestamp(t *rapid.T, rowCount int) ColumnData {
 		values[i] = genTime(t)
 	}
 	cd := NewColumnDataTimestamp(values)
+
 	return &cd
 }
 
@@ -353,6 +366,7 @@ func genWriterDataBlob(t *rapid.T, rowCount int) ColumnData {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "blob")
 	}
 	cd := NewColumnDataBlob(values)
+
 	return &cd
 }
 
@@ -362,6 +376,7 @@ func genWriterDataString(t *rapid.T, rowCount int) ColumnData {
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string")
 	}
 	cd := NewColumnDataString(values)
+
 	return &cd
 }
 
@@ -386,6 +401,7 @@ func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []ColumnDa
 	for i, col := range columns {
 		datas[i] = genWriterData(t, rowCount, col.ColumnType)
 	}
+
 	return datas
 }
 
@@ -423,6 +439,7 @@ func genPopulatedTables(t *rapid.T, handle HandleType) []WriterTable {
 
 		tables[i] = wt
 	}
+
 	return tables
 }
 
@@ -446,6 +463,7 @@ func genPopulatedTables(t *rapid.T, handle HandleType) []WriterTable {
 func genTime(t *rapid.T) time.Time {
 	sec := rapid.Int64Range(0, 8_147_483_646).Draw(t, "sec")
 	nsec := rapid.Int64Range(0, 999_999_999).Draw(t, "nsec")
+
 	return time.Unix(sec, nsec).UTC()
 }
 
@@ -492,7 +510,7 @@ func genTimes(t *rapid.T) []time.Time {
 func genReaderColumn(t *rapid.T) ReaderColumn {
 	// Column names are just a-zA-Z
 	columnName := rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "columnName")
-	columnType := rapid.SampledFrom(TsColumnTypes[:]).Draw(t, "columnType")
+	columnType := rapid.SampledFrom(TsColumnTypes).Draw(t, "columnType")
 
 	return ReaderColumn{
 		columnName: columnName,
@@ -543,6 +561,7 @@ func genReaderColumns(t *rapid.T) []ReaderColumn {
 //	rd := genReaderData(t) // ReaderData with random schema and data
 func genReaderData(t *rapid.T) ColumnData {
 	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
+
 	return genReaderDataOfRowCount(t, rowCount)
 }
 
@@ -629,6 +648,7 @@ func genReaderDataInt64(t *rapid.T, name string, rowCount int) *ColumnDataInt64 
 	}
 
 	ret := NewColumnDataInt64(values)
+
 	return &ret
 }
 
@@ -656,6 +676,7 @@ func genReaderDataDouble(t *rapid.T, name string, rowCount int) *ColumnDataDoubl
 	}
 
 	ret := NewColumnDataDouble(values)
+
 	return &ret
 }
 
@@ -683,6 +704,7 @@ func genReaderDataTimestamp(t *rapid.T, name string, rowCount int) *ColumnDataTi
 	}
 
 	ret := NewColumnDataTimestamp(values)
+
 	return &ret
 }
 
@@ -710,6 +732,7 @@ func genReaderDataBlob(t *rapid.T, name string, rowCount int) *ColumnDataBlob {
 	}
 
 	ret := NewColumnDataBlob(values)
+
 	return &ret
 }
 
@@ -739,6 +762,7 @@ func genReaderDataString(t *rapid.T, name string, rowCount int) *ColumnDataStrin
 	}
 
 	ret := NewColumnDataString(values)
+
 	return &ret
 }
 
@@ -761,7 +785,6 @@ func genReaderDataString(t *rapid.T, name string, rowCount int) *ColumnDataStrin
 //	schema := genReaderColumns(t)
 //	rc := genReaderChunkOfSchema(t, schema)
 func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
-
 	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
 
 	idx := make([]time.Time, rowCount)
@@ -778,7 +801,6 @@ func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 		cols,
 		idx,
 		data)
-
 	if err != nil {
 		panic(err)
 	}
@@ -804,7 +826,6 @@ func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 //	t := rapid.MakeT()
 //	rc := genReaderChunk(t) // ReaderChunk with random schema and rows
 func genReaderChunk(t *rapid.T) ReaderChunk {
-
 	columns := genReaderColumns(t)
 
 	return genReaderChunkOfSchema(t, columns)
@@ -828,7 +849,6 @@ func genReaderChunk(t *rapid.T) ReaderChunk {
 //	t := rapid.MakeT()
 //	chunks := genReaderChunks(t) // []ReaderChunk length ∈ [1,8]
 func genReaderChunks(t *rapid.T) []ReaderChunk {
-
 	cols := genReaderColumns(t)
 
 	genChunk := rapid.Custom(func(t *rapid.T) ReaderChunk {
@@ -836,6 +856,7 @@ func genReaderChunks(t *rapid.T) []ReaderChunk {
 	})
 
 	genChunks := rapid.SliceOfN(genChunk, 1, 8)
+
 	return genChunks.Draw(t, "readerChunks")
 }
 
@@ -866,11 +887,12 @@ func generateTags(n int) []string {
 	for i := range ret {
 		ret[i] = generateAlias(16)
 	}
+
 	return ret
 }
 
 func genWriterPushMode(t *rapid.T) WriterPushMode {
-	return rapid.SampledFrom(writerPushModes[:]).Draw(t, "writerPushMode")
+	return rapid.SampledFrom(writerPushModes).Draw(t, "writerPushMode")
 }
 
 // createTempFile writes content to a new file named
@@ -889,6 +911,7 @@ func createTempFile(t *testing.T, prefix, content string) string {
 	name := fmt.Sprintf("%s_%s.tmp", prefix, generateAlias(8))
 	require.NoError(t, os.WriteFile(name, []byte(content), 0o600))
 	t.Cleanup(func() { os.Remove(name) })
+
 	return name
 }
 
@@ -902,7 +925,8 @@ func setupFindTestData(
 ) (aliases []string,
 	blob1, blob2 BlobEntry,
 	integer IntegerEntry,
-	tagAll, tagFirst, tagSecond, tagThird string) {
+	tagAll, tagFirst, tagSecond, tagThird string,
+) {
 	t.Helper()
 
 	tags := generateTags(4)
@@ -952,7 +976,7 @@ var writerPushFlags = []WriterPushFlag{
 }
 
 func genWriterPushFlag(t *rapid.T) WriterPushFlag {
-	return rapid.SampledFrom(writerPushFlags[:]).Draw(t, "writerPushFlag")
+	return rapid.SampledFrom(writerPushFlags).Draw(t, "writerPushFlag")
 }
 
 var writerDedupModes = []WriterDeduplicationMode{
@@ -961,7 +985,7 @@ var writerDedupModes = []WriterDeduplicationMode{
 }
 
 func genWriterDedupMode(t *rapid.T) WriterDeduplicationMode {
-	return rapid.SampledFrom(writerDedupModes[:]).Draw(t, "writerDedupMode")
+	return rapid.SampledFrom(writerDedupModes).Draw(t, "writerDedupMode")
 }
 
 // genWriterOptions constructs a WriterOptions value using random combinations
@@ -1071,7 +1095,6 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 // Converts a writerColumn to a readerColumn
 func writerColumnToReaderColumn(wc WriterColumn) ReaderColumn {
 	ret, err := NewReaderColumn(wc.ColumnName, wc.ColumnType)
-
 	if err != nil {
 		panic(fmt.Sprintf("unable to convert writer column to reader column: %v", err))
 	}
@@ -1081,15 +1104,11 @@ func writerColumnToReaderColumn(wc WriterColumn) ReaderColumn {
 
 // Converts a WriterTable to a ReaderChunk
 func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
-
 	idx := wt.GetIndex()
 
 	// Pre-allocate all output data
 	data := make([]ColumnData, len(wt.data))
-	for i := range wt.data {
-		// ColumnData is already the same type for reader & writer
-		data[i] = wt.data[i]
-	}
+	copy(data, wt.data)
 
 	columns := make([]ReaderColumn, len(wt.columnInfoByOffset))
 	for i, wc := range wt.columnInfoByOffset {
@@ -1097,13 +1116,11 @@ func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
 	}
 
 	ret, err := NewReaderChunk(columns, idx, data)
-
 	if err != nil {
 		panic(fmt.Sprintf("unable to convert writer table to reader chunk: %v", err))
 	}
 
 	return ret
-
 }
 
 // Converts the writer table data to reader chunks, groups all reader chunks
@@ -1136,7 +1153,7 @@ func writerTablesToReaderChunks(xs []WriterTable) map[string]ReaderChunk {
 func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, names []string, rc ReaderChunk) {
 	t.Helper()
 
-	var expectedRows int = 0
+	expectedRows := 0
 	for _, wt := range expected {
 		expectedRows += wt.RowCount()
 	}
@@ -1239,7 +1256,7 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 	timestampPoints := make([]TsTimestampPoint, count)
 	symbolPoints := make([]TsStringPoint, count)
 
-	for i := int64(0); i < count; i++ {
+	for i := range count {
 		tsVal := time.Unix((i+1)*10, 0)
 		timestamps[i] = tsVal
 		blobPoints[i] = NewTsBlobPoint(tsVal, []byte(fmt.Sprintf("content_%d", i)))
@@ -1284,8 +1301,8 @@ func createDoubleTimeseriesWithPoints(
 	handle HandleType,
 	count int64,
 ) (alias string, ts TimeseriesEntry, column TsDoubleColumn,
-	timestamps []time.Time, points []TsDoublePoint) {
-
+	timestamps []time.Time, points []TsDoublePoint,
+) {
 	t.Helper()
 
 	alias = generateAlias(16)
@@ -1301,7 +1318,7 @@ func createDoubleTimeseriesWithPoints(
 	if count > 0 {
 		timestamps = make([]time.Time, count)
 		points = make([]TsDoublePoint, count)
-		for i := int64(0); i < count; i++ {
+		for i := range count {
 			tsVal := time.Unix((i+1)*10, 0)
 			timestamps[i] = tsVal
 			points[i] = NewTsDoublePoint(tsVal, float64(i))
@@ -1326,8 +1343,8 @@ func createInt64TimeseriesWithPoints(
 	handle HandleType,
 	count int64,
 ) (alias string, ts TimeseriesEntry, column TsInt64Column,
-	timestamps []time.Time, points []TsInt64Point) {
-
+	timestamps []time.Time, points []TsInt64Point,
+) {
 	t.Helper()
 
 	alias = generateAlias(16)
@@ -1343,7 +1360,7 @@ func createInt64TimeseriesWithPoints(
 	if count > 0 {
 		timestamps = make([]time.Time, count)
 		points = make([]TsInt64Point, count)
-		for i := int64(0); i < count; i++ {
+		for i := range count {
 			tsVal := time.Unix((i+1)*10, 0)
 			timestamps[i] = tsVal
 			points[i] = NewTsInt64Point(tsVal, i)

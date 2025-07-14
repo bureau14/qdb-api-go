@@ -14,7 +14,6 @@ func TestTimeCanConvertToQdbTimespec(t *testing.T) {
 	genTimes := rapid.SliceOf(rapid.Custom(genTime))
 
 	rapid.Check(t, func(t *rapid.T) {
-
 		// Generate a random set of times
 		input := genTimes.Draw(t, "times")
 
