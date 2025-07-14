@@ -4,6 +4,7 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"math"
 	"time"
@@ -27,7 +28,7 @@ func (t TsTimestampPoint) Content() time.Time {
 }
 
 // NewTsTimestampPoint : Create new timeseries timestamp point
-func NewTsTimestampPoint(timestamp time.Time, value time.Time) TsTimestampPoint {
+func NewTsTimestampPoint(timestamp, value time.Time) TsTimestampPoint {
 	return TsTimestampPoint{timestamp, value}
 }
 
@@ -87,7 +88,7 @@ func (column TsTimestampColumn) Insert(points ...TsTimestampPoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := timestampPointArrayToC(points...)
 	err := C.qdb_ts_timestamp_insert(column.parent.handle, alias, columnName, content, contentCount)
-	return makeErrorOrNil(err)
+	return wrapError(err, "timeseries_timestamp_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
 // EraseRanges : erase all points in the specified ranges
@@ -100,7 +101,7 @@ func (column TsTimestampColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
-	return uint64(erasedCount), makeErrorOrNil(err)
+	return uint64(erasedCount), wrapError(err, "ts_timestamp_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // GetRanges : Retrieves timestamps in the specified range of the time series column.
@@ -121,7 +122,7 @@ func (column TsTimestampColumn) GetRanges(rgs ...TsRange) ([]TsTimestampPoint, e
 		defer column.parent.Release(unsafe.Pointer(points))
 		return timestampPointArrayToGo(points, pointsCount), nil
 	}
-	return nil, ErrorType(err)
+	return nil, wrapError(err, "ts_timestamp_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // TsTimestampAggregation : Aggregation of timestamp type
@@ -219,12 +220,12 @@ func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	var content C.qdb_timespec_t
 	err := C.qdb_ts_row_get_timestamp(t.table, C.qdb_size_t(t.index), &content)
 	t.index++
-	return TimespecToStructG(content), makeErrorOrNil(err)
+	return TimespecToStructG(content), wrapError(err, "ts_bulk_get_timestamp")
 }
 
 // RowSetTimestamp : Add a timestamp to current row
 func (t *TsBatch) RowSetTimestamp(index int64, value time.Time) error {
 	valueIndex := C.qdb_size_t(index)
 	cValue := toQdbTimespec(value)
-	return makeErrorOrNil(C.qdb_ts_batch_row_set_timestamp(t.table, valueIndex, &cValue))
+	return wrapError(C.qdb_ts_batch_row_set_timestamp(t.table, valueIndex, &cValue), "ts_batch_row_set_timestamp", "index", valueIndex)
 }

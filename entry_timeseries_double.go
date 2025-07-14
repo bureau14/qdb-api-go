@@ -4,6 +4,7 @@ package qdb
 	#include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"math"
 	"time"
@@ -87,7 +88,7 @@ func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := doublePointArrayToC(points...)
 	err := C.qdb_ts_double_insert(column.parent.handle, alias, columnName, content, contentCount)
-	return makeErrorOrNil(err)
+	return wrapError(err, "timeseries_double_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
 // EraseRanges : erase all points in the specified ranges
@@ -100,7 +101,7 @@ func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
-	return uint64(erasedCount), makeErrorOrNil(err)
+	return uint64(erasedCount), wrapError(err, "ts_double_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // GetRanges : Retrieves blobs in the specified range of the time series column.
@@ -121,7 +122,7 @@ func (column TsDoubleColumn) GetRanges(rgs ...TsRange) ([]TsDoublePoint, error) 
 		defer column.parent.Release(unsafe.Pointer(points))
 		return doublePointArrayToGo(points, pointsCount), nil
 	}
-	return nil, ErrorType(err)
+	return nil, wrapError(err, "ts_double_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
 // TsDoubleAggregation : Aggregation of double type
@@ -234,5 +235,5 @@ func (t *TsBulk) GetDouble() (float64, error) {
 // RowSetDouble : Set double at specified index in current row
 func (t *TsBatch) RowSetDouble(index int64, value float64) error {
 	valueIndex := C.qdb_size_t(index)
-	return makeErrorOrNil(C.qdb_ts_batch_row_set_double(t.table, valueIndex, C.double(value)))
+	return wrapError(C.qdb_ts_batch_row_set_double(t.table, valueIndex, C.double(value)), "ts_batch_row_set_double", "index", valueIndex, "value", value)
 }

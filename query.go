@@ -37,6 +37,7 @@ package qdb
 	}
 */
 import "C"
+
 import (
 	"math"
 	"time"
@@ -122,7 +123,7 @@ func (r *QueryPoint) GetDouble() (float64, error) {
 	if result._type == C.qdb_query_result_double {
 		return float64(C.get_double_from_payload(result)), nil
 	}
-	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
+	return 0, wrapError(C.qdb_e_operation_not_permitted, "query_point_get_double", "wrong_type", "expected_double")
 }
 
 // GetBlob : retrieve a double from the interface
@@ -131,7 +132,7 @@ func (r *QueryPoint) GetBlob() ([]byte, error) {
 		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
 		return getBlobUnsafe(result), nil
 	}
-	return []byte{}, makeErrorOrNil(C.qdb_e_operation_not_permitted)
+	return []byte{}, wrapError(C.qdb_e_operation_not_permitted, "query_point_get_blob", "wrong_type", "expected_blob")
 }
 
 // GetInt64 : retrieve an int64 from the interface
@@ -140,7 +141,7 @@ func (r *QueryPoint) GetInt64() (int64, error) {
 	if result._type == C.qdb_query_result_int64 {
 		return int64(C.get_int64_from_payload(result)), nil
 	}
-	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
+	return 0, wrapError(C.qdb_e_operation_not_permitted, "query_point_get_int64", "wrong_type", "expected_int64")
 }
 
 // GetString : retrieve a string from the interface
@@ -149,7 +150,7 @@ func (r *QueryPoint) GetString() (string, error) {
 		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
 		return getStringUnsafe(result), nil
 	}
-	return "", makeErrorOrNil(C.qdb_e_operation_not_permitted)
+	return "", wrapError(C.qdb_e_operation_not_permitted, "query_point_get_string", "wrong_type", "expected_string")
 }
 
 // GetTimestamp : retrieve a timestamp from the interface
@@ -158,7 +159,7 @@ func (r *QueryPoint) GetTimestamp() (time.Time, error) {
 	if result._type == C.qdb_query_result_timestamp {
 		return TimespecToStructG(C.get_timestamp_from_payload(result)), nil
 	}
-	return time.Unix(-1, -1), makeErrorOrNil(C.qdb_e_operation_not_permitted)
+	return time.Unix(-1, -1), wrapError(C.qdb_e_operation_not_permitted, "query_point_get_timestamp", "wrong_type", "expected_timestamp")
 }
 
 // GetCount : retrieve the count from the interface
@@ -264,7 +265,7 @@ func (q Query) Execute() (*QueryResult, error) {
 	var r QueryResult
 	err := C.qdb_query(q.handle, query, &r.result)
 	if r.result == nil {
-		return nil, makeErrorOrNil(err)
+		return nil, wrapError(err, "query_execute", "query", q.query)
 	}
-	return &r, makeErrorOrNil(err)
+	return &r, wrapError(err, "query_execute", "query", q.query)
 }

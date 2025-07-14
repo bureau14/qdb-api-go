@@ -1,3 +1,7 @@
+// Copyright (c) 2009-2025, quasardb SAS. All rights reserved.
+// Package qdb: QuasarDB Go client API
+// Types: Reader, Writer, ColumnData, HandleType
+// Ex: h.NewReader(opts).FetchAll() → batch
 package qdb
 
 /*
@@ -12,60 +16,34 @@ import (
 	"time"
 )
 
-// WriterColumn: metadata for single column.
-// Fields:
-//   ColumnName: identifier
-//   ColumnType: data type
+// WriterColumn holds column metadata.
 type WriterColumn struct {
-	ColumnName string
-	ColumnType TsColumnType
+	ColumnName string       // column identifier
+	ColumnType TsColumnType // data type
 }
 
-// Writer: batches tables for push.
-// Fields:
-//   options: push configuration
-//   tables: name→WriterTable map
+// Writer batches tables for bulk push.
 type Writer struct {
-	options WriterOptions
-	tables  map[string]WriterTable
+	options WriterOptions          // push configuration
+	tables  map[string]WriterTable // table cache
 }
 
-// NewWriter creates writer with options.
-// Args:
-//   options: push configuration
-// Returns:
-//   Writer: configured writer
-// Example:
-//   w := NewWriter(opts) // → Writer{opts, empty map}
+// NewWriter creates a writer with options.
 func NewWriter(options WriterOptions) Writer {
 	return Writer{options: options, tables: make(map[string]WriterTable)}
 }
 
-// NewWriterWithDefaultOptions creates writer with defaults.
-// Returns:
-//   Writer: default configuration
-// Example:
-//   w := NewWriterWithDefaultOptions() // → Writer{default opts}
+// NewWriterWithDefaultOptions creates a writer with default options.
 func NewWriterWithDefaultOptions() Writer {
 	return NewWriter(NewWriterOptions())
 }
 
-// GetOptions returns push configuration.
-// Returns:
-//   WriterOptions: current options
-// Example:
-//   opts := w.GetOptions() // → WriterOptions
+// GetOptions returns the writer's push configuration.
 func (w *Writer) GetOptions() WriterOptions {
 	return w.options
 }
 
-// SetTable adds table to batch.
-// Args:
-//   t: table to add
-// Returns:
-//   error: if exists or schema mismatch
-// Example:
-//   err := w.SetTable(tbl) // → nil or error
+// SetTable adds a table to the writer batch.
 func (w *Writer) SetTable(t WriterTable) error {
 	tableName := t.GetName()
 
@@ -89,14 +67,7 @@ func (w *Writer) SetTable(t WriterTable) error {
 	return nil
 }
 
-// GetTable retrieves table by name.
-// Args:
-//   name: table identifier
-// Returns:
-//   WriterTable: found table
-//   error: if not found
-// Example:
-//   tbl, err := w.GetTable("my_table") // → WriterTable or error
+// GetTable retrieves a table by name from the writer.
 func (w *Writer) GetTable(name string) (WriterTable, error) {
 	t, ok := w.tables[name]
 	if !ok {
@@ -106,22 +77,12 @@ func (w *Writer) GetTable(name string) (WriterTable, error) {
 	return t, nil
 }
 
-// Length returns table count.
-// Returns:
-//   int: number of tables
-// Example:
-//   n := w.Length() // → 3
+// Length returns the number of tables in the writer.
 func (w *Writer) Length() int {
 	return len(w.tables)
 }
 
-// Push writes all tables to server.
-// Args:
-//   h: connection handle
-// Returns:
-//   error: push failure
-// Example:
-//   err := w.Push(handle) // → nil or error
+// Push writes all tables to the QuasarDB server.
 func (w *Writer) Push(h HandleType) error {
 	var pinner runtime.Pinner
 	defer pinner.Unpin()
@@ -149,7 +110,7 @@ func (w *Writer) Push(h HandleType) error {
 		i++
 	}
 
-	var tableSchemas = (**C.qdb_exp_batch_push_table_schema_t)(nil)
+	tableSchemas := (**C.qdb_exp_batch_push_table_schema_t)(nil)
 
 	var options C.qdb_exp_batch_options_t
 	options = w.options.setNative(options)
@@ -169,18 +130,15 @@ func (w *Writer) Push(h HandleType) error {
 		C.qdb_size_t(len(tblSlice)),
 	)
 	elapsed := time.Since(start)
-	
+
 	if errCode == 0 {
 		L().Info("wrote rows", "count", totalRows, "duration", elapsed)
 	}
-	
-	return makeErrorOrNil(C.qdb_error_t(errCode))
+
+	return wrapError(C.qdb_error_t(errCode), "writer_write", "tables", len(tblSlice))
 }
 
-// writerTableSchemasEqual compares table schemas.
-// In: a, b WriterTable - tables to compare
-// Out: bool - true if identical
-// Ex: writerTableSchemasEqual(t1, t2) → true
+// writerTableSchemasEqual compares schemas of two tables.
 func writerTableSchemasEqual(a, b WriterTable) bool {
 	if len(a.columnInfoByOffset) != len(b.columnInfoByOffset) {
 		return false

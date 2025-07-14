@@ -6,6 +6,7 @@ package qdb
 	void go_callback_log(qdb_log_level_t log_level, unsigned long * date, unsigned long pid, unsigned long tid, char * message_buffer, size_t message_size);
 */
 import "C"
+
 import (
 	"log/slog"
 	"math"

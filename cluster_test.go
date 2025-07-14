@@ -78,7 +78,7 @@ func TestClusterTrimAllWithExistingData(t *testing.T) {
 	cluster := handle.Cluster()
 	err = cluster.TrimAll()
 	assert.NoError(t, err)
-	
+
 	// Verify blob still exists after trim
 	contentObtained, err := blob.Get()
 	assert.NoError(t, err)

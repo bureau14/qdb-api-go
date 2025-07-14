@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"bytes"
 	"errors"
@@ -96,5 +97,5 @@ func (q Find) ExecuteString(query string) ([]string, error) {
 		}
 		return output, nil
 	}
-	return nil, ErrorType(err)
+	return nil, wrapError(err, "find_execute", "query", query)
 }

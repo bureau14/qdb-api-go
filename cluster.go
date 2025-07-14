@@ -5,6 +5,7 @@ package qdb
 	#include <stdlib.h>
 */
 import "C"
+
 import (
 	"fmt"
 	"math"
@@ -24,7 +25,7 @@ type Cluster struct {
 //	By default cluster does not allow this operation and the function returns a qdb_e_operation_disabled error.
 func (c Cluster) PurgeAll() error {
 	err := C.qdb_purge_all(c.handle, 60*1000)
-	return makeErrorOrNil(err)
+	return wrapError(err, "cluster_purge_all")
 }
 
 // PurgeCache : Removes all cached data from all the nodes of the cluster.
@@ -35,7 +36,7 @@ func (c Cluster) PurgeAll() error {
 //	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
 func (c Cluster) PurgeCache() error {
 	err := C.qdb_purge_cache(c.handle, 60*1000)
-	return makeErrorOrNil(err)
+	return wrapError(err, "cluster_purge_cache", "timeout_ms", 60*1000)
 }
 
 // TrimAll : Trims all data on all the nodes of the cluster.
@@ -48,7 +49,7 @@ func (c Cluster) PurgeCache() error {
 //	Because this operation is I/O and CPU intensive it is not recommended to run it when the cluster is heavily used.
 func (c Cluster) TrimAll() error {
 	err := C.qdb_trim_all(c.handle, 0, 60*60*1000)
-	return makeErrorOrNil(err)
+	return wrapError(err, "cluster_trim_all")
 }
 
 // WaitForStabilization : Wait for all nodes of the cluster to be stabilized.
@@ -56,7 +57,7 @@ func (c Cluster) TrimAll() error {
 //	Takes a timeout value, in milliseconds.
 func (c Cluster) WaitForStabilization(timeout time.Duration) error {
 	err := C.qdb_wait_for_stabilization(c.handle, C.int(timeout/time.Millisecond))
-	return makeErrorOrNil(err)
+	return wrapError(err, "cluster_wait_for_stabilization", "timeout", timeout)
 }
 
 // Endpoint : A structure representing a qdb url endpoint
@@ -100,5 +101,5 @@ func (c Cluster) Endpoints() ([]Endpoint, error) {
 		defer c.Release(unsafe.Pointer(endpoints))
 		return endpointArrayToGo(endpoints, endpointsCount), nil
 	}
-	return nil, makeErrorOrNil(err)
+	return nil, wrapError(err, "cluster_trim_all")
 }

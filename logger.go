@@ -83,10 +83,11 @@ func splitTimestamp(args []any) (ts time.Time, rest []any) {
 	// the *value* during the next iteration; `skip` flags that intent.
 	skip := false
 
-	for i := range len(args) {
+	for i := range args {
 		// Honour skip request coming from the previous iteration.
 		if skip {
 			skip = false
+
 			continue
 		}
 
@@ -114,6 +115,7 @@ func splitTimestamp(args []any) (ts time.Time, rest []any) {
 					ts = t
 					// Skip the value on the next loop iteration.
 					skip = true
+
 					continue
 				}
 			}
@@ -135,6 +137,7 @@ func (s *slogAdapter) log(level slog.Level, msg string, args ...any) {
 	// Fast path: no custom timestamp requested.
 	if ts.IsZero() {
 		s.l.Log(context.Background(), level, msg, rest...)
+
 		return
 	}
 
@@ -193,6 +196,7 @@ func defaultLogger() Logger {
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo, // default level; tweak in tests if needed
 	})
+
 	return &slogAdapter{l: slog.New(handler)}
 }
 
@@ -207,7 +211,7 @@ func init() {
 }
 
 // L returns the current package-level logger.
-func L() Logger { 
+func L() Logger {
 	return globalLogger.Load().(*loggerHolder).logger
 }
 

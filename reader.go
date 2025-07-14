@@ -1,4 +1,7 @@
-// Package qdb provides an api to a quasardb server
+// Copyright (c) 2009-2025, quasardb SAS. All rights reserved.
+// Package qdb: QuasarDB Go client API
+// Types: Reader, Writer, ColumnData, HandleType
+// Ex: h.NewReader(opts).FetchAll() → batch
 package qdb
 
 /*
@@ -8,28 +11,20 @@ package qdb
    #include <qdb/ts.h>
 */
 import "C"
+
 import (
 	"fmt"
 	"time"
 	"unsafe"
 )
 
-
-// ReaderColumn: column metadata for reading
+// ReaderColumn holds column metadata for reading.
 type ReaderColumn struct {
-	columnName string
-	columnType TsColumnType
+	columnName string       // column identifier
+	columnType TsColumnType // data type
 }
 
 // NewReaderColumn creates column metadata.
-// Args:
-//   n: column name
-//   t: column type
-// Returns:
-//   ReaderColumn: metadata
-//   error: if invalid type
-// Example:
-//   col, err := NewReaderColumn("temp", TsColumnDouble)
 func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
 	if t.IsValid() == false {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumn: invalid column: %v", t)
@@ -38,14 +33,6 @@ func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
 }
 
 // NewReaderColumnFromNative creates column from C types.
-// Args:
-//   n: C string name
-//   t: C column type
-// Returns:
-//   ReaderColumn: metadata
-//   error: if null name
-// Example:
-//   col, err := NewReaderColumnFromNative(cName, cType)
 func NewReaderColumnFromNative(n *C.char, t C.qdb_ts_column_type_t) (ReaderColumn, error) {
 	if n == nil {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumnFromNative: got null string reference for column name: %v", n)
@@ -57,25 +44,17 @@ func NewReaderColumnFromNative(n *C.char, t C.qdb_ts_column_type_t) (ReaderColum
 	}, nil
 }
 
-// Name returns column identifier.
-// Returns:
-//   string: column name
-// Example:
-//   name := col.Name() // → "temperature"
+// Name returns the column name.
 func (rc ReaderColumn) Name() string {
 	return rc.columnName
 }
 
-// Type returns column data type.
-// Returns:
-//   TsColumnType: data type
-// Example:
-//   typ := col.Type() // → TsColumnDouble
+// Type returns the column data type.
 func (rc ReaderColumn) Type() TsColumnType {
 	return rc.columnType
 }
 
-// ReaderChunk: batch of rows read from table
+// ReaderChunk holds a batch of rows read from table.
 type ReaderChunk struct {
 	// An index that enables looking up of a column's name by its offset within the table.
 	columnInfoByOffset []ReaderColumn
@@ -87,17 +66,7 @@ type ReaderChunk struct {
 	data []ColumnData
 }
 
-// NewReaderChunk constructs a ReaderChunk from explicit column metadata,
-// index values and column data slices.
-//
-// Decision rationale:
-//   - Separates validation from data copying, enabling reuse in tests and
-//     production code.
-//
-// Key assumptions:
-//   - len(cols) == len(data).
-//   - len(idx) matches data[i].Length() for each column.
-//   - Callers validate these preconditions; TODO above indicates missing checks.
+// NewReaderChunk creates a chunk from columns, index, and data.
 func NewReaderChunk(cols []ReaderColumn, idx []time.Time, data []ColumnData) (ReaderChunk, error) {
 	return ReaderChunk{
 		columnInfoByOffset: cols,
@@ -106,19 +75,13 @@ func NewReaderChunk(cols []ReaderColumn, idx []time.Time, data []ColumnData) (Re
 	}, nil
 }
 
-// Empty checks if chunk has no data.
-// Returns:
-//   bool: true if empty
-// Example:
-//   isEmpty := chunk.Empty() // → false
+// Empty reports if the chunk has no data.
 func (rc *ReaderChunk) Empty() bool {
 	// Returns true if no data
 	return rc.idx == nil || len(rc.idx) == 0 || rc.data == nil || len(rc.data) == 0
 }
 
-// Clear resets chunk to empty state.
-// Example:
-//   chunk.Clear() // all data removed
+// Clear resets the chunk to empty state.
 func (rc *ReaderChunk) Clear() {
 	// Empty slice
 	rc.idx = make([]time.Time, 0)
@@ -128,11 +91,7 @@ func (rc *ReaderChunk) Clear() {
 	}
 }
 
-// EnsureCapacity pre-allocates space.
-// Args:
-//   n: minimum capacity
-// Example:
-//   chunk.EnsureCapacity(1000) // ready for 1000 rows
+// EnsureCapacity pre-allocates space for n rows.
 func (rc *ReaderChunk) EnsureCapacity(n int) {
 	rc.idx = sliceEnsureCapacity(rc.idx, n)
 
@@ -143,26 +102,12 @@ func (rc *ReaderChunk) EnsureCapacity(n int) {
 	}
 }
 
-// RowCount returns rows in chunk.
-// Returns:
-//   int: row count
-// Example:
-//   n := chunk.RowCount() // → 1000
+// RowCount returns the number of rows in the chunk.
 func (rc *ReaderChunk) RowCount() int {
 	return len(rc.idx)
 }
 
-// mergeReaderChunks merges multiple chunks of the same table into one unified chunk.
-//
-// Decision rationale:
-//   - Consolidates batch iteration results into a single structure for simpler
-//     comparison and verification.
-//
-// Key assumptions:
-//   - xs is non-empty and all chunks share identical schemas.
-//
-// Performance trade-offs:
-//   - Requires copying all row data once; acceptable for test sizes.
+// mergeReaderChunks combines multiple chunks into one.
 func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	if len(xs) == 0 {
 		return ReaderChunk{}, nil
@@ -230,25 +175,12 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	return ReaderChunk{
 		idx:                mergedIdx,
 		data:               mergedData,
-		columnInfoByOffset: base.columnInfoByOffset}, nil
+		columnInfoByOffset: base.columnInfoByOffset,
+	}, nil
 }
 
-// newReaderChunk converts the native C table representation into a Go ReaderChunk.
-//
-// Decision rationale:
-//   - Encapsulates the logic for translating C types and copying data into
-//     Go-managed memory.
-//
-// Key assumptions:
-//   - `columns` describes the schema encoded in `data`.
-//   - `data` originates from qdb_exp_batch_push_table_data_t with valid pointers
-//     and counts.
-//
-// Performance trade-offs:
-//   - Copies all row data into Go slices for safety; incurs O(n) allocation but
-//     ensures lifetime independence from the C buffer.
+// newReaderChunk converts C table data to Go ReaderChunk.
 func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data_t) (ReaderChunk, error) {
-
 	if data.timestamps == nil {
 		return ReaderChunk{}, fmt.Errorf("Internal error: nil timestamps")
 	}
@@ -327,35 +259,16 @@ func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data
 	return out, nil
 }
 
-// ReaderOptions: bulk read configuration
+// ReaderOptions configures bulk read operations.
 type ReaderOptions struct {
-	batchSize  int
-	tables     []string
-	columns    []string
-	rangeStart time.Time
-	rangeEnd   time.Time
+	batchSize  int       // max rows per fetch
+	tables     []string  // tables to read
+	columns    []string  // columns to read
+	rangeStart time.Time // range start (inclusive)
+	rangeEnd   time.Time // range end (exclusive)
 }
 
-// NewReaderOptions creates a new ReaderOptions value with default settings.
-//
-// ReaderOptions uses the builder pattern to make configuration flexible and readable.
-// You typically create an options value with NewReaderOptions, and then chain one or more
-// configuration methods like WithTables, WithColumns, WithBatchSize, and WithTimeRange.
-//
-// Example usage:
-//
-//	opts := NewReaderOptions().
-//	    WithTables([]string{"table1", "table2"}).
-//	    WithColumns([]string{"colA", "colB"}).
-//	    WithBatchSize(10000).
-//	    WithTimeRange(startTime, endTime)
-//
-// This options value can then be passed to NewReader to create a Reader
-// instance:
-//
-//	reader, err := NewReader(handle, opts)
-//
-// See WithTables, WithColumns, WithBatchSize, and WithTimeRange for configuration details.
+// NewReaderOptions creates reader options with defaults.
 func NewReaderOptions() ReaderOptions {
 	// Default to 32768 rows
 	var defaultBatchSize int = 32 * 1024
@@ -363,46 +276,38 @@ func NewReaderOptions() ReaderOptions {
 	return ReaderOptions{batchSize: defaultBatchSize}
 }
 
-// NewReaderDefaultOptions creates options for full table read.
-// Args:
-//   tables: table names to read
-// Returns:
-//   ReaderOptions: configured for all data
-// Example:
-//   opts := NewReaderDefaultOptions([]string{"metrics"})
+// NewReaderDefaultOptions creates options for reading entire tables.
 func NewReaderDefaultOptions(tables []string) ReaderOptions {
 	return NewReaderOptions().WithTables(tables)
 }
 
-// WithBatchSize specifies the maximum rows returned per fetch.
-// Use smaller sizes to limit memory usage at the cost of more network calls.
+// WithBatchSize sets max rows per fetch.
 func (ro ReaderOptions) WithBatchSize(batchSize int) ReaderOptions {
 	ro.batchSize = batchSize
 	return ro
 }
 
-// WithTables restricts the reader to the provided table names.
+// WithTables sets tables to read.
 func (ro ReaderOptions) WithTables(tables []string) ReaderOptions {
 	ro.tables = tables
 	return ro
 }
 
-// WithColumns limits which columns are read from each table.
-// An empty slice implies all columns.
+// WithColumns sets columns to read (empty=all).
 func (ro ReaderOptions) WithColumns(columns []string) ReaderOptions {
 	ro.columns = columns
 	return ro
 }
 
-// WithTimeRange restricts reads to the given half-open interval [start, end).
-func (ro ReaderOptions) WithTimeRange(start time.Time, end time.Time) ReaderOptions {
+// WithTimeRange sets time range [start, end).
+func (ro ReaderOptions) WithTimeRange(start, end time.Time) ReaderOptions {
 	ro.rangeStart = start
 	ro.rangeEnd = end
 
 	return ro
 }
 
-// Reader: iterator for bulk data retrieval
+// Reader iterates over bulk data from QuasarDB.
 type Reader struct {
 	// Handle that was used to create the reader, and should be reused accross all additional
 	// calls (specifically all memory allocations and/or qdb_release() invocations) in the scope
@@ -426,31 +331,7 @@ type Reader struct {
 	currentBatch ReaderChunk
 }
 
-// NewReader returns a new Reader instance that allows bulk data retrieval from quasardb tables.
-//
-// Typical usage for retrieving data involves iteration like this:
-//
-//	reader := NewReader(options)
-//	defer reader.Close()
-//	for reader.Next() {
-//	    batch := reader.Batch()
-//	    // process batch
-//	}
-//	if err := reader.Err(); err != nil {
-//	    // handle error appropriately
-//	}
-//
-// To conveniently retrieve all available data as a single batch:
-//
-//	reader := NewReader(options)
-//	defer reader.Close()
-//	batch, err := reader.FetchAll()
-//	if err != nil {
-//	    // handle error appropriately
-//	}
-//	// process batch
-//
-// Always call reader.Close() to release any associated resources.
+// NewReader creates a reader for bulk data retrieval.
 func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var ret Reader
 	ret.handle = h
@@ -561,8 +442,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		&readerHandle,
 	)
 
-	err = makeErrorOrNil(errCode)
-
+	err = wrapError(errCode, "reader_init", "tables", tableCount)
 	if err != nil {
 		return ret, err
 	}
@@ -574,38 +454,21 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	return ret, nil
 }
 
-// fetchBatch retrieves up to r.options.batchSize rows from the server.
-//
-// Decision rationale:
-//   - Wraps the qdb_bulk_reader_get_data call and converts the native format
-//     to a Go ReaderChunk.
-//
-// Key assumptions:
-//   - r.state is a valid reader handle.
-//   - Caller handles ErrIteratorEnd appropriately.
-//
-// Performance trade-offs:
-//   - Allocates new slices for column data each call; acceptable for test-sized
-//     batches but avoid for extremely large data sets.
-//
-// Usage example:
-//
-//	batch, err := r.fetchBatch()
-//	if err != nil { /* handle */ }
+// fetchBatch retrieves the next batch of rows.
 func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	var ret ReaderChunk
 	var ptr *C.qdb_bulk_reader_table_data_t
 
 	// Time the C API call
 	start := time.Now()
-	
+
 	// qdb_bulk_reader_get_data "fills" a pointer in style of when you would get data back
 	// for a number of tables, but it returns just a pointer for a single table. all memory
 	// allocated within this function call is linked to this single object, and a qdbRelease
 	// clears eerything
 	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
-	err := makeErrorOrNil(errCode)
-	
+	err := wrapError(errCode, "reader_fetch_batch", "batch_size", r.options.batchSize)
+
 	elapsed := time.Since(start)
 
 	// Trigger the `defer` statement as there are failure scenarios in both cases where err
@@ -644,7 +507,6 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	cols := make([]ReaderColumn, colCount)
 	for j := range colCount {
 		cols[j], err = NewReaderColumnFromNative(colSlice[j].name, colSlice[j].data_type)
-
 		if err != nil {
 			return ret, err
 		}
@@ -658,17 +520,11 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 	// Log the batch read performance
 	rowCount := ret.RowCount()
 	L().Debug("read batch of rows", "count", rowCount, "duration", elapsed)
-	
+
 	return ret, nil
 }
 
-// Next prepares the next available data batch.
-// It returns true if more data is available, false otherwise, making it suitable
-// for idiomatic Go loops:
-//
-//	for reader.Next() { ... }
-//
-// Always use Err() afterward to check if iteration ended due to an error.
+// Next advances to the next batch, returns false when done.
 func (r *Reader) Next() bool {
 	if r.done {
 		return false
@@ -684,30 +540,17 @@ func (r *Reader) Next() bool {
 	return true
 }
 
-// Err returns the error encountered during iteration, if any.
-// After a completed iteration with Next(), Err() must be checked to
-// distinguish between successful completion and errors during reading.
+// Err returns any error from iteration.
 func (r *Reader) Err() error {
 	return r.err
 }
 
-// Batch returns the current batch of data prepared by Next().
-// It's designed to be called within a Next() loop:
-//
-//	for reader.Next() {
-//	    batch := reader.Batch()
-//	    // use batch
-//	}
+// Batch returns the current batch.
 func (r *Reader) Batch() ReaderChunk {
 	return r.currentBatch
 }
 
-// FetchAll retrieves the entire dataset as a single batch to simplify interaction when the entire result set is required.
-//
-// It internally manages batching and merging of data, eliminating the need for callers to iterate manually.
-//
-// Important: Consider memory usage carefully — FetchAll may consume significant resources when reading large datasets.
-// Use this function when convenience outweighs potential memory overhead.
+// FetchAll retrieves all data as a single batch.
 func (r *Reader) FetchAll() (ReaderChunk, error) {
 	// Accumulate all batches from the reader's iterator, and merges them together in a single
 	// batch.
@@ -738,8 +581,6 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 }
 
 // Close releases reader resources.
-// Example:
-//   defer reader.Close()
 func (r *Reader) Close() {
 	// if state is non-nil, invoke qdbRelease() on state
 	if r.state != nil {
@@ -748,5 +589,4 @@ func (r *Reader) Close() {
 
 		r.state = nil
 	}
-
 }
