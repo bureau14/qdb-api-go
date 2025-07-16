@@ -294,3 +294,138 @@ func (t *WriterTable) GetData(offset int) (ColumnData, error) {
 
 	return t.data[offset], nil
 }
+
+// MergeWriterTables merges multiple WriterTables by grouping them by table name.
+// Tables with the same name must have identical schemas (columns and types).
+// This is the primary merge function that handles all cases, including when all
+// tables happen to be for the same table name.
+// Returns a slice with one WriterTable per unique table name.
+func MergeWriterTables(tables []WriterTable) ([]WriterTable, error) {
+	if len(tables) <= 1 {
+		return tables, nil
+	}
+
+	// Performance optimization: check if all tables have unique names first
+	uniqueNames := make(map[string]bool)
+	for _, table := range tables {
+		if uniqueNames[table.TableName] {
+			break
+		}
+		uniqueNames[table.TableName] = true
+	}
+
+	// Common case: all tables have unique names
+	if len(uniqueNames) == len(tables) {
+		return tables, nil
+	}
+
+	// Group tables by name
+	groups := make(map[string][]WriterTable)
+	for _, table := range tables {
+		groups[table.TableName] = append(groups[table.TableName], table)
+	}
+
+	result := make([]WriterTable, 0, len(groups))
+	for tableName, group := range groups {
+		if len(group) == 1 {
+			result = append(result, group[0])
+		} else {
+			merged, err := MergeSingleTableWriters(group)
+			if err != nil {
+				return nil, fmt.Errorf("failed to merge tables for %q: %w", tableName, err)
+			}
+			result = append(result, merged)
+		}
+	}
+
+	return result, nil
+}
+
+// MergeSingleTableWriters merges multiple WriterTables with the same table name.
+// All input tables must have identical table names and column schemas.
+// Performance-optimized with pre-allocation based on total row count.
+// This is a specialized function for when you know all tables are for the same table.
+func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
+	if len(tables) == 0 {
+		return WriterTable{}, fmt.Errorf("cannot merge empty table slice")
+	}
+
+	if len(tables) == 1 {
+		return tables[0], nil
+	}
+
+	base := tables[0]
+	baseName := base.TableName
+
+	// Validate all tables have same name and schema
+	totalRows := base.rowCount
+	for i := 1; i < len(tables); i++ {
+		table := tables[i]
+		if table.TableName != baseName {
+			return WriterTable{}, fmt.Errorf("table name mismatch: expected %q, got %q", baseName, table.TableName)
+		}
+		if !writerTableSchemasEqual(base, table) {
+			return WriterTable{}, fmt.Errorf("schema mismatch for table %q: tables have different column schemas", baseName)
+		}
+		totalRows += table.rowCount
+	}
+
+	// Pre-allocate merged index with total capacity
+	mergedIdx := make([]C.qdb_timespec_t, 0, totalRows)
+
+	// Create merged data columns - create new instances based on the value type
+	mergedData := make([]ColumnData, len(base.data))
+	for i, baseColumn := range base.data {
+		// Create a new column data of the same type
+		switch baseColumn.ValueType() {
+		case TsValueInt64:
+			newCol := NewColumnDataInt64(nil)
+			newCol.EnsureCapacity(totalRows)
+			mergedData[i] = &newCol
+		case TsValueDouble:
+			newCol := NewColumnDataDouble(nil)
+			newCol.EnsureCapacity(totalRows)
+			mergedData[i] = &newCol
+		case TsValueString:
+			newCol := NewColumnDataString(nil)
+			newCol.EnsureCapacity(totalRows)
+			mergedData[i] = &newCol
+		case TsValueBlob:
+			newCol := NewColumnDataBlob(nil)
+			newCol.EnsureCapacity(totalRows)
+			mergedData[i] = &newCol
+		case TsValueTimestamp:
+			newCol := NewColumnDataTimestamp(nil)
+			newCol.EnsureCapacity(totalRows)
+			mergedData[i] = &newCol
+		default:
+			return WriterTable{}, fmt.Errorf("unsupported column type: %v", baseColumn.ValueType())
+		}
+	}
+
+	// Merge all data
+	for _, table := range tables {
+		// Append timestamp indices
+		mergedIdx = append(mergedIdx, table.idx...)
+
+		// Append column data
+		for i, column := range table.data {
+			err := mergedData[i].appendData(column)
+			if err != nil {
+				return WriterTable{}, fmt.Errorf("failed to append data for column %d: %w", i, err)
+			}
+		}
+	}
+
+	// Create merged table
+	merged := WriterTable{
+		TableName:          baseName,
+		rowCount:           totalRows,
+		columnInfoByOffset: base.columnInfoByOffset,
+		columnOffsetByName: base.columnOffsetByName,
+		idx:                mergedIdx,
+		data:               mergedData,
+	}
+
+	return merged, nil
+}
