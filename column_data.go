@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2025, quasardb SAS. All rights reserved.
-// Package qdb: QuasarDB Go client API  
+// Package qdb: QuasarDB Go client API
 // Types: Reader, Writer, ColumnData, HandleType
 // Ex: h.NewReader(opts).FetchAll() → batch
 package qdb
