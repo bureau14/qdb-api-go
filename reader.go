@@ -13,6 +13,7 @@ package qdb
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"time"
 	"unsafe"
@@ -482,7 +483,7 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 		defer qdbRelease(r.handle, ptr)
 	}
 
-	if err == ErrIteratorEnd {
+	if errors.Is(err, ErrIteratorEnd) {
 		if ptr != nil {
 			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v\n", ptr)
 		}
@@ -530,9 +531,16 @@ func (r *Reader) Next() bool {
 		return false
 	}
 
-	r.currentBatch, r.err = r.fetchBatch()
+	var err error
+	r.currentBatch, err = r.fetchBatch()
 
-	if r.err != nil || r.currentBatch.Empty() == true {
+	if errors.Is(err, ErrIteratorEnd) {
+		r.done = true
+		return false
+	}
+
+	if err != nil || r.currentBatch.Empty() {
+		r.err = err // Only store non-ErrIteratorEnd errors
 		r.done = true
 		return false
 	}
