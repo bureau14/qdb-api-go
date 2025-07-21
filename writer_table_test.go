@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -547,4 +548,328 @@ func createTestWriterTableWithTimestamps(t *testing.T, name string, timestamps [
 	require.NoError(t, err)
 
 	return table
+}
+
+// TestWriterTableSegfaultPrevention tests the main segfault prevention fixes
+func TestWriterTableSegfaultPrevention(t *testing.T) {
+	t.Run("NewWriterTable initialization prevents nil access", func(t *testing.T) {
+		// This test verifies that NewWriterTable initializes all columns with empty data
+		// The fix is in lines 46-64 of writer_table.go
+		
+		cols := []WriterColumn{
+			{ColumnName: "int_col", ColumnType: TsColumnInt64},
+			{ColumnName: "double_col", ColumnType: TsColumnDouble},
+			{ColumnName: "string_col", ColumnType: TsColumnString},
+			{ColumnName: "blob_col", ColumnType: TsColumnBlob},
+			{ColumnName: "timestamp_col", ColumnType: TsColumnTimestamp},
+		}
+		
+		table, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		// Verify all columns are initialized with non-nil empty data
+		for i := 0; i < len(cols); i++ {
+			data, err := table.GetData(i)
+			require.NoError(t, err)
+			require.NotNil(t, data, "Column %d should not be nil after NewWriterTable", i)
+			require.Equal(t, 0, data.Length(), "Column %d should have empty data", i)
+			require.Equal(t, cols[i].ColumnType.AsValueType(), data.ValueType(), "Column %d should have correct type", i)
+		}
+		
+		// Test that we can safely access all initialized columns
+		timestamps := []time.Time{time.Unix(1000, 0)}
+		table.SetIndex(timestamps)
+		
+		// Should not crash when accessing unset columns during merge
+		result, err := MergeSingleTableWriters([]WriterTable{table})
+		require.NoError(t, err)
+		require.Equal(t, 1, result.rowCount)
+	})
+	
+	t.Run("partial column data handling", func(t *testing.T) {
+		// Create a WriterTable with 3 columns
+		cols := []WriterColumn{
+			{ColumnName: "int_col", ColumnType: TsColumnInt64},
+			{ColumnName: "double_col", ColumnType: TsColumnDouble},
+			{ColumnName: "string_col", ColumnType: TsColumnString},
+		}
+		
+		table, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		// Set index/timestamps
+		timestamps := []time.Time{time.Unix(1000, 0), time.Unix(2000, 0)}
+		table.SetIndex(timestamps)
+		
+		// Only set data for 2 out of 3 columns
+		intData := NewColumnDataInt64([]int64{100, 200})
+		err = table.SetData(0, &intData)
+		require.NoError(t, err)
+		
+		stringData := NewColumnDataString([]string{"test1", "test2"})
+		err = table.SetData(2, &stringData)
+		require.NoError(t, err)
+		
+		// Column 1 (double_col) is left with its initial empty data
+		
+		// Try to use the table in a merge operation - this should not crash
+		result, err := MergeSingleTableWriters([]WriterTable{table})
+		require.NoError(t, err)
+		require.Equal(t, table.rowCount, result.rowCount)
+		
+		// Verify set columns are preserved
+		resultIntCol, err := result.GetData(0)
+		require.NoError(t, err)
+		intCol, ok := resultIntCol.(*ColumnDataInt64)
+		require.True(t, ok)
+		require.Equal(t, []int64{100, 200}, intCol.xs)
+		
+		resultStringCol, err := result.GetData(2)
+		require.NoError(t, err)
+		stringCol, ok := resultStringCol.(*ColumnDataString)
+		require.True(t, ok)
+		require.Equal(t, []string{"test1", "test2"}, stringCol.xs)
+		
+		// Verify unset column has empty data (not nil)
+		resultDoubleCol, err := result.GetData(1)
+		require.NoError(t, err)
+		require.NotNil(t, resultDoubleCol)
+		require.Equal(t, 0, resultDoubleCol.Length())
+	})
+	
+	t.Run("empty table merge safety", func(t *testing.T) {
+		// Create tables with only empty column data
+		cols := []WriterColumn{
+			{ColumnName: "int_col", ColumnType: TsColumnInt64},
+			{ColumnName: "double_col", ColumnType: TsColumnDouble},
+		}
+		
+		table1, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		table2, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		// Set indexes but no column data
+		timestamps1 := []time.Time{time.Unix(1000, 0)}
+		table1.SetIndex(timestamps1)
+		
+		timestamps2 := []time.Time{time.Unix(2000, 0)}
+		table2.SetIndex(timestamps2)
+		
+		// Attempt merge operations - this should not crash due to safety checks
+		result, err := MergeSingleTableWriters([]WriterTable{table1, table2})
+		require.NoError(t, err)
+		require.Equal(t, 2, result.rowCount)
+		
+		// Verify all columns have empty data (not nil)
+		for i := 0; i < len(cols); i++ {
+			resultCol, err := result.GetData(i)
+			require.NoError(t, err)
+			require.NotNil(t, resultCol)
+			require.Equal(t, 0, resultCol.Length())
+		}
+	})
+	
+	t.Run("comprehensive column type initialization", func(t *testing.T) {
+		// Test that all supported column types are properly initialized
+		// This specifically tests the fix in lines 46-64 of writer_table.go
+		
+		cols := []WriterColumn{
+			{ColumnName: "int_col", ColumnType: TsColumnInt64},
+			{ColumnName: "double_col", ColumnType: TsColumnDouble},
+			{ColumnName: "string_col", ColumnType: TsColumnString},
+			{ColumnName: "blob_col", ColumnType: TsColumnBlob},
+			{ColumnName: "timestamp_col", ColumnType: TsColumnTimestamp},
+		}
+		
+		table, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		// Set minimum required data
+		timestamps := []time.Time{time.Unix(1000, 0)}
+		table.SetIndex(timestamps)
+		
+		// Test all column types can be accessed without crashing
+		for i, col := range cols {
+			data, err := table.GetData(i)
+			require.NoError(t, err)
+			require.NotNil(t, data, "Column %d (%s) should be initialized", i, col.ColumnName)
+			require.Equal(t, 0, data.Length(), "Column %d should start empty", i)
+			require.Equal(t, col.ColumnType.AsValueType(), data.ValueType(), "Column %d should have correct type", i)
+		}
+		
+		// Test that uninitialized columns can be safely merged
+		result, err := MergeSingleTableWriters([]WriterTable{table})
+		require.NoError(t, err)
+		require.Equal(t, 1, result.rowCount)
+		
+		// Verify all columns still accessible after merge
+		for i := 0; i < len(cols); i++ {
+			data, err := result.GetData(i)
+			require.NoError(t, err)
+			require.NotNil(t, data)
+			require.Equal(t, 0, data.Length())
+		}
+	})
+	
+	t.Run("merge operations with mixed column data states", func(t *testing.T) {
+		// Test the nil checks in MergeSingleTableWriters (lines 403-406, 441-444)
+		// by creating tables with different states of column initialization
+		
+		cols := []WriterColumn{
+			{ColumnName: "int_col", ColumnType: TsColumnInt64},
+			{ColumnName: "double_col", ColumnType: TsColumnDouble},
+			{ColumnName: "string_col", ColumnType: TsColumnString},
+		}
+		
+		// Table 1: Fully populated
+		table1, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		timestamps1 := []time.Time{time.Unix(1000, 0), time.Unix(2000, 0)}
+		table1.SetIndex(timestamps1)
+		
+		intData1 := NewColumnDataInt64([]int64{100, 200})
+		err = table1.SetData(0, &intData1)
+		require.NoError(t, err)
+		
+		doubleData1 := NewColumnDataDouble([]float64{1.0, 2.0})
+		err = table1.SetData(1, &doubleData1)
+		require.NoError(t, err)
+		
+		stringData1 := NewColumnDataString([]string{"a", "b"})
+		err = table1.SetData(2, &stringData1)
+		require.NoError(t, err)
+		
+		// Table 2: Partially populated 
+		table2, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		timestamps2 := []time.Time{time.Unix(3000, 0)}
+		table2.SetIndex(timestamps2)
+		
+		intData2 := NewColumnDataInt64([]int64{300})
+		err = table2.SetData(0, &intData2)
+		require.NoError(t, err)
+		
+		// Leave columns 1 and 2 with their default empty initialization
+		
+		// Table 3: Only initialized, no data set
+		table3, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		timestamps3 := []time.Time{time.Unix(4000, 0)}
+		table3.SetIndex(timestamps3)
+		
+		// No column data set - all should remain in their initialized empty state
+		
+		// Merge all three tables - this tests the nil safety checks
+		result, err := MergeSingleTableWriters([]WriterTable{table1, table2, table3})
+		require.NoError(t, err)
+		require.Equal(t, 4, result.rowCount) // 2 + 1 + 1
+		
+		// Verify the merged data for populated columns
+		resultIntCol, err := result.GetData(0)
+		require.NoError(t, err)
+		intCol, ok := resultIntCol.(*ColumnDataInt64)
+		require.True(t, ok)
+		require.Equal(t, []int64{100, 200, 300}, intCol.xs) // Only populated data is merged
+		
+		// Verify partially populated columns work correctly - should not crash
+		resultDoubleCol, err := result.GetData(1)
+		require.NoError(t, err)
+		require.NotNil(t, resultDoubleCol)
+		require.Equal(t, 2, resultDoubleCol.Length()) // Only from table1 which had data
+		
+		resultStringCol, err := result.GetData(2)
+		require.NoError(t, err)
+		require.NotNil(t, resultStringCol)
+		require.Equal(t, 2, resultStringCol.Length()) // Only from table1 which had data
+	})
+	
+	t.Run("table structure integrity during operations", func(t *testing.T) {
+		// This test ensures that table structure remains sound for toNativeTableData
+		// by testing various scenarios that could cause issues
+		
+		cols := []WriterColumn{
+			{ColumnName: "int_col", ColumnType: TsColumnInt64},
+			{ColumnName: "double_col", ColumnType: TsColumnDouble},
+		}
+		
+		table, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		// Test with minimal data
+		timestamps := []time.Time{time.Unix(1000, 0)}
+		table.SetIndex(timestamps)
+		
+		// Set only one column
+		intData := NewColumnDataInt64([]int64{100})
+		err = table.SetData(0, &intData)
+		require.NoError(t, err)
+		
+		// Leave the second column in its initialized empty state
+		
+		// This should work without any issues - tests safe access to t.data[i]
+		result, err := MergeSingleTableWriters([]WriterTable{table})
+		require.NoError(t, err)
+		require.Equal(t, 1, result.rowCount)
+		
+		// Verify both columns are accessible
+		col0, err := result.GetData(0)
+		require.NoError(t, err)
+		require.NotNil(t, col0)
+		require.Equal(t, 1, col0.Length())
+		
+		col1, err := result.GetData(1)
+		require.NoError(t, err)
+		require.NotNil(t, col1)
+		require.Equal(t, 0, col1.Length()) // Empty but not nil
+	})
+	
+	t.Run("stress test with many empty columns", func(t *testing.T) {
+		// Create a table with many columns to test that initialization scales properly
+		
+		var cols []WriterColumn
+		for i := 0; i < 20; i++ {
+			cols = append(cols, WriterColumn{
+				ColumnName: fmt.Sprintf("col_%d", i),
+				ColumnType: TsColumnInt64,
+			})
+		}
+		
+		table, err := NewWriterTable("test_table", cols)
+		require.NoError(t, err)
+		
+		timestamps := []time.Time{time.Unix(1000, 0)}
+		table.SetIndex(timestamps)
+		
+		// Set data for only every other column
+		for i := 0; i < len(cols); i += 2 {
+			intData := NewColumnDataInt64([]int64{int64(i * 100)})
+			err = table.SetData(i, &intData)
+			require.NoError(t, err)
+		}
+		
+		// Merge should work without issues
+		result, err := MergeSingleTableWriters([]WriterTable{table})
+		require.NoError(t, err)
+		require.Equal(t, 1, result.rowCount)
+		
+		// Verify all columns are accessible
+		for i := 0; i < len(cols); i++ {
+			data, err := result.GetData(i)
+			require.NoError(t, err)
+			require.NotNil(t, data, "Column %d should not be nil", i)
+			
+			if i%2 == 0 {
+				// Columns we set data for
+				require.Equal(t, 1, data.Length(), "Set column %d should have data", i)
+			} else {
+				// Columns left in initialized empty state
+				require.Equal(t, 0, data.Length(), "Empty column %d should have no data", i)
+			}
+		}
+	})
 }

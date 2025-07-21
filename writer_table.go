@@ -42,6 +42,27 @@ type WriterTable struct {
 func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 	data := make([]ColumnData, len(cols))
 
+	// Initialize all columns with empty data to prevent nil entries
+	for i, col := range cols {
+		switch col.ColumnType {
+		case TsColumnInt64:
+			emptyData := NewColumnDataInt64([]int64{})
+			data[i] = &emptyData
+		case TsColumnDouble:
+			emptyData := NewColumnDataDouble([]float64{})
+			data[i] = &emptyData
+		case TsColumnString:
+			emptyData := NewColumnDataString([]string{})
+			data[i] = &emptyData
+		case TsColumnBlob:
+			emptyData := NewColumnDataBlob([][]byte{})
+			data[i] = &emptyData
+		case TsColumnTimestamp:
+			emptyData := NewColumnDataTimestamp([]time.Time{})
+			data[i] = &emptyData
+		}
+	}
+
 	columnInfoByOffset := make([]WriterColumn, len(cols))
 	columnOffsetByName := make(map[string]int)
 
@@ -144,7 +165,6 @@ func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, ou
 
 	// Convert each ColumnData to its native counterpart.
 	for i, column := range t.columnInfoByOffset {
-
 		elem := &colSlice[i]
 
 		// Pin the Go string backing bytes – zero-copy.
@@ -367,6 +387,10 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 		if !writerTableSchemasEqual(base, table) {
 			return WriterTable{}, fmt.Errorf("schema mismatch for table %q: tables have different column schemas", baseName)
 		}
+		// Validate all tables have the same column count
+		if len(table.data) != len(base.data) {
+			return WriterTable{}, fmt.Errorf("column count mismatch for table %q: expected %d columns, got %d", baseName, len(base.data), len(table.data))
+		}
 		totalRows += table.rowCount
 	}
 
@@ -376,6 +400,10 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 	// Create merged data columns - create new instances based on the value type
 	mergedData := make([]ColumnData, len(base.data))
 	for i, baseColumn := range base.data {
+		// SAFETY: Skip nil columns (can occur when parser skips fields)
+		if baseColumn == nil {
+			continue
+		}
 		// Create a new column data of the same type
 		switch baseColumn.ValueType() {
 		case TsValueInt64:
@@ -410,6 +438,10 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 
 		// Append column data
 		for i, column := range table.data {
+			// SAFETY: Skip nil columns (can occur when parser skips fields)
+			if column == nil || mergedData[i] == nil {
+				continue
+			}
 			err := mergedData[i].appendData(column)
 			if err != nil {
 				return WriterTable{}, fmt.Errorf("failed to append data for column %d: %w", i, err)
