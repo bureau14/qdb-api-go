@@ -400,10 +400,6 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 	// Create merged data columns - create new instances based on the value type
 	mergedData := make([]ColumnData, len(base.data))
 	for i, baseColumn := range base.data {
-		// SAFETY: Skip nil columns (can occur when parser skips fields)
-		if baseColumn == nil {
-			continue
-		}
 		// Create a new column data of the same type
 		switch baseColumn.ValueType() {
 		case TsValueInt64:
@@ -438,10 +434,6 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 
 		// Append column data
 		for i, column := range table.data {
-			// SAFETY: Skip nil columns (can occur when parser skips fields)
-			if column == nil || mergedData[i] == nil {
-				continue
-			}
 			err := mergedData[i].appendData(column)
 			if err != nil {
 				return WriterTable{}, fmt.Errorf("failed to append data for column %d: %w", i, err)
