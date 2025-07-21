@@ -260,9 +260,9 @@ func TestHandleOptionsValidation(t *testing.T) {
 			name: "client max parallelism overflow",
 			opts: &HandleOptions{
 				clusterURI:           "qdb://localhost:2836",
-				clientMaxParallelism: int(^uint32(0)) + 1,
+				clientMaxParallelism: 65537,
 			},
-			wantErr: "client max parallelism 4294967296 exceeds maximum allowed value 4294967295",
+			wantErr: "client max parallelism 65537 exceeds maximum allowed value 65536",
 		},
 		{
 			name: "negative timeout",

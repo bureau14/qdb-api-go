@@ -296,9 +296,11 @@ func (o *HandleOptions) validate() error {
 	if o.clientMaxParallelism < 0 {
 		return errors.New("client max parallelism cannot be negative")
 	}
-	// Check if the value fits in uint32 (since C API expects qdb_size_t which maps to size_t/uint)
-	if o.clientMaxParallelism > math.MaxUint32 {
-		return fmt.Errorf("client max parallelism %d exceeds maximum allowed value %d", o.clientMaxParallelism, math.MaxUint32)
+
+	// Check if the parallelism value is reasonable, we want to avoid people doing wrong things
+	const maxParallelism = 65536 // 2^16
+	if o.clientMaxParallelism > maxParallelism {
+		return fmt.Errorf("client max parallelism %d exceeds maximum allowed value %d", o.clientMaxParallelism, maxParallelism)
 	}
 
 	// Validate timeout
