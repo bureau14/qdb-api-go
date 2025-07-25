@@ -85,7 +85,9 @@ func (w *Writer) Length() int {
 // Push writes all tables to the QuasarDB server.
 func (w *Writer) Push(h HandleType) error {
 	var pinner runtime.Pinner
-	defer pinner.Unpin()
+	defer func() {
+		pinner.Unpin()
+	}()
 	var releases []func() // collected column/table release callbacks
 
 	defer func() {
