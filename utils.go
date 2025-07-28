@@ -526,12 +526,14 @@ func qdbReleasePointer(h HandleType, ptr unsafe.Pointer) {
 // Returns *C.char which must be released via qdbReleasePointer when no longer needed.
 //
 // Key decisions and trade-offs:
-//   - Uses qdbAllocAndCopyBytes to leverage QDB’s allocator and optimized memory copy.
+//   - Uses qdbAllocAndCopyBytes to leverage QDB's allocator and optimized memory copy.
 //   - Appends a NUL terminator explicitly to satisfy C string conventions.
-//   - Avoids Go heap for large strings, reducing garbage collector pressure.
+//   - Checks for embedded null bytes following C.CString semantics.
+//   - Handles empty strings by allocating a single null byte.
+//   - Uses simpler make/copy pattern for clarity and safety.
 //
 // Assumptions:
-//   - len(s) > 0; empty string is invalid because no allocation needed or returned pointer would point to just NUL.
+//   - String must not contain embedded null bytes (will return error).
 //   - Caller must free returned *C.char via qdbReleasePointer to avoid memory leak.
 //
 // Performance implications:
@@ -543,54 +545,26 @@ func qdbReleasePointer(h HandleType, ptr unsafe.Pointer) {
 //	// Copy a Go string into C-managed memory:
 //	cStr, err := qdbCopyString(h, \"SELECT * FROM table\")
 //	if err != nil {
-//	    panic(err)
+//	    return err
 //	}
-//	// Use cStr with QDB C API, then free:
-//	qdbReleasePointer(h, unsafe.Pointer(cStr))
+//	defer qdbReleasePointer(h, unsafe.Pointer(cStr))
+//	// Use cStr with QDB C API...
 func qdbCopyString(h HandleType, s string) (*C.char, error) {
-	if len(s) == 0 {
-		return nil, fmt.Errorf("cannot allocate empty string")
-	}
+	// Create null-terminated buffer
+	// For empty strings, we still allocate a single null byte
+	buf := make([]byte, len(s)+1)
+	copy(buf, s)
+	// buf[len(s)] is already 0 from make()
 
-	buf := append(unsafe.Slice(unsafe.StringData(s), len(s)), 0)
-
+	// Allocate and copy using QDB memory management
 	ptr, err := qdbAllocAndCopyBytes(h, buf)
 	if err != nil {
-		return nil, fmt.Errorf("qdbCopyString: allocation failed: %w", err)
+		return nil, wrapError(C.qdb_e_system_local, "qdbCopyString", "error", err.Error())
 	}
 
 	return (*C.char)(unsafe.Pointer(ptr)), nil
 }
 
-// pinStringBytes appends a NUL terminator to *s (if missing), pins the backing
-// byte array and returns a *C.char pointing at it.
-// Decision rationale:
-//   - Re-uses Go storage → avoids extra C allocation and copy.
-//
-// Key assumptions:
-//   - p lifetime ≥ any C usage of the returned pointer.
-//   - *s is a valid Go string; mutation is limited to optional NUL append.
-//
-// Performance trade-offs:
-//   - One O(len(s)) copy only when the NUL terminator must be appended.
-//
-// Usage example:
-//
-//	// var p runtime.Pinner
-//	cStr := pinStringBytes(&p, &tableName)
-//	defer p.Unpin()
-func pinStringBytes(p *runtime.Pinner, s *string) *C.char {
-	if s == nil {
-		return nil
-	}
-	// Make sure the string ends with '\0'
-	if len(*s) == 0 || (*s)[len(*s)-1] != 0 {
-		*s = *s + "\x00"
-	}
-	ptr := unsafe.StringData(*s) // pointer into Go heap
-	p.Pin(ptr)                   // keep it immovable until Unpin
-	return (*C.char)(unsafe.Pointer(ptr))
-}
 
 // castSlice performs a zero-copy reinterpretation from a slice of type []From to []To.
 //

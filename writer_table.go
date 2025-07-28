@@ -167,8 +167,13 @@ func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, ou
 	for i, column := range t.columnInfoByOffset {
 		elem := &colSlice[i]
 
-		// Pin the Go string backing bytes – zero-copy.
-		elem.name = pinStringBytes(pinner, &column.ColumnName)
+		// Allocate C string for column name
+		cName, err := qdbCopyString(h, column.ColumnName)
+		if err != nil {
+			return func() {}, err
+		}
+		releases = append(releases, func() { qdbReleasePointer(h, unsafe.Pointer(cName)) })
+		elem.name = cName
 		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
 		ptr, rel := t.data[i].PinToC(pinner, h) // zero-copy
@@ -213,9 +218,19 @@ func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, ou
 func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) (func(), error) {
 	var err error
 
-	// Zero-copy: use the Go string bytes directly and pin them so the GC keeps
-	// the backing array alive for the entire push.
-	out.name = pinStringBytes(pinner, &t.TableName)
+	var releases []func()
+
+	// Allocate C string for table name
+	cTableName, err := qdbCopyString(h, t.TableName)
+	if err != nil {
+		return func() {}, err
+	}
+	// Add table name release to releases
+	releases = append(releases, func() {
+		qdbReleasePointer(h, unsafe.Pointer(cTableName))
+	})
+
+	out.name = cTableName
 
 	// Zero-initialize the rest of the struct. This should already be the case,
 	// but just in case, we are very explicit about all the default values we
@@ -234,8 +249,6 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 		return func() {}, fmt.Errorf("upsert deduplication mode requires drop duplicate columns to be set")
 	}
 
-	var releases []func()
-
 	if len(opts.dropDuplicateColumns) > 0 {
 		count := len(opts.dropDuplicateColumns)
 		ptr, err := qdbAllocBuffer[*C.char](h, count)
@@ -249,7 +262,12 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 
 		dupSlice := unsafe.Slice(ptr, count)
 		for i := range opts.dropDuplicateColumns {
-			dupSlice[i] = pinStringBytes(pinner, &opts.dropDuplicateColumns[i])
+			cDupCol, err := qdbCopyString(h, opts.dropDuplicateColumns[i])
+			if err != nil {
+				return func() {}, err
+			}
+			releases = append(releases, func() { qdbReleasePointer(h, unsafe.Pointer(cDupCol)) })
+			dupSlice[i] = cDupCol
 		}
 
 		out.where_duplicate = ptr
