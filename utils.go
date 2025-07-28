@@ -13,7 +13,6 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
-	"runtime"
 	"strings"
 	"time"
 	"unsafe"
@@ -564,7 +563,6 @@ func qdbCopyString(h HandleType, s string) (*C.char, error) {
 
 	return (*C.char)(unsafe.Pointer(ptr)), nil
 }
-
 
 // castSlice performs a zero-copy reinterpretation from a slice of type []From to []To.
 //
