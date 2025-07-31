@@ -165,6 +165,7 @@ func (w *Writer) Push(h HandleType) error {
 		if err != nil {
 			return wrapError(C.qdb_e_invalid_argument, "writer_push", "table", v.GetName(), "error", err)
 		}
+
 		allPinnableBuilders = append(allPinnableBuilders, pinnableBuilders...)
 		releases = append(releases, releaseTableData)
 		i++
@@ -178,6 +179,7 @@ func (w *Writer) Push(h HandleType) error {
 	// The Objects array contains interface{} values that wrap actual pointers
 	// (like unsafe.Pointer from unsafe.SliceData() or unsafe.StringData()).
 	// We must pin the actual data, not the interface{} container.
+
 	for _, builder := range allPinnableBuilders {
 		for _, obj := range builder.Objects {
 			if obj != nil {
@@ -188,6 +190,9 @@ func (w *Writer) Push(h HandleType) error {
 					pinner.Pin(v)
 				case *byte:
 					// Pin the actual data pointer (from unsafe.SliceData/StringData)
+					pinner.Pin(v)
+				case *string:
+					// Handle string pointer case
 					pinner.Pin(v)
 				default:
 					// Fallback: pin the interface{} container (legacy behavior)
@@ -267,6 +272,9 @@ func (w *Writer) Push(h HandleType) error {
 					runtime.KeepAlive(v)
 				case *byte:
 					// Keep alive the actual data pointer (from unsafe.SliceData/StringData)
+					runtime.KeepAlive(v)
+				case *string:
+					// Handle string pointer case
 					runtime.KeepAlive(v)
 				default:
 					// Fallback: keep alive the interface{} container (legacy behavior)

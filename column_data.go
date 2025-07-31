@@ -511,23 +511,22 @@ func (cd *ColumnDataBlob) PinToC(h HandleType) (PinnableBuilder, func()) {
 		return PinnableBuilder{}, func() {}
 	}
 
-	// Allocate C envelope for qdb_blob_t array
+	// Allocate C envelope (unchanged)
 	envelope := qdbAllocBuffer[C.qdb_blob_t](h, len(cd.xs))
 	envelopeSlice := unsafe.Slice(envelope, len(cd.xs))
 
-	// Create objects array for pinning individual blobs
-	objects := make([]interface{}, 0, len(cd.xs))
-	for _, blob := range cd.xs {
-		if len(blob) > 0 {
-			objects = append(objects, unsafe.SliceData(blob))
-		}
-	}
+	// Track copied blobs for cleanup
+	copiedBlobs := make([]unsafe.Pointer, 0, len(cd.xs))
 
-	return NewPinnableBuilderMultiple(objects, func() unsafe.Pointer {
-			// Build C structures AFTER pinning
+	// No objects to pin - we're copying instead
+	return NewPinnableBuilderMultiple(nil, func() unsafe.Pointer {
+			// Build C structures (executed in Phase 2.5 after pinning)
 			for i, blob := range cd.xs {
 				if len(blob) > 0 {
-					envelopeSlice[i].content = unsafe.Pointer(unsafe.SliceData(blob))
+					// Copy blob to C memory
+					blobPtr := qdbAllocAndCopyBytes(h, blob)
+					copiedBlobs = append(copiedBlobs, blobPtr)
+					envelopeSlice[i].content = blobPtr
 					envelopeSlice[i].content_length = C.qdb_size_t(len(blob))
 				} else {
 					envelopeSlice[i].content = nil
@@ -536,7 +535,11 @@ func (cd *ColumnDataBlob) PinToC(h HandleType) (PinnableBuilder, func()) {
 			}
 			return unsafe.Pointer(envelope)
 		}), func() {
-			// Only release the envelope, not blob data (owned by Go)
+			// Release all copied blobs
+			for _, blobPtr := range copiedBlobs {
+				qdbReleasePointer(h, blobPtr)
+			}
+			// Release envelope
 			qdbRelease(h, envelope)
 		}
 }
@@ -625,42 +628,41 @@ func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 
 // PinToC builds a C envelope for string data and returns PinnableBuilder.
 //
-// ZERO-COPY STRATEGY: For strings, we pin each individual string's data pointer
-// rather than copying. This provides optimal performance for string operations
-// while maintaining safety through proper pinning.
+// COPYING STRATEGY: For strings, we copy each string to C memory using qdbCopyString
+// rather than pinning. This provides safety by avoiding unsafe pointer operations
+// while maintaining correct memory management through proper cleanup.
 //
 // Implementation notes:
-//   - Each string is pinned individually using unsafe.StringData
+//   - Each string is copied to C memory using qdbCopyString
 //   - The envelope array is allocated in C memory
-//   - Only the envelope is released, not the string data (owned by Go)
-//   - Go strings are immutable, so this is safe
+//   - Both the envelope and copied strings are released
+//   - Go strings are immutable, so copying is safe
 //
 // Safety considerations:
-//   - All string data pointers are pinned before C access
-//   - The centralized pinning strategy ensures correctness
-//   - String immutability is preserved (C cannot modify)
+//   - All string data is copied to C memory before C access
+//   - No pinning required since we use copying instead
+//   - String immutability is preserved (C cannot modify original strings)
 func (cd *ColumnDataString) PinToC(h HandleType) (PinnableBuilder, func()) {
 	if len(cd.xs) == 0 {
 		return PinnableBuilder{}, func() {}
 	}
 
-	// Allocate C envelope for qdb_string_t array
+	// Allocate C envelope (unchanged)
 	envelope := qdbAllocBuffer[C.qdb_string_t](h, len(cd.xs))
 	envelopeSlice := unsafe.Slice(envelope, len(cd.xs))
 
-	// Create objects array for pinning individual strings
-	objects := make([]interface{}, 0, len(cd.xs))
-	for _, str := range cd.xs {
-		if len(str) > 0 {
-			objects = append(objects, unsafe.StringData(str))
-		}
-	}
+	// Track copied strings for cleanup
+	copiedStrings := make([]*C.char, 0, len(cd.xs))
 
-	return NewPinnableBuilderMultiple(objects, func() unsafe.Pointer {
-			// Build C structures AFTER pinning
+	// No objects to pin - we're copying instead
+	return NewPinnableBuilderMultiple(nil, func() unsafe.Pointer {
+			// Build C structures (executed in Phase 2.5 after pinning)
 			for i, str := range cd.xs {
 				if len(str) > 0 {
-					envelopeSlice[i].data = (*C.char)(unsafe.Pointer(unsafe.StringData(str)))
+					// Copy string to C memory (includes null terminator)
+					cStr := qdbCopyString(h, str)
+					copiedStrings = append(copiedStrings, cStr)
+					envelopeSlice[i].data = cStr
 					envelopeSlice[i].length = C.qdb_size_t(len(str))
 				} else {
 					envelopeSlice[i].data = nil
@@ -669,7 +671,11 @@ func (cd *ColumnDataString) PinToC(h HandleType) (PinnableBuilder, func()) {
 			}
 			return unsafe.Pointer(envelope)
 		}), func() {
-			// Only release the envelope, not string data (owned by Go)
+			// Release all copied strings
+			for _, cStr := range copiedStrings {
+				qdbReleasePointer(h, unsafe.Pointer(cStr))
+			}
+			// Release envelope
 			qdbRelease(h, envelope)
 		}
 }

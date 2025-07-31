@@ -157,7 +157,6 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 	// Collect PinnableBuilders for centralized pinning
 	var pinnableBuilders []PinnableBuilder
 
-
 	// Zero-copy: Pass timestamp index directly
 	// SAFETY: This demonstrates the critical pattern for all zero-copy operations.
 	// We MUST NOT assign the pointer now because t.idx[0] isn't pinned yet!
