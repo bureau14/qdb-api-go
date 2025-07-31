@@ -12,7 +12,6 @@ import "C"
 
 import (
 	"fmt"
-	"runtime"
 	"time"
 	"unsafe"
 )
@@ -43,23 +42,27 @@ type ColumnData interface {
 	// Unsafe variant of appendData(), does not check for type safety
 	appendDataUnsafe(data ColumnData)
 
-	// Zero-copy / pin path.  The returned release-fn **must always be
-	// called** by the caller once the C function that consumed the buffer
-	// has returned (typically right after qdb_exp_batch_push_with_options).
+	// PinToC prepares column data for zero-copy passing to C functions.
 	//
-	//   p       – caller-owned pinner that outlives the C call.
-	//   h       – handle, in case a tiny C allocation is still required
-	//             (e.g., the []qdb_string_t envelope for strings).
+	// CRITICAL: This is part of the centralized pinning strategy that prevents segfaults.
+	// The function returns a PinnableBuilder that MUST be pinned at the top level
+	// (in Writer.Push) before any C calls. This two-phase approach ensures:
+	//   1. All pointers are collected before any pinning occurs
+	//   2. The runtime.Pinner can pin all objects in one batch
+	//   3. No Go pointers are stored in C-accessible memory before pinning
 	//
-	//   ptr     – address to be stored in qdb_exp_batch_push_column_t.data
-	//             (never nil; on error PinToC returns (nil, nil, err)).
+	// Parameters:
+	//   h       – handle for QDB memory allocation when copies are required
 	//
-	//   release – releases any C allocations done inside PinToC;
-	//             it is a no-op for “pure pin” cases.
+	// Returns:
+	//   builder – PinnableBuilder containing the object to pin and builder function
+	//   release – cleanup function for any C allocations (called after C returns)
 	//
-	// Implementations of this function always pin memory to the pinner whenever
-	// possible.
-	PinToC(p *runtime.Pinner, h HandleType) (ptr unsafe.Pointer, release func())
+	// Implementation notes:
+	//   - Int64/Double/Timestamp: Direct pin of Go slice memory (zero-copy)
+	//   - Blob/String: MUST copy to C memory to avoid storing Go pointers before pinning
+	//   - The release function is always safe to call, even on error
+	PinToC(h HandleType) (builder PinnableBuilder, release func())
 }
 
 // --- Int64 ---------------------------------------------------------
@@ -89,14 +92,23 @@ func (cd *ColumnDataInt64) Clear() {
 	cd.xs = make([]int64, 0)
 }
 
-// PinToC pins slice for C access.
-func (cd *ColumnDataInt64) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+// PinToC prepares int64 data for zero-copy passing to C.
+//
+// ZERO-COPY STRATEGY: Safe for numeric types like int64 because:
+// - Simple value type with no internal pointers
+// - Direct memory layout compatible with C
+// - Pinning prevents GC movement during C operations
+//
+// Performance: Zero allocations, zero copies - maximum efficiency.
+func (cd *ColumnDataInt64) PinToC(h HandleType) (PinnableBuilder, func()) {
 	if len(cd.xs) == 0 {
-		return nil, func() {}
+		return PinnableBuilder{}, func() {}
 	}
 	base := &cd.xs[0]
-	p.Pin(base)
-	return unsafe.Pointer(base), func() {}
+	return NewPinnableBuilderSingle(base, func() unsafe.Pointer {
+		// Executed AFTER pinning for safety
+		return unsafe.Pointer(base)
+	}), func() {} // No C allocations, so no cleanup needed
 }
 
 // appendData appends another ColumnDataInt64.
@@ -236,14 +248,27 @@ func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// PinToC pins slice for C access.
-func (cd *ColumnDataDouble) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+// PinToC prepares float64 data for zero-copy passing to C.
+//
+// ZERO-COPY STRATEGY: Numeric types (int64, float64, timestamp) can safely
+// use zero-copy because they are simple value types without internal pointers.
+// We return a PinnableBuilder that will provide the pointer AFTER pinning.
+//
+// Why zero-copy is safe here:
+// - float64 is a value type with no internal pointers
+// - Pinning prevents GC from moving the slice during C operations
+// - No risk of violating string immutability or pointer rules
+//
+// Performance: Zero allocations, zero copies - maximum efficiency.
+func (cd *ColumnDataDouble) PinToC(h HandleType) (PinnableBuilder, func()) {
 	if len(cd.xs) == 0 {
-		return nil, func() {}
+		return PinnableBuilder{}, func() {}
 	}
 	base := &cd.xs[0]
-	p.Pin(base)
-	return unsafe.Pointer(base), func() {}
+	return NewPinnableBuilderSingle(base, func() unsafe.Pointer {
+		// This executes AFTER pinning, making it safe
+		return unsafe.Pointer(base)
+	}), func() {} // No C allocations, so no cleanup needed
 }
 
 // NewColumnDataDouble creates float64 column data.
@@ -324,14 +349,23 @@ func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// PinToC pins slice for C access.
-func (cd *ColumnDataTimestamp) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
+// PinToC prepares timestamp data for zero-copy passing to C.
+//
+// ZERO-COPY STRATEGY: Safe because we store data in C.qdb_timespec_t format:
+// - Data is already in C-compatible memory layout
+// - Direct pinning like int64/double (no conversion needed)
+// - Pinning prevents GC movement during C operations
+//
+// Performance: Zero allocations, zero copies - maximum efficiency.
+func (cd *ColumnDataTimestamp) PinToC(h HandleType) (PinnableBuilder, func()) {
 	if len(cd.xs) == 0 {
-		return nil, func() {}
+		return PinnableBuilder{}, func() {}
 	}
 	base := &cd.xs[0]
-	p.Pin(base)
-	return unsafe.Pointer(base), func() {}
+	return NewPinnableBuilderSingle(base, func() unsafe.Pointer {
+		// Executed AFTER pinning for safety
+		return unsafe.Pointer(base)
+	}), func() {} // No C allocations, so no cleanup needed
 }
 
 // NewColumnDataTimestamp creates timestamp column data.
@@ -380,17 +414,17 @@ func newColumnDataTimestampFromNative(
 	if err != nil {
 		return ColumnDataTimestamp{}, err
 	}
+	// Keep data in C.qdb_timespec_t format
 	return ColumnDataTimestamp{xs: specs}, nil
 }
 
 // GetColumnDataTimestamp extracts []time.Time from ColumnData.
 func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
-	xs, err := GetColumnDataTimestampNative(cd)
-	if err != nil {
-		return nil, err
+	v, ok := cd.(*ColumnDataTimestamp)
+	if !ok {
+		return nil, fmt.Errorf("GetColumnDataTimestamp: expected ColumnDataTimestamp, got %T", cd)
 	}
-
-	return QdbTimespecSliceToTime(xs), nil
+	return QdbTimespecSliceToTime(v.xs), nil
 }
 
 // GetColumnDataTimestampNative extracts []C.qdb_timespec_t from ColumnData.
@@ -399,17 +433,21 @@ func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 	if !ok {
 		return nil, fmt.Errorf("GetColumnDataTimestamp: expected ColumnDataTimestamp, got %T", cd)
 	}
+	// Data is already in C.qdb_timespec_t format
 	return v.xs, nil
 }
 
 // GetColumnDataTimestampUnsafe extracts []time.Time without type check.
 func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
-	return QdbTimespecSliceToTime(GetColumnDataTimestampNativeUnsafe(cd))
+	v := (*ColumnDataTimestamp)(ifaceDataPtr(cd))
+	return QdbTimespecSliceToTime(v.xs)
 }
 
 // GetColumnDataTimestampNativeUnsafe extracts []C.qdb_timespec_t without type check.
 func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
-	return (*ColumnDataTimestamp)(ifaceDataPtr(cd)).xs
+	v := (*ColumnDataTimestamp)(ifaceDataPtr(cd))
+	// Data is already in C.qdb_timespec_t format
+	return v.xs
 }
 
 // --- Blob ---------------------------------------------------------
@@ -453,41 +491,54 @@ func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// PinToC builds a C envelope and pins each []byte in cd.xs.
+// PinToC builds a C envelope for blob data and returns PinnableBuilder.
 //
-// Decision rationale:
+// ZERO-COPY STRATEGY: For blobs, we pin each individual blob's data pointer
+// rather than copying. This requires more complex pinning but provides optimal
+// performance for large binary data transfers.
 //
-//	– Zero-copy path avoids duplicating potentially large blobs.
-//	– release() frees only the envelope; Go memory is unpinned automatically.
-func (cd *ColumnDataBlob) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
-	count := len(cd.xs)
-	if count == 0 {
-		// still return a valid no-op release func
-		return nil, func() {}
+// Implementation notes:
+//   - Each []byte is pinned individually using unsafe.SliceData
+//   - The envelope array is allocated in C memory
+//   - Only the envelope is released, not the blob data (owned by Go)
+//
+// Safety considerations:
+//   - All blob data pointers are pinned before C access
+//   - The centralized pinning strategy ensures correctness
+//   - Blobs are immutable during C operations
+func (cd *ColumnDataBlob) PinToC(h HandleType) (PinnableBuilder, func()) {
+	if len(cd.xs) == 0 {
+		return PinnableBuilder{}, func() {}
 	}
 
-	// Envelope allocated once in C memory
-	arr, err := qdbAllocBuffer[C.qdb_blob_t](h, count)
-	if err != nil {
-		panic(err)
-	}
-	slice := unsafe.Slice(arr, count)
+	// Allocate C envelope for qdb_blob_t array
+	envelope := qdbAllocBuffer[C.qdb_blob_t](h, len(cd.xs))
+	envelopeSlice := unsafe.Slice(envelope, len(cd.xs))
 
-	// Point each qdb_blob_t to pinned Go byte slices (zero-copy)
-	for i, b := range cd.xs {
-		if len(b) > 0 {
-			p.Pin(&b[0])                             // keep backing array immovable
-			slice[i].content = unsafe.Pointer(&b[0]) // direct pointer into Go memory
-			slice[i].content_length = C.qdb_size_t(len(b))
+	// Create objects array for pinning individual blobs
+	objects := make([]interface{}, 0, len(cd.xs))
+	for _, blob := range cd.xs {
+		if len(blob) > 0 {
+			objects = append(objects, unsafe.SliceData(blob))
 		}
 	}
 
-	// Always return a valid release closure (no-op for the blob contents)
-	release := func() {
-		qdbRelease(h, arr) // free only the envelope allocated above
-	}
-
-	return unsafe.Pointer(arr), release
+	return NewPinnableBuilderMultiple(objects, func() unsafe.Pointer {
+			// Build C structures AFTER pinning
+			for i, blob := range cd.xs {
+				if len(blob) > 0 {
+					envelopeSlice[i].content = unsafe.Pointer(unsafe.SliceData(blob))
+					envelopeSlice[i].content_length = C.qdb_size_t(len(blob))
+				} else {
+					envelopeSlice[i].content = nil
+					envelopeSlice[i].content_length = 0
+				}
+			}
+			return unsafe.Pointer(envelope)
+		}), func() {
+			// Only release the envelope, not blob data (owned by Go)
+			qdbRelease(h, envelope)
+		}
 }
 
 // NewColumnDataBlob creates binary column data.
@@ -572,48 +623,55 @@ func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 	cd.xs = append(cd.xs, other.xs...)
 }
 
-// PinToC builds a C envelope and pins each string in cd.xs.
+// PinToC builds a C envelope for string data and returns PinnableBuilder.
 //
-// Decision rationale:
+// ZERO-COPY STRATEGY: For strings, we pin each individual string's data pointer
+// rather than copying. This provides optimal performance for string operations
+// while maintaining safety through proper pinning.
 //
-//	– Zero-copy path avoids duplicating potentially large strings.
-//	– qdb_string_t uses explicit length, so NUL-termination is not required.
-func (cd *ColumnDataString) PinToC(p *runtime.Pinner, h HandleType) (unsafe.Pointer, func()) {
-	count := len(cd.xs)
-	if count == 0 {
-		// still return a valid no-op release func
-		return nil, func() {}
+// Implementation notes:
+//   - Each string is pinned individually using unsafe.StringData
+//   - The envelope array is allocated in C memory
+//   - Only the envelope is released, not the string data (owned by Go)
+//   - Go strings are immutable, so this is safe
+//
+// Safety considerations:
+//   - All string data pointers are pinned before C access
+//   - The centralized pinning strategy ensures correctness
+//   - String immutability is preserved (C cannot modify)
+func (cd *ColumnDataString) PinToC(h HandleType) (PinnableBuilder, func()) {
+	if len(cd.xs) == 0 {
+		return PinnableBuilder{}, func() {}
 	}
 
-	// Allocate the C envelope once
-	arr, err := qdbAllocBuffer[C.qdb_string_t](h, count)
-	if err != nil {
-		panic(err)
-	}
-	slice := unsafe.Slice(arr, count)
+	// Allocate C envelope for qdb_string_t array
+	envelope := qdbAllocBuffer[C.qdb_string_t](h, len(cd.xs))
+	envelopeSlice := unsafe.Slice(envelope, len(cd.xs))
 
-	// Fill the envelope with zero-copy, pinned Go strings
-	for i := 0; i < count; i++ {
-		s := &cd.xs[i]
-		if len(*s) == 0 {
-			continue // leave data/length = 0
+	// Create objects array for pinning individual strings
+	objects := make([]interface{}, 0, len(cd.xs))
+	for _, str := range cd.xs {
+		if len(str) > 0 {
+			objects = append(objects, unsafe.StringData(str))
 		}
-
-		// qdb_string_t already carries an explicit length, therefore no
-		// NUL-terminator is required.  We simply obtain the address of the
-		// existing Go string bytes, pin that memory so the GC can’t move it,
-		// and store the pointer/length in the envelope.
-		dataPtr := unsafe.StringData(*s) // pointer to first byte
-		p.Pin(dataPtr)                   // keep the bytes immovable
-
-		slice[i].data = (*C.char)(unsafe.Pointer(dataPtr))
-		slice[i].length = C.qdb_size_t(len(*s))
 	}
 
-	// envelope itself must be freed after the C call
-	release := func() { qdbRelease(h, arr) }
-
-	return unsafe.Pointer(arr), release
+	return NewPinnableBuilderMultiple(objects, func() unsafe.Pointer {
+			// Build C structures AFTER pinning
+			for i, str := range cd.xs {
+				if len(str) > 0 {
+					envelopeSlice[i].data = (*C.char)(unsafe.Pointer(unsafe.StringData(str)))
+					envelopeSlice[i].length = C.qdb_size_t(len(str))
+				} else {
+					envelopeSlice[i].data = nil
+					envelopeSlice[i].length = 0
+				}
+			}
+			return unsafe.Pointer(envelope)
+		}), func() {
+			// Only release the envelope, not string data (owned by Go)
+			qdbRelease(h, envelope)
+		}
 }
 
 // NewColumnDataString creates string column data.

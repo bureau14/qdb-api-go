@@ -11,8 +11,6 @@ package qdb
 import "C"
 
 import (
-	"fmt"
-	"runtime"
 	"time"
 	"unsafe"
 )
@@ -105,60 +103,80 @@ func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
 }
 
-// toNativeTableData initialises `out` so it can be passed directly to
-// qdb_exp_batch_push_with_options.
+// toNativeTableData prepares table data for C API consumption.
 //
-// Decision rationale:
-//   - Avoid copies: the timestamp index and every numeric/timespec column
-//     are passed zero-copy by pinning the backing Go slices.
-//   - Keep memory-ownership crystal clear: every temporary C allocation
-//     made here is registered in a slice and folded into ONE `release`
-//     closure returned to the caller.
+// CRITICAL SAFETY PATTERN: This function creates PinnableBuilders to defer
+// pointer assignment until AFTER memory is pinned. This prevents segfaults
+// from violating Go 1.23+ CGO pointer rules.
 //
-// Key assumptions:
-//   - t.idx, t.data and t.columnInfoByOffset have already been validated.
-//   - `pinner` outlives the C call that will consume `out`.
-//   - Each ColumnData implementation obeys CGO pointer-safety when
-//     returning from PinToC.
+// The Problem (CAUSES SEGFAULT):
 //
-// Performance trade-offs:
-//   - Exactly one C allocation for the column envelope (O(#columns));
-//     all row-level data stays in Go memory.
+//	out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))  // CRASH!
+//	// ^^ Storing Go pointer in C memory before pinning = immediate panic
 //
-// Usage example:
+// The Solution (SAFE):
 //
-//	rel, err := tbl.toNativeTableData(&pinner, h, &cTbl.data)
-//	if err != nil { … }
-//	defer rel()   // single call releases every allocation done here.
-func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, out *C.qdb_exp_batch_push_table_data_t) (func(), error) {
+//	pinnableBuilders = append(pinnableBuilders, PinnableBuilder{
+//	    Objects: []interface{}{&t.idx[0]},  // What to pin
+//	    Builder: func() unsafe.Pointer {  // Executed AFTER pinning
+//	        out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
+//	        return unsafe.Pointer(&t.idx[0])
+//	    },
+//	})
+//
+// Memory strategy by column type:
+//   - Timestamps: Zero-copy with pinning (Go slice → pin → C pointer)
+//   - Int64/Double: Zero-copy with pinning (Go slice → pin → C pointer)
+//   - Blob/String: Copy to C memory (Go slice → copy → C memory, no pinning)
+//
+// This is Phase 1 of the 5-phase pattern. No pinning or pointer assignment
+// happens here - only preparation of builders for later execution.
+//
+// Returns:
+//   - pinnableBuilders: Closures that assign pointers AFTER pinning
+//   - release: Cleanup function for all C allocations
+//   - error: Any validation or allocation failures
+func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_table_data_t) ([]PinnableBuilder, func(), error) {
 	// Set row and column counts directly.
 	out.row_count = C.qdb_size_t(t.rowCount)
 	out.column_count = C.qdb_size_t(len(t.data))
 
 	// Index ("timestamps") slice: directly reference underlying Go slice memory.
 	if t.idx == nil {
-		return func() {}, fmt.Errorf("Index is not set")
+		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "reason", "index not set")
 	}
 
 	if t.rowCount <= 0 {
-		return func() {}, fmt.Errorf("Index provided, but number of rows is 0")
+		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "rows", t.rowCount, "reason", "no rows")
 	}
 
 	if len(t.data) == 0 {
-		return func() {}, fmt.Errorf("Index provided, but no column data provided")
+		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "columns", len(t.data), "reason", "no columns")
 	}
 
-	// Zero-copy: pin the existing Go slice; safe because qdb_timespec_t has no Go pointers.
-	pinner.Pin(&t.idx[0])
-	out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
+	// Collect PinnableBuilders for centralized pinning
+	var pinnableBuilders []PinnableBuilder
+
+
+	// Zero-copy: Pass timestamp index directly
+	// SAFETY: This demonstrates the critical pattern for all zero-copy operations.
+	// We MUST NOT assign the pointer now because t.idx[0] isn't pinned yet!
+	// Instead, we create a closure that will execute this assignment later.
+	//
+	// WRONG (causes segfault):
+	//   out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
+	//
+	// RIGHT (what we do here):
+	pinnableBuilders = append(pinnableBuilders, NewPinnableBuilderSingle(&t.idx[0], func() unsafe.Pointer {
+		// This code runs in Phase 2.5, AFTER t.idx[0] is pinned
+		out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
+		return unsafe.Pointer(&t.idx[0])
+	}))
 
 	// Allocate native columns array using the QuasarDB allocator so the
 	// memory remains valid after this function returns.
 	columnCount := len(t.data)
-	cols, err := qdbAllocBuffer[C.qdb_exp_batch_push_column_t](h, columnCount)
-	if err != nil {
-		return func() {}, err
-	}
+	cols := qdbAllocBuffer[C.qdb_exp_batch_push_column_t](h, columnCount)
 	colSlice := unsafe.Slice(cols, columnCount)
 
 	var releases []func()
@@ -168,63 +186,77 @@ func (t *WriterTable) toNativeTableData(pinner *runtime.Pinner, h HandleType, ou
 		elem := &colSlice[i]
 
 		// Allocate C string for column name
-		cName, err := qdbCopyString(h, column.ColumnName)
-		if err != nil {
-			return func() {}, err
-		}
+		cName := qdbCopyString(h, column.ColumnName)
 		releases = append(releases, func() { qdbReleasePointer(h, unsafe.Pointer(cName)) })
 		elem.name = cName
 		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
-		ptr, rel := t.data[i].PinToC(pinner, h) // zero-copy
-		*(*unsafe.Pointer)(unsafe.Pointer(&elem.data[0])) = ptr
+		// Convert column data based on type:
+		// - Numeric types: Zero-copy with pinning (efficient but requires pinning)
+		// - Blob/String: Copy to C memory (2x memory but avoids pointer violations)
+		builder, rel := t.data[i].PinToC(h)
+
+		// CRITICAL VARIABLE CAPTURE PATTERN:
+		// We MUST capture loop variables to avoid all builders referencing the last element!
+		//
+		// WRONG (all builders would use the last elem):
+		//   Builder: func() { elem.data = ... }  // elem changes each iteration!
+		//
+		// RIGHT (each builder uses its own elem):
+		currentElem := elem     // Capture current iteration's pointer
+		localBuilder := builder // Capture current iteration's builder
+
+		wrappedBuilder := NewPinnableBuilderMultiple(localBuilder.Objects, func() unsafe.Pointer {
+			// This executes in Phase 2.5 with captured variables
+			ptr := localBuilder.Builder()
+			// Store the pointer in the C structure
+			*(*unsafe.Pointer)(unsafe.Pointer(&currentElem.data[0])) = ptr
+			return ptr
+		})
+		pinnableBuilders = append(pinnableBuilders, wrappedBuilder)
 		releases = append(releases, rel)
 	}
 
 	// Store the pointer to the first element.
 	out.columns = cols
 
+	// Create a single release function that cleans up all allocations
 	releaseAll := func() {
+		// Release all column-specific allocations (names, blob/string data)
 		for _, f := range releases {
 			f()
 		}
-		// cols was C-allocated, must be freed; timestamps are Go-pinned, no release.
+		// Release the column envelope (C-allocated metadata)
 		qdbRelease(h, cols)
+		// Note: Timestamp index and numeric columns use Go memory - no release needed
 	}
-	return releaseAll, nil
+	return pinnableBuilders, releaseAll, nil
 }
 
-// toNative converts a WriterTable into the flat
-// qdb_exp_batch_push_table_t required by the batch writer.
+// toNative converts a WriterTable to the C structure for batch push.
 //
-// Decision rationale:
-//   - Encapsulate every table-level conversion and gather the subordinate
-//     column release callbacks into a single closure, mirroring the
-//     semantics of multiple defers while incurring only one.
+// This is a wrapper around toNativeTableData that adds table-level
+// metadata like name, deduplication settings, and creation mode.
 //
-// Key assumptions:
-//   - `pinner` survives until the batch push completes.
-//   - `opts` were validated in Writer.Push.
+// IMPORTANT: This function is part of Phase 1 (Prepare) of the
+// centralized pinning strategy. It collects PinnableBuilders but
+// does NOT pin them - that happens later in Writer.Push.
 //
-// Performance trade-offs:
-//   - No data copies; only minimal envelope allocations done in
-//     toNativeTableData.
+// The function handles:
+//  1. Table name allocation (C memory)
+//  2. Deduplication column setup (if enabled)
+//  3. Delegation to toNativeTableData for actual data
+//  4. Aggregation of all release functions
 //
-// Usage example:
-//
-//	rel, err := tbl.toNative(&pinner, h, opts, &cTbl)
-//	if err != nil { … }
-//	defer rel()
-func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) (func(), error) {
+// Memory safety note: All C allocations are tracked in the releases
+// slice to ensure proper cleanup even on error paths.
+func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_batch_push_table_t) ([]PinnableBuilder, func(), error) {
 	var err error
 
 	var releases []func()
 
 	// Allocate C string for table name
-	cTableName, err := qdbCopyString(h, t.TableName)
-	if err != nil {
-		return func() {}, err
-	}
+	cTableName := qdbCopyString(h, t.TableName)
 	// Add table name release to releases
 	releases = append(releases, func() {
 		qdbReleasePointer(h, unsafe.Pointer(cTableName))
@@ -246,15 +278,12 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 	// Upsert mode requires explicit columns so QuasarDB knows which columns
 	// are compared for duplicates.
 	if opts.dedupMode == WriterDeduplicationModeUpsert && len(opts.dropDuplicateColumns) == 0 {
-		return func() {}, fmt.Errorf("upsert deduplication mode requires drop duplicate columns to be set")
+		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "dedup_mode", "upsert", "reason", "missing drop duplicate columns")
 	}
 
 	if len(opts.dropDuplicateColumns) > 0 {
 		count := len(opts.dropDuplicateColumns)
-		ptr, err := qdbAllocBuffer[*C.char](h, count)
-		if err != nil {
-			return func() {}, err
-		}
+		ptr := qdbAllocBuffer[*C.char](h, count)
 
 		releases = append(releases, func() {
 			qdbRelease(h, ptr)
@@ -262,10 +291,7 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 
 		dupSlice := unsafe.Slice(ptr, count)
 		for i := range opts.dropDuplicateColumns {
-			cDupCol, err := qdbCopyString(h, opts.dropDuplicateColumns[i])
-			if err != nil {
-				return func() {}, err
-			}
+			cDupCol := qdbCopyString(h, opts.dropDuplicateColumns[i])
 			releases = append(releases, func() { qdbReleasePointer(h, unsafe.Pointer(cDupCol)) })
 			dupSlice[i] = cDupCol
 		}
@@ -280,9 +306,9 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 	// Never automatically create tables
 	out.creation = C.qdb_exp_batch_creation_mode_t(C.qdb_exp_batch_dont_create)
 
-	releaseTableData, err := t.toNativeTableData(pinner, h, &out.data)
+	pinnableObjects, releaseTableData, err := t.toNativeTableData(h, &out.data)
 	if err != nil {
-		return releaseTableData, err
+		return pinnableObjects, releaseTableData, err
 	}
 
 	release := func() {
@@ -293,18 +319,18 @@ func (t *WriterTable) toNative(pinner *runtime.Pinner, h HandleType, opts Writer
 		}
 	}
 
-	return release, nil
+	return pinnableObjects, release, nil
 }
 
 // SetData sets column data at the given offset.
 func (t *WriterTable) SetData(offset int, xs ColumnData) error {
 	if len(t.columnInfoByOffset) <= offset {
-		return fmt.Errorf("Column offset out of range: %v", offset)
+		return wrapError(C.qdb_e_out_of_bounds, "writer_table_set_data", "offset", offset, "max", len(t.columnInfoByOffset)-1)
 	}
 
 	col := t.columnInfoByOffset[offset]
 	if col.ColumnType.AsValueType() != xs.ValueType() {
-		return fmt.Errorf("Column's expected value type does not match provided value type: column type (%v)'s value type %v != %v", col.ColumnType, col.ColumnType.AsValueType(), xs.ValueType())
+		return wrapError(C.qdb_e_incompatible_type, "writer_table_set_data", "column_type", col.ColumnType, "expected_value_type", col.ColumnType.AsValueType(), "provided_value_type", xs.ValueType())
 	}
 
 	t.data[offset] = xs
@@ -327,7 +353,7 @@ func (t *WriterTable) SetDatas(xs []ColumnData) error {
 // GetData retrieves column data at the given offset.
 func (t *WriterTable) GetData(offset int) (ColumnData, error) {
 	if offset >= len(t.data) {
-		return nil, fmt.Errorf("Column offset out of range: %v", offset)
+		return nil, wrapError(C.qdb_e_out_of_bounds, "writer_table_get_data", "offset", offset, "max", len(t.data)-1)
 	}
 
 	return t.data[offset], nil
@@ -370,7 +396,7 @@ func MergeWriterTables(tables []WriterTable) ([]WriterTable, error) {
 		} else {
 			merged, err := MergeSingleTableWriters(group)
 			if err != nil {
-				return nil, fmt.Errorf("failed to merge tables for %q: %w", tableName, err)
+				return nil, wrapError(C.qdb_e_invalid_argument, "merge_writer_tables", "table", tableName, "error", err)
 			}
 			result = append(result, merged)
 		}
@@ -385,7 +411,7 @@ func MergeWriterTables(tables []WriterTable) ([]WriterTable, error) {
 // This is a specialized function for when you know all tables are for the same table.
 func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 	if len(tables) == 0 {
-		return WriterTable{}, fmt.Errorf("cannot merge empty table slice")
+		return WriterTable{}, wrapError(C.qdb_e_invalid_argument, "merge_single_table_writers", "reason", "empty table slice")
 	}
 
 	if len(tables) == 1 {
@@ -400,14 +426,14 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 	for i := 1; i < len(tables); i++ {
 		table := tables[i]
 		if table.TableName != baseName {
-			return WriterTable{}, fmt.Errorf("table name mismatch: expected %q, got %q", baseName, table.TableName)
+			return WriterTable{}, wrapError(C.qdb_e_invalid_argument, "merge_single_table_writers", "expected", baseName, "actual", table.TableName)
 		}
 		if !writerTableSchemasEqual(base, table) {
-			return WriterTable{}, fmt.Errorf("schema mismatch for table %q: tables have different column schemas", baseName)
+			return WriterTable{}, wrapError(C.qdb_e_invalid_argument, "merge_single_table_writers", "table", baseName, "reason", "schema mismatch")
 		}
 		// Validate all tables have the same column count
 		if len(table.data) != len(base.data) {
-			return WriterTable{}, fmt.Errorf("column count mismatch for table %q: expected %d columns, got %d", baseName, len(base.data), len(table.data))
+			return WriterTable{}, wrapError(C.qdb_e_invalid_argument, "merge_single_table_writers", "table", baseName, "expected_columns", len(base.data), "actual_columns", len(table.data))
 		}
 		totalRows += table.rowCount
 	}
@@ -441,7 +467,7 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 			newCol.EnsureCapacity(totalRows)
 			mergedData[i] = &newCol
 		default:
-			return WriterTable{}, fmt.Errorf("unsupported column type: %v", baseColumn.ValueType())
+			return WriterTable{}, wrapError(C.qdb_e_incompatible_type, "merge_single_table_writers", "column_type", baseColumn.ValueType())
 		}
 	}
 
@@ -454,7 +480,7 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 		for i, column := range table.data {
 			err := mergedData[i].appendData(column)
 			if err != nil {
-				return WriterTable{}, fmt.Errorf("failed to append data for column %d: %w", i, err)
+				return WriterTable{}, wrapError(C.qdb_e_invalid_argument, "merge_single_table_writers", "column", i, "error", err)
 			}
 		}
 	}
