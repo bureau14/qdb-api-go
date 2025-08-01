@@ -386,18 +386,12 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	// the QuasarDB allocator so it is compatible with the C API.  Each table name must also be
 	// allocated using qdbCopyString and is immediately deferred for release.
 	tableCount := len(options.tables)
-	cTables, err := qdbAllocBuffer[C.qdb_bulk_reader_table_t](h, tableCount)
-	if err != nil {
-		return ret, fmt.Errorf("failed to allocate table array: %w", err)
-	}
+	cTables := qdbAllocBuffer[C.qdb_bulk_reader_table_t](h, tableCount)
 	defer qdbRelease(h, cTables)
 	tblSlice := unsafe.Slice(cTables, tableCount)
 
 	for i, tbl := range options.tables {
-		name, err := qdbCopyString(h, tbl)
-		if err != nil {
-			return ret, fmt.Errorf("failed to copy table name: %w", err)
-		}
+		name := qdbCopyString(h, tbl)
 		defer qdbRelease(h, name)
 
 		tblSlice[i].name = name
@@ -411,17 +405,11 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	columnCount := len(options.columns)
 	var cColumns **C.char
 	if columnCount > 0 {
-		ptr, err := qdbAllocBuffer[*C.char](h, columnCount)
-		if err != nil {
-			return ret, fmt.Errorf("failed to allocate column array: %w", err)
-		}
+		ptr := qdbAllocBuffer[*C.char](h, columnCount)
 		defer qdbRelease(h, ptr)
 		colSlice := unsafe.Slice(ptr, columnCount)
 		for i, col := range options.columns {
-			cname, err := qdbCopyString(h, col)
-			if err != nil {
-				return ret, fmt.Errorf("failed to copy column name: %w", err)
-			}
+			cname := qdbCopyString(h, col)
 			defer qdbRelease(h, cname)
 			colSlice[i] = cname
 		}
@@ -443,7 +431,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		&readerHandle,
 	)
 
-	err = wrapError(errCode, "reader_init", "tables", tableCount)
+	err := wrapError(errCode, "reader_init", "tables", tableCount)
 	if err != nil {
 		return ret, err
 	}
