@@ -98,7 +98,7 @@ func TestMergeSingleTableWriters(t *testing.T) {
 	t.Run("empty input", func(t *testing.T) {
 		result, err := MergeSingleTableWriters([]WriterTable{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot merge empty table slice")
+		assert.Contains(t, err.Error(), "reason=empty table slice")
 		assert.Equal(t, WriterTable{}, result)
 	})
 
@@ -129,7 +129,7 @@ func TestMergeSingleTableWriters(t *testing.T) {
 
 		result, err := MergeSingleTableWriters([]WriterTable{table1, table2})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "table name mismatch")
+		assert.Contains(t, err.Error(), "expected=table1, actual=table2")
 		assert.Equal(t, WriterTable{}, result)
 	})
 
