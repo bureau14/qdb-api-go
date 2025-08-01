@@ -179,11 +179,13 @@ func (w *Writer) Push(h HandleType) error {
 	// The Objects array contains interface{} values that wrap actual pointers
 	// (like unsafe.Pointer from unsafe.SliceData() or unsafe.StringData()).
 	// We must pin the actual data, not the interface{} container.
-
+	//
 	for _, builder := range allPinnableBuilders {
 		for _, obj := range builder.Objects {
 			if obj != nil {
-				// Extract the actual pointer from the interface{} container
+				// Extract the actual pointer from the interface{} container. See
+				// ADR-003 for rationale on why this is the best way to approach
+				// this.
 				switch v := obj.(type) {
 				case unsafe.Pointer:
 					// Pin the actual data pointer
