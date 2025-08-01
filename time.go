@@ -56,11 +56,9 @@ func QdbTimespecToTime(t C.qdb_timespec_t) time.Time {
 // TimeSliceToQdbTimespec converts a slice of time.Time values to qdb_timespec_t slice.
 func TimeSliceToQdbTimespec(xs []time.Time) []C.qdb_timespec_t {
 	ret := make([]C.qdb_timespec_t, len(xs))
-
 	for i, x := range xs {
 		TimeToQdbTimespec(x, &ret[i])
 	}
-
 	return ret
 }
 
