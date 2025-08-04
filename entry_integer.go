@@ -28,6 +28,7 @@ func (entry IntegerEntry) Put(content int64, expiry time.Time) error {
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_int_put(entry.handle, alias, C.qdb_int_t(content), toQdbTime(expiry))
+
 	return wrapError(err, "integer_put", "alias", entry.alias, "value", content, "expiry", expiry)
 }
 
@@ -41,6 +42,7 @@ func (entry *IntegerEntry) Update(newContent int64, expiry time.Time) error {
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_int_update(entry.handle, alias, C.qdb_int_t(newContent), toQdbTime(expiry))
+
 	return wrapError(err, "integer_update", "alias", entry.alias, "value", newContent, "expiry", expiry)
 }
 
@@ -53,6 +55,7 @@ func (entry IntegerEntry) Get() (int64, error) {
 	var content C.qdb_int_t
 	err := C.qdb_int_get(entry.handle, alias, &content)
 	output := int64(content)
+
 	return output, wrapError(err, "integer_get", "alias", entry.alias)
 }
 
@@ -70,5 +73,6 @@ func (entry IntegerEntry) Add(added int64) (int64, error) {
 	var result C.qdb_int_t
 	err := C.qdb_int_add(entry.handle, alias, C.qdb_int_t(added), &result)
 	output := int64(result)
+
 	return output, wrapError(err, "integer_add", "alias", entry.alias, "addend", added)
 }

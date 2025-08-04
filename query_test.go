@@ -27,7 +27,7 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 	result, err := handle.Query(query).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	defer handle.Release(unsafe.Pointer(result))
+	defer handle.Release(unsafe.Pointer(result)) //nolint:gosec // Safe CGO conversion for QuasarDB API
 
 	for rowIdx, row := range result.Rows() {
 		cols := result.Columns(row)
@@ -59,6 +59,7 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 		// Universal getter validation
 		for i, c := range cols {
 			if i == 1 { // skip $table
+
 				continue
 			}
 			p := c.Get()
@@ -76,6 +77,11 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 				assert.True(t, v == exp1 || v == exp2)
 			case QueryResultTimestamp:
 				assert.Equal(t, td.TimestampPoints[rowIdx].Content(), p.Value())
+			case QueryResultNone:
+				assert.Nil(t, p.Value())
+			case QueryResultCount:
+				// Count results should be int64
+				assert.IsType(t, int64(0), p.Value())
 			}
 		}
 	}
@@ -95,7 +101,7 @@ func TestQueryWrongTypeReturnsError(t *testing.T) {
 	query := fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
 	result, err := handle.Query(query).Execute()
 	require.NoError(t, err)
-	defer handle.Release(unsafe.Pointer(result))
+	defer handle.Release(unsafe.Pointer(result)) //nolint:gosec // Safe CGO conversion for QuasarDB API
 
 	for _, row := range result.Rows() {
 		cols := result.Columns(row)

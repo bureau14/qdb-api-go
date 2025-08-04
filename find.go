@@ -27,19 +27,56 @@ type Find struct {
 // Tag : Adds a tag to include into the current query results
 func (q *Find) Tag(t string) *Find {
 	q.tags = append(q.tags, t)
+
 	return q
 }
 
 // NotTag : Adds a tag to exclude from the current query results
 func (q *Find) NotTag(t string) *Find {
 	q.tagsExcluded = append(q.tagsExcluded, t)
+
 	return q
 }
 
 // Type : Restrict the query results to a particular type
 func (q *Find) Type(t string) *Find {
 	q.types = append(q.types, t)
+
 	return q
+}
+
+// Execute : Execute the current query
+func (q Find) Execute() ([]string, error) {
+	query, err := q.buildQuery()
+	if err != nil {
+		return nil, err
+	}
+
+	return q.ExecuteString(query)
+}
+
+// ExecuteString : Execute a string query immediately
+func (q Find) ExecuteString(query string) ([]string, error) {
+	cQuery := convertToCharStar(query)
+	defer releaseCharStar(cQuery)
+	var aliasCount C.size_t
+	var aliases **C.char
+	err := C.qdb_query_find(q.handle, cQuery, &aliases, &aliasCount)
+	if err == 0 {
+		length := int(aliasCount)
+		output := make([]string, length)
+		if aliasCount > 0 {
+			defer q.Release(unsafe.Pointer(aliases))
+			slice := charStarArrayToSlice(aliases, length)
+			for i, s := range slice {
+				output[i] = C.GoString(s)
+			}
+		}
+
+		return output, nil
+	}
+
+	return nil, wrapError(err, "find_execute", "query", query)
 }
 
 func (q Find) buildQuery() (string, error) {
@@ -66,36 +103,6 @@ func (q Find) buildQuery() (string, error) {
 		query.WriteString(t)
 	}
 	query.WriteString(")")
+
 	return query.String(), nil
-}
-
-// Execute : Execute the current query
-func (q Find) Execute() ([]string, error) {
-	query, err := q.buildQuery()
-	if err != nil {
-		return nil, err
-	}
-	return q.ExecuteString(query)
-}
-
-// ExecuteString : Execute a string query immediately
-func (q Find) ExecuteString(query string) ([]string, error) {
-	cQuery := convertToCharStar(query)
-	defer releaseCharStar(cQuery)
-	var aliasCount C.size_t
-	var aliases **C.char
-	err := C.qdb_query_find(q.handle, cQuery, &aliases, &aliasCount)
-	if err == 0 {
-		length := int(aliasCount)
-		output := make([]string, length)
-		if aliasCount > 0 {
-			defer q.Release(unsafe.Pointer(aliases))
-			slice := charStarArrayToSlice(aliases, length)
-			for i, s := range slice {
-				output[i] = C.GoString(s)
-			}
-		}
-		return output, nil
-	}
-	return nil, wrapError(err, "find_execute", "query", query)
 }

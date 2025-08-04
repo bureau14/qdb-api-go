@@ -10,17 +10,17 @@ import (
 )
 
 func TestReaderOptionsCanCreateNew(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
 
 	opts := NewReaderOptions()
-	assert.Empty(opts.tables)
-	assert.Empty(opts.columns)
-	assert.True(opts.rangeStart.IsZero())
-	assert.True(opts.rangeEnd.IsZero())
+	a.Empty(opts.tables)
+	a.Empty(opts.columns)
+	a.True(opts.rangeStart.IsZero())
+	a.True(opts.rangeEnd.IsZero())
 }
 
 func TestReaderOptionsCanSetProperties(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
 
 	tables := []string{"tbl1", "tbl2"}
 	columns := []string{"col1", "col2"}
@@ -29,10 +29,10 @@ func TestReaderOptionsCanSetProperties(t *testing.T) {
 
 	opts := NewReaderOptions().WithTables(tables).WithColumns(columns).WithTimeRange(start, end)
 
-	assert.Equal(tables, opts.tables)
-	assert.Equal(columns, opts.columns)
-	assert.Equal(start, opts.rangeStart)
-	assert.Equal(end, opts.rangeEnd)
+	a.Equal(tables, opts.tables)
+	a.Equal(columns, opts.columns)
+	a.Equal(start, opts.rangeStart)
+	a.Equal(end, opts.rangeEnd)
 }
 
 func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
@@ -88,16 +88,19 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	reader, err := NewReader(handle, opts)
 	if err != nil {
 		assert.NoError(err)
+
 		return
 	}
-	defer reader.Close()
+
+	reader.Close()
 }
 
 func TestReaderCanReadDataFromTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		handle := newTestHandle(t)
 		defer func() {
-			if err := handle.Close(); err != nil {
+			err := handle.Close()
+			if err != nil {
 				t.Errorf("Failed to close handle: %v", err)
 			}
 		}()
@@ -108,13 +111,11 @@ func TestReaderCanReadDataFromTables(t *testing.T) {
 
 		names := writerTableNames(tables)
 
-		// columns := writerTablesColumns(tables)
-		// columnNames := columnNamesFromWriterColumns(columns)
-
 		opts := NewReaderOptions().WithTables(names)
 		reader, err := NewReader(handle, opts)
 		if err != nil {
 			require.NoError(rt, err)
+
 			return
 		}
 		defer reader.Close()

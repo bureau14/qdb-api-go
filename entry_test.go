@@ -19,7 +19,8 @@ func TestEntryAlias(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -46,7 +47,8 @@ func TestEntryAttachTag(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -62,7 +64,8 @@ func TestEntryAttachTags(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -77,7 +80,8 @@ func TestEntryGetTagsWithoutAny(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -109,7 +113,8 @@ func TestEntryTagLifecycle(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -149,7 +154,8 @@ func TestEntryTagEdgeCases(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -175,7 +181,8 @@ func TestEntryExpiryDistantFuture(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -198,7 +205,8 @@ func TestEntryExpiryShortFuture(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -221,7 +229,8 @@ func TestEntryExpiryPastErrors(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -240,7 +249,8 @@ func TestEntryExpiryPreserve(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -272,7 +282,8 @@ func TestEntryGetLocation(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -290,7 +301,8 @@ func TestEntryGetMetadata(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -311,7 +323,8 @@ func TestEntryExistsReturnsTrue(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(42, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -373,7 +386,8 @@ func TestEntryExistsWithSpecialCharacters(t *testing.T) {
 			err := integer.Put(42, NeverExpires())
 			if err == nil {
 				defer func() {
-					if err := integer.Remove(); err != nil {
+					err := integer.Remove()
+					if err != nil {
 						t.Errorf("Failed to remove integer: %v", err)
 					}
 				}()
@@ -403,7 +417,8 @@ func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 				return blob.Entry, err
 			},
 			cleanup: func(e Entry) {
-				if err := e.Remove(); err != nil {
+				err := e.Remove()
+				if err != nil {
 					t.Errorf("Failed to remove entry: %v", err)
 				}
 			},
@@ -417,7 +432,8 @@ func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 				return integer.Entry, err
 			},
 			cleanup: func(e Entry) {
-				if err := e.Remove(); err != nil {
+				err := e.Remove()
+				if err != nil {
 					t.Errorf("Failed to remove entry: %v", err)
 				}
 			},
@@ -450,7 +466,8 @@ func TestEntryExistsConsistencyWithGetMetadata(t *testing.T) {
 	// After creation
 	require.NoError(t, integer.Put(42, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()
@@ -467,7 +484,8 @@ func TestEntryExistsConcurrentAccess(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(42, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()

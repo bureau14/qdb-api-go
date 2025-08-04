@@ -30,7 +30,8 @@ func TestHandleOpenWithRandomProtocol(t *testing.T) {
 func TestHandleOpenWithTCP(t *testing.T) {
 	var h HandleType
 	require.NoError(t, h.Open(ProtocolTCP))
-	if err := h.Close(); err != nil {
+	err := h.Close()
+	if err != nil {
 		t.Errorf("Failed to close handle: %v", err)
 	}
 }
@@ -38,7 +39,8 @@ func TestHandleOpenWithTCP(t *testing.T) {
 func TestHandleSetup(t *testing.T) {
 	h, err := SetupHandle(insecureURI, testTimeout)
 	require.NoError(t, err)
-	if err := h.Close(); err != nil {
+	err = h.Close()
+	if err != nil {
 		t.Errorf("Failed to close handle: %v", err)
 	}
 }
@@ -55,7 +57,8 @@ func TestHandleSetupZeroTimeout(t *testing.T) {
 
 func TestHandleMustSetup(t *testing.T) {
 	h := MustSetupHandle(insecureURI, testTimeout)
-	if err := h.Close(); err != nil {
+	err := h.Close()
+	if err != nil {
 		t.Errorf("Failed to close handle: %v", err)
 	}
 }
@@ -71,7 +74,8 @@ func TestHandleMustSetupInvalidParameters(t *testing.T) {
 func TestHandleSetupSecure(t *testing.T) {
 	h, err := SetupSecuredHandle(secureURI, clusterPublicKeyFile, userPrivateKeyFile, testTimeout, EncryptNone)
 	require.NoError(t, err)
-	if err := h.Close(); err != nil {
+	err = h.Close()
+	if err != nil {
 		t.Errorf("Failed to close handle: %v", err)
 	}
 }
@@ -103,7 +107,8 @@ func TestHandleSetupSecureRandomEncrypt(t *testing.T) {
 
 func TestHandleMustSetupSecure(t *testing.T) {
 	h := MustSetupSecuredHandle(secureURI, clusterPublicKeyFile, userPrivateKeyFile, testTimeout, EncryptNone)
-	if err := h.Close(); err != nil {
+	err := h.Close()
+	if err != nil {
 		t.Errorf("Failed to close handle: %v", err)
 	}
 }
@@ -122,7 +127,8 @@ func TestHandleGetLastErrorAfterFailedConnect(t *testing.T) {
 	h, err := NewHandle()
 	require.NoError(t, err)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -173,7 +179,8 @@ func TestHandleConnectWithoutAddress(t *testing.T) {
 	h, err := NewHandle()
 	require.NoError(t, err)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -183,7 +190,8 @@ func TestHandleConnectWithoutAddress(t *testing.T) {
 
 func TestHandleConnectAndClose(t *testing.T) {
 	h := newTestHandle(t)
-	if err := h.Close(); err != nil {
+	err := h.Close()
+	if err != nil {
 		t.Errorf("Failed to close handle: %v", err)
 	}
 }
@@ -191,7 +199,8 @@ func TestHandleConnectAndClose(t *testing.T) {
 func TestHandleGetLastErrorOnSuccess(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -204,7 +213,8 @@ func TestHandleGetLastErrorOnSuccess(t *testing.T) {
 func TestHandleAPIVersionNotEmpty(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -215,7 +225,8 @@ func TestHandleAPIVersionNotEmpty(t *testing.T) {
 func TestHandleAPIBuildNotEmpty(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -226,7 +237,8 @@ func TestHandleAPIBuildNotEmpty(t *testing.T) {
 func TestHandleSetTimeoutValid(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -237,7 +249,8 @@ func TestHandleSetTimeoutValid(t *testing.T) {
 func TestHandleSetTimeoutZero(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -248,7 +261,8 @@ func TestHandleSetTimeoutZero(t *testing.T) {
 func TestHandleSetMaxCardinalityValid(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -259,7 +273,8 @@ func TestHandleSetMaxCardinalityValid(t *testing.T) {
 func TestHandleSetMaxCardinalityTooSmall(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -270,7 +285,8 @@ func TestHandleSetMaxCardinalityTooSmall(t *testing.T) {
 func TestHandleSetCompressionRandomValueFails(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -281,7 +297,8 @@ func TestHandleSetCompressionRandomValueFails(t *testing.T) {
 func TestHandleSetClientMaxInBufSizeValid(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -292,7 +309,8 @@ func TestHandleSetClientMaxInBufSizeValid(t *testing.T) {
 func TestHandleSetClientMaxInBufSizeTooSmall(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -303,7 +321,8 @@ func TestHandleSetClientMaxInBufSizeTooSmall(t *testing.T) {
 func TestHandleGetClientMaxInBufSize(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -317,7 +336,8 @@ func TestHandleGetClientMaxInBufSize(t *testing.T) {
 func TestHandleGetClusterMaxInBufSize(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -330,7 +350,8 @@ func TestHandleGetClusterMaxInBufSize(t *testing.T) {
 func TestHandleGetClientMaxParallelism(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -347,7 +368,8 @@ func TestHandleGetClientMaxParallelism(t *testing.T) {
 func TestHandleTagsAndPrefixFunctions(t *testing.T) {
 	h := newTestHandle(t)
 	defer func() {
-		if err := h.Close(); err != nil {
+		err := h.Close()
+		if err != nil {
 			t.Errorf("Failed to close h: %v", err)
 		}
 	}()
@@ -356,7 +378,8 @@ func TestHandleTagsAndPrefixFunctions(t *testing.T) {
 	integer := h.Integer(alias)
 	require.NoError(t, integer.Put(8, NeverExpires()))
 	defer func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	}()

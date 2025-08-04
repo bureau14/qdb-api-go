@@ -22,6 +22,7 @@ func convertDate(d *C.ulong, length int) []C.ulong {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 	slice := (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.ulong(0))]C.ulong)(unsafe.Pointer(d))[:length:length]
 	copy(date, slice)
+
 	return date
 }
 
@@ -66,7 +67,8 @@ func swapCallback() {
 func SetLogFile(path string) {
 	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	if path != "" {
-		if f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o644); err == nil {
+		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o644)
+		if err == nil {
 			h = slog.NewTextHandler(f, &slog.HandlerOptions{Level: slog.LevelInfo})
 		} else {
 			L().Warn("cannot open log file, falling back to stderr", "path", path, "err", err)

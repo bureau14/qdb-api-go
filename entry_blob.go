@@ -29,6 +29,7 @@ func (entry BlobEntry) Get() ([]byte, error) {
 	err := C.qdb_blob_get(entry.handle, alias, &content, &contentLength)
 
 	output := C.GoBytes(content, C.int(contentLength))
+
 	return output, wrapError(err, "blob_get", "alias", entry.alias)
 }
 
@@ -44,6 +45,7 @@ func (entry BlobEntry) GetAndRemove() ([]byte, error) {
 	err := C.qdb_blob_get_and_remove(entry.handle, alias, &content, &contentLength)
 
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+
 	return output, wrapError(err, "blob_get_and_remove", "alias", entry.alias)
 }
 
@@ -60,6 +62,7 @@ func (entry BlobEntry) Put(content []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
 	err := C.qdb_blob_put(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
+
 	return wrapError(err, "blob_put", "alias", entry.alias, "size", len(content), "expiry", expiry)
 }
 
@@ -76,6 +79,7 @@ func (entry *BlobEntry) Update(newContent []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&newContent[0])
 	}
 	err := C.qdb_blob_update(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
+
 	return wrapError(err, "blob_update", "alias", entry.alias, "size", len(newContent), "expiry", expiry)
 }
 
@@ -95,6 +99,7 @@ func (entry *BlobEntry) GetAndUpdate(newContent []byte, expiry time.Time) ([]byt
 	defer entry.Release(content)
 	err := C.qdb_blob_get_and_update(entry.handle, alias, contentPtr, contentSize, toQdbTime(expiry), &content, &contentLength)
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
+
 	return output, wrapError(err, "blob_get_and_update", "alias", entry.alias, "content_size", len(newContent))
 }
 
@@ -121,6 +126,7 @@ func (entry *BlobEntry) CompareAndSwap(newValue, newComparand []byte, expiry tim
 	defer entry.Release(unsafe.Pointer(originalValue))
 	err := C.qdb_blob_compare_and_swap(entry.handle, alias, value, valueLength, comparand, comparandLength, toQdbTime(expiry), &originalValue, &originalLength)
 	output := C.GoBytes(originalValue, C.int(originalLength))
+
 	return output, wrapError(err, "blob_compare_and_swap", "alias", entry.alias, "comparand_size", len(newComparand), "new_size", len(newValue), "expiry", expiry)
 }
 
@@ -137,6 +143,7 @@ func (entry BlobEntry) RemoveIf(comparand []byte) error {
 		comparandC = unsafe.Pointer(&comparand[0])
 	}
 	err := C.qdb_blob_remove_if(entry.handle, alias, comparandC, comparandLength)
+
 	return wrapError(err, "blob_remove_if", "alias", entry.alias, "comparand_size", len(comparand))
 }
 

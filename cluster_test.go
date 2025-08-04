@@ -57,7 +57,8 @@ func TestClusterBlobExistsBeforeOperations(t *testing.T) {
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
 	defer func() {
-		if err := blob.Remove(); err != nil {
+		err := blob.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove blob: %v", err)
 		}
 	}()
@@ -74,7 +75,8 @@ func TestClusterTrimAllWithExistingData(t *testing.T) {
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
 	defer func() {
-		if err := blob.Remove(); err != nil {
+		err := blob.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove blob: %v", err)
 		}
 	}()

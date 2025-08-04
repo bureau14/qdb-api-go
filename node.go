@@ -30,6 +30,7 @@ func (n Node) Status() (NodeStatus, error) {
 
 	var output NodeStatus
 	err = json.Unmarshal(data, &output)
+
 	return output, err
 }
 
@@ -49,6 +50,7 @@ func (n Node) RawStatus() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
+
 	return output, wrapError(err, "node_raw_status", "uri", n.uri)
 }
 
@@ -78,6 +80,7 @@ func (n Node) RawConfig() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
+
 	return output, wrapError(err, "node_config", "uri", n.uri)
 }
 
@@ -93,6 +96,7 @@ func (n Node) Topology() (NodeTopology, error) {
 	}
 	var output NodeTopology
 	err = json.Unmarshal(data, &output)
+
 	return output, err
 }
 
@@ -112,5 +116,6 @@ func (n Node) RawTopology() ([]byte, error) {
 		output = C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 		n.Release(unsafe.Pointer(content))
 	}
+
 	return output, wrapError(err, "node_topology", "uri", n.uri)
 }

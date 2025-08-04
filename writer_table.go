@@ -11,6 +11,7 @@ package qdb
 import "C"
 
 import (
+	"fmt"
 	"time"
 	"unsafe"
 )
@@ -52,12 +53,18 @@ func NewWriterTable(t string, cols []WriterColumn) (WriterTable, error) {
 		case TsColumnString:
 			emptyData := NewColumnDataString([]string{})
 			data[i] = &emptyData
+		case TsColumnSymbol:
+			emptyData := NewColumnDataString([]string{})
+			data[i] = &emptyData
 		case TsColumnBlob:
 			emptyData := NewColumnDataBlob([][]byte{})
 			data[i] = &emptyData
 		case TsColumnTimestamp:
 			emptyData := NewColumnDataTimestamp([]time.Time{})
 			data[i] = &emptyData
+		case TsColumnUninitialized:
+
+			return WriterTable{}, fmt.Errorf("cannot create table with uninitialized column type: %s", col.ColumnName)
 		}
 	}
 
@@ -101,6 +108,43 @@ func (t *WriterTable) GetIndexAsNative() []C.qdb_timespec_t {
 // GetIndex returns the table's timestamp index.
 func (t *WriterTable) GetIndex() []time.Time {
 	return QdbTimespecSliceToTime(t.GetIndexAsNative())
+}
+
+// SetData sets column data at the given offset.
+func (t *WriterTable) SetData(offset int, xs ColumnData) error {
+	if len(t.columnInfoByOffset) <= offset {
+		return wrapError(C.qdb_e_out_of_bounds, "writer_table_set_data", "offset", offset, "max", len(t.columnInfoByOffset)-1)
+	}
+
+	col := t.columnInfoByOffset[offset]
+	if col.ColumnType.AsValueType() != xs.ValueType() {
+		return wrapError(C.qdb_e_incompatible_type, "writer_table_set_data", "column_type", col.ColumnType, "expected_value_type", col.ColumnType.AsValueType(), "provided_value_type", xs.ValueType())
+	}
+
+	t.data[offset] = xs
+
+	return nil
+}
+
+// SetDatas sets data for all columns.
+func (t *WriterTable) SetDatas(xs []ColumnData) error {
+	for i, x := range xs {
+		err := t.SetData(i, x)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetData retrieves column data at the given offset.
+func (t *WriterTable) GetData(offset int) (ColumnData, error) { //nolint:ireturn // Justified: Public API returns different column types
+	if offset >= len(t.data) {
+		return nil, wrapError(C.qdb_e_out_of_bounds, "writer_table_get_data", "offset", offset, "max", len(t.data)-1)
+	}
+
+	return t.data[offset], nil
 }
 
 // toNativeTableData prepares table data for C API consumption.
@@ -169,6 +213,7 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 	pinnableBuilders = append(pinnableBuilders, NewPinnableBuilderSingle(&t.idx[0], func() unsafe.Pointer {
 		// This code runs in Phase 2.5, AFTER t.idx[0] is pinned
 		out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
+
 		return unsafe.Pointer(&t.idx[0])
 	}))
 
@@ -210,6 +255,7 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 			ptr := localBuilder.Builder()
 			// Store the pointer in the C structure
 			*(*unsafe.Pointer)(unsafe.Pointer(&currentElem.data[0])) = ptr
+
 			return ptr
 		})
 		pinnableBuilders = append(pinnableBuilders, wrappedBuilder)
@@ -229,6 +275,7 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		qdbRelease(h, cols)
 		// Note: Timestamp index and numeric columns use Go memory - no release needed
 	}
+
 	return pinnableBuilders, releaseAll, nil
 }
 
@@ -319,43 +366,6 @@ func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_
 	}
 
 	return pinnableObjects, release, nil
-}
-
-// SetData sets column data at the given offset.
-func (t *WriterTable) SetData(offset int, xs ColumnData) error {
-	if len(t.columnInfoByOffset) <= offset {
-		return wrapError(C.qdb_e_out_of_bounds, "writer_table_set_data", "offset", offset, "max", len(t.columnInfoByOffset)-1)
-	}
-
-	col := t.columnInfoByOffset[offset]
-	if col.ColumnType.AsValueType() != xs.ValueType() {
-		return wrapError(C.qdb_e_incompatible_type, "writer_table_set_data", "column_type", col.ColumnType, "expected_value_type", col.ColumnType.AsValueType(), "provided_value_type", xs.ValueType())
-	}
-
-	t.data[offset] = xs
-
-	return nil
-}
-
-// SetDatas sets data for all columns.
-func (t *WriterTable) SetDatas(xs []ColumnData) error {
-	for i, x := range xs {
-		err := t.SetData(i, x)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// GetData retrieves column data at the given offset.
-func (t *WriterTable) GetData(offset int) (ColumnData, error) {
-	if offset >= len(t.data) {
-		return nil, wrapError(C.qdb_e_out_of_bounds, "writer_table_get_data", "offset", offset, "max", len(t.data)-1)
-	}
-
-	return t.data[offset], nil
 }
 
 // MergeWriterTables merges multiple WriterTables by grouping them by table name.
@@ -465,7 +475,11 @@ func MergeSingleTableWriters(tables []WriterTable) (WriterTable, error) {
 			newCol := NewColumnDataTimestamp(nil)
 			newCol.EnsureCapacity(totalRows)
 			mergedData[i] = &newCol
+		case TsValueNull:
+
+			return WriterTable{}, wrapError(C.qdb_e_incompatible_type, "merge_single_table_writers", "column_type", "null_value_type")
 		default:
+
 			return WriterTable{}, wrapError(C.qdb_e_incompatible_type, "merge_single_table_writers", "column_type", baseColumn.ValueType())
 		}
 	}

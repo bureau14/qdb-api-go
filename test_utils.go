@@ -33,7 +33,8 @@ func newTestHandle(t *testing.T) HandleType {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		if err := handle.Close(); err != nil {
+		err := handle.Close()
+		if err != nil {
 			t.Errorf("Failed to close handle: %v", err)
 		}
 	})
@@ -147,7 +148,8 @@ func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (Bl
 	}
 
 	t.Cleanup(func() {
-		if err := blob.Remove(); err != nil {
+		err := blob.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove blob: %v", err)
 		}
 	})
@@ -177,7 +179,8 @@ func newTestBlob(t *testing.T, handle HandleType) BlobEntry {
 	blob := handle.Blob(alias)
 
 	t.Cleanup(func() {
-		if err := blob.Remove(); err != nil {
+		err := blob.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove blob: %v", err)
 		}
 	})
@@ -207,7 +210,8 @@ func newTestInteger(t *testing.T, handle HandleType) IntegerEntry {
 	integer := handle.Integer(alias)
 
 	t.Cleanup(func() {
-		if err := integer.Remove(); err != nil {
+		err := integer.Remove()
+		if err != nil {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	})
@@ -365,7 +369,7 @@ func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
 	return idx
 }
 
-func genWriterDataInt64(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataInt64(t *rapid.T, rowCount int) *ColumnDataInt64 {
 	values := make([]int64, rowCount)
 	for i := range values {
 		values[i] = rapid.Int64().Draw(t, "int64")
@@ -375,7 +379,7 @@ func genWriterDataInt64(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataDouble(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataDouble(t *rapid.T, rowCount int) *ColumnDataDouble {
 	values := make([]float64, rowCount)
 	for i := range values {
 		values[i] = rapid.Float64().Draw(t, "float64")
@@ -385,7 +389,7 @@ func genWriterDataDouble(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataTimestamp(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataTimestamp(t *rapid.T, rowCount int) *ColumnDataTimestamp {
 	values := make([]time.Time, rowCount)
 	for i := range values {
 		values[i] = genTime(t)
@@ -395,7 +399,7 @@ func genWriterDataTimestamp(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataBlob(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataBlob(t *rapid.T, rowCount int) *ColumnDataBlob {
 	values := make([][]byte, rowCount)
 	for i := range values {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "blob")
@@ -405,7 +409,7 @@ func genWriterDataBlob(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataString(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataString(t *rapid.T, rowCount int) *ColumnDataString {
 	values := make([]string, rowCount)
 	for i := range values {
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string")
@@ -415,18 +419,28 @@ func genWriterDataString(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) ColumnData {
+func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) ColumnData { //nolint:ireturn // Justified: Runtime type selection
 	switch ctype {
 	case TsColumnInt64:
+
 		return genWriterDataInt64(t, rowCount)
 	case TsColumnDouble:
+
 		return genWriterDataDouble(t, rowCount)
 	case TsColumnTimestamp:
+
 		return genWriterDataTimestamp(t, rowCount)
 	case TsColumnBlob:
+
 		return genWriterDataBlob(t, rowCount)
 	case TsColumnString:
+
 		return genWriterDataString(t, rowCount)
+	case TsColumnSymbol:
+
+		return genWriterDataString(t, rowCount) // Symbols are handled same as strings for data generation
+	case TsColumnUninitialized:
+		panic(fmt.Sprintf("cannot generate data for uninitialized column type: %v", ctype))
 	}
 	panic(fmt.Sprintf("unknown column type: %v", ctype))
 }
@@ -573,18 +587,25 @@ func genReaderColumns(t *rapid.T) []ReaderColumn {
 //	t := rapid.MakeT()
 //	col := genReaderColumn(t)
 //	rd := genReaderDataOfRowCountAndColumn(t, 50, col)
-func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ColumnData {
+func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ColumnData { //nolint:ireturn // Justified: Runtime type selection
 	switch column.columnType.AsValueType() {
 	case TsValueInt64:
+
 		return genReaderDataInt64(t, column.Name(), rowCount)
 	case TsValueDouble:
+
 		return genReaderDataDouble(t, column.Name(), rowCount)
 	case TsValueTimestamp:
+
 		return genReaderDataTimestamp(t, column.Name(), rowCount)
 	case TsValueBlob:
+
 		return genReaderDataBlob(t, column.Name(), rowCount)
 	case TsValueString:
+
 		return genReaderDataString(t, column.Name(), rowCount)
+	case TsValueNull:
+		panic(fmt.Sprintf("Cannot generate reader data for null value type in column: %v", column))
 	}
 
 	panic(fmt.Sprintf("Invalid column type for column: %v", column))
@@ -862,6 +883,8 @@ func createTempFile(t *testing.T, prefix, content string) string {
 // predefined tag combinations and registers automatic cleanup via t.Cleanup.
 //
 // Returned slice layout: []string{blob1Alias, blob2Alias, integerAlias}
+//
+//nolint:gocritic // tooManyResultsChecker: test helper function, multiple return values needed for comprehensive setup
 func setupFindTestData(
 	t *testing.T,
 	handle HandleType,
@@ -1054,7 +1077,11 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 
 	expectedRows := 0
 	for _, wt := range expected {
-		expectedRows += wt.RowCount()
+		rowCount := wt.RowCount()
+		if rowCount < 0 || expectedRows > int(^uint(0)>>1)-rowCount {
+			panic(fmt.Sprintf("integer overflow in row count calculation: expectedRows=%d, adding=%d", expectedRows, rowCount))
+		}
+		expectedRows += rowCount
 	}
 
 	assert.Equal(t, expectedRows, rc.RowCount(), "row count mismatch")
@@ -1135,11 +1162,15 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 	symbolPoints := make([]TsStringPoint, count)
 
 	for i := range count {
-		tsVal := time.Unix((i+1)*10, 0)
+		// Check for potential overflow before arithmetic
+		if i >= int64(^uint(0)>>1)/10-1 {
+			panic(fmt.Sprintf("integer overflow in timestamp calculation: i=%d", i))
+		}
+		tsVal := time.Unix((int64(i)+1)*10, 0)
 		timestamps[i] = tsVal
 		blobPoints[i] = NewTsBlobPoint(tsVal, []byte(fmt.Sprintf("content_%d", i)))
 		doublePoints[i] = NewTsDoublePoint(tsVal, float64(i))
-		int64Points[i] = NewTsInt64Point(tsVal, i)
+		int64Points[i] = NewTsInt64Point(tsVal, int64(i))
 		stringPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
 		timestampPoints[i] = NewTsTimestampPoint(tsVal, tsVal)
 		symbolPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))

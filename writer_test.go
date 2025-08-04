@@ -697,10 +697,12 @@ func TestWriterEdgeCases(t *testing.T) {
 			columnType: TsColumnTimestamp,
 			createEmpty: func() ColumnData {
 				c := NewColumnDataTimestamp([]time.Time{})
+
 				return &c
 			},
 			createSample: func() ColumnData {
 				c := NewColumnDataTimestamp([]time.Time{time.Now()})
+
 				return &c
 			},
 		},

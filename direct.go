@@ -47,6 +47,7 @@ func (h HandleType) DirectConnect(nodeURI string) (DirectHandleType, error) {
 
 	if directHandle.handle == nil {
 		err := fmt.Errorf("unable to connect to node with URI: %s", nodeURI)
+
 		return directHandle, err
 	}
 
@@ -58,6 +59,7 @@ func (h DirectHandleType) Close() error {
 	C.qdb_direct_close(h.handle)
 	// the C api currently doesn't return an error but we want to keep the
 	// option open later
+
 	return nil
 }
 
@@ -65,7 +67,7 @@ func (h DirectHandleType) Close() error {
 func (h DirectHandleType) Release(buffer unsafe.Pointer) {
 	// TODO(Mike): we are casting qdb_direct_handle_t to qdb_direct_t for
 	// release, but should probably have a separate qdb_direct_release api call
-	unsafeHandle := (C.qdb_handle_t)(unsafe.Pointer(h.handle))
+	unsafeHandle := C.qdb_handle_t(unsafe.Pointer(h.handle))
 	C.qdb_release(unsafeHandle, buffer)
 }
 
@@ -100,8 +102,10 @@ func (h DirectHandleType) PrefixGet(prefix string, limit int) ([]string, error) 
 				output[i] = C.GoString(s)
 			}
 		}
+
 		return output, nil
 	}
+
 	return []string{}, wrapError(err, "direct_prefix_get", "prefix", prefix, "limit", limit)
 }
 
@@ -122,6 +126,7 @@ func (e DirectEntry) Remove() error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_direct_remove(e.handle, alias)
+
 	return wrapError(err, "direct_remove", "alias", e.alias)
 }
 
@@ -137,6 +142,7 @@ func (e DirectBlobEntry) Get() ([]byte, error) {
 	err := C.qdb_direct_blob_get(e.handle, alias, &content, &contentLength)
 
 	output := C.GoBytes(content, C.int(contentLength))
+
 	return output, wrapError(err, "direct_blob_get", "alias", e.alias)
 }
 
@@ -152,6 +158,7 @@ func (e DirectBlobEntry) Put(content []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
 	err := C.qdb_direct_blob_put(e.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
+
 	return wrapError(err, "direct_blob_put", "alias", e.alias, "content_size", len(content))
 }
 
@@ -167,6 +174,7 @@ func (e *DirectBlobEntry) Update(newContent []byte, expiry time.Time) error {
 		contentPtr = unsafe.Pointer(&newContent[0])
 	}
 	err := C.qdb_direct_blob_update(e.handle, alias, contentPtr, contentSize, toQdbTime(expiry))
+
 	return wrapError(err, "direct_blob_update", "alias", e.alias, "content_size", len(newContent))
 }
 
@@ -177,6 +185,7 @@ func (e DirectIntegerEntry) Get() (int64, error) {
 	var content C.qdb_int_t
 	err := C.qdb_direct_int_get(e.handle, alias, &content)
 	output := int64(content)
+
 	return output, wrapError(err, "direct_int_get", "alias", e.alias)
 }
 
@@ -193,6 +202,7 @@ func (e DirectIntegerEntry) Put(content int64, expiry time.Time) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_direct_int_put(e.handle, alias, C.qdb_int_t(content), toQdbTime(expiry))
+
 	return wrapError(err, "direct_int_put", "alias", e.alias, "content", content)
 }
 
@@ -206,6 +216,7 @@ func (e DirectIntegerEntry) Update(newContent int64, expiry time.Time) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_direct_int_update(e.handle, alias, C.qdb_int_t(newContent), toQdbTime(expiry))
+
 	return wrapError(err, "direct_int_update", "alias", e.alias, "content", newContent)
 }
 
@@ -223,5 +234,6 @@ func (e DirectIntegerEntry) Add(added int64) (int64, error) {
 	var result C.qdb_int_t
 	err := C.qdb_direct_int_add(e.handle, alias, C.qdb_int_t(added), &result)
 	output := int64(result)
+
 	return output, wrapError(err, "direct_int_add", "alias", e.alias, "added", added)
 }

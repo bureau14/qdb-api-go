@@ -30,10 +30,11 @@ func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 	ptrSize := unsafe.Sizeof(v)
 	size := len(toConvert)
 	data := C.malloc(C.size_t(size) * C.size_t(ptrSize))
-	for i := 0; i < size; i++ {
+	for i := range size {
 		element := (**C.char)(unsafe.Pointer(uintptr(data) + uintptr(i)*ptrSize))
 		*element = (*C.char)(convertToCharStar(toConvert[i]))
 	}
+
 	return data
 }
 
@@ -46,7 +47,7 @@ func convertToCharStarStar(toConvert []string) unsafe.Pointer {
 func releaseCharStarStar(data unsafe.Pointer, size int) {
 	var v *C.char
 	ptrSize := unsafe.Sizeof(v)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		element := (**C.char)(unsafe.Pointer(uintptr(data) + uintptr(i)*ptrSize))
 		releaseCharStar(*element)
 	}
@@ -58,9 +59,10 @@ func releaseCharStarStar(data unsafe.Pointer, size int) {
 // Out: *C.char - C string or nil
 // Ex: convertToCharStar("hello") → *C.char
 func convertToCharStar(toConvert string) *C.char {
-	if len(toConvert) == 0 {
+	if toConvert == "" {
 		return nil
 	}
+
 	return C.CString(toConvert)
 }
 
@@ -221,6 +223,7 @@ func createTableOfColumnInfos(handle HandleType, columnInfos []TsColumnInfo, sha
 
 func createTableOfColumnInfosAndDefaultShardSize(handle HandleType, columns []TsColumnInfo) (TimeseriesEntry, error) {
 	var duration time.Duration = 86400 * 1000 * 1000 * 1000 // 1 day
+
 	return createTableOfColumnInfos(handle, columns, duration)
 }
 
@@ -234,29 +237,36 @@ func createTableOfWriterColumns(handle HandleType, columns []WriterColumn, shard
 
 func createTableOfWriterColumnsAndDefaultShardSize(handle HandleType, columns []WriterColumn) (TimeseriesEntry, error) {
 	var duration time.Duration = 86400 * 1000 * 1000 * 1000 // 1 day
+
 	return createTableOfWriterColumns(handle, columns, duration)
 }
 
 // Generates artifical writer data for a single column
-func generateWriterData(n int, column WriterColumn) (ColumnData, error) {
+func generateWriterData(n int, column WriterColumn) (ColumnData, error) { //nolint:ireturn // Justified: Runtime type selection
 	switch column.ColumnType {
 	case TsColumnBlob:
 		cdBlob := NewColumnDataBlob(make([][]byte, n))
+
 		return &cdBlob, nil
-	case TsColumnSymbol:
-		fallthrough
-	case TsColumnString:
+	case TsColumnSymbol, TsColumnString:
 		cdStr := NewColumnDataString(make([]string, n))
+
 		return &cdStr, nil
 	case TsColumnInt64:
 		cdInt := NewColumnDataInt64(make([]int64, n))
+
 		return &cdInt, nil
 	case TsColumnDouble:
 		cdDbl := NewColumnDataDouble(make([]float64, n))
+
 		return &cdDbl, nil
 	case TsColumnTimestamp:
 		cdTs := NewColumnDataTimestamp(make([]time.Time, n))
+
 		return &cdTs, nil
+	case TsColumnUninitialized:
+
+		return nil, fmt.Errorf("cannot generate data for uninitialized column type: %v", column.ColumnType)
 	}
 
 	return nil, fmt.Errorf("unrecognized column type: %v", column.ColumnType)
@@ -297,9 +307,10 @@ func generateDefaultIndex(n int) []time.Time {
 	return generateIndex(n, start, duration)
 }
 
-func charStarArrayToSlice(strings **C.char, length int) []*C.char {
+func charStarArrayToSlice(cStrings **C.char, length int) []*C.char {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.char)(nil))]*C.char)(unsafe.Pointer(strings))[:length:length]
+
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.char)(nil))]*C.char)(unsafe.Pointer(cStrings))[:length:length]
 }
 
 // qdbAllocBytes allocates a raw byte buffer of the specified size via the QDB C API.
@@ -359,7 +370,8 @@ func charStarArrayToSlice(strings **C.char, length int) []*C.char {
 func qdbAllocBytes(h HandleType, totalBytes int) unsafe.Pointer {
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_alloc_buffer(h.handle, C.qdb_size_t(totalBytes), &basePtr)
-	if err := makeErrorOrNil(errCode); err != nil {
+	err := makeErrorOrNil(errCode)
+	if err != nil {
 		panic(fmt.Sprintf("qdbAllocBytes: failed to allocate %d bytes: %v", totalBytes, err))
 	}
 
@@ -401,6 +413,7 @@ func qdbAllocBytes(h HandleType, totalBytes int) unsafe.Pointer {
 func qdbAllocBuffer[T any](h HandleType, count int) *T {
 	totalSize := int(unsafe.Sizeof(*new(T))) * count
 	ptr := qdbAllocBytes(h, totalSize)
+
 	return (*T)(ptr)
 }
 
@@ -449,7 +462,8 @@ func qdbAllocAndCopyBytes[T any](h HandleType, src []T) unsafe.Pointer {
 
 	var basePtr unsafe.Pointer
 	errCode := C.qdb_copy_alloc_buffer(h.handle, unsafe.Pointer(&src[0]), C.qdb_size_t(totalSize), &basePtr)
-	if err := makeErrorOrNil(errCode); err != nil {
+	err := makeErrorOrNil(errCode)
+	if err != nil {
 		panic(fmt.Sprintf("qdbAllocAndCopyBytes: failed to allocate and copy %d bytes: %v", totalSize, err))
 	}
 
@@ -490,6 +504,7 @@ func qdbAllocAndCopyBytes[T any](h HandleType, src []T) unsafe.Pointer {
 
 func qdbAllocAndCopyBuffer[Src, Dst any](h HandleType, src []Src) *Dst {
 	basePtr := qdbAllocAndCopyBytes(h, src)
+
 	return (*Dst)(basePtr)
 }
 
@@ -578,6 +593,7 @@ func qdbCopyString(h HandleType, s string) *C.char {
 
 	// Allocate and copy using QDB memory management
 	ptr := qdbAllocAndCopyBytes(h, buf)
+
 	return (*C.char)(unsafe.Pointer(ptr))
 }
 
@@ -663,6 +679,7 @@ func castSlice[From, To any](input []From) ([]To, error) {
 func copySlice[T any](xs []T) []T {
 	ret := make([]T, len(xs))
 	copy(ret, xs)
+
 	return ret
 }
 
@@ -793,6 +810,7 @@ func sliceEnsureCapacity[E any](xs []E, n int) []E {
 	// Need a larger-capacity slice: allocate with same length, new capacity n.
 	ys := make([]E, len(xs), n)
 	copy(ys, xs) // bulk copy of existing elements
+
 	return ys
 }
 
@@ -875,6 +893,7 @@ func parseJSON(data []byte) (*JSONPath, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &JSONPath{data: result}, nil
 }
 
@@ -919,6 +938,7 @@ func (j *JSONPath) Path(path string) *JSONPath {
 			current = next
 		default:
 			// Cannot traverse non-map types
+
 			return &JSONPath{data: nil}
 		}
 	}
