@@ -27,7 +27,7 @@ type ReaderColumn struct {
 
 // NewReaderColumn creates column metadata.
 func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
-	if t.IsValid() == false {
+	if !t.IsValid() {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumn: invalid column: %v", t)
 	}
 	return ReaderColumn{columnName: n, columnType: t}, nil
@@ -79,7 +79,7 @@ func NewReaderChunk(cols []ReaderColumn, idx []time.Time, data []ColumnData) (Re
 // Empty reports if the chunk has no data.
 func (rc *ReaderChunk) Empty() bool {
 	// Returns true if no data
-	return rc.idx == nil || len(rc.idx) == 0 || rc.data == nil || len(rc.data) == 0
+	return len(rc.idx) == 0 || len(rc.data) == 0
 }
 
 // Clear resets the chunk to empty state.
@@ -183,19 +183,19 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 // newReaderChunk converts C table data to Go ReaderChunk.
 func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data_t) (ReaderChunk, error) {
 	if data.timestamps == nil {
-		return ReaderChunk{}, fmt.Errorf("Internal error: nil timestamps")
+		return ReaderChunk{}, fmt.Errorf("internal error: nil timestamps")
 	}
 
 	if data.columns == nil {
-		return ReaderChunk{}, fmt.Errorf("Internal error: nil columns")
+		return ReaderChunk{}, fmt.Errorf("internal error: nil columns")
 	}
 
 	if data.row_count <= 0 {
-		return ReaderChunk{}, fmt.Errorf("Internal error: invalid row count %d", data.row_count)
+		return ReaderChunk{}, fmt.Errorf("internal error: invalid row count %d", data.row_count)
 	}
 
 	if data.column_count <= 0 {
-		return ReaderChunk{}, fmt.Errorf("Internal error: invalid column count %d", data.column_count)
+		return ReaderChunk{}, fmt.Errorf("internal error: invalid column count %d", data.column_count)
 	}
 
 	var out ReaderChunk
@@ -216,7 +216,7 @@ func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data
 
 		expected := C.qdb_ts_column_type_t(columns[i].columnType)
 		if column.data_type != expected {
-			return ReaderChunk{}, fmt.Errorf("Internal error: column %d type mismatch (expected %v, got %v)", i, expected, column.data_type)
+			return ReaderChunk{}, fmt.Errorf("internal error: column %d type mismatch (expected %v, got %v)", i, expected, column.data_type)
 		}
 
 		name := columns[i].columnName
@@ -253,7 +253,7 @@ func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data
 			}
 			out.data[i] = &v
 		default:
-			return ReaderChunk{}, fmt.Errorf("Internal error: unsupported value type for column %s", name)
+			return ReaderChunk{}, fmt.Errorf("internal error: unsupported value type for column %s", name)
 		}
 	}
 
@@ -350,7 +350,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		return ret, fmt.Errorf("invalid time range")
 	}
 
-	if options.rangeEnd.IsZero() == false && !options.rangeEnd.After(options.rangeStart) {
+	if !options.rangeEnd.IsZero() && !options.rangeEnd.After(options.rangeStart) {
 		return ret, fmt.Errorf("invalid time range")
 	}
 
@@ -372,7 +372,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var cRangePtr *C.qdb_ts_range_t = nil
 
 	// But if a range is provided, set the pointer accordingly.
-	if options.rangeStart.IsZero() == false && options.rangeEnd.IsZero() == false {
+	if !options.rangeStart.IsZero() && !options.rangeEnd.IsZero() {
 		cRanges[0] = toQdbRange(options.rangeStart, options.rangeEnd)
 
 		// Points to stack-allocated value
@@ -473,7 +473,7 @@ func (r *Reader) fetchBatch() (ReaderChunk, error) {
 
 	if errors.Is(err, ErrIteratorEnd) {
 		if ptr != nil {
-			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v\n", ptr)
+			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v", ptr)
 		}
 
 		// Return empty batch
@@ -565,7 +565,7 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 	}
 
 	if r.Err() != nil {
-		return ret, fmt.Errorf("Reader.FetchAll: error while traversing data: %v\n", r.Err())
+		return ret, fmt.Errorf("Reader.FetchAll: error while traversing data: %v", r.Err())
 	}
 
 	ret, err = mergeReaderChunks(batches)

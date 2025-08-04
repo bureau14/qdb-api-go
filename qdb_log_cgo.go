@@ -21,9 +21,7 @@ func convertDate(d *C.ulong, length int) []C.ulong {
 	date := make([]C.ulong, 6)
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 	slice := (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.ulong(0))]C.ulong)(unsafe.Pointer(d))[:length:length]
-	for i, s := range slice {
-		date[i] = s
-	}
+	copy(date, slice)
 	return date
 }
 

@@ -233,7 +233,7 @@ type TimeseriesEntry struct {
 
 // Name : Returns the name of the table
 func (t TimeseriesEntry) Name() string {
-	return t.Entry.Alias()
+	return t.Alias()
 }
 
 // :: internals
@@ -262,15 +262,16 @@ func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, 
 	if length > 0 {
 		slice := columnInfoArrayToSlice(columns, length)
 		for _, s := range slice {
-			if s._type == C.qdb_ts_column_blob {
+			switch s._type {
+			case C.qdb_ts_column_blob:
 				blobColumns = append(blobColumns, TsBlobColumn{TsColumnInfoExToStructG(s, entry)})
-			} else if s._type == C.qdb_ts_column_double {
+			case C.qdb_ts_column_double:
 				doubleColumns = append(doubleColumns, TsDoubleColumn{TsColumnInfoExToStructG(s, entry)})
-			} else if s._type == C.qdb_ts_column_int64 {
+			case C.qdb_ts_column_int64:
 				int64Columns = append(int64Columns, TsInt64Column{TsColumnInfoExToStructG(s, entry)})
-			} else if s._type == C.qdb_ts_column_string || s._type == C.qdb_ts_column_symbol {
+			case C.qdb_ts_column_string, C.qdb_ts_column_symbol:
 				stringColumns = append(stringColumns, TsStringColumn{TsColumnInfoExToStructG(s, entry)})
-			} else if s._type == C.qdb_ts_column_timestamp {
+			case C.qdb_ts_column_timestamp:
 				timestampColumns = append(timestampColumns, TsTimestampColumn{TsColumnInfoExToStructG(s, entry)})
 			}
 		}

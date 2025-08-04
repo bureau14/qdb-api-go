@@ -12,7 +12,6 @@ import (
 
 func TestFindTagAllReturnsAllAliases(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	aliases, _, _, _, tagAll, _, _, _ := setupFindTestData(t, handle)
 
@@ -24,7 +23,6 @@ func TestFindTagAllReturnsAllAliases(t *testing.T) {
 
 func TestFindExcludeSecondTag(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, blob1, _, integer, tagAll, _, tagSecond, _ := setupFindTestData(t, handle)
 
@@ -35,7 +33,6 @@ func TestFindExcludeSecondTag(t *testing.T) {
 
 func TestFindNotTagAloneReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, _, _, _, _, _, tagSecond, _ := setupFindTestData(t, handle)
 
@@ -46,7 +43,6 @@ func TestFindNotTagAloneReturnsError(t *testing.T) {
 
 func TestFindTagAllAndThird(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, _, _, integer, tagAll, _, _, tagThird := setupFindTestData(t, handle)
 
@@ -57,7 +53,6 @@ func TestFindTagAllAndThird(t *testing.T) {
 
 func TestFindIncompatibleTagsReturnsEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, _, _, _, _, tagFirst, _, tagThird := setupFindTestData(t, handle)
 
@@ -68,7 +63,6 @@ func TestFindIncompatibleTagsReturnsEmpty(t *testing.T) {
 
 func TestFindTagAllTypeBlob(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, blob1, blob2, _, tagAll, _, _, _ := setupFindTestData(t, handle)
 
@@ -79,7 +73,6 @@ func TestFindTagAllTypeBlob(t *testing.T) {
 
 func TestFindTypeBlobAloneReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	setupFindTestData(t, handle)
 
@@ -90,7 +83,6 @@ func TestFindTypeBlobAloneReturnsError(t *testing.T) {
 
 func TestFindTagAllTypeInt(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, _, _, integer, tagAll, _, _, _ := setupFindTestData(t, handle)
 
@@ -101,7 +93,6 @@ func TestFindTagAllTypeInt(t *testing.T) {
 
 func TestFindUnknownTagReturnsEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	setupFindTestData(t, handle)
 
@@ -112,7 +103,6 @@ func TestFindUnknownTagReturnsEmpty(t *testing.T) {
 
 func TestFindUnknownTypeReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, _, _, _, tagAll, _, _, _ := setupFindTestData(t, handle)
 
@@ -123,7 +113,6 @@ func TestFindUnknownTypeReturnsError(t *testing.T) {
 
 func TestFindExecuteStringValidQuery(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	aliases, _, _, _, tagAll, _, _, _ := setupFindTestData(t, handle)
 

@@ -39,7 +39,6 @@ func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 	assert := assert.New(t)
 
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	// Error when no range provided
 	opts := NewReaderOptions().WithTables([]string{"table1"})
@@ -67,7 +66,6 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	require := require.New(t)
 
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	// Use all the column types we have
 	columnInfos := generateColumnInfosOfAllTypes()
@@ -88,14 +86,21 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 		WithColumns(columnNames)
 
 	reader, err := NewReader(handle, opts)
+	if err != nil {
+		assert.NoError(err)
+		return
+	}
 	defer reader.Close()
-	assert.NoError(err)
 }
 
 func TestReaderCanReadDataFromTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		handle := newTestHandle(t)
-		defer handle.Close()
+		defer func() {
+			if err := handle.Close(); err != nil {
+				t.Errorf("Failed to close handle: %v", err)
+			}
+		}()
 
 		tables := genPopulatedTables(rt, handle)
 
@@ -108,7 +113,10 @@ func TestReaderCanReadDataFromTables(t *testing.T) {
 
 		opts := NewReaderOptions().WithTables(names)
 		reader, err := NewReader(handle, opts)
-		require.NoError(rt, err)
+		if err != nil {
+			require.NoError(rt, err)
+			return
+		}
 		defer reader.Close()
 
 		data, err := reader.FetchAll()

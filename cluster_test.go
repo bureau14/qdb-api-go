@@ -29,7 +29,6 @@ func TestClusterTrimAllWithBadHandle(t *testing.T) {
 
 func TestClusterTrimAllWithValidHandle(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	cluster := handle.Cluster()
 	err := cluster.TrimAll()
@@ -45,7 +44,6 @@ func TestClusterWaitForStabilizationWithBadHandle(t *testing.T) {
 
 func TestClusterWaitForStabilizationWithValidHandle(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	cluster := handle.Cluster()
 	err := cluster.WaitForStabilization(60 * time.Second)
@@ -54,12 +52,15 @@ func TestClusterWaitForStabilizationWithValidHandle(t *testing.T) {
 
 func TestClusterBlobExistsBeforeOperations(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content_blob")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
+	defer func() {
+		if err := blob.Remove(); err != nil {
+			t.Errorf("Failed to remove blob: %v", err)
+		}
+	}()
 
 	contentObtained, err := blob.Get()
 	assert.NoError(t, err)
@@ -68,12 +69,15 @@ func TestClusterBlobExistsBeforeOperations(t *testing.T) {
 
 func TestClusterTrimAllWithExistingData(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content_blob")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
+	defer func() {
+		if err := blob.Remove(); err != nil {
+			t.Errorf("Failed to remove blob: %v", err)
+		}
+	}()
 
 	cluster := handle.Cluster()
 	err = cluster.TrimAll()

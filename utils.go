@@ -259,7 +259,7 @@ func generateWriterData(n int, column WriterColumn) (ColumnData, error) {
 		return &cdTs, nil
 	}
 
-	return nil, fmt.Errorf("Unrecognized column type: %v", column.ColumnType)
+	return nil, fmt.Errorf("unrecognized column type: %v", column.ColumnType)
 }
 
 // Generates artificial data to be inserted for each column.

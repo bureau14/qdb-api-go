@@ -46,7 +46,7 @@ func (h HandleType) DirectConnect(nodeURI string) (DirectHandleType, error) {
 	directHandle.handle = C.qdb_direct_connect(h.handle, uri)
 
 	if directHandle.handle == nil {
-		err := fmt.Errorf("Unable to connect to node with URI: %s", nodeURI)
+		err := fmt.Errorf("unable to connect to node with URI: %s", nodeURI)
 		return directHandle, err
 	}
 

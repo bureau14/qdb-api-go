@@ -9,7 +9,6 @@ import (
 
 func TestStatisticsEngineVersion(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	// allow the daemon to gather statistics
 	time.Sleep(5 * time.Second)

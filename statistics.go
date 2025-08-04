@@ -67,13 +67,15 @@ func (h DirectHandleType) getStatistics(prefix string, s interface{}) error {
 		if vType.Kind() == reflect.Struct {
 			inner := v.Field(i).Addr().Interface()
 			newPrefix := prefix + name + "."
-			h.getStatistics(newPrefix, inner)
+			if err := h.getStatistics(newPrefix, inner); err != nil {
+				return err
+			}
 		} else if vType.Kind() == reflect.String {
 			content, err := h.Blob(prefix + name).Get()
 			if err != nil {
 				return err
 			}
-			content = bytes.Replace(content, []byte("\x00"), []byte{}, -1)
+			content = bytes.ReplaceAll(content, []byte("\x00"), []byte{})
 			v.Field(i).SetString(string(content))
 		} else if vType.Kind() == reflect.Int64 {
 			value, err := h.Integer(prefix + name).Get()

@@ -16,7 +16,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 	"unsafe"
 )
@@ -192,7 +192,7 @@ type jSONCredentialConfig struct {
 //	    return err
 //	}
 func UserCredentialFromFile(userCredentialFile string) (string, string, error) {
-	fileConfig, err := ioutil.ReadFile(userCredentialFile)
+	fileConfig, err := os.ReadFile(userCredentialFile)
 	if err != nil {
 		return "", "", err
 	}
@@ -222,7 +222,7 @@ func UserCredentialFromFile(userCredentialFile string) (string, string, error) {
 //	    return err
 //	}
 func ClusterKeyFromFile(clusterPublicKeyFile string) (string, error) {
-	clusterPublicKey, err := ioutil.ReadFile(clusterPublicKeyFile)
+	clusterPublicKey, err := os.ReadFile(clusterPublicKeyFile)
 	if err != nil {
 		return "", err
 	}

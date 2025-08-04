@@ -20,7 +20,6 @@ const (
 
 func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	td := newTestTimeseriesAllColumns(t, handle, 8)
 
@@ -84,7 +83,6 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 
 func TestQueryInvalidQueryReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, err := handle.Query("select").Execute()
 	assert.Error(t, err)
@@ -92,7 +90,6 @@ func TestQueryInvalidQueryReturnsError(t *testing.T) {
 
 func TestQueryWrongTypeReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	td := newTestTimeseriesAllColumns(t, handle, 1) // just 1 row needed
 	query := fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
@@ -109,7 +106,6 @@ func TestQueryWrongTypeReturnsError(t *testing.T) {
 
 func TestQueryReturnsNoResults(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	td := newTestTimeseriesAllColumns(t, handle, 4)
 	query := fmt.Sprintf("select * from %s in range(1971, +10d)", td.Alias)
@@ -121,7 +117,6 @@ func TestQueryReturnsNoResults(t *testing.T) {
 
 func TestQueryCreateTableReturnsNil(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
 	result, err := handle.Query(
@@ -131,15 +126,14 @@ func TestQueryCreateTableReturnsNil(t *testing.T) {
 	assert.Nil(t, result)
 
 	// cleanup
-	handle.Query(fmt.Sprintf("drop table %s", alias)).Execute()
+	_, _ = handle.Query(fmt.Sprintf("drop table %s", alias)).Execute()
 }
 
 func TestQueryDropTableReturnsNil(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
-	handle.Query(
+	_, _ = handle.Query(
 		fmt.Sprintf("create table %s (id INT64, price DOUBLE)", alias),
 	).Execute()
 
