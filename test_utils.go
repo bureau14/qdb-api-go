@@ -1,9 +1,16 @@
 package qdb
 
+/*
+#include <qdb/client.h>
+*/
+import "C"
+
 import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"testing"
@@ -1015,6 +1022,7 @@ func genWriterOptions(t *rapid.T) WriterOptions {
 type testHelper interface {
 	require.TestingT
 	Helper()
+	Logf(format string, args ...interface{})
 }
 
 // assertReaderChunksEqualChunk verifies that merging lhs chunks produces rhs.
@@ -1201,4 +1209,197 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 		TimestampPoints: timestampPoints,
 		SymbolPoints:    symbolPoints,
 	}
+}
+
+// createDoubleTimeseriesWithPoints spins up a fresh time-series containing one
+// double column.  If count > 0 it pre-inserts <count> deterministic points.
+//
+// Returned values:
+//   - alias      – random alias of the created time-series
+//   - ts         – TimeseriesEntry handle
+//   - column     – typed handle to the single double column
+//   - timestamps – slice of inserted timestamps (nil when count == 0)
+//   - points     – slice of inserted TsDoublePoint values (nil when count == 0)
+func createDoubleTimeseriesWithPoints(
+	t *testing.T,
+	handle HandleType,
+	count int64,
+) (alias string, ts TimeseriesEntry, column TsDoubleColumn,
+	timestamps []time.Time, points []TsDoublePoint,
+) {
+	t.Helper()
+
+	alias = generateAlias(16)
+	colName := generateColumnName()
+	colInfo := NewTsColumnInfo(colName, TsColumnDouble)
+
+	ts = handle.Timeseries(alias)
+	require.NoError(t, ts.Create(24*time.Hour, colInfo))
+	t.Cleanup(func() { ts.Remove() })
+
+	column = ts.DoubleColumn(colName)
+
+	if count > 0 {
+		timestamps = make([]time.Time, count)
+		points = make([]TsDoublePoint, count)
+		for i := range count {
+			tsVal := time.Unix((i+1)*10, 0)
+			timestamps[i] = tsVal
+			points[i] = NewTsDoublePoint(tsVal, float64(i))
+		}
+		require.NoError(t, column.Insert(points...))
+	}
+
+	return
+}
+
+// createInt64TimeseriesWithPoints spins up a fresh time-series containing one
+// int64 column. If count > 0 it pre-inserts <count> deterministic points.
+//
+// Returned values:
+//   - alias      – random alias of the created time-series
+//   - ts         – TimeseriesEntry handle
+//   - column     – typed handle to the single int64 column
+//   - timestamps – slice of inserted timestamps (nil when count == 0)
+//   - points     – slice of inserted TsInt64Point values (nil when count == 0)
+func createInt64TimeseriesWithPoints(
+	t *testing.T,
+	handle HandleType,
+	count int64,
+) (alias string, ts TimeseriesEntry, column TsInt64Column,
+	timestamps []time.Time, points []TsInt64Point,
+) {
+	t.Helper()
+
+	alias = generateAlias(16)
+	colName := generateColumnName()
+	colInfo := NewTsColumnInfo(colName, TsColumnInt64)
+
+	ts = handle.Timeseries(alias)
+	require.NoError(t, ts.Create(24*time.Hour, colInfo))
+	t.Cleanup(func() { ts.Remove() })
+
+	column = ts.Int64Column(colName)
+
+	if count > 0 {
+		timestamps = make([]time.Time, count)
+		points = make([]TsInt64Point, count)
+		for i := range count {
+			tsVal := time.Unix((i+1)*10, 0)
+			timestamps[i] = tsVal
+			points[i] = NewTsInt64Point(tsVal, i)
+		}
+		require.NoError(t, column.Insert(points...))
+	}
+
+	return
+}
+
+// WithGC provides memory isolation for tests by invoking garbage collection
+// before and after test execution. This ensures proper memory cleanup between
+// tests by calling Go's garbage collector.
+//
+// Decision rationale:
+//   - Ensures memory isolation between tests in high-memory scenarios
+//   - Uses Go's garbage collector for memory management
+//   - Logs timing metrics to track GC overhead
+//
+// Key assumptions:
+//   - test function follows standard testing patterns
+//
+// Performance trade-offs:
+//   - Adds GC overhead but ensures test reliability
+//   - Acceptable cost for memory isolation in test environments
+//
+// Usage example:
+//
+//	func TestMyMemoryIntensiveFunction(t *testing.T) {
+//		WithGC(t, "TestMyMemoryIntensiveFunction", func() {
+//			// Your test code here
+//		})
+//	}
+func WithGC(t testHelper, testName string, testFunc func()) {
+	t.Helper()
+
+	// Phase 1: Pre-test GC
+	startTime := time.Now()
+	performGC(t, testName, "pre-test")
+	preGCDuration := time.Since(startTime)
+
+	// Run the actual test
+	testStartTime := time.Now()
+	testFunc()
+	testDuration := time.Since(testStartTime)
+
+	// Phase 2: Post-test GC
+	postGCStartTime := time.Now()
+	performGC(t, testName, "post-test")
+	postGCDuration := time.Since(postGCStartTime)
+
+	// Log timing metrics
+	t.Logf("GC timing for %s: pre-GC=%v, test=%v, post-GC=%v, total-GC=%v",
+		testName,
+		preGCDuration,
+		testDuration,
+		postGCDuration,
+		preGCDuration+postGCDuration)
+}
+
+// performGC executes Go garbage collection.
+// This helper consolidates all GC operations for consistency.
+func performGC(t testHelper, testName, phase string) {
+	t.Helper()
+
+	// Go garbage collection - call twice to ensure finalizers run
+	runtime.GC()
+	runtime.GC()
+
+	// Return memory to OS
+	debug.FreeOSMemory()
+
+	t.Logf("Performed %s GC for %s", phase, testName)
+}
+
+// WithGCAndHandle provides memory isolation for tests. This version maintains
+// the same interface as the original but now only uses Go's garbage collection.
+//
+// Decision rationale:
+//   - Maintains API compatibility for existing test code
+//   - Uses only Go GC for memory management
+//   - Used for tests that have access to database handles
+//
+// Usage example:
+//
+//	func TestMyDatabaseFunction(t *testing.T) {
+//		handle := newTestHandle(t)
+//		
+//		WithGCAndHandle(t, handle, "TestMyDatabaseFunction", func() {
+//			// Your test code here
+//		})
+//	}
+func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc func()) {
+	t.Helper()
+
+	// Phase 1: Pre-test GC
+	startTime := time.Now()
+	performGC(t, testName, "pre-test")
+	preGCDuration := time.Since(startTime)
+
+	// Run the actual test
+	testStartTime := time.Now()
+	testFunc()
+	testDuration := time.Since(testStartTime)
+
+	// Phase 2: Post-test GC
+	postGCStartTime := time.Now()
+	performGC(t, testName, "post-test")
+	postGCDuration := time.Since(postGCStartTime)
+
+	// Log timing metrics
+	t.Logf("GC timing for %s: pre-GC=%v, test=%v, post-GC=%v, total-GC=%v",
+		testName,
+		preGCDuration,
+		testDuration,
+		postGCDuration,
+		preGCDuration+postGCDuration)
 }
