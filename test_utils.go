@@ -2,10 +2,6 @@ package qdb
 
 /*
 #include <qdb/client.h>
-#include <qdb/option.h>
-
-// #cgo noescape qdb_option_client_tidy_memory
-// #cgo nocallback qdb_option_client_tidy_memory
 */
 import "C"
 
@@ -1385,15 +1381,14 @@ func createInt64TimeseriesWithPoints(
 
 // WithGC provides memory isolation for tests by invoking garbage collection
 // before and after test execution. This ensures proper memory cleanup between
-// tests by calling both Go's garbage collector and QuasarDB's native GC functions.
+// tests by calling Go's garbage collector.
 //
 // Decision rationale:
 //   - Ensures memory isolation between tests in high-memory scenarios
-//   - Combines Go GC with QuasarDB-specific memory management
+//   - Uses Go's garbage collector for memory management
 //   - Logs timing metrics to track GC overhead
 //
 // Key assumptions:
-//   - handle is valid and connected to a running daemon
 //   - test function follows standard testing patterns
 //
 // Performance trade-offs:
@@ -1434,7 +1429,7 @@ func WithGC(t testHelper, testName string, testFunc func()) {
 		preGCDuration+postGCDuration)
 }
 
-// performGC executes both Go and QuasarDB garbage collection.
+// performGC executes Go garbage collection.
 // This helper consolidates all GC operations for consistency.
 func performGC(t testHelper, testName, phase string) {
 	t.Helper()
@@ -1446,18 +1441,15 @@ func performGC(t testHelper, testName, phase string) {
 	// Return memory to OS
 	debug.FreeOSMemory()
 
-	// QuasarDB client-side memory cleanup
-	// Note: We don't have a handle here, so we'll need to integrate this differently
-	// For now, focus on Go GC only and add QDB GC integration later when we have handles
-
 	t.Logf("Performed %s GC for %s", phase, testName)
 }
 
-// WithGCAndHandle provides memory isolation with QuasarDB-specific cleanup.
-// This version takes a handle parameter to enable QuasarDB memory management.
+// WithGCAndHandle provides memory isolation for tests. This version maintains
+// the same interface as the original but now only uses Go's garbage collection.
 //
 // Decision rationale:
-//   - Allows QuasarDB-specific memory cleanup in addition to Go GC
+//   - Maintains API compatibility for existing test code
+//   - Uses only Go GC for memory management
 //   - Used for tests that have access to database handles
 //
 // Usage example:
@@ -1473,9 +1465,9 @@ func performGC(t testHelper, testName, phase string) {
 func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc func()) {
 	t.Helper()
 
-	// Phase 1: Pre-test GC with QDB cleanup
+	// Phase 1: Pre-test GC
 	startTime := time.Now()
-	performGCWithHandle(t, handle, testName, "pre-test")
+	performGC(t, testName, "pre-test")
 	preGCDuration := time.Since(startTime)
 
 	// Run the actual test
@@ -1483,13 +1475,13 @@ func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc 
 	testFunc()
 	testDuration := time.Since(testStartTime)
 
-	// Phase 2: Post-test GC with QDB cleanup
+	// Phase 2: Post-test GC
 	postGCStartTime := time.Now()
-	performGCWithHandle(t, handle, testName, "post-test")
+	performGC(t, testName, "post-test")
 	postGCDuration := time.Since(postGCStartTime)
 
 	// Log timing metrics
-	t.Logf("GC+QDB timing for %s: pre-GC=%v, test=%v, post-GC=%v, total-GC=%v",
+	t.Logf("GC timing for %s: pre-GC=%v, test=%v, post-GC=%v, total-GC=%v",
 		testName,
 		preGCDuration,
 		testDuration,
@@ -1497,21 +1489,3 @@ func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc 
 		preGCDuration+postGCDuration)
 }
 
-// performGCWithHandle executes both Go and QuasarDB garbage collection.
-func performGCWithHandle(t testHelper, handle HandleType, testName, phase string) {
-	t.Helper()
-
-	// Go garbage collection - call twice to ensure finalizers run
-	runtime.GC()
-	runtime.GC()
-
-	// Return memory to OS
-	debug.FreeOSMemory()
-
-	// QuasarDB client-side memory cleanup
-	if err := C.qdb_option_client_tidy_memory(handle.handle); err != 0 {
-		t.Logf("Warning: QuasarDB client tidy memory failed in %s %s: error code %d", phase, testName, int(err))
-	}
-
-	t.Logf("Performed %s GC+QDB cleanup for %s", phase, testName)
-}
