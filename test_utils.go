@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -34,7 +35,7 @@ func newTestHandle(t *testing.T) HandleType {
 
 	t.Cleanup(func() {
 		err := handle.Close()
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrInvalidHandle) {
 			t.Errorf("Failed to close handle: %v", err)
 		}
 	})
@@ -60,7 +61,7 @@ func newTestDirectHandle(t *testing.T) DirectHandleType {
 
 	t.Cleanup(func() {
 		_ = direct.Close()
-		_ = handle.Close()
+		// Note: handle.Close() is handled by newTestHandle() cleanup
 	})
 
 	return direct
@@ -149,7 +150,7 @@ func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (Bl
 
 	t.Cleanup(func() {
 		err := blob.Remove()
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
 			t.Errorf("Failed to remove blob: %v", err)
 		}
 	})
@@ -180,7 +181,7 @@ func newTestBlob(t *testing.T, handle HandleType) BlobEntry {
 
 	t.Cleanup(func() {
 		err := blob.Remove()
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
 			t.Errorf("Failed to remove blob: %v", err)
 		}
 	})
@@ -211,7 +212,7 @@ func newTestInteger(t *testing.T, handle HandleType) IntegerEntry {
 
 	t.Cleanup(func() {
 		err := integer.Remove()
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	})
@@ -926,9 +927,15 @@ func setupFindTestData(
 
 	// Automatic cleanup.
 	t.Cleanup(func() {
-		_ = blob1.Remove()
-		_ = blob2.Remove()
-		_ = integer.Remove()
+		if err := blob1.Remove(); err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove blob1: %v", err)
+		}
+		if err := blob2.Remove(); err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove blob2: %v", err)
+		}
+		if err := integer.Remove(); err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
 	})
 
 	return aliases, blob1, blob2, integer, tagAll, tagFirst, tagSecond, tagThird

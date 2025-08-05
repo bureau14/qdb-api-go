@@ -81,6 +81,7 @@ func TestIntegerRemove(t *testing.T) {
 	content := int64(13)
 	require.NoError(t, integer.Put(content, NeverExpires()))
 
+	// Test that we can remove the integer - cleanup will handle removal
 	require.NoError(t, integer.Remove())
 
 	_, err := integer.Get()

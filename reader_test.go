@@ -98,12 +98,7 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 func TestReaderCanReadDataFromTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		handle := newTestHandle(t)
-		defer func() {
-			err := handle.Close()
-			if err != nil {
-				t.Errorf("Failed to close handle: %v", err)
-			}
-		}()
+		// Cleanup handled automatically by newTestHandle()
 
 		tables := genPopulatedTables(rt, handle)
 
