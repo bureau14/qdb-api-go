@@ -934,13 +934,16 @@ func setupFindTestData(
 
 	// Automatic cleanup.
 	t.Cleanup(func() {
-		if err := blob1.Remove(); err != nil && !errors.Is(err, ErrAliasNotFound) {
+		err := blob1.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
 			t.Errorf("Failed to remove blob1: %v", err)
 		}
-		if err := blob2.Remove(); err != nil && !errors.Is(err, ErrAliasNotFound) {
+		err = blob2.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
 			t.Errorf("Failed to remove blob2: %v", err)
 		}
-		if err := integer.Remove(); err != nil && !errors.Is(err, ErrAliasNotFound) {
+		err = integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	})
@@ -1235,7 +1238,12 @@ func createDoubleTimeseriesWithPoints(
 
 	ts = handle.Timeseries(alias)
 	require.NoError(t, ts.Create(24*time.Hour, colInfo))
-	t.Cleanup(func() { ts.Remove() })
+	t.Cleanup(func() {
+		err := ts.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Logf("Failed to remove timeseries in cleanup: %v", err)
+		}
+	})
 
 	column = ts.DoubleColumn(colName)
 
@@ -1277,7 +1285,12 @@ func createInt64TimeseriesWithPoints(
 
 	ts = handle.Timeseries(alias)
 	require.NoError(t, ts.Create(24*time.Hour, colInfo))
-	t.Cleanup(func() { ts.Remove() })
+	t.Cleanup(func() {
+		err := ts.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Logf("Failed to remove timeseries in cleanup: %v", err)
+		}
+	})
 
 	column = ts.Int64Column(colName)
 
@@ -1372,7 +1385,7 @@ func performGC(t testHelper, testName, phase string) {
 //
 //	func TestMyDatabaseFunction(t *testing.T) {
 //		handle := newTestHandle(t)
-//		
+//
 //		WithGCAndHandle(t, handle, "TestMyDatabaseFunction", func() {
 //			// Your test code here
 //		})

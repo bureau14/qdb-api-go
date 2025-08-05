@@ -300,7 +300,8 @@ func TestHandleTagsAndPrefixFunctions(t *testing.T) {
 	integer := h.Integer(alias)
 	require.NoError(t, integer.Put(8, NeverExpires()))
 	t.Cleanup(func() {
-		if err := integer.Remove(); err != nil && !errors.Is(err, ErrAliasNotFound) {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
 			t.Errorf("Failed to remove integer: %v", err)
 		}
 	})

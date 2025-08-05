@@ -89,8 +89,8 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 			WithColumns(columnNames)
 
 		reader, err := NewReader(handle, opts)
-		defer reader.Close()
 		assert.NoError(err)
+		defer reader.Close()
 	})
 }
 
@@ -105,9 +105,6 @@ func TestReaderCanReadDataFromTables(t *testing.T) {
 			pushWriterTables(t, handle, tables)
 
 			names := writerTableNames(tables)
-
-			// columns := writerTablesColumns(tables)
-			// columnNames := columnNamesFromWriterColumns(columns)
 
 			opts := NewReaderOptions().WithTables(names)
 			reader, err := NewReader(handle, opts)
