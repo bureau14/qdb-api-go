@@ -27,9 +27,10 @@ type ReaderColumn struct {
 
 // NewReaderColumn creates column metadata.
 func NewReaderColumn(n string, t TsColumnType) (ReaderColumn, error) {
-	if t.IsValid() == false {
+	if !t.IsValid() {
 		return ReaderColumn{}, fmt.Errorf("NewReaderColumn: invalid column: %v", t)
 	}
+
 	return ReaderColumn{columnName: n, columnType: t}, nil
 }
 
@@ -79,7 +80,8 @@ func NewReaderChunk(cols []ReaderColumn, idx []time.Time, data []ColumnData) (Re
 // Empty reports if the chunk has no data.
 func (rc *ReaderChunk) Empty() bool {
 	// Returns true if no data
-	return rc.idx == nil || len(rc.idx) == 0 || rc.data == nil || len(rc.data) == 0
+
+	return len(rc.idx) == 0 || len(rc.data) == 0
 }
 
 // Clear resets the chunk to empty state.
@@ -129,6 +131,7 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 		for ci, c := range chunk.data {
 			if c.ValueType() != base.data[ci].ValueType() {
 				// you can also pull the name from base.columnInfoByOffset[ci].Name()
+
 				return base, fmt.Errorf(
 					"column mismatch at chunk %d, offset %d: expected type %v, got %v",
 					i+1, ci,
@@ -183,19 +186,19 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 // newReaderChunk converts C table data to Go ReaderChunk.
 func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data_t) (ReaderChunk, error) {
 	if data.timestamps == nil {
-		return ReaderChunk{}, fmt.Errorf("Internal error: nil timestamps")
+		return ReaderChunk{}, fmt.Errorf("internal error: nil timestamps")
 	}
 
 	if data.columns == nil {
-		return ReaderChunk{}, fmt.Errorf("Internal error: nil columns")
+		return ReaderChunk{}, fmt.Errorf("internal error: nil columns")
 	}
 
 	if data.row_count <= 0 {
-		return ReaderChunk{}, fmt.Errorf("Internal error: invalid row count %d", data.row_count)
+		return ReaderChunk{}, fmt.Errorf("internal error: invalid row count %d", data.row_count)
 	}
 
 	if data.column_count <= 0 {
-		return ReaderChunk{}, fmt.Errorf("Internal error: invalid column count %d", data.column_count)
+		return ReaderChunk{}, fmt.Errorf("internal error: invalid column count %d", data.column_count)
 	}
 
 	var out ReaderChunk
@@ -211,12 +214,12 @@ func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data
 	out.data = make([]ColumnData, colCount)
 
 	columnSlice := unsafe.Slice(data.columns, colCount)
-	for i := 0; i < colCount; i++ {
+	for i := range colCount {
 		column := columnSlice[i]
 
 		expected := C.qdb_ts_column_type_t(columns[i].columnType)
 		if column.data_type != expected {
-			return ReaderChunk{}, fmt.Errorf("Internal error: column %d type mismatch (expected %v, got %v)", i, expected, column.data_type)
+			return ReaderChunk{}, fmt.Errorf("internal error: column %d type mismatch (expected %v, got %v)", i, expected, column.data_type)
 		}
 
 		name := columns[i].columnName
@@ -252,8 +255,12 @@ func newReaderChunk(columns []ReaderColumn, data C.qdb_exp_batch_push_table_data
 				return ReaderChunk{}, err
 			}
 			out.data[i] = &v
+		case TsValueNull:
+
+			return ReaderChunk{}, fmt.Errorf("internal error: cannot read null value type for column %s", name)
 		default:
-			return ReaderChunk{}, fmt.Errorf("Internal error: unsupported value type for column %s", name)
+
+			return ReaderChunk{}, fmt.Errorf("internal error: unsupported value type for column %s", name)
 		}
 	}
 
@@ -285,18 +292,21 @@ func NewReaderDefaultOptions(tables []string) ReaderOptions {
 // WithBatchSize sets max rows per fetch.
 func (ro ReaderOptions) WithBatchSize(batchSize int) ReaderOptions {
 	ro.batchSize = batchSize
+
 	return ro
 }
 
 // WithTables sets tables to read.
 func (ro ReaderOptions) WithTables(tables []string) ReaderOptions {
 	ro.tables = tables
+
 	return ro
 }
 
 // WithColumns sets columns to read (empty=all).
 func (ro ReaderOptions) WithColumns(columns []string) ReaderOptions {
 	ro.columns = columns
+
 	return ro
 }
 
@@ -350,7 +360,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		return ret, fmt.Errorf("invalid time range")
 	}
 
-	if options.rangeEnd.IsZero() == false && !options.rangeEnd.After(options.rangeStart) {
+	if !options.rangeEnd.IsZero() && !options.rangeEnd.After(options.rangeStart) {
 		return ret, fmt.Errorf("invalid time range")
 	}
 
@@ -372,7 +382,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var cRangePtr *C.qdb_ts_range_t = nil
 
 	// But if a range is provided, set the pointer accordingly.
-	if options.rangeStart.IsZero() == false && options.rangeEnd.IsZero() == false {
+	if !options.rangeStart.IsZero() && !options.rangeEnd.IsZero() {
 		cRanges[0] = toQdbRange(options.rangeStart, options.rangeEnd)
 
 		// Points to stack-allocated value
@@ -392,7 +402,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 
 	for i, tbl := range options.tables {
 		name := qdbCopyString(h, tbl)
-		defer qdbRelease(h, name)
+		defer qdbRelease(h, name) //nolint:gocritic
 
 		tblSlice[i].name = name
 		tblSlice[i].ranges = cRangePtr
@@ -410,7 +420,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 		colSlice := unsafe.Slice(ptr, columnCount)
 		for i, col := range options.columns {
 			cname := qdbCopyString(h, col)
-			defer qdbRelease(h, cname)
+			defer qdbRelease(h, cname) //nolint:gocritic
 			colSlice[i] = cname
 		}
 		cColumns = ptr
@@ -422,6 +432,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	// this call the C API manages its own copy of the provided tables and columns so we can
 	// safely release our temporary allocations via the deferred qdbRelease calls.
 	var readerHandle C.qdb_reader_handle_t
+
 	errCode := C.qdb_bulk_reader_fetch(
 		ret.handle.handle,
 		cColumns,
@@ -443,76 +454,6 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	return ret, nil
 }
 
-// fetchBatch retrieves the next batch of rows.
-func (r *Reader) fetchBatch() (ReaderChunk, error) {
-	var ret ReaderChunk
-	var ptr *C.qdb_bulk_reader_table_data_t
-
-	// Time the C API call
-	start := time.Now()
-
-	// qdb_bulk_reader_get_data "fills" a pointer in style of when you would get data back
-	// for a number of tables, but it returns just a pointer for a single table. all memory
-	// allocated within this function call is linked to this single object, and a qdbRelease
-	// clears eerything
-	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
-	err := wrapError(errCode, "reader_fetch_batch", "batch_size", r.options.batchSize)
-
-	elapsed := time.Since(start)
-
-	// Trigger the `defer` statement as there are failure scenarios in both cases where err
-	// is nil or not-nil. That's why we put the ptr-check before checking error return codes.
-	if ptr != nil {
-		// All data in the `ptr`is allocated on the QuasarDB C-API side,
-		// and as such is linked to this one "root" pointer.
-		//
-		// By invoking qdbRelease on it, it automatically recursively releases
-		// all attached objects.
-		defer qdbRelease(r.handle, ptr)
-	}
-
-	if errors.Is(err, ErrIteratorEnd) {
-		if ptr != nil {
-			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v\n", ptr)
-		}
-
-		// Return empty batch
-		return ret, nil
-	} else if err != nil {
-		return ret, fmt.Errorf("unable to fetch bulk reader data: %v", err)
-	} else if ptr == nil {
-		return ret, fmt.Errorf("qdb_bulk_reader_get_data returned nil pointer")
-	}
-
-	table := *ptr
-
-	if table.columns == nil || table.column_count <= 0 {
-		return ret, fmt.Errorf("invalid column metadata (columns=%v column_count=%d)", table.columns, table.column_count)
-	}
-
-	colCount := int(table.column_count)
-	colSlice := unsafe.Slice(table.columns, colCount)
-
-	cols := make([]ReaderColumn, colCount)
-	for j := range colCount {
-		cols[j], err = NewReaderColumnFromNative(colSlice[j].name, colSlice[j].data_type)
-		if err != nil {
-			return ret, err
-		}
-	}
-
-	ret, err = newReaderChunk(cols, table)
-	if err != nil {
-		return ret, err
-	}
-
-	// Log the batch read performance
-	rowCount := ret.RowCount()
-	L().Debug("read batch of rows", "count", rowCount, "duration", elapsed)
-
-	return ret, nil
-}
-
 // Next advances to the next batch, returns false when done.
 func (r *Reader) Next() bool {
 	if r.done {
@@ -524,12 +465,14 @@ func (r *Reader) Next() bool {
 
 	if errors.Is(err, ErrIteratorEnd) {
 		r.done = true
+
 		return false
 	}
 
 	if err != nil || r.currentBatch.Empty() {
 		r.err = err // Only store non-ErrIteratorEnd errors
 		r.done = true
+
 		return false
 	}
 
@@ -565,7 +508,7 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 	}
 
 	if r.Err() != nil {
-		return ret, fmt.Errorf("Reader.FetchAll: error while traversing data: %v\n", r.Err())
+		return ret, fmt.Errorf("Reader.FetchAll: error while traversing data: %v", r.Err())
 	}
 
 	ret, err = mergeReaderChunks(batches)
@@ -585,4 +528,78 @@ func (r *Reader) Close() {
 
 		r.state = nil
 	}
+}
+
+// fetchBatch retrieves the next batch of rows.
+func (r *Reader) fetchBatch() (ReaderChunk, error) {
+	var ret ReaderChunk
+	var ptr *C.qdb_bulk_reader_table_data_t
+
+	// Time the C API call
+	start := time.Now()
+
+	// qdb_bulk_reader_get_data "fills" a pointer in style of when you would get data back
+	// for a number of tables, but it returns just a pointer for a single table. all memory
+	// allocated within this function call is linked to this single object, and a qdbRelease
+	// clears eerything
+	errCode := C.qdb_bulk_reader_get_data(r.state, &ptr, C.qdb_size_t(r.options.batchSize))
+	err := wrapError(errCode, "reader_fetch_batch", "batch_size", r.options.batchSize)
+
+	elapsed := time.Since(start)
+
+	// Trigger the `defer` statement as there are failure scenarios in both cases where err
+	// is nil or not-nil. That's why we put the ptr-check before checking error return codes.
+	if ptr != nil {
+		// All data in the `ptr`is allocated on the QuasarDB C-API side,
+		// and as such is linked to this one "root" pointer.
+		//
+		// By invoking qdbRelease on it, it automatically recursively releases
+		// all attached objects.
+		defer qdbRelease(r.handle, ptr)
+	}
+
+	switch {
+	case errors.Is(err, ErrIteratorEnd):
+		if ptr != nil {
+			return ret, fmt.Errorf("fetchBatch iterator end, did not expect table data: %v", ptr)
+		}
+
+		// Return empty batch
+
+		return ret, nil
+	case err != nil:
+
+		return ret, fmt.Errorf("unable to fetch bulk reader data: %v", err)
+	case ptr == nil:
+
+		return ret, fmt.Errorf("qdb_bulk_reader_get_data returned nil pointer")
+	}
+
+	table := *ptr
+
+	if table.columns == nil || table.column_count <= 0 {
+		return ret, fmt.Errorf("invalid column metadata (columns=%v column_count=%d)", table.columns, table.column_count)
+	}
+
+	colCount := int(table.column_count)
+	colSlice := unsafe.Slice(table.columns, colCount)
+
+	cols := make([]ReaderColumn, colCount)
+	for j := range colCount {
+		cols[j], err = NewReaderColumnFromNative(colSlice[j].name, colSlice[j].data_type)
+		if err != nil {
+			return ret, err
+		}
+	}
+
+	ret, err = newReaderChunk(cols, table)
+	if err != nil {
+		return ret, err
+	}
+
+	// Log the batch read performance
+	rowCount := ret.RowCount()
+	L().Debug("read batch of rows", "count", rowCount, "duration", elapsed)
+
+	return ret, nil
 }

@@ -10,11 +10,9 @@ import (
 // TestBlobPutEmpty tests putting empty content into a blob
 func TestBlobPutEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	contentObtained, err := blob.Get()
 	assert.NoError(t, err)
@@ -24,11 +22,8 @@ func TestBlobPutEmpty(t *testing.T) {
 // TestBlobUpdateEmpty tests updating a blob with empty content
 func TestBlobUpdateEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	blob := handle.Blob(alias)
-	defer blob.Remove()
+	blob := newTestBlob(t, handle)
 
 	err := blob.Update([]byte{}, NeverExpires())
 	assert.NoError(t, err)
@@ -41,11 +36,9 @@ func TestBlobUpdateEmpty(t *testing.T) {
 // TestBlobGetEmpty tests getting empty blob content
 func TestBlobGetEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	contentObtained, err := blob.Get()
 	assert.NoError(t, err)
@@ -55,11 +48,9 @@ func TestBlobGetEmpty(t *testing.T) {
 // TestBlobGetAndUpdateEmpty tests get and update operation with empty initial content
 func TestBlobGetAndUpdateEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	newContent := []byte("newContent")
 	contentObtained, err := blob.GetAndUpdate(newContent, PreserveExpiration())
@@ -74,7 +65,6 @@ func TestBlobGetAndUpdateEmpty(t *testing.T) {
 // TestBlobGetAndRemoveEmpty tests get and remove operation with empty content
 func TestBlobGetAndRemoveEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
@@ -92,7 +82,6 @@ func TestBlobGetAndRemoveEmpty(t *testing.T) {
 // TestBlobRemoveIfEmpty tests conditional remove with empty content
 func TestBlobRemoveIfEmpty(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
@@ -109,11 +98,9 @@ func TestBlobRemoveIfEmpty(t *testing.T) {
 // TestBlobRemoveIfEmptyWithBadComparand tests conditional remove with wrong comparand on empty blob
 func TestBlobRemoveIfEmptyWithBadComparand(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	err = blob.RemoveIf([]byte("badContent"))
 	assert.Error(t, err)
@@ -122,11 +109,9 @@ func TestBlobRemoveIfEmptyWithBadComparand(t *testing.T) {
 // TestBlobCompareAndSwapEmptyWithGoodComparand tests CAS with correct comparand on empty blob
 func TestBlobCompareAndSwapEmptyWithGoodComparand(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	newContent := []byte("newContent")
 	contentObtained, err := blob.CompareAndSwap(newContent, []byte{}, PreserveExpiration())
@@ -141,11 +126,9 @@ func TestBlobCompareAndSwapEmptyWithGoodComparand(t *testing.T) {
 // TestBlobCompareAndSwapEmptyWithBadComparand tests CAS with wrong comparand on empty blob
 func TestBlobCompareAndSwapEmptyWithBadComparand(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	blob, err := newTestBlobWithContent(t, handle, []byte{})
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	newContent := []byte("newContent")
 	contentObtained, err := blob.CompareAndSwap(newContent, []byte("badContent"), PreserveExpiration())
@@ -156,12 +139,10 @@ func TestBlobCompareAndSwapEmptyWithBadComparand(t *testing.T) {
 // TestBlobPutNormal tests putting normal content into a blob
 func TestBlobPutNormal(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	contentObtained, err := blob.Get()
 	assert.NoError(t, err)
@@ -171,11 +152,8 @@ func TestBlobPutNormal(t *testing.T) {
 // TestBlobUpdateNormal tests updating a blob with normal content
 func TestBlobUpdateNormal(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	blob := handle.Blob(alias)
-	defer blob.Remove()
+	blob := newTestBlob(t, handle)
 
 	content := []byte("content")
 	err := blob.Update(content, NeverExpires())
@@ -189,12 +167,10 @@ func TestBlobUpdateNormal(t *testing.T) {
 // TestBlobGetNormal tests getting normal blob content
 func TestBlobGetNormal(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	contentObtained, err := blob.Get()
 	assert.NoError(t, err)
@@ -204,12 +180,10 @@ func TestBlobGetNormal(t *testing.T) {
 // TestBlobGetAndUpdateNormal tests get and update operation with normal content
 func TestBlobGetAndUpdateNormal(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	newContent := []byte{}
 	contentObtained, err := blob.GetAndUpdate(newContent, PreserveExpiration())
@@ -224,7 +198,6 @@ func TestBlobGetAndUpdateNormal(t *testing.T) {
 // TestBlobGetAndRemoveNormal tests get and remove operation with normal content
 func TestBlobGetAndRemoveNormal(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
@@ -243,7 +216,6 @@ func TestBlobGetAndRemoveNormal(t *testing.T) {
 // TestBlobRemoveIfNormal tests conditional remove with correct comparand
 func TestBlobRemoveIfNormal(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
@@ -261,12 +233,10 @@ func TestBlobRemoveIfNormal(t *testing.T) {
 // TestBlobRemoveIfNormalWithBadComparand tests conditional remove with wrong comparand
 func TestBlobRemoveIfNormalWithBadComparand(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	err = blob.RemoveIf([]byte("badContent"))
 	assert.Error(t, err)
@@ -275,12 +245,10 @@ func TestBlobRemoveIfNormalWithBadComparand(t *testing.T) {
 // TestBlobCompareAndSwapNormalWithGoodComparand tests CAS with correct comparand
 func TestBlobCompareAndSwapNormalWithGoodComparand(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	newContent := []byte{}
 	contentObtained, err := blob.CompareAndSwap(newContent, content, PreserveExpiration())
@@ -295,12 +263,10 @@ func TestBlobCompareAndSwapNormalWithGoodComparand(t *testing.T) {
 // TestBlobCompareAndSwapNormalWithBadComparand tests CAS with wrong comparand
 func TestBlobCompareAndSwapNormalWithBadComparand(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	newContent := []byte{}
 	contentObtained, err := blob.CompareAndSwap(newContent, []byte("badContent"), PreserveExpiration())
@@ -311,12 +277,10 @@ func TestBlobCompareAndSwapNormalWithBadComparand(t *testing.T) {
 // TestBlobGetNoAllocExactBuffer tests GetNoAlloc with exact buffer size
 func TestBlobGetNoAllocExactBuffer(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	exactbuf := make([]byte, len(content))
 	n, err := blob.GetNoAlloc(exactbuf)
@@ -328,12 +292,10 @@ func TestBlobGetNoAllocExactBuffer(t *testing.T) {
 // TestBlobGetNoAllocSmallBuffer tests GetNoAlloc with buffer too small
 func TestBlobGetNoAllocSmallBuffer(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	smallbuf := make([]byte, len(content)-2)
 	n, err := blob.GetNoAlloc(smallbuf)
@@ -344,12 +306,10 @@ func TestBlobGetNoAllocSmallBuffer(t *testing.T) {
 // TestBlobGetNoAllocBigBuffer tests GetNoAlloc with buffer larger than content
 func TestBlobGetNoAllocBigBuffer(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	content := []byte("content")
 	blob, err := newTestBlobWithContent(t, handle, content)
 	require.NoError(t, err)
-	defer blob.Remove()
 
 	bigbuf := make([]byte, len(content)+2)
 	n, err := blob.GetNoAlloc(bigbuf)

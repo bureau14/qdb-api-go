@@ -1,0 +1,102 @@
+# This file contains all available configuration options
+# with their default values (in comments).
+#
+# This file is not a configuration example,
+# it contains the exhaustive configuration with explanations of the options.
+
+# Defines the configuration version.
+# The only possible value is "2".
+version: "2"
+
+linters:
+  default: standard
+
+  # Enable additional linters
+  enable:
+    - asciicheck
+    - gosec
+    - funcorder
+    - gocritic
+    - sloglint
+    - nestif
+    - tagalign
+#   - nlreturn  # Disabled: false positives with multi-line CGO function calls
+#   - dupl      # Disabled: Type-specific CGO wrappers require duplication (see CLAUDE.md)
+    - noinlineerr
+    - ireturn
+    - intrange
+    - exhaustive
+
+  settings:
+    gocritic:
+      enable-all: true
+
+      disabled-checks:
+        - hugeParam
+        # These checks produce false positives with CGO code
+        - dupImport      # Incorrectly flags import "C" as duplicate of regular imports
+        - dupSubExpr     # Produces corrupted output, reports == operators that don't exist
+        - importShadow   # Too many false positives with test assertions
+        - uncheckedInlineErr  # Corrupted output makes these unreliable
+
+formatters:
+  # Enable specific formatter.
+  # Default: [] (uses standard Go formatting)
+  enable:
+    - gci        # import format
+    - gofumpt    # more strict gofmt
+    - goimports  # add missing, remove unreferenced imports
+
+  settings:
+    gofumpt:
+      # Choose whether to use the extra rules.
+      # Default: false
+      extra-rules: true
+
+issues:
+  # Maximum issues count per one linter.
+  # Set to 0 to disable.
+  # Default: 50
+  max-issues-per-linter: 0
+
+  # Maximum count of issues with the same text.
+  # Set to 0 to disable.
+  # Default: 3
+  max-same-issues: 0
+
+  # Make issues output unique by line.
+  # Default: true
+  uniq-by-line: true
+
+  # Show only new issues: if there are unstaged changes or untracked files,
+  # only those changes are analyzed, else only changes in HEAD~ are analyzed.
+  # It's a super-useful option for integration of golangci-lint into existing large codebase.
+  # It's not practical to fix all existing issues at the moment of integration:
+  # much better don't allow issues in new code.
+  #
+  # Default: false
+  new: false
+
+  # NOTE: The examples directory contains documentation code that may not follow
+  # all production standards. To exclude it from linting, run:
+  # golangci-lint run --timeout=5m ./*.go
+  # instead of analyzing all directories recursively.
+
+
+
+# Options for analysis running.
+run:
+  # Timeout for total work, e.g. 30s, 5m, 5m30s.
+  # If the value is lower or equal to 0, the timeout is disabled.
+  # Default: 0 (disabled)
+  timeout: 5m
+
+  # The mode used to evaluate relative paths.
+  # It's used by exclusions, Go plugins, and some linters.
+  # The value can be:
+  # - `gomod`: the paths will be relative to the directory of the `go.mod` file.
+  # - `gitroot`: the paths will be relative to the git root (the parent directory of `.git`).
+  # - `cfg`: the paths will be relative to the configuration file.
+  # - `wd` (NOT recommended): the paths will be relative to the place where golangci-lint is run.
+  # Default: cfg
+  relative-path-mode: cfg

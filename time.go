@@ -26,6 +26,7 @@ func toQdbTime(tp time.Time) C.qdb_time_t {
 	if tp.Equal(PreserveExpiration()) {
 		return C.qdb_preserve_expiration
 	}
+
 	return C.qdb_time_t(tp.UnixNano() / int64(time.Millisecond))
 }
 
@@ -34,6 +35,7 @@ func toQdbRange(begin, end time.Time) C.qdb_ts_range_t {
 	var ret C.qdb_ts_range_t
 	ret.begin = toQdbTimespec(begin)
 	ret.end = toQdbTimespec(end)
+
 	return ret
 }
 
@@ -59,6 +61,7 @@ func TimeSliceToQdbTimespec(xs []time.Time) []C.qdb_timespec_t {
 	for i, x := range xs {
 		TimeToQdbTimespec(x, &ret[i])
 	}
+
 	return ret
 }
 

@@ -25,6 +25,7 @@ type Cluster struct {
 //	By default cluster does not allow this operation and the function returns a qdb_e_operation_disabled error.
 func (c Cluster) PurgeAll() error {
 	err := C.qdb_purge_all(c.handle, 60*1000)
+
 	return wrapError(err, "cluster_purge_all")
 }
 
@@ -36,6 +37,7 @@ func (c Cluster) PurgeAll() error {
 //	This call is not atomic: if the command cannot be dispatched on the whole cluster, it will be dispatched on as many nodes as possible and the function will return with a qdb_e_ok code.
 func (c Cluster) PurgeCache() error {
 	err := C.qdb_purge_cache(c.handle, 60*1000)
+
 	return wrapError(err, "cluster_purge_cache", "timeout_ms", 60*1000)
 }
 
@@ -49,6 +51,7 @@ func (c Cluster) PurgeCache() error {
 //	Because this operation is I/O and CPU intensive it is not recommended to run it when the cluster is heavily used.
 func (c Cluster) TrimAll() error {
 	err := C.qdb_trim_all(c.handle, 0, 60*60*1000)
+
 	return wrapError(err, "cluster_trim_all")
 }
 
@@ -57,6 +60,7 @@ func (c Cluster) TrimAll() error {
 //	Takes a timeout value, in milliseconds.
 func (c Cluster) WaitForStabilization(timeout time.Duration) error {
 	err := C.qdb_wait_for_stabilization(c.handle, C.int(timeout/time.Millisecond))
+
 	return wrapError(err, "cluster_wait_for_stabilization", "timeout", timeout)
 }
 
@@ -77,6 +81,7 @@ func RemoteNodeToStructG(t C.qdb_remote_node_t) Endpoint {
 
 func endpointArrayToSlice(endpoints *C.qdb_remote_node_t, length int) []C.qdb_remote_node_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_remote_node_t{})]C.qdb_remote_node_t)(unsafe.Pointer(endpoints))[:length:length]
 }
 
@@ -89,6 +94,7 @@ func endpointArrayToGo(endpoints *C.qdb_remote_node_t, endpointsCount C.qdb_size
 			output[i] = RemoteNodeToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -96,10 +102,13 @@ func endpointArrayToGo(endpoints *C.qdb_remote_node_t, endpointsCount C.qdb_size
 func (c Cluster) Endpoints() ([]Endpoint, error) {
 	var endpoints *C.qdb_remote_node_t
 	var endpointsCount C.qdb_size_t
+
 	err := C.qdb_cluster_endpoints(c.handle, &endpoints, &endpointsCount)
 	if err == 0 {
 		defer c.Release(unsafe.Pointer(endpoints))
+
 		return endpointArrayToGo(endpoints, endpointsCount), nil
 	}
+
 	return nil, wrapError(err, "cluster_trim_all")
 }

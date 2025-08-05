@@ -359,40 +359,56 @@ func TestHandleOptionsValidation(t *testing.T) {
 			originalURI := tt.opts.clusterURI
 
 			err := tt.opts.validate()
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Errorf("expected no error, got: %v", err)
-				}
-
-				// Verify strings were trimmed (for "strings are trimmed during validation" test case)
-				if tt.name == "strings are trimmed during validation" {
-					// All strings should have been trimmed
-					if tt.opts.clusterURI != "qdb://localhost:2836" {
-						t.Errorf("cluster URI not properly trimmed, got %q", tt.opts.clusterURI)
-					}
-					if tt.opts.clusterPublicKey != "key" {
-						t.Errorf("cluster public key not properly trimmed, got %q", tt.opts.clusterPublicKey)
-					}
-					if tt.opts.userName != "user" {
-						t.Errorf("user name not properly trimmed, got %q", tt.opts.userName)
-					}
-					if tt.opts.userSecret != "secret" {
-						t.Errorf("user secret not properly trimmed, got %q", tt.opts.userSecret)
-					}
-				} else if tt.opts.clusterURI != "" && tt.opts.clusterURI != originalURI {
-					if len(originalURI) > len(tt.opts.clusterURI) {
-						// String was trimmed, which is expected
-						t.Logf("cluster URI was trimmed from %q to %q", originalURI, tt.opts.clusterURI)
-					}
-				}
-			} else {
+			if tt.wantErr != "" {
+				// Expected error case
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.wantErr)
-				} else if err.Error() != tt.wantErr {
+
+					return
+				}
+				if err.Error() != tt.wantErr {
 					t.Errorf("expected error %q, got %q", tt.wantErr, err.Error())
 				}
+
+				return
+			}
+
+			// Expected success case
+			if err != nil {
+				t.Errorf("expected no error, got: %v", err)
+
+				return
+			}
+
+			// Verify strings were trimmed for specific test case
+			if tt.name == "strings are trimmed during validation" {
+				verifyStringsTrimmed(t, tt.opts)
+
+				return
+			}
+
+			// Check if URI was trimmed
+			if tt.opts.clusterURI != "" && tt.opts.clusterURI != originalURI && len(originalURI) > len(tt.opts.clusterURI) {
+				// String was trimmed, which is expected
+				t.Logf("cluster URI was trimmed from %q to %q", originalURI, tt.opts.clusterURI)
 			}
 		})
+	}
+}
+
+// verifyStringsTrimmed checks that all string fields in the options have been properly trimmed
+func verifyStringsTrimmed(t *testing.T, opts *HandleOptions) {
+	if opts.clusterURI != "qdb://localhost:2836" {
+		t.Errorf("cluster URI not properly trimmed, got %q", opts.clusterURI)
+	}
+	if opts.clusterPublicKey != "key" {
+		t.Errorf("cluster public key not properly trimmed, got %q", opts.clusterPublicKey)
+	}
+	if opts.userName != "user" {
+		t.Errorf("user name not properly trimmed, got %q", opts.userName)
+	}
+	if opts.userSecret != "secret" {
+		t.Errorf("user secret not properly trimmed, got %q", opts.userSecret)
 	}
 }
 

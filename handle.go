@@ -16,7 +16,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 	"unsafe"
 )
@@ -47,619 +47,6 @@ const (
 	CompNone     Compression = C.qdb_comp_none
 	CompBalanced Compression = C.qdb_comp_balanced
 )
-
-// APIVersion returns the QuasarDB API version string.
-//
-// Args:
-//
-//	None
-//
-// Returns:
-//
-//	string: API version (e.g. "3.14.0")
-//
-// Example:
-//
-//	version := h.APIVersion() // → "3.14.0"
-func (h HandleType) APIVersion() string {
-	version := C.qdb_version()
-	defer h.Release(unsafe.Pointer(version))
-	return C.GoString(version)
-}
-
-// APIBuild returns the QuasarDB API build information.
-//
-// Args:
-//
-//	None
-//
-// Returns:
-//
-//	string: Build information including version, compiler, and platform
-//
-// Example:
-//
-//	build := h.APIBuild() // → "3.14.0-gcc-11.2.0-linux-x86_64"
-func (h HandleType) APIBuild() string {
-	build := C.qdb_build()
-	defer h.Release(unsafe.Pointer(build))
-	return C.GoString(build)
-}
-
-// Open initializes a handle with the specified protocol.
-//
-// Args:
-//
-//	protocol: Network protocol to use (e.g. ProtocolTCP)
-//
-// Returns:
-//
-//	error: Initialization error if any
-//
-// Note: No connection will be established. Not needed if you created your handle with NewHandle.
-//
-// Example:
-//
-//	err := h.Open(qdb.ProtocolTCP)
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) Open(protocol Protocol) error {
-	err := C.qdb_open(&h.handle, C.qdb_protocol_t(protocol))
-	return wrapError(err, "handle_open", "protocol", protocol)
-}
-
-// SetTimeout sets the timeout for all network operations.
-//
-// Args:
-//
-//	timeout: Duration for network operations timeout
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Note: Lower timeouts increase risk of timeout errors. Server-side timeout might be shorter.
-//
-// Example:
-//
-//	err := h.SetTimeout(30 * time.Second)
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) SetTimeout(timeout time.Duration) error {
-	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
-	return wrapError(err, "handle_set_timeout", "timeout_ms", timeout/time.Millisecond)
-}
-
-// Encryption is an encryption option.
-type Encryption C.qdb_encryption_t
-
-// Encryption values:
-//
-//	EncryptNone : No encryption.
-//	EncryptAES : Uses aes gcm 256 encryption.
-const (
-	EncryptNone Encryption = C.qdb_crypt_none
-	EncryptAES  Encryption = C.qdb_crypt_aes_gcm_256
-)
-
-// SetEncryption sets the encryption method for the handle.
-//
-// Args:
-//
-//	encryption: Encryption type (EncryptNone or EncryptAES)
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Note: Must be called before Connect. See AddClusterPublicKey for adding public key.
-//
-// Example:
-//
-//	err := h.SetEncryption(qdb.EncryptAES)
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) SetEncryption(encryption Encryption) error {
-	err := C.qdb_option_set_encryption(h.handle, C.qdb_encryption_t(encryption))
-	return wrapError(err, "set_encryption", "type", encryption)
-}
-
-// jSONCredentialConfig holds username and secret key from JSON credential files.
-type jSONCredentialConfig struct {
-	Username  string `json:"username"`
-	SecretKey string `json:"secret_key"`
-}
-
-// UserCredentialFromFile retrieves user credentials from a JSON file.
-//
-// Args:
-//
-//	userCredentialFile: Path to JSON file containing username and secret_key
-//
-// Returns:
-//
-//	string: Username from the file
-//	string: Secret key from the file
-//	error: File read or JSON parsing error if any
-//
-// Example:
-//
-//	user, secret, err := qdb.UserCredentialFromFile("/path/to/user.json")
-//	if err != nil {
-//	    return err
-//	}
-func UserCredentialFromFile(userCredentialFile string) (string, string, error) {
-	fileConfig, err := ioutil.ReadFile(userCredentialFile)
-	if err != nil {
-		return "", "", err
-	}
-	var jsonConfig jSONCredentialConfig
-	err = json.Unmarshal(fileConfig, &jsonConfig)
-	if err != nil {
-		return "", "", err
-	}
-	return jsonConfig.Username, jsonConfig.SecretKey, nil
-}
-
-// ClusterKeyFromFile retrieves cluster public key from a file.
-//
-// Args:
-//
-//	clusterPublicKeyFile: Path to file containing cluster public key in PEM format
-//
-// Returns:
-//
-//	string: Cluster public key content
-//	error: File read error if any
-//
-// Example:
-//
-//	key, err := qdb.ClusterKeyFromFile("/path/to/cluster.key")
-//	if err != nil {
-//	    return err
-//	}
-func ClusterKeyFromFile(clusterPublicKeyFile string) (string, error) {
-	clusterPublicKey, err := ioutil.ReadFile(clusterPublicKeyFile)
-	if err != nil {
-		return "", err
-	}
-	return string(clusterPublicKey), nil
-}
-
-// AddUserCredentials adds a username and secret key for authentication.
-//
-// Args:
-//
-//	name: Username for authentication
-//	secret: User secret key/private key
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Example:
-//
-//	err := handle.AddUserCredentials("myuser", "mysecretkey")
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) AddUserCredentials(name, secret string) error {
-	username := convertToCharStar(name)
-	defer releaseCharStar(username)
-	userSecret := convertToCharStar(secret)
-	defer releaseCharStar(userSecret)
-	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, userSecret)
-	return wrapError(qdbErr, "add_user_credentials")
-}
-
-// AddClusterPublicKey adds the cluster public key for secure communication.
-//
-// Args:
-//
-//	secret: Cluster public key in PEM format
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Note: Must be called before Connect.
-//
-// Example:
-//
-//	err := handle.AddClusterPublicKey(clusterKey)
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) AddClusterPublicKey(secret string) error {
-	clusterPublicKey := convertToCharStar(secret)
-	defer releaseCharStar(clusterPublicKey)
-	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
-	return wrapError(qdbErr, "add_cluster_public_key")
-}
-
-// SetMaxCardinality sets the maximum allowed cardinality for queries.
-//
-// Args:
-//
-//	maxCardinality: Maximum cardinality value (minimum: 100)
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Note: Default value is 10,007. Minimum allowed value is 100.
-//
-// Example:
-//
-//	err := h.SetMaxCardinality(50000)
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
-	err := C.qdb_option_set_max_cardinality(h.handle, C.qdb_uint_t(maxCardinality))
-	return wrapError(err, "handle_set_max_cardinality", "max_cardinality", maxCardinality)
-}
-
-// SetCompression sets the compression level for outgoing messages.
-//
-// Args:
-//
-//	compressionLevel: Compression type (CompNone, CompBalanced)
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Note: API can read any compression used by server regardless of this setting.
-//
-// Example:
-//
-//	err := h.SetCompression(qdb.CompBalanced)
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) SetCompression(compressionLevel Compression) error {
-	err := C.qdb_option_set_compression(h.handle, C.qdb_compression_t(compressionLevel))
-	return makeErrorOrNil(err)
-}
-
-// SetClientMaxInBufSize sets the maximum incoming buffer size for client network operations.
-//
-// Args:
-//
-//	bufSize: Maximum buffer size in bytes
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Note: Only modify if expecting very large responses from server.
-//
-// Example:
-//
-//	err := h.SetClientMaxInBufSize(64 * 1024 * 1024) // 64MB
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
-	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
-	return makeErrorOrNil(err)
-}
-
-// GetClientMaxInBufSize gets the maximum incoming buffer size for client network operations.
-//
-// Args:
-//
-//	None
-//
-// Returns:
-//
-//	uint: Current maximum buffer size in bytes
-//	error: Retrieval error if any
-//
-// Example:
-//
-//	size, err := h.GetClientMaxInBufSize() // → 16777216
-//	if err != nil {
-//	    return 0, err
-//	}
-func (h HandleType) GetClientMaxInBufSize() (uint, error) {
-	var bufSize C.size_t
-	err := C.qdb_option_get_client_max_in_buf_size(h.handle, &bufSize)
-	return uint(bufSize), wrapError(err, "get_client_max_in_buf_size")
-}
-
-// GetClusterMaxInBufSize gets the maximum incoming buffer size allowed by the cluster.
-//
-// Args:
-//
-//	None
-//
-// Returns:
-//
-//	uint: Maximum buffer size allowed by cluster in bytes
-//	error: Retrieval error if any
-//
-// Example:
-//
-//	size, err := h.GetClusterMaxInBufSize() // → 67108864
-//	if err != nil {
-//	    return 0, err
-//	}
-func (h HandleType) GetClusterMaxInBufSize() (uint, error) {
-	var bufSize C.size_t
-	err := C.qdb_option_get_cluster_max_in_buf_size(h.handle, &bufSize)
-	return uint(bufSize), wrapError(err, "get_cluster_max_in_buf_size")
-}
-
-// GetClientMaxParallelism gets the maximum parallelism option of the client.
-//
-// Args:
-//
-//	None
-//
-// Returns:
-//
-//	uint: Current maximum parallelism thread count
-//	error: Retrieval error if any
-//
-// Example:
-//
-//	count, err := h.GetClientMaxParallelism() // → 16
-//	if err != nil {
-//	    return 0, err
-//	}
-func (h HandleType) GetClientMaxParallelism() (uint, error) {
-	var threadCount C.size_t
-	err := C.qdb_option_get_client_max_parallelism(h.handle, &threadCount)
-	return uint(threadCount), makeErrorOrNil(err)
-}
-
-// SetClientMaxParallelism sets the maximum parallelism level for the client.
-//
-// Args:
-//
-//	threadCount: Number of threads for concurrent operations
-//
-// Returns:
-//
-//	error: Configuration error if any
-//
-// Note: Higher values may improve throughput but consume more resources.
-//
-// Example:
-//
-//	err := h.SetClientMaxParallelism(16)
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
-	err := C.qdb_option_set_client_max_parallelism(h.handle, C.size_t(threadCount))
-	return makeErrorOrNil(err)
-}
-
-// Connect connects a previously opened handle to a QuasarDB cluster.
-//
-// Args:
-//
-//	clusterURI: URI in format qdb://<address>:<port> (IPv4/IPv6/domain)
-//
-// Returns:
-//
-//	error: Connection error if any
-//
-// Example:
-//
-//	err := h.Connect("qdb://localhost:2836")
-//	if err != nil {
-//	    return err
-//	}
-//	// Multiple nodes: "qdb://node1:2836,node2:2836"
-//	// IPv6: "qdb://[::1]:2836"
-func (h HandleType) Connect(clusterURI string) error {
-	uri := convertToCharStar(clusterURI)
-	defer releaseCharStar(uri)
-	err := C.qdb_connect(h.handle, uri)
-	if err == C.qdb_e_ok {
-		L().Info("successfully connected", "cluster", clusterURI)
-	}
-	return wrapError(err, "connect", "uri", clusterURI)
-}
-
-// Close closes the handle and releases all resources.
-//
-// Args:
-//
-//	None
-//
-// Returns:
-//
-//	error: Closing error if any
-//
-// Note: Terminates connections and releases all internal buffers.
-//
-// Example:
-//
-//	err := h.Close()
-//	if err != nil {
-//	    return err
-//	}
-func (h HandleType) Close() error {
-	err := C.qdb_close(h.handle)
-	return makeErrorOrNil(err)
-}
-
-// Release releases an API-allocated buffer.
-//
-// Args:
-//
-//	buffer: Pointer to buffer allocated by QuasarDB API
-//
-// Returns:
-//
-//	None
-//
-// Note: Failure to call may cause memory leaks. Works with any API-allocated buffer type.
-//
-// Example:
-//
-//	var tags **C.char
-//	err := C.qdb_get_tags(h.handle, alias, &tags, &tagCount)
-//	defer h.Release(unsafe.Pointer(tags))
-func (h HandleType) Release(buffer unsafe.Pointer) {
-	C.qdb_release(h.handle, buffer)
-}
-
-// GetTags retrieves all tags of an entry.
-//
-// Args:
-//
-//	entryAlias: Name of the entry to get tags from
-//
-// Returns:
-//
-//	[]string: List of tag names
-//	error: Retrieval error if any
-//
-// Note: Entry must exist. Tags scale across nodes.
-//
-// Example:
-//
-//	tags, err := h.GetTags("myentry") // → ["important", "data"]
-//	if err != nil {
-//	    return nil, err
-//	}
-func (h HandleType) GetTags(entryAlias string) ([]string, error) {
-	alias := convertToCharStar(entryAlias)
-	defer releaseCharStar(alias)
-	var tagCount C.size_t
-	var tags **C.char
-	err := C.qdb_get_tags(h.handle, alias, &tags, &tagCount)
-
-	if err == 0 {
-		defer h.Release(unsafe.Pointer(tags))
-		length := int(tagCount)
-		output := make([]string, length)
-		if length > 0 {
-			slice := charStarArrayToSlice(tags, length)
-			for i, s := range slice {
-				output[i] = C.GoString(s)
-			}
-		}
-		return output, nil
-	}
-	return nil, ErrorType(err)
-}
-
-// GetTagged retrieves all entries that have the specified tag.
-//
-// Args:
-//
-//	tag: Tag name to search for
-//
-// Returns:
-//
-//	[]string: List of entry aliases with this tag
-//	error: Retrieval error if any
-//
-// Note: Tag must exist. Constant time complexity.
-//
-// Example:
-//
-//	entries, err := h.GetTagged("important") // → ["entry1", "entry2"]
-//	if err != nil {
-//	    return nil, err
-//	}
-func (h HandleType) GetTagged(tag string) ([]string, error) {
-	cTag := convertToCharStar(tag)
-	defer releaseCharStar(cTag)
-	var aliasCount C.size_t
-	var aliases **C.char
-	err := C.qdb_get_tagged(h.handle, cTag, &aliases, &aliasCount)
-
-	if err == 0 {
-		defer h.Release(unsafe.Pointer(aliases))
-		length := int(aliasCount)
-		output := make([]string, length)
-		if length > 0 {
-			slice := charStarArrayToSlice(aliases, length)
-			for i, s := range slice {
-				output[i] = C.GoString(s)
-			}
-		}
-		return output, nil
-	}
-	return nil, wrapError(err, "get_tagged", "tag", tag)
-}
-
-// PrefixGet retrieves all entries matching the provided prefix.
-//
-// Args:
-//
-//	prefix: Prefix string to match
-//	limit: Maximum number of results to return
-//
-// Returns:
-//
-//	[]string: List of entry aliases matching the prefix
-//	error: Retrieval error if any
-//
-// Example:
-//
-//	entries, err := h.PrefixGet("user:", 100) // → ["user:1", "user:2"]
-//	if err != nil {
-//	    return nil, err
-//	}
-func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
-	cPrefix := convertToCharStar(prefix)
-	defer releaseCharStar(cPrefix)
-	var entryCount C.size_t
-	var entries **C.char
-	err := C.qdb_prefix_get(h.handle, cPrefix, C.qdb_int_t(limit), &entries, &entryCount)
-
-	if err == 0 {
-		defer h.Release(unsafe.Pointer(entries))
-		length := int(entryCount)
-		output := make([]string, length)
-		if length > 0 {
-			slice := charStarArrayToSlice(entries, length)
-			for i, s := range slice {
-				output[i] = C.GoString(s)
-			}
-		}
-		return output, nil
-	}
-	return []string{}, ErrorType(err)
-}
-
-// PrefixCount retrieves the count of entries matching the provided prefix.
-//
-// Args:
-//
-//	prefix: Prefix string to match
-//
-// Returns:
-//
-//	uint64: Number of entries matching the prefix
-//	error: Counting error if any
-//
-// Example:
-//
-//	count, err := h.PrefixCount("user:") // → 42
-//	if err != nil {
-//	    return 0, err
-//	}
-func (h HandleType) PrefixCount(prefix string) (uint64, error) {
-	cPrefix := convertToCharStar(prefix)
-	defer releaseCharStar(cPrefix)
-	var count C.qdb_uint_t
-	err := C.qdb_prefix_count(h.handle, cPrefix, &count)
-
-	return uint64(count), makeErrorOrNil(err)
-}
 
 // Handles Creators
 
@@ -713,6 +100,7 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 	}
 
 	swapCallback()
+
 	return h, nil
 }
 
@@ -739,7 +127,8 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 //	defer h.Close()
 func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 	// Validate options
-	if err := options.validate(); err != nil {
+	err := options.validate()
+	if err != nil {
 		return HandleType{}, fmt.Errorf("invalid options: %w", err)
 	}
 
@@ -754,38 +143,44 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 	defer func() {
 		if setupErr != nil {
 			// Log close error but don't override the original error
-			if closeErr := h.Close(); closeErr != nil {
+			closeErr := h.Close()
+			if closeErr != nil {
 				L().Debug("failed to close handle during cleanup", "error", closeErr)
 			}
 		}
 	}()
 
 	// Set compression (must be before Connect)
-	if setupErr = h.SetCompression(options.compression); setupErr != nil {
+	setupErr = h.SetCompression(options.compression)
+	if setupErr != nil {
 		return HandleType{}, fmt.Errorf("failed to set compression: %w", setupErr)
 	}
 
 	// Set encryption (must be before Connect)
-	if setupErr = h.SetEncryption(options.encryption); setupErr != nil {
+	setupErr = h.SetEncryption(options.encryption)
+	if setupErr != nil {
 		return HandleType{}, fmt.Errorf("failed to set encryption: %w", setupErr)
 	}
 
 	// Set timeout
-	if setupErr = h.SetTimeout(options.timeout); setupErr != nil {
+	setupErr = h.SetTimeout(options.timeout)
+	if setupErr != nil {
 		return HandleType{}, fmt.Errorf("failed to set timeout: %w", setupErr)
 	}
 
 	// Set client max parallelism if specified
 	if options.clientMaxParallelism > 0 {
 		// Ensure the value fits in uint (validation already checks this)
-		if setupErr = h.SetClientMaxParallelism(uint(options.clientMaxParallelism)); setupErr != nil {
+		setupErr = h.SetClientMaxParallelism(uint(options.clientMaxParallelism))
+		if setupErr != nil {
 			return HandleType{}, fmt.Errorf("failed to set client max parallelism: %w", setupErr)
 		}
 	}
 
 	// Set client max in buffer size if specified
 	if options.clientMaxInBufSize > 0 {
-		if setupErr = h.SetClientMaxInBufSize(options.clientMaxInBufSize); setupErr != nil {
+		setupErr = h.SetClientMaxInBufSize(options.clientMaxInBufSize)
+		if setupErr != nil {
 			return HandleType{}, fmt.Errorf("failed to set client max in buffer size: %w", setupErr)
 		}
 	}
@@ -795,13 +190,16 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 		clusterKey, err := ClusterKeyFromFile(options.clusterPublicKeyFile)
 		if err != nil {
 			setupErr = err
+
 			return HandleType{}, fmt.Errorf("failed to load cluster public key from file: %w", err)
 		}
-		if setupErr = h.AddClusterPublicKey(clusterKey); setupErr != nil {
+		setupErr = h.AddClusterPublicKey(clusterKey)
+		if setupErr != nil {
 			return HandleType{}, fmt.Errorf("failed to add cluster public key: %w", setupErr)
 		}
 	} else if options.clusterPublicKey != "" {
-		if setupErr = h.AddClusterPublicKey(options.clusterPublicKey); setupErr != nil {
+		setupErr = h.AddClusterPublicKey(options.clusterPublicKey)
+		if setupErr != nil {
 			return HandleType{}, fmt.Errorf("failed to add cluster public key: %w", setupErr)
 		}
 	}
@@ -811,24 +209,29 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 		userName, userSecret, err := UserCredentialFromFile(options.userSecurityFile)
 		if err != nil {
 			setupErr = err
+
 			return HandleType{}, fmt.Errorf("failed to load user credentials from file: %w", err)
 		}
-		if setupErr = h.AddUserCredentials(userName, userSecret); setupErr != nil {
+		setupErr = h.AddUserCredentials(userName, userSecret)
+		if setupErr != nil {
 			return HandleType{}, fmt.Errorf("failed to add user credentials: %w", setupErr)
 		}
 	} else if options.userName != "" && options.userSecret != "" {
-		if setupErr = h.AddUserCredentials(options.userName, options.userSecret); setupErr != nil {
+		setupErr = h.AddUserCredentials(options.userName, options.userSecret)
+		if setupErr != nil {
 			return HandleType{}, fmt.Errorf("failed to add user credentials: %w", setupErr)
 		}
 	}
 
 	// Connect to cluster
-	if setupErr = h.Connect(options.clusterURI); setupErr != nil {
+	setupErr = h.Connect(options.clusterURI)
+	if setupErr != nil {
 		return HandleType{}, fmt.Errorf("failed to connect to cluster: %w", setupErr)
 	}
 
 	// Success - clear setupErr to prevent cleanup
 	setupErr = nil
+
 	return h, nil
 }
 
@@ -861,6 +264,7 @@ func SetupHandle(clusterURI string, timeout time.Duration) (HandleType, error) {
 		return h, err
 	}
 	err = h.Connect(clusterURI)
+
 	return h, err
 }
 
@@ -884,6 +288,7 @@ func MustSetupHandle(clusterURI string, timeout time.Duration) HandleType {
 	if err != nil {
 		panic(err)
 	}
+
 	return h
 }
 
@@ -944,6 +349,7 @@ func SetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile str
 		return h, err
 	}
 	err = h.Connect(clusterURI)
+
 	return h, err
 }
 
@@ -975,7 +381,645 @@ func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile
 	if err != nil {
 		panic(err)
 	}
+
 	return h
+}
+
+// APIVersion returns the QuasarDB API version string.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	string: API version (e.g. "3.14.0")
+//
+// Example:
+//
+//	version := h.APIVersion() // → "3.14.0"
+func (h HandleType) APIVersion() string {
+	version := C.qdb_version()
+	defer h.Release(unsafe.Pointer(version))
+
+	return C.GoString(version)
+}
+
+// APIBuild returns the QuasarDB API build information.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	string: Build information including version, compiler, and platform
+//
+// Example:
+//
+//	build := h.APIBuild() // → "3.14.0-gcc-11.2.0-linux-x86_64"
+func (h HandleType) APIBuild() string {
+	build := C.qdb_build()
+	defer h.Release(unsafe.Pointer(build))
+
+	return C.GoString(build)
+}
+
+// Open initializes a handle with the specified protocol.
+//
+// Args:
+//
+//	protocol: Network protocol to use (e.g. ProtocolTCP)
+//
+// Returns:
+//
+//	error: Initialization error if any
+//
+// Note: No connection will be established. Not needed if you created your handle with NewHandle.
+//
+// Example:
+//
+//	err := h.Open(qdb.ProtocolTCP)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) Open(protocol Protocol) error {
+	err := C.qdb_open(&h.handle, C.qdb_protocol_t(protocol))
+
+	return wrapError(err, "handle_open", "protocol", protocol)
+}
+
+// SetTimeout sets the timeout for all network operations.
+//
+// Args:
+//
+//	timeout: Duration for network operations timeout
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Lower timeouts increase risk of timeout errors. Server-side timeout might be shorter.
+//
+// Example:
+//
+//	err := h.SetTimeout(30 * time.Second)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) SetTimeout(timeout time.Duration) error {
+	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
+
+	return wrapError(err, "handle_set_timeout", "timeout_ms", timeout/time.Millisecond)
+}
+
+// Encryption is an encryption option.
+type Encryption C.qdb_encryption_t
+
+// Encryption values:
+//
+//	EncryptNone : No encryption.
+//	EncryptAES : Uses aes gcm 256 encryption.
+const (
+	EncryptNone Encryption = C.qdb_crypt_none
+	EncryptAES  Encryption = C.qdb_crypt_aes_gcm_256
+)
+
+// SetEncryption sets the encryption method for the handle.
+//
+// Args:
+//
+//	encryption: Encryption type (EncryptNone or EncryptAES)
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Must be called before Connect. See AddClusterPublicKey for adding public key.
+//
+// Example:
+//
+//	err := h.SetEncryption(qdb.EncryptAES)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) SetEncryption(encryption Encryption) error {
+	err := C.qdb_option_set_encryption(h.handle, C.qdb_encryption_t(encryption))
+
+	return wrapError(err, "set_encryption", "type", encryption)
+}
+
+// jSONCredentialConfig holds username and secret key from JSON credential files.
+type jSONCredentialConfig struct {
+	Username  string `json:"username"`
+	SecretKey string `json:"secret_key"`
+}
+
+// UserCredentialFromFile retrieves user credentials from a JSON file.
+//
+// Args:
+//
+//	userCredentialFile: Path to JSON file containing username and secret_key
+//
+// Returns:
+//
+//	string: Username from the file
+//	string: Secret key from the file
+//	error: File read or JSON parsing error if any
+//
+// Example:
+//
+//	user, secret, err := qdb.UserCredentialFromFile("/path/to/user.json")
+//	if err != nil {
+//	    return err
+//	}
+func UserCredentialFromFile(userCredentialFile string) (user, secret string, err error) {
+	fileConfig, err := os.ReadFile(userCredentialFile)
+	if err != nil {
+		return "", "", err
+	}
+	var jsonConfig jSONCredentialConfig
+	err = json.Unmarshal(fileConfig, &jsonConfig)
+	if err != nil {
+		return "", "", err
+	}
+
+	return jsonConfig.Username, jsonConfig.SecretKey, nil
+}
+
+// ClusterKeyFromFile retrieves cluster public key from a file.
+//
+// Args:
+//
+//	clusterPublicKeyFile: Path to file containing cluster public key in PEM format
+//
+// Returns:
+//
+//	string: Cluster public key content
+//	error: File read error if any
+//
+// Example:
+//
+//	key, err := qdb.ClusterKeyFromFile("/path/to/cluster.key")
+//	if err != nil {
+//	    return err
+//	}
+func ClusterKeyFromFile(clusterPublicKeyFile string) (string, error) {
+	clusterPublicKey, err := os.ReadFile(clusterPublicKeyFile)
+	if err != nil {
+		return "", err
+	}
+
+	return string(clusterPublicKey), nil
+}
+
+// AddUserCredentials adds a username and secret key for authentication.
+//
+// Args:
+//
+//	name: Username for authentication
+//	secret: User secret key/private key
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Example:
+//
+//	err := handle.AddUserCredentials("myuser", "mysecretkey")
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) AddUserCredentials(name, secret string) error {
+	username := convertToCharStar(name)
+	defer releaseCharStar(username)
+	userSecret := convertToCharStar(secret)
+	defer releaseCharStar(userSecret)
+	qdbErr := C.qdb_option_set_user_credentials(h.handle, username, userSecret)
+
+	return wrapError(qdbErr, "add_user_credentials")
+}
+
+// AddClusterPublicKey adds the cluster public key for secure communication.
+//
+// Args:
+//
+//	secret: Cluster public key in PEM format
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Must be called before Connect.
+//
+// Example:
+//
+//	err := handle.AddClusterPublicKey(clusterKey)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) AddClusterPublicKey(secret string) error {
+	clusterPublicKey := convertToCharStar(secret)
+	defer releaseCharStar(clusterPublicKey)
+	qdbErr := C.qdb_option_set_cluster_public_key(h.handle, clusterPublicKey)
+
+	return wrapError(qdbErr, "add_cluster_public_key")
+}
+
+// SetMaxCardinality sets the maximum allowed cardinality for queries.
+//
+// Args:
+//
+//	maxCardinality: Maximum cardinality value (minimum: 100)
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Default value is 10,007. Minimum allowed value is 100.
+//
+// Example:
+//
+//	err := h.SetMaxCardinality(50000)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
+	err := C.qdb_option_set_max_cardinality(h.handle, C.qdb_uint_t(maxCardinality))
+
+	return wrapError(err, "handle_set_max_cardinality", "max_cardinality", maxCardinality)
+}
+
+// SetCompression sets the compression level for outgoing messages.
+//
+// Args:
+//
+//	compressionLevel: Compression type (CompNone, CompBalanced)
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: API can read any compression used by server regardless of this setting.
+//
+// Example:
+//
+//	err := h.SetCompression(qdb.CompBalanced)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) SetCompression(compressionLevel Compression) error {
+	err := C.qdb_option_set_compression(h.handle, C.qdb_compression_t(compressionLevel))
+
+	return makeErrorOrNil(err)
+}
+
+// SetClientMaxInBufSize sets the maximum incoming buffer size for client network operations.
+//
+// Args:
+//
+//	bufSize: Maximum buffer size in bytes
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Only modify if expecting very large responses from server.
+//
+// Example:
+//
+//	err := h.SetClientMaxInBufSize(64 * 1024 * 1024) // 64MB
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
+	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
+
+	return makeErrorOrNil(err)
+}
+
+// GetClientMaxInBufSize gets the maximum incoming buffer size for client network operations.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	uint: Current maximum buffer size in bytes
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	size, err := h.GetClientMaxInBufSize() // → 16777216
+//	if err != nil {
+//	    return 0, err
+//	}
+func (h HandleType) GetClientMaxInBufSize() (uint, error) {
+	var bufSize C.size_t
+	err := C.qdb_option_get_client_max_in_buf_size(h.handle, &bufSize)
+
+	return uint(bufSize), wrapError(err, "get_client_max_in_buf_size")
+}
+
+// GetClusterMaxInBufSize gets the maximum incoming buffer size allowed by the cluster.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	uint: Maximum buffer size allowed by cluster in bytes
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	size, err := h.GetClusterMaxInBufSize() // → 67108864
+//	if err != nil {
+//	    return 0, err
+//	}
+func (h HandleType) GetClusterMaxInBufSize() (uint, error) {
+	var bufSize C.size_t
+	err := C.qdb_option_get_cluster_max_in_buf_size(h.handle, &bufSize)
+
+	return uint(bufSize), wrapError(err, "get_cluster_max_in_buf_size")
+}
+
+// GetClientMaxParallelism gets the maximum parallelism option of the client.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	uint: Current maximum parallelism thread count
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	count, err := h.GetClientMaxParallelism() // → 16
+//	if err != nil {
+//	    return 0, err
+//	}
+func (h HandleType) GetClientMaxParallelism() (uint, error) {
+	var threadCount C.size_t
+	err := C.qdb_option_get_client_max_parallelism(h.handle, &threadCount)
+
+	return uint(threadCount), makeErrorOrNil(err)
+}
+
+// SetClientMaxParallelism sets the maximum parallelism level for the client.
+//
+// Args:
+//
+//	threadCount: Number of threads for concurrent operations
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Higher values may improve throughput but consume more resources.
+//
+// Example:
+//
+//	err := h.SetClientMaxParallelism(16)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
+	err := C.qdb_option_set_client_max_parallelism(h.handle, C.size_t(threadCount))
+
+	return makeErrorOrNil(err)
+}
+
+// Connect connects a previously opened handle to a QuasarDB cluster.
+//
+// Args:
+//
+//	clusterURI: URI in format qdb://<address>:<port> (IPv4/IPv6/domain)
+//
+// Returns:
+//
+//	error: Connection error if any
+//
+// Example:
+//
+//	err := h.Connect("qdb://localhost:2836")
+//	if err != nil {
+//	    return err
+//	}
+//	// Multiple nodes: "qdb://node1:2836,node2:2836"
+//	// IPv6: "qdb://[::1]:2836"
+func (h HandleType) Connect(clusterURI string) error {
+	uri := convertToCharStar(clusterURI)
+	defer releaseCharStar(uri)
+	err := C.qdb_connect(h.handle, uri)
+	if err == C.qdb_e_ok {
+		L().Info("successfully connected", "cluster", clusterURI)
+	}
+
+	return wrapError(err, "connect", "uri", clusterURI)
+}
+
+// Close closes the handle and releases all resources.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	error: Closing error if any
+//
+// Note: Terminates connections and releases all internal buffers.
+//
+// Example:
+//
+//	err := h.Close()
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) Close() error {
+	err := C.qdb_close(h.handle)
+
+	return makeErrorOrNil(err)
+}
+
+// Release releases an API-allocated buffer.
+//
+// Args:
+//
+//	buffer: Pointer to buffer allocated by QuasarDB API
+//
+// Returns:
+//
+//	None
+//
+// Note: Failure to call may cause memory leaks. Works with any API-allocated buffer type.
+//
+// Example:
+//
+//	var tags **C.char
+//	err := C.qdb_get_tags(h.handle, alias, &tags, &tagCount)
+//	defer h.Release(unsafe.Pointer(tags))
+func (h HandleType) Release(buffer unsafe.Pointer) {
+	C.qdb_release(h.handle, buffer)
+}
+
+// GetTags retrieves all tags of an entry.
+//
+// Args:
+//
+//	entryAlias: Name of the entry to get tags from
+//
+// Returns:
+//
+//	[]string: List of tag names
+//	error: Retrieval error if any
+//
+// Note: Entry must exist. Tags scale across nodes.
+//
+// Example:
+//
+//	tags, err := h.GetTags("myentry") // → ["important", "data"]
+//	if err != nil {
+//	    return nil, err
+//	}
+func (h HandleType) GetTags(entryAlias string) ([]string, error) {
+	alias := convertToCharStar(entryAlias)
+	defer releaseCharStar(alias)
+	var tagCount C.size_t
+	var tags **C.char
+	err := C.qdb_get_tags(h.handle, alias, &tags, &tagCount)
+
+	if err == 0 {
+		defer h.Release(unsafe.Pointer(tags))
+		length := int(tagCount)
+		output := make([]string, length)
+		if length > 0 {
+			slice := charStarArrayToSlice(tags, length)
+			for i, s := range slice {
+				output[i] = C.GoString(s)
+			}
+		}
+
+		return output, nil
+	}
+
+	return nil, ErrorType(err)
+}
+
+// GetTagged retrieves all entries that have the specified tag.
+//
+// Args:
+//
+//	tag: Tag name to search for
+//
+// Returns:
+//
+//	[]string: List of entry aliases with this tag
+//	error: Retrieval error if any
+//
+// Note: Tag must exist. Constant time complexity.
+//
+// Example:
+//
+//	entries, err := h.GetTagged("important") // → ["entry1", "entry2"]
+//	if err != nil {
+//	    return nil, err
+//	}
+func (h HandleType) GetTagged(tag string) ([]string, error) {
+	cTag := convertToCharStar(tag)
+	defer releaseCharStar(cTag)
+	var aliasCount C.size_t
+	var aliases **C.char
+	err := C.qdb_get_tagged(h.handle, cTag, &aliases, &aliasCount)
+
+	if err == 0 {
+		defer h.Release(unsafe.Pointer(aliases))
+		length := int(aliasCount)
+		output := make([]string, length)
+		if length > 0 {
+			slice := charStarArrayToSlice(aliases, length)
+			for i, s := range slice {
+				output[i] = C.GoString(s)
+			}
+		}
+
+		return output, nil
+	}
+
+	return nil, wrapError(err, "get_tagged", "tag", tag)
+}
+
+// PrefixGet retrieves all entries matching the provided prefix.
+//
+// Args:
+//
+//	prefix: Prefix string to match
+//	limit: Maximum number of results to return
+//
+// Returns:
+//
+//	[]string: List of entry aliases matching the prefix
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	entries, err := h.PrefixGet("user:", 100) // → ["user:1", "user:2"]
+//	if err != nil {
+//	    return nil, err
+//	}
+func (h HandleType) PrefixGet(prefix string, limit int) ([]string, error) {
+	cPrefix := convertToCharStar(prefix)
+	defer releaseCharStar(cPrefix)
+	var entryCount C.size_t
+	var entries **C.char
+	err := C.qdb_prefix_get(h.handle, cPrefix, C.qdb_int_t(limit), &entries, &entryCount)
+
+	if err == 0 {
+		defer h.Release(unsafe.Pointer(entries))
+		length := int(entryCount)
+		output := make([]string, length)
+		if length > 0 {
+			slice := charStarArrayToSlice(entries, length)
+			for i, s := range slice {
+				output[i] = C.GoString(s)
+			}
+		}
+
+		return output, nil
+	}
+
+	return []string{}, ErrorType(err)
+}
+
+// PrefixCount retrieves the count of entries matching the provided prefix.
+//
+// Args:
+//
+//	prefix: Prefix string to match
+//
+// Returns:
+//
+//	uint64: Number of entries matching the prefix
+//	error: Counting error if any
+//
+// Example:
+//
+//	count, err := h.PrefixCount("user:") // → 42
+//	if err != nil {
+//	    return 0, err
+//	}
+func (h HandleType) PrefixCount(prefix string) (uint64, error) {
+	cPrefix := convertToCharStar(prefix)
+	defer releaseCharStar(cPrefix)
+	var count C.qdb_uint_t
+	err := C.qdb_prefix_count(h.handle, cPrefix, &count)
+
+	return uint64(count), makeErrorOrNil(err)
 }
 
 // Entries creators
@@ -1152,6 +1196,7 @@ func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
 	batch := &TsBatch{}
 	batch.h = h
 	err := C.qdb_ts_batch_table_init(h.handle, columns, columnsCount, &batch.table)
+
 	return batch, wrapError(err, "ts_batch_init", "columns", len(cols))
 }
 
@@ -1178,5 +1223,6 @@ func (h HandleType) GetLastError() (string, error) {
 	if message != nil {
 		lastError = C.GoString(message.data)
 	}
+
 	return lastError, makeErrorOrNil(err)
 }

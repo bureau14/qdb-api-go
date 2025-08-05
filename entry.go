@@ -34,6 +34,7 @@ func (e Entry) Remove() error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_remove(e.handle, alias)
+
 	return wrapError(err, "entry_remove", "alias", e.alias)
 }
 
@@ -52,6 +53,7 @@ func (e Entry) ExpiresAt(expiry time.Time) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_expires_at(e.handle, alias, toQdbTime(expiry))
+
 	return wrapError(err, "entry_expires_at", "alias", e.alias)
 }
 
@@ -65,6 +67,7 @@ func (e Entry) ExpiresFromNow(expiry time.Duration) error {
 	alias := convertToCharStar(e.alias)
 	defer releaseCharStar(alias)
 	err := C.qdb_expires_from_now(e.handle, alias, C.qdb_time_t(expiry/time.Millisecond))
+
 	return wrapError(err, "entry_expires_from_now", "alias", e.alias, "expiry_ms", expiry/time.Millisecond)
 }
 
@@ -86,6 +89,7 @@ func (e Entry) GetLocation() (NodeLocation, error) {
 	var location C.qdb_remote_node_t
 	defer e.Release(unsafe.Pointer(&location))
 	err := C.qdb_get_location(e.handle, alias, &location)
+
 	return NodeLocation{C.GoString(location.address), int16(location.port)}, makeErrorOrNil(err)
 }
 
@@ -131,6 +135,7 @@ func (e Entry) GetMetadata() (Metadata, error) {
 	defer releaseCharStar(alias)
 	var m C.qdb_entry_metadata_t
 	err := C.qdb_get_metadata(e.handle, alias, &m)
+
 	return Metadata{RefID(m.reference), EntryType(m._type), uint64(m.size), TimespecToStructG(m.modification_time), TimespecToStructG(m.expiry_time)}, wrapError(err, "entry_get_metadata", "alias", e.alias)
 }
 
@@ -154,6 +159,7 @@ func (e Entry) AttachTag(tag string) error {
 	cTag := convertToCharStar(tag)
 	defer releaseCharStar(cTag)
 	err := C.qdb_attach_tag(e.handle, alias, cTag)
+
 	return makeErrorOrNil(err)
 }
 
@@ -169,6 +175,7 @@ func (e Entry) AttachTags(tags []string) error {
 	data := convertToCharStarStar(tags)
 	defer releaseCharStarStar(data, len(tags))
 	err := C.qdb_attach_tags(e.handle, alias, (**C.char)(data), C.size_t(len(tags)))
+
 	return makeErrorOrNil(err)
 }
 
@@ -182,6 +189,7 @@ func (e Entry) HasTag(tag string) error {
 	cTag := convertToCharStar(tag)
 	defer releaseCharStar(cTag)
 	err := C.qdb_has_tag(e.handle, alias, cTag)
+
 	return makeErrorOrNil(err)
 }
 
@@ -196,6 +204,7 @@ func (e Entry) DetachTag(tag string) error {
 	cTag := convertToCharStar(tag)
 	defer releaseCharStar(cTag)
 	err := C.qdb_detach_tag(e.handle, alias, cTag)
+
 	return makeErrorOrNil(err)
 }
 
@@ -210,6 +219,7 @@ func (e Entry) DetachTags(tags []string) error {
 	data := convertToCharStarStar(tags)
 	defer releaseCharStarStar(data, len(tags))
 	err := C.qdb_detach_tags(e.handle, alias, (**C.char)(data), C.size_t(len(tags)))
+
 	return makeErrorOrNil(err)
 }
 
@@ -235,8 +245,10 @@ func (e Entry) GetTagged(tag string) ([]string, error) {
 				output[i] = C.GoString(s)
 			}
 		}
+
 		return output, nil
 	}
+
 	return nil, ErrorType(err)
 }
 
@@ -261,7 +273,9 @@ func (e Entry) GetTags() ([]string, error) {
 				output[i] = C.GoString(s)
 			}
 		}
+
 		return output, nil
 	}
+
 	return nil, ErrorType(err)
 }

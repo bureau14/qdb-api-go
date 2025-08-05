@@ -43,7 +43,7 @@ func captureStderr(t *testing.T, f func()) string {
 	// Start reading in a goroutine
 	go func() {
 		var buf bytes.Buffer
-		io.Copy(&buf, r)
+		_, _ = io.Copy(&buf, r)
 		done <- buf.String()
 	}()
 
@@ -55,11 +55,11 @@ func captureStderr(t *testing.T, f func()) string {
 
 	// Restore stderr and close write end
 	os.Stderr = origStderr
-	w.Close()
+	_ = w.Close()
 
 	// Wait for reading to complete
 	output := <-done
-	r.Close()
+	_ = r.Close()
 
 	return output
 }
@@ -214,12 +214,12 @@ func TestDefaultLoggerFunction(t *testing.T) {
 
 	// Restore stderr and close write end
 	os.Stderr = origStderr
-	w.Close()
+	_ = w.Close()
 
 	// Read output
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	r.Close()
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
 	output := buf.String()
 
 	if !strings.Contains(output, "default logger test") {

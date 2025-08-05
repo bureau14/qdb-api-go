@@ -241,47 +241,81 @@ func IsRetryable(err error) bool {
 	switch errorType {
 	// Success - no retry needed
 	case Success, Created:
+
 		return false
+
+	// Retryable network/transient errors
+	case ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrUnstableCluster,
+		ErrTryAgain, ErrResourceLocked, ErrNetworkError, ErrNetworkInbufTooSmall:
+
+		return true
+
+	// Retryable system errors - may be temporary
+	case ErrSystemRemote, ErrSystemLocal, ErrInternalRemote, ErrInternalLocal,
+		ErrNoMemoryRemote, ErrNoMemoryLocal, ErrConflict, ErrNotConnected,
+		ErrInterrupted, ErrAsyncPipeFull:
+
+		return true
+
+	// Partial failures - some operations succeeded, worth retrying remainder
+	case ErrTransactionPartialFailure, ErrPartialFailure:
+
+		return true
+
+	// Clock skew - may resolve over time
+	case ErrClockSkew:
+
+		return true
 
 	// Logic errors - retrying won't fix bad code
 	case ErrInvalidArgument, ErrInvalidHandle, ErrInvalidIterator, ErrInvalidVersion,
 		ErrInvalidProtocol, ErrInvalidReply, ErrInvalidQuery, ErrInvalidRegex,
-		ErrInvalidCryptoKey, ErrBufferTooSmall, ErrNotImplemented, ErrIteratorEnd:
+		ErrInvalidCryptoKey, ErrBufferTooSmall, ErrNotImplemented, ErrIteratorEnd,
+		ErrUninitialized:
+
 		return false
 
 	// Schema errors - retrying won't change schema
 	case ErrIncompatibleType, ErrColumnNotFound, ErrQueryTooComplex:
+
 		return false
 
 	// Constraint violations - retrying won't resolve conflicts
 	case ErrAliasAlreadyExists, ErrElementAlreadyExists, ErrTagAlreadySet,
 		ErrOutOfBounds, ErrOverflow, ErrUnderflow, ErrEntryTooLarge,
-		ErrAliasTooLong, ErrUnmatchedContent, ErrReservedAlias:
+		ErrAliasTooLong, ErrUnmatchedContent, ErrReservedAlias, ErrSkipped:
+
 		return false
 
 	// Auth failures - retrying won't fix credentials
 	case ErrAccessDenied, ErrLoginFailed, ErrOperationNotPermitted, ErrUnknownUser:
+
 		return false
 
 	// Config errors - retrying won't enable features
 	case ErrOperationDisabled:
+
 		return false
 
 	// State errors - retrying won't create missing data
 	case ErrContainerEmpty, ErrContainerFull, ErrElementNotFound, ErrTagNotSet,
 		ErrAliasNotFound, ErrHostNotFound:
+
 		return false
 
 	// Data integrity - retrying won't fix corruption
 	case ErrDataCorruption:
+
 		return false
 
 	// Resource exhaustion - retrying won't free disk space
 	case ErrNoSpaceLeft, ErrQuotaExceeded:
+
 		return false
 
 	// Unknown errors assumed retryable - prevents data loss from new errors
 	default:
+
 		return true
 	}
 }

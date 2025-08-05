@@ -402,6 +402,29 @@ func createTestWriterTableWithColumns(t *testing.T, name string, rowCount int, c
 			}
 			stringData := NewColumnDataString(stringSlice)
 			data = &stringData
+		case TsColumnUninitialized:
+			t.Fatalf("Cannot create test data for uninitialized column type")
+		case TsColumnBlob:
+			blobSlice := make([][]byte, rowCount)
+			for j := range rowCount {
+				blobSlice[j] = []byte("blob" + string(rune(48+j)))
+			}
+			blobData := NewColumnDataBlob(blobSlice)
+			data = &blobData
+		case TsColumnTimestamp:
+			tsSlice := make([]time.Time, rowCount)
+			for j := range rowCount {
+				tsSlice[j] = time.Unix(int64(j), 0)
+			}
+			tsData := NewColumnDataTimestamp(tsSlice)
+			data = &tsData
+		case TsColumnSymbol:
+			symbolSlice := make([]string, rowCount)
+			for j := range rowCount {
+				symbolSlice[j] = "symbol" + string(rune(48+j))
+			}
+			symbolData := NewColumnDataString(symbolSlice)
+			data = &symbolData
 		}
 		err := table.SetData(i, data)
 		require.NoError(t, err)
@@ -483,6 +506,15 @@ func createTestWriterTableWithAllTypes(t *testing.T, name string, rowCount int, 
 			}
 			timestampData := NewColumnDataTimestamp(timestampSlice)
 			data = &timestampData
+		case TsColumnSymbol:
+			symbolSlice := make([]string, rowCount)
+			for j := range rowCount {
+				symbolSlice[j] = "symbol_" + string(rune(48+j))
+			}
+			symbolData := NewColumnDataString(symbolSlice)
+			data = &symbolData
+		case TsColumnUninitialized:
+			t.Fatalf("Cannot create test data for uninitialized column type")
 		}
 		err := table.SetData(i, data)
 		require.NoError(t, err)
@@ -518,6 +550,17 @@ func createTestWriterTableWithEmptyData(t *testing.T, name string, expectedRowCo
 		case TsColumnString:
 			stringData := NewColumnDataString(nil)
 			data = &stringData
+		case TsColumnSymbol:
+			symbolData := NewColumnDataString(nil)
+			data = &symbolData
+		case TsColumnBlob:
+			blobData := NewColumnDataBlob(nil)
+			data = &blobData
+		case TsColumnTimestamp:
+			timestampData := NewColumnDataTimestamp(nil)
+			data = &timestampData
+		case TsColumnUninitialized:
+			t.Fatalf("Cannot create test data for uninitialized column type")
 		}
 		err := table.SetData(i, data)
 		require.NoError(t, err)

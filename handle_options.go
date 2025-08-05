@@ -311,8 +311,8 @@ func (o *HandleOptions) validate() error {
 		return errors.New("timeout cannot be zero")
 	}
 	// Check if timeout in milliseconds fits in int32 (C API expects int)
-	timeoutMillis := o.timeout / time.Millisecond
-	if timeoutMillis > math.MaxInt32 {
+	timeoutValue := o.timeout / time.Millisecond
+	if timeoutValue > math.MaxInt32 {
 		return fmt.Errorf("timeout %v exceeds maximum allowed value (approximately 24.8 days)", o.timeout)
 	}
 

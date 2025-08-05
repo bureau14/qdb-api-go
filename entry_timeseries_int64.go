@@ -17,6 +17,11 @@ type TsInt64Point struct {
 	content   int64
 }
 
+// NewTsInt64Point : Create new timeseries int64 point
+func NewTsInt64Point(timestamp time.Time, value int64) TsInt64Point {
+	return TsInt64Point{timestamp, value}
+}
+
 // Timestamp : return data point timestamp
 func (t TsInt64Point) Timestamp() time.Time {
 	return t.timestamp
@@ -25,11 +30,6 @@ func (t TsInt64Point) Timestamp() time.Time {
 // Content : return data point content
 func (t TsInt64Point) Content() int64 {
 	return t.content
-}
-
-// NewTsInt64Point : Create new timeseries int64 point
-func NewTsInt64Point(timestamp time.Time, value int64) TsInt64Point {
-	return TsInt64Point{timestamp, value}
 }
 
 // :: internals
@@ -49,11 +49,13 @@ func int64PointArrayToC(pts ...TsInt64Point) *C.qdb_ts_int64_point {
 	for idx, pt := range pts {
 		points[idx] = pt.toStructC()
 	}
+
 	return &points[0]
 }
 
 func int64PointArrayToSlice(points *C.qdb_ts_int64_point, length int) []C.qdb_ts_int64_point {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_int64_point{})]C.qdb_ts_int64_point)(unsafe.Pointer(points))[:length:length]
 }
 
@@ -66,6 +68,7 @@ func int64PointArrayToGo(points *C.qdb_ts_int64_point, pointsCount C.qdb_size_t)
 			output[i] = TsInt64PointToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -88,6 +91,7 @@ func (column TsInt64Column) Insert(points ...TsInt64Point) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := int64PointArrayToC(points...)
 	err := C.qdb_ts_int64_insert(column.parent.handle, alias, columnName, content, contentCount)
+
 	return wrapError(err, "timeseries_int64_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
@@ -101,6 +105,7 @@ func (column TsInt64Column) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+
 	return uint64(erasedCount), wrapError(err, "ts_int64_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -120,8 +125,10 @@ func (column TsInt64Column) GetRanges(rgs ...TsRange) ([]TsInt64Point, error) {
 
 	if err == 0 {
 		defer column.parent.Release(unsafe.Pointer(points))
+
 		return int64PointArrayToGo(points, pointsCount), nil
 	}
+
 	return nil, wrapError(err, "ts_int64_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -131,6 +138,11 @@ type TsInt64Aggregation struct {
 	rng   TsRange
 	count int64
 	point TsInt64Point
+}
+
+// NewInt64Aggregation : Create new timeseries int64 aggregation
+func NewInt64Aggregation(kind TsAggregationType, rng TsRange) *TsInt64Aggregation {
+	return &TsInt64Aggregation{kind, rng, 0, TsInt64Point{}}
 }
 
 // Type : returns the type of the aggregation
@@ -153,11 +165,6 @@ func (t TsInt64Aggregation) Result() TsInt64Point {
 	return t.point
 }
 
-// NewInt64Aggregation : Create new timeseries int64 aggregation
-func NewInt64Aggregation(kind TsAggregationType, rng TsRange) *TsInt64Aggregation {
-	return &TsInt64Aggregation{kind, rng, 0, TsInt64Point{}}
-}
-
 // :: internals
 func (t TsInt64Aggregation) toStructC() C.qdb_ts_int64_aggregation_t {
 	var cAgg C.qdb_ts_int64_aggregation_t
@@ -165,6 +172,7 @@ func (t TsInt64Aggregation) toStructC() C.qdb_ts_int64_aggregation_t {
 	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
+
 	return cAgg
 }
 
@@ -174,6 +182,7 @@ func TsInt64AggregationToStructG(t C.qdb_ts_int64_aggregation_t) TsInt64Aggregat
 	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
 	gAgg.point = TsInt64PointToStructG(t.result)
+
 	return gAgg
 }
 
@@ -185,11 +194,13 @@ func int64AggregationArrayToC(ags ...*TsInt64Aggregation) *C.qdb_ts_int64_aggreg
 	for _, ag := range ags {
 		int64Aggregations = append(int64Aggregations, ag.toStructC())
 	}
+
 	return &int64Aggregations[0]
 }
 
 func int64AggregationArrayToSlice(aggregations *C.qdb_ts_int64_aggregation_t, length int) []C.qdb_ts_int64_aggregation_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_int64_aggregation_t{})]C.qdb_ts_int64_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
 }
 
@@ -203,6 +214,7 @@ func int64AggregationArrayToGo(aggregations *C.qdb_ts_int64_aggregation_t, aggre
 			output[i] = TsInt64AggregationToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -220,11 +232,13 @@ func (t *TsBulk) GetInt64() (int64, error) {
 	var content C.qdb_int_t
 	err := C.qdb_ts_row_get_int64(t.table, C.qdb_size_t(t.index), &content)
 	t.index++
+
 	return int64(content), wrapError(err, "ts_bulk_get_int64")
 }
 
 // RowSetInt64 : Set int64 at specified index in current row
 func (t *TsBatch) RowSetInt64(index, value int64) error {
 	valueIndex := C.qdb_size_t(index)
+
 	return wrapError(C.qdb_ts_batch_row_set_int64(t.table, valueIndex, C.qdb_int_t(value)), "ts_batch_row_set_int64", "index", valueIndex, "value", value)
 }

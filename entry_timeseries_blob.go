@@ -18,6 +18,11 @@ type TsBlobPoint struct {
 	content   []byte
 }
 
+// NewTsBlobPoint : Create new timeseries blob point
+func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
+	return TsBlobPoint{timestamp, value}
+}
+
 // Timestamp : return data point timestamp
 func (t TsBlobPoint) Timestamp() time.Time {
 	return t.timestamp
@@ -28,11 +33,6 @@ func (t TsBlobPoint) Content() []byte {
 	return t.content
 }
 
-// NewTsBlobPoint : Create new timeseries blob point
-func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
-	return TsBlobPoint{timestamp, value}
-}
-
 // :: internals
 
 // TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
@@ -40,6 +40,7 @@ func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
 func (t TsBlobPoint) toStructC() C.qdb_ts_blob_point {
 	dataSize := C.qdb_size_t(len(t.content))
 	data := unsafe.Pointer(convertToCharStar(string(t.content)))
+
 	return C.qdb_ts_blob_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
@@ -55,6 +56,7 @@ func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
 	for idx, pt := range pts {
 		points[idx] = pt.toStructC()
 	}
+
 	return &points[0]
 }
 
@@ -69,6 +71,7 @@ func releaseBlobPointArray(points *C.qdb_ts_blob_point, length int) {
 
 func blobPointArrayToSlice(points *C.qdb_ts_blob_point, length int) []C.qdb_ts_blob_point {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_blob_point{})]C.qdb_ts_blob_point)(unsafe.Pointer(points))[:length:length]
 }
 
@@ -81,6 +84,7 @@ func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) [
 			output[i] = TsBlobPointToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -104,6 +108,7 @@ func (column TsBlobColumn) Insert(points ...TsBlobPoint) error {
 	content := blobPointArrayToC(points...)
 	defer releaseBlobPointArray(content, len(points))
 	err := C.qdb_ts_blob_insert(column.parent.handle, alias, columnName, content, contentCount)
+
 	return wrapError(err, "ts_blob_insert", "table", column.parent.alias, "column", column.name, "points", len(points))
 }
 
@@ -117,6 +122,7 @@ func (column TsBlobColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+
 	return uint64(erasedCount), wrapError(err, "ts_blob_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -136,8 +142,10 @@ func (column TsBlobColumn) GetRanges(rgs ...TsRange) ([]TsBlobPoint, error) {
 
 	if err == 0 {
 		defer column.parent.Release(unsafe.Pointer(points))
+
 		return blobPointArrayToGo(points, pointsCount), nil
 	}
+
 	return nil, wrapError(err, "ts_blob_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -147,6 +155,11 @@ type TsBlobAggregation struct {
 	rng   TsRange
 	count int64
 	point TsBlobPoint
+}
+
+// NewBlobAggregation : Create new timeseries blob aggregation
+func NewBlobAggregation(kind TsAggregationType, rng TsRange) *TsBlobAggregation {
+	return &TsBlobAggregation{kind, rng, 0, TsBlobPoint{}}
 }
 
 // Type : returns the type of the aggregation
@@ -169,11 +182,6 @@ func (t TsBlobAggregation) Result() TsBlobPoint {
 	return t.point
 }
 
-// NewBlobAggregation : Create new timeseries blob aggregation
-func NewBlobAggregation(kind TsAggregationType, rng TsRange) *TsBlobAggregation {
-	return &TsBlobAggregation{kind, rng, 0, TsBlobPoint{}}
-}
-
 // :: internals
 func (t TsBlobAggregation) toStructC() C.qdb_ts_blob_aggregation_t {
 	var cAgg C.qdb_ts_blob_aggregation_t
@@ -181,6 +189,7 @@ func (t TsBlobAggregation) toStructC() C.qdb_ts_blob_aggregation_t {
 	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
+
 	return cAgg
 }
 
@@ -190,6 +199,7 @@ func TsBlobAggregationToStructG(t C.qdb_ts_blob_aggregation_t) TsBlobAggregation
 	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
 	gAgg.point = TsBlobPointToStructG(t.result)
+
 	return gAgg
 }
 
@@ -201,11 +211,13 @@ func blobAggregationArrayToC(ags ...*TsBlobAggregation) *C.qdb_ts_blob_aggregati
 	for _, ag := range ags {
 		blobAggregations = append(blobAggregations, ag.toStructC())
 	}
+
 	return &blobAggregations[0]
 }
 
 func blobAggregationArrayToSlice(aggregations *C.qdb_ts_blob_aggregation_t, length int) []C.qdb_ts_blob_aggregation_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_blob_aggregation_t{})]C.qdb_ts_blob_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
 }
 
@@ -219,6 +231,7 @@ func blobAggregationArrayToGo(aggregations *C.qdb_ts_blob_aggregation_t, aggrega
 			output[i] = TsBlobAggregationToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -237,6 +250,7 @@ func (column TsBlobColumn) Aggregate(aggs ...*TsBlobAggregation) ([]TsBlobAggreg
 	if err == 0 {
 		output = blobAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
+
 	return output, wrapError(err, "ts_blob_aggregate", "alias", column.parent.alias, "column", column.name, "aggregations", len(aggs))
 }
 
@@ -249,6 +263,7 @@ func (t *TsBulk) GetBlob() ([]byte, error) {
 
 	output := C.GoBytes(unsafe.Pointer(content), C.int(contentLength))
 	t.index++
+
 	return output, wrapError(err, "ts_bulk_get_blob")
 }
 
@@ -260,6 +275,7 @@ func (t *TsBatch) RowSetBlob(index int64, content []byte) error {
 	if contentSize != 0 {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
+
 	return wrapError(C.qdb_ts_batch_row_set_blob(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_blob", "index", valueIndex, "content_size", len(content))
 }
 
@@ -271,5 +287,6 @@ func (t *TsBatch) RowSetBlobNoCopy(index int64, content []byte) error {
 	if contentSize != 0 {
 		contentPtr = unsafe.Pointer(&content[0])
 	}
+
 	return wrapError(C.qdb_ts_batch_row_set_blob_no_copy(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_blob_no_copy", "index", valueIndex, "content_size", len(content))
 }

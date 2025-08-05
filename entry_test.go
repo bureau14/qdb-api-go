@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -18,8 +19,12 @@ func TestEntryAlias(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	assert.Equal(t, alias, integer.Alias())
 }
@@ -28,7 +33,6 @@ func TestEntryPutWithEmptyAlias(t *testing.T) {
 	handle := newTestHandle(t)
 	integer := handle.Integer("")
 	err := integer.Put(17, NeverExpires())
-	defer handle.Close()
 
 	assert.Error(t, err)
 }
@@ -43,8 +47,12 @@ func TestEntryAttachTag(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	assert.NoError(t, integer.AttachTag("atag"))
 }
@@ -56,8 +64,12 @@ func TestEntryAttachTags(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	assert.NoError(t, integer.AttachTags(tags))
 }
@@ -68,8 +80,12 @@ func TestEntryGetTagsWithoutAny(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	got, err := integer.GetTags()
 	require.NoError(t, err)
@@ -83,7 +99,6 @@ func TestEntryGetTagsAfterRemove(t *testing.T) {
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
 	require.NoError(t, integer.Remove())
-	defer handle.Close()
 
 	got, err := integer.GetTags()
 	assert.Error(t, err)
@@ -98,8 +113,12 @@ func TestEntryTagLifecycle(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	require.NoError(t, integer.AttachTags(tags))
 
@@ -135,8 +154,12 @@ func TestEntryTagEdgeCases(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	assert.Error(t, integer.HasTag(""))
 	aliases, err := integer.GetTagged("")
@@ -158,8 +181,12 @@ func TestEntryExpiryDistantFuture(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	expiry := time.Date(2040, time.January, 1, 0, 0, 0, 0, time.UTC)
 	duration := time.Until(expiry)
@@ -178,8 +205,12 @@ func TestEntryExpiryShortFuture(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	duration, _ := time.ParseDuration("1h")
 	expiry := time.Now().Add(duration)
@@ -198,8 +229,12 @@ func TestEntryExpiryPastErrors(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	for _, d := range []time.Duration{-1 * time.Hour, -5*time.Minute - 30*time.Second} {
 		expiry := time.Now().Add(d)
@@ -214,8 +249,12 @@ func TestEntryExpiryPreserve(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	duration, _ := time.ParseDuration("1h")
 	expiry := time.Now().Add(duration)
@@ -243,8 +282,12 @@ func TestEntryGetLocation(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	loc, err := integer.GetLocation()
 	require.NoError(t, err)
@@ -258,8 +301,12 @@ func TestEntryGetMetadata(t *testing.T) {
 
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(13, NeverExpires()))
-	defer integer.Remove()
-	defer handle.Close()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	meta, err := integer.GetMetadata()
 	require.NoError(t, err)
@@ -272,19 +319,22 @@ func TestEntryGetMetadata(t *testing.T) {
 
 func TestEntryExistsReturnsTrue(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(42, NeverExpires()))
-	defer integer.Remove()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	assert.True(t, integer.Exists())
 }
 
 func TestEntryExistsReturnsFalse(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
@@ -294,7 +344,6 @@ func TestEntryExistsReturnsFalse(t *testing.T) {
 
 func TestEntryExistsAfterRemove(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
@@ -308,7 +357,6 @@ func TestEntryExistsAfterRemove(t *testing.T) {
 
 func TestEntryExistsWithEmptyAlias(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	integer := handle.Integer("")
 	assert.False(t, integer.Exists())
@@ -316,7 +364,6 @@ func TestEntryExistsWithEmptyAlias(t *testing.T) {
 
 func TestEntryExistsWithSpecialCharacters(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	testCases := []struct {
 		name  string
@@ -339,7 +386,12 @@ func TestEntryExistsWithSpecialCharacters(t *testing.T) {
 			// Try to create entry - this may fail for some special characters
 			err := integer.Put(42, NeverExpires())
 			if err == nil {
-				defer integer.Remove()
+				defer func() {
+					err := integer.Remove()
+					if err != nil {
+						t.Errorf("Failed to remove integer: %v", err)
+					}
+				}()
 				assert.True(t, integer.Exists())
 			} else {
 				// If put fails, entry should still not exist
@@ -351,7 +403,6 @@ func TestEntryExistsWithSpecialCharacters(t *testing.T) {
 
 func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	testCases := []struct {
 		name    string
@@ -366,7 +417,12 @@ func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 
 				return blob.Entry, err
 			},
-			cleanup: func(e Entry) { e.Remove() },
+			cleanup: func(e Entry) {
+				err := e.Remove()
+				if err != nil && !errors.Is(err, ErrAliasNotFound) {
+					t.Errorf("Failed to remove entry: %v", err)
+				}
+			},
 		},
 		{
 			name: "integer",
@@ -376,7 +432,12 @@ func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 
 				return integer.Entry, err
 			},
-			cleanup: func(e Entry) { e.Remove() },
+			cleanup: func(e Entry) {
+				err := e.Remove()
+				if err != nil && !errors.Is(err, ErrAliasNotFound) {
+					t.Errorf("Failed to remove entry: %v", err)
+				}
+			},
 		},
 	}
 
@@ -394,7 +455,6 @@ func TestEntryExistsWithDifferentEntryTypes(t *testing.T) {
 
 func TestEntryExistsConsistencyWithGetMetadata(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
@@ -406,7 +466,12 @@ func TestEntryExistsConsistencyWithGetMetadata(t *testing.T) {
 
 	// After creation
 	require.NoError(t, integer.Put(42, NeverExpires()))
-	defer integer.Remove()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	exists = integer.Exists()
 	_, err = integer.GetMetadata()
@@ -415,12 +480,16 @@ func TestEntryExistsConsistencyWithGetMetadata(t *testing.T) {
 
 func TestEntryExistsConcurrentAccess(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
 	integer := handle.Integer(alias)
 	require.NoError(t, integer.Put(42, NeverExpires()))
-	defer integer.Remove()
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
 
 	// Test concurrent access to Exists() - should be safe
 	done := make(chan bool, 10)
