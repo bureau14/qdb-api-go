@@ -36,60 +36,64 @@ func TestReaderOptionsCanSetProperties(t *testing.T) {
 }
 
 func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
-	assert := assert.New(t)
-
 	handle := newTestHandle(t)
 	defer handle.Close()
 
-	// Error when no range provided
-	opts := NewReaderOptions().WithTables([]string{"table1"})
-	_, err := NewReader(handle, opts)
-	assert.Error(err)
+	WithGCAndHandle(t, handle, "TestReaderReturnsErrorOnInvalidRange", func() {
+		assert := assert.New(t)
 
-	// Error when range end precedes start
-	opts = opts.WithTimeRange(time.Unix(10, 0), time.Unix(5, 0))
-	_, err = NewReader(handle, opts)
-	assert.Error(err)
+		// Error when no range provided
+		opts := NewReaderOptions().WithTables([]string{"table1"})
+		_, err := NewReader(handle, opts)
+		assert.Error(err)
 
-	// Error when start is zero but end is non-zero
-	opts = opts.WithTimeRange(time.Time{}, time.Unix(5, 0))
-	_, err = NewReader(handle, opts)
-	assert.Error(err)
+		// Error when range end precedes start
+		opts = opts.WithTimeRange(time.Unix(10, 0), time.Unix(5, 0))
+		_, err = NewReader(handle, opts)
+		assert.Error(err)
 
-	// Error when start is non-zero but end is zero
-	opts = opts.WithTimeRange(time.Unix(5, 0), time.Time{})
-	_, err = NewReader(handle, opts)
-	assert.Error(err)
+		// Error when start is zero but end is non-zero
+		opts = opts.WithTimeRange(time.Time{}, time.Unix(5, 0))
+		_, err = NewReader(handle, opts)
+		assert.Error(err)
+
+		// Error when start is non-zero but end is zero
+		opts = opts.WithTimeRange(time.Unix(5, 0), time.Time{})
+		_, err = NewReader(handle, opts)
+		assert.Error(err)
+	})
 }
 
 func TestReaderCanOpenWithValidOptions(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
-
 	handle := newTestHandle(t)
 	defer handle.Close()
 
-	// Use all the column types we have
-	columnInfos := generateColumnInfosOfAllTypes()
+	WithGCAndHandle(t, handle, "TestReaderCanOpenWithValidOptions", func() {
+		assert := assert.New(t)
+		require := require.New(t)
 
-	// Ensure a certain table exists
-	table, err := createTableOfColumnInfosAndDefaultShardSize(handle, columnInfos)
-	require.NoError(err)
+		// Use all the column types we have
+		columnInfos := generateColumnInfosOfAllTypes()
 
-	// Collect column names for reader
-	var columnNames []string
-	for _, info := range columnInfos {
-		columnNames = append(columnNames, info.Name())
-	}
+		// Ensure a certain table exists
+		table, err := createTableOfColumnInfosAndDefaultShardSize(handle, columnInfos)
+		require.NoError(err)
 
-	// Reader should open with valid options: all columns and full time range
-	opts := NewReaderOptions().
-		WithTables([]string{table.Name()}).
-		WithColumns(columnNames)
+		// Collect column names for reader
+		var columnNames []string
+		for _, info := range columnInfos {
+			columnNames = append(columnNames, info.Name())
+		}
 
-	reader, err := NewReader(handle, opts)
-	defer reader.Close()
-	assert.NoError(err)
+		// Reader should open with valid options: all columns and full time range
+		opts := NewReaderOptions().
+			WithTables([]string{table.Name()}).
+			WithColumns(columnNames)
+
+		reader, err := NewReader(handle, opts)
+		defer reader.Close()
+		assert.NoError(err)
+	})
 }
 
 func TestReaderCanReadDataFromTables(t *testing.T) {
@@ -97,24 +101,26 @@ func TestReaderCanReadDataFromTables(t *testing.T) {
 		handle := newTestHandle(t)
 		defer handle.Close()
 
-		tables := genPopulatedTables(rt, handle)
+		WithGCAndHandle(rt, handle, "TestReaderCanReadDataFromTables", func() {
+			tables := genPopulatedTables(rt, handle)
 
-		pushWriterTables(t, handle, tables)
+			pushWriterTables(t, handle, tables)
 
-		names := writerTableNames(tables)
+			names := writerTableNames(tables)
 
-		// columns := writerTablesColumns(tables)
-		// columnNames := columnNamesFromWriterColumns(columns)
+			// columns := writerTablesColumns(tables)
+			// columnNames := columnNamesFromWriterColumns(columns)
 
-		opts := NewReaderOptions().WithTables(names)
-		reader, err := NewReader(handle, opts)
-		require.NoError(rt, err)
-		defer reader.Close()
+			opts := NewReaderOptions().WithTables(names)
+			reader, err := NewReader(handle, opts)
+			require.NoError(rt, err)
+			defer reader.Close()
 
-		data, err := reader.FetchAll()
-		require.NoError(rt, err)
+			data, err := reader.FetchAll()
+			require.NoError(rt, err)
 
-		assertWriterTablesEqualReaderChunks(rt, tables, names, data)
+			assertWriterTablesEqualReaderChunks(rt, tables, names, data)
+		})
 	})
 }
 
@@ -122,11 +128,13 @@ func TestReaderCanReadDataFromTables(t *testing.T) {
 // when given valid input.
 func TestReaderMergeReaderChunks(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		xs := genReaderChunks(rt)
-		ret, err := mergeReaderChunks(xs)
+		WithGC(rt, "TestReaderMergeReaderChunks", func() {
+			xs := genReaderChunks(rt)
+			ret, err := mergeReaderChunks(xs)
 
-		assert.NoError(rt, err)
+			assert.NoError(rt, err)
 
-		assertReaderChunksEqualChunk(rt, xs, ret)
+			assertReaderChunksEqualChunk(rt, xs, ret)
+		})
 	})
 }

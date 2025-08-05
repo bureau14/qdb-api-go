@@ -1,8 +1,15 @@
 package qdb
 
+/*
+#include <qdb/client.h>
+*/
+import "C"
+
 import (
 	"fmt"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"testing"
@@ -1042,6 +1049,7 @@ func genWriterOptions(t *rapid.T) WriterOptions {
 type testHelper interface {
 	require.TestingT
 	Helper()
+	Logf(format string, args ...interface{})
 }
 
 // assertReaderChunksEqualChunk verifies that merging lhs chunks produces rhs.
@@ -1370,3 +1378,114 @@ func createInt64TimeseriesWithPoints(
 
 	return
 }
+
+// WithGC provides memory isolation for tests by invoking garbage collection
+// before and after test execution. This ensures proper memory cleanup between
+// tests by calling Go's garbage collector.
+//
+// Decision rationale:
+//   - Ensures memory isolation between tests in high-memory scenarios
+//   - Uses Go's garbage collector for memory management
+//   - Logs timing metrics to track GC overhead
+//
+// Key assumptions:
+//   - test function follows standard testing patterns
+//
+// Performance trade-offs:
+//   - Adds GC overhead but ensures test reliability
+//   - Acceptable cost for memory isolation in test environments
+//
+// Usage example:
+//
+//	func TestMyMemoryIntensiveFunction(t *testing.T) {
+//		WithGC(t, "TestMyMemoryIntensiveFunction", func() {
+//			// Your test code here
+//		})
+//	}
+func WithGC(t testHelper, testName string, testFunc func()) {
+	t.Helper()
+
+	// Phase 1: Pre-test GC
+	startTime := time.Now()
+	performGC(t, testName, "pre-test")
+	preGCDuration := time.Since(startTime)
+
+	// Run the actual test
+	testStartTime := time.Now()
+	testFunc()
+	testDuration := time.Since(testStartTime)
+
+	// Phase 2: Post-test GC
+	postGCStartTime := time.Now()
+	performGC(t, testName, "post-test")
+	postGCDuration := time.Since(postGCStartTime)
+
+	// Log timing metrics
+	t.Logf("GC timing for %s: pre-GC=%v, test=%v, post-GC=%v, total-GC=%v",
+		testName,
+		preGCDuration,
+		testDuration,
+		postGCDuration,
+		preGCDuration+postGCDuration)
+}
+
+// performGC executes Go garbage collection.
+// This helper consolidates all GC operations for consistency.
+func performGC(t testHelper, testName, phase string) {
+	t.Helper()
+
+	// Go garbage collection - call twice to ensure finalizers run
+	runtime.GC()
+	runtime.GC()
+
+	// Return memory to OS
+	debug.FreeOSMemory()
+
+	t.Logf("Performed %s GC for %s", phase, testName)
+}
+
+// WithGCAndHandle provides memory isolation for tests. This version maintains
+// the same interface as the original but now only uses Go's garbage collection.
+//
+// Decision rationale:
+//   - Maintains API compatibility for existing test code
+//   - Uses only Go GC for memory management
+//   - Used for tests that have access to database handles
+//
+// Usage example:
+//
+//	func TestMyDatabaseFunction(t *testing.T) {
+//		handle := newTestHandle(t)
+//		defer handle.Close()
+//		
+//		WithGCAndHandle(t, handle, "TestMyDatabaseFunction", func(t *testing.T) {
+//			// Your test code here
+//		})
+//	}
+func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc func()) {
+	t.Helper()
+
+	// Phase 1: Pre-test GC
+	startTime := time.Now()
+	performGC(t, testName, "pre-test")
+	preGCDuration := time.Since(startTime)
+
+	// Run the actual test
+	testStartTime := time.Now()
+	testFunc()
+	testDuration := time.Since(testStartTime)
+
+	// Phase 2: Post-test GC
+	postGCStartTime := time.Now()
+	performGC(t, testName, "post-test")
+	postGCDuration := time.Since(postGCStartTime)
+
+	// Log timing metrics
+	t.Logf("GC timing for %s: pre-GC=%v, test=%v, post-GC=%v, total-GC=%v",
+		testName,
+		preGCDuration,
+		testDuration,
+		postGCDuration,
+		preGCDuration+postGCDuration)
+}
+

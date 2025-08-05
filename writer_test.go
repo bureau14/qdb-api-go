@@ -314,14 +314,16 @@ func TestWriterCanPushTables(t *testing.T) {
 		handle := newTestHandle(t)
 		defer handle.Close()
 
-		tables := genPopulatedTables(rt, handle)
+		WithGCAndHandle(rt, handle, "TestWriterCanPushTables", func() {
+			tables := genPopulatedTables(rt, handle)
 
-		writer := NewWriter(genWriterOptions(rt))
-		for _, wt := range tables {
-			require.NoError(rt, writer.SetTable(wt))
-		}
+			writer := NewWriter(genWriterOptions(rt))
+			for _, wt := range tables {
+				require.NoError(rt, writer.SetTable(wt))
+			}
 
-		require.NoError(rt, writer.Push(handle))
+			require.NoError(rt, writer.Push(handle))
+		})
 	})
 }
 
@@ -330,64 +332,66 @@ func TestWriterCanDeduplicate(t *testing.T) {
 	defer handle.Close()
 
 	rapid.Check(t, func(rt *rapid.T) {
-		assert := assert.New(rt)
-		require := require.New(rt)
+		WithGCAndHandle(rt, handle, "TestWriterCanDeduplicate", func() {
+			assert := assert.New(rt)
+			require := require.New(rt)
 
-		tables := genPopulatedTables(rt, handle)
+			tables := genPopulatedTables(rt, handle)
 
-		names := writerTableNames(tables)
-		columns := writerTablesColumns(tables)
-		columnNames := columnNamesFromWriterColumns(columns)
+			names := writerTableNames(tables)
+			columns := writerTablesColumns(tables)
+			columnNames := columnNamesFromWriterColumns(columns)
 
-		// Initial push without deduplication.
-		writer := NewWriterWithDefaultOptions()
-		for _, wt := range tables {
-			require.NoError(writer.SetTable(wt))
-		}
-		require.NoError(writer.Push(handle))
+			// Initial push without deduplication.
+			writer := NewWriterWithDefaultOptions()
+			for _, wt := range tables {
+				require.NoError(writer.SetTable(wt))
+			}
+			require.NoError(writer.Push(handle))
 
-		opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
-		reader, err := NewReader(handle, opts)
-		require.NoError(err)
-		defer reader.Close()
-
-		baseData, err := reader.FetchAll()
-		require.NoError(err)
-		assertWriterTablesEqualReaderChunks(rt, tables, names, baseData)
-
-		// Push again with deduplication enabled.
-		writer = NewWriter(NewWriterOptions().EnableDropDuplicates())
-		for _, wt := range tables {
-			require.NoError(writer.SetTable(wt))
-		}
-		require.NoError(writer.Push(handle))
-
-		reader2, err := NewReader(handle, opts)
-		require.NoError(err)
-		defer reader2.Close()
-		dedupData, err := reader2.FetchAll()
-		require.NoError(err)
-
-		assertWriterTablesEqualReaderChunks(rt, tables, names, dedupData)
-
-		// Push once more without deduplication.
-		writer = NewWriterWithDefaultOptions()
-		for _, wt := range tables {
-			require.NoError(writer.SetTable(wt))
-		}
-		require.NoError(writer.Push(handle))
-
-		// Verify each table now contains twice the original rows.
-		for _, wt := range tables {
-			rcOpts := NewReaderOptions().WithTables([]string{wt.GetName()}).WithColumns(columnNames)
-			r, err := NewReader(handle, rcOpts)
+			opts := NewReaderOptions().WithTables(names).WithColumns(columnNames)
+			reader, err := NewReader(handle, opts)
 			require.NoError(err)
-			data, err := r.FetchAll()
-			r.Close()
+			defer reader.Close()
+
+			baseData, err := reader.FetchAll()
+			require.NoError(err)
+			assertWriterTablesEqualReaderChunks(rt, tables, names, baseData)
+
+			// Push again with deduplication enabled.
+			writer = NewWriter(NewWriterOptions().EnableDropDuplicates())
+			for _, wt := range tables {
+				require.NoError(writer.SetTable(wt))
+			}
+			require.NoError(writer.Push(handle))
+
+			reader2, err := NewReader(handle, opts)
+			require.NoError(err)
+			defer reader2.Close()
+			dedupData, err := reader2.FetchAll()
 			require.NoError(err)
 
-			assert.Equal(wt.RowCount()*2, data.RowCount())
-		}
+			assertWriterTablesEqualReaderChunks(rt, tables, names, dedupData)
+
+			// Push once more without deduplication.
+			writer = NewWriterWithDefaultOptions()
+			for _, wt := range tables {
+				require.NoError(writer.SetTable(wt))
+			}
+			require.NoError(writer.Push(handle))
+
+			// Verify each table now contains twice the original rows.
+			for _, wt := range tables {
+				rcOpts := NewReaderOptions().WithTables([]string{wt.GetName()}).WithColumns(columnNames)
+				r, err := NewReader(handle, rcOpts)
+				require.NoError(err)
+				data, err := r.FetchAll()
+				r.Close()
+				require.NoError(err)
+
+				assert.Equal(wt.RowCount()*2, data.RowCount())
+			}
+		})
 	})
 }
 
@@ -489,59 +493,61 @@ func TestWriterEmptyData(t *testing.T) {
 // This test is particularly important for validating memory management and
 // pointer safety with bulk operations.
 func TestWriterLargeData(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
-
 	h := newTestHandle(t)
 	defer h.Close()
 
-	w := NewWriterWithDefaultOptions()
+	WithGCAndHandle(t, h, "TestWriterLargeData", func() {
+		assert := assert.New(t)
+		require := require.New(t)
 
-	// Create large dataset
-	const rowCount = 10000
-	timestamps := make([]time.Time, rowCount)
-	values := make([]float64, rowCount)
+		w := NewWriterWithDefaultOptions()
 
-	baseTime := time.Now()
-	for i := range rowCount {
-		timestamps[i] = baseTime.Add(time.Duration(i) * time.Second)
-		values[i] = float64(i) * 1.23
-	}
+		// Create large dataset
+		const rowCount = 10000
+		timestamps := make([]time.Time, rowCount)
+		values := make([]float64, rowCount)
 
-	cols := []WriterColumn{
-		{ColumnName: "value", ColumnType: TsColumnDouble},
-	}
+		baseTime := time.Now()
+		for i := range rowCount {
+			timestamps[i] = baseTime.Add(time.Duration(i) * time.Second)
+			values[i] = float64(i) * 1.23
+		}
 
-	// Create the table in QuasarDB first
-	tsTable, err := createTableOfWriterColumnsAndDefaultShardSize(h, cols)
-	require.NoError(err)
+		cols := []WriterColumn{
+			{ColumnName: "value", ColumnType: TsColumnDouble},
+		}
 
-	table, err := NewWriterTable(tsTable.alias, cols)
-	require.NoError(err)
+		// Create the table in QuasarDB first
+		tsTable, err := createTableOfWriterColumnsAndDefaultShardSize(h, cols)
+		require.NoError(err)
 
-	table.SetIndex(timestamps)
-	table.SetData(0, &ColumnDataDouble{xs: values})
+		table, err := NewWriterTable(tsTable.alias, cols)
+		require.NoError(err)
 
-	err = w.SetTable(table)
-	require.NoError(err)
+		table.SetIndex(timestamps)
+		table.SetData(0, &ColumnDataDouble{xs: values})
 
-	// This tests that our CGO implementation can handle large amounts
-	// of data without violating pointer safety rules
-	err = w.Push(h)
-	assert.NoError(err, "Push should succeed with large dataset")
+		err = w.SetTable(table)
+		require.NoError(err)
 
-	// Verify we can read the data back
-	opts := NewReaderOptions().
-		WithTables([]string{tsTable.alias}).
-		WithColumns([]string{"value"})
+		// This tests that our CGO implementation can handle large amounts
+		// of data without violating pointer safety rules
+		err = w.Push(h)
+		assert.NoError(err, "Push should succeed with large dataset")
 
-	reader, err := NewReader(h, opts)
-	require.NoError(err)
-	defer reader.Close()
+		// Verify we can read the data back
+		opts := NewReaderOptions().
+			WithTables([]string{tsTable.alias}).
+			WithColumns([]string{"value"})
 
-	data, err := reader.FetchAll()
-	require.NoError(err)
-	assert.Equal(rowCount, data.RowCount(), "Should have written all rows")
+		reader, err := NewReader(h, opts)
+		require.NoError(err)
+		defer reader.Close()
+
+		data, err := reader.FetchAll()
+		require.NoError(err)
+		assert.Equal(rowCount, data.RowCount(), "Should have written all rows")
+	})
 }
 
 // TestWriterMixedStringLengths tests string columns with various lengths
