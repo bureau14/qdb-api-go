@@ -75,12 +75,14 @@ func (options WriterOptions) IsDropDuplicatesEnabled() bool {
 // EnableWriteThrough bypasses server-side cache on push.
 func (options WriterOptions) EnableWriteThrough() WriterOptions {
 	options.pushFlags |= WriterPushFlagWriteThrough
+
 	return options
 }
 
 // DisableWriteThrough allows server to cache pushed data.
 func (options WriterOptions) DisableWriteThrough() WriterOptions {
 	options.pushFlags &^= WriterPushFlagWriteThrough
+
 	return options
 }
 
@@ -92,12 +94,14 @@ func (options WriterOptions) IsWriteThroughEnabled() bool {
 // EnableAsyncClientPush returns before server persistence.
 func (options WriterOptions) EnableAsyncClientPush() WriterOptions {
 	options.pushFlags |= WriterPushFlagAsyncClientPush
+
 	return options
 }
 
 // DisableAsyncClientPush waits for server acknowledgement.
 func (options WriterOptions) DisableAsyncClientPush() WriterOptions {
 	options.pushFlags &^= WriterPushFlagAsyncClientPush
+
 	return options
 }
 
@@ -112,6 +116,7 @@ func (options WriterOptions) EnableDropDuplicates() WriterOptions {
 	if options.dedupMode == WriterDeduplicationModeDisabled {
 		options.dedupMode = WriterDeduplicationModeDrop // set least-expensive deduplication strategy
 	}
+
 	return options
 }
 
@@ -122,6 +127,7 @@ func (options WriterOptions) EnableDropDuplicatesOn(columns []string) WriterOpti
 	if options.dedupMode == WriterDeduplicationModeDisabled {
 		options.dedupMode = WriterDeduplicationModeDrop // use least-expensive strategy by default
 	}
+
 	return options
 }
 
@@ -135,12 +141,14 @@ func (options WriterOptions) IsValid() bool {
 	switch options.pushMode {
 	case WriterPushModeTransactional, WriterPushModeFast, WriterPushModeAsync:
 	default:
+
 		return false
 	}
 
 	switch options.dedupMode {
 	case WriterDeduplicationModeDisabled, WriterDeduplicationModeDrop, WriterDeduplicationModeUpsert:
 	default:
+
 		return false
 	}
 
@@ -167,6 +175,7 @@ func (options WriterOptions) IsValid() bool {
 // WithPushMode sets the push mode.
 func (options WriterOptions) WithPushMode(mode WriterPushMode) WriterOptions {
 	options.pushMode = mode
+
 	return options
 }
 
@@ -174,6 +183,7 @@ func (options WriterOptions) WithPushMode(mode WriterPushMode) WriterOptions {
 func (options WriterOptions) WithDeduplicationMode(mode WriterDeduplicationMode) WriterOptions {
 	options.dedupMode = mode
 	options.dropDuplicates = mode != WriterDeduplicationModeDisabled
+
 	return options
 }
 
@@ -195,5 +205,6 @@ func (options WriterOptions) WithTransactionalPush() WriterOptions {
 // setNative converts options to C struct.
 func (options WriterOptions) setNative(opts C.qdb_exp_batch_options_t) C.qdb_exp_batch_options_t {
 	opts.mode = C.qdb_exp_batch_push_mode_t(options.pushMode)
+
 	return opts
 }

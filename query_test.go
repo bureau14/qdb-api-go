@@ -20,7 +20,6 @@ const (
 
 func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	td := newTestTimeseriesAllColumns(t, handle, 8)
 
@@ -28,7 +27,7 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 	result, err := handle.Query(query).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	defer handle.Release(unsafe.Pointer(result))
+	defer handle.Release(unsafe.Pointer(result)) //nolint:gosec // Safe CGO conversion for QuasarDB API
 
 	for rowIdx, row := range result.Rows() {
 		cols := result.Columns(row)
@@ -60,6 +59,7 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 		// Universal getter validation
 		for i, c := range cols {
 			if i == 1 { // skip $table
+
 				continue
 			}
 			p := c.Get()
@@ -77,6 +77,11 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 				assert.True(t, v == exp1 || v == exp2)
 			case QueryResultTimestamp:
 				assert.Equal(t, td.TimestampPoints[rowIdx].Content(), p.Value())
+			case QueryResultNone:
+				assert.Nil(t, p.Value())
+			case QueryResultCount:
+				// Count results should be int64
+				assert.IsType(t, int64(0), p.Value())
 			}
 		}
 	}
@@ -84,7 +89,6 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 
 func TestQueryInvalidQueryReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	_, err := handle.Query("select").Execute()
 	assert.Error(t, err)
@@ -92,13 +96,12 @@ func TestQueryInvalidQueryReturnsError(t *testing.T) {
 
 func TestQueryWrongTypeReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	td := newTestTimeseriesAllColumns(t, handle, 1) // just 1 row needed
 	query := fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
 	result, err := handle.Query(query).Execute()
 	require.NoError(t, err)
-	defer handle.Release(unsafe.Pointer(result))
+	defer handle.Release(unsafe.Pointer(result)) //nolint:gosec // Safe CGO conversion for QuasarDB API
 
 	for _, row := range result.Rows() {
 		cols := result.Columns(row)
@@ -109,7 +112,6 @@ func TestQueryWrongTypeReturnsError(t *testing.T) {
 
 func TestQueryReturnsNoResults(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	td := newTestTimeseriesAllColumns(t, handle, 4)
 	query := fmt.Sprintf("select * from %s in range(1971, +10d)", td.Alias)
@@ -121,7 +123,6 @@ func TestQueryReturnsNoResults(t *testing.T) {
 
 func TestQueryCreateTableReturnsNil(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
 	result, err := handle.Query(
@@ -131,15 +132,14 @@ func TestQueryCreateTableReturnsNil(t *testing.T) {
 	assert.Nil(t, result)
 
 	// cleanup
-	handle.Query(fmt.Sprintf("drop table %s", alias)).Execute()
+	_, _ = handle.Query(fmt.Sprintf("drop table %s", alias)).Execute()
 }
 
 func TestQueryDropTableReturnsNil(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	alias := generateAlias(16)
-	handle.Query(
+	_, _ = handle.Query(
 		fmt.Sprintf("create table %s (id INT64, price DOUBLE)", alias),
 	).Execute()
 

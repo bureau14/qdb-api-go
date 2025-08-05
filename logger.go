@@ -104,6 +104,7 @@ func splitTimestamp(args []any) (ts time.Time, rest []any) {
 					ts = t
 					// Do NOT add this attr to rest; we’re replacing the record’s timestamp
 					// and purposely omitting the original attribute to avoid duplication.
+
 					continue
 				}
 			}
@@ -126,10 +127,22 @@ func splitTimestamp(args []any) (ts time.Time, rest []any) {
 	}
 
 	// ts will be zero when no override was provided; callers test that.
+
 	return
 }
 
 type slogAdapter struct{ l *slog.Logger }
+
+func (s *slogAdapter) Detailed(msg string, args ...any) { s.log(slog.LevelDebug, msg, args...) }
+func (s *slogAdapter) Debug(msg string, args ...any)    { s.log(slog.LevelDebug, msg, args...) }
+func (s *slogAdapter) Info(msg string, args ...any)     { s.log(slog.LevelInfo, msg, args...) }
+func (s *slogAdapter) Warn(msg string, args ...any)     { s.log(slog.LevelWarn, msg, args...) }
+func (s *slogAdapter) Error(msg string, args ...any)    { s.log(slog.LevelError, msg, args...) }
+func (s *slogAdapter) Panic(msg string, args ...any)    { s.log(slog.LevelError, msg, args...) }
+func (s *slogAdapter) With(args ...any) Logger { //nolint:ireturn // Justified: Logger interface abstraction
+
+	return &slogAdapter{l: s.l.With(args...)}
+}
 
 func (s *slogAdapter) log(level slog.Level, msg string, args ...any) {
 	ts, rest := splitTimestamp(args)
@@ -149,14 +162,6 @@ func (s *slogAdapter) log(level slog.Level, msg string, args ...any) {
 	// Pass straight to the underlying Handler.
 	_ = s.l.Handler().Handle(context.Background(), rec)
 }
-
-func (s *slogAdapter) Detailed(msg string, args ...any) { s.log(slog.LevelDebug, msg, args...) }
-func (s *slogAdapter) Debug(msg string, args ...any)    { s.log(slog.LevelDebug, msg, args...) }
-func (s *slogAdapter) Info(msg string, args ...any)     { s.log(slog.LevelInfo, msg, args...) }
-func (s *slogAdapter) Warn(msg string, args ...any)     { s.log(slog.LevelWarn, msg, args...) }
-func (s *slogAdapter) Error(msg string, args ...any)    { s.log(slog.LevelError, msg, args...) }
-func (s *slogAdapter) Panic(msg string, args ...any)    { s.log(slog.LevelError, msg, args...) }
-func (s *slogAdapter) With(args ...any) Logger          { return &slogAdapter{l: s.l.With(args...)} }
 
 // NilLogger provides a Logger implementation that silences all log output.
 //
@@ -183,7 +188,10 @@ func (*NilLogger) Info(msg string, args ...any)     {}
 func (*NilLogger) Warn(msg string, args ...any)     {}
 func (*NilLogger) Error(msg string, args ...any)    {}
 func (*NilLogger) Panic(msg string, args ...any)    {}
-func (*NilLogger) With(args ...any) Logger          { return &NilLogger{} }
+func (*NilLogger) With(args ...any) Logger { //nolint:ireturn // Justified: Logger interface abstraction
+
+	return &NilLogger{}
+}
 
 // defaultLogger creates the default logger instance that writes to stderr.
 //
@@ -192,7 +200,7 @@ func (*NilLogger) With(args ...any) Logger          { return &NilLogger{} }
 //	– Extracted from init() to enable test cases to reset to default state.
 //	– Uses stderr by default to avoid interfering with stdout-based tools.
 //	– Info level provides reasonable verbosity without debug noise.
-func defaultLogger() Logger {
+func defaultLogger() Logger { //nolint:ireturn // Justified: Logger interface abstraction
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo, // default level; tweak in tests if needed
 	})
@@ -202,7 +210,8 @@ func defaultLogger() Logger {
 
 // NewSlogAdapter creates a Logger from a slog.Handler.
 // This is primarily intended for testing purposes.
-func NewSlogAdapter(h slog.Handler) Logger {
+func NewSlogAdapter(h slog.Handler) Logger { //nolint:ireturn // Justified: Logger interface abstraction
+
 	return &slogAdapter{l: slog.New(h)}
 }
 
@@ -211,7 +220,8 @@ func init() {
 }
 
 // L returns the current package-level logger.
-func L() Logger {
+func L() Logger { //nolint:ireturn // Justified: Logger interface abstraction
+
 	return globalLogger.Load().(*loggerHolder).logger
 }
 

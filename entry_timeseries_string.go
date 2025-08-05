@@ -18,6 +18,11 @@ type TsStringPoint struct {
 	content   string
 }
 
+// NewTsStringPoint : Create new timeseries string point
+func NewTsStringPoint(timestamp time.Time, value string) TsStringPoint {
+	return TsStringPoint{timestamp, value}
+}
+
 // Timestamp : return data point timestamp
 func (t TsStringPoint) Timestamp() time.Time {
 	return t.timestamp
@@ -28,15 +33,11 @@ func (t TsStringPoint) Content() string {
 	return t.content
 }
 
-// NewTsStringPoint : Create new timeseries string point
-func NewTsStringPoint(timestamp time.Time, value string) TsStringPoint {
-	return TsStringPoint{timestamp, value}
-}
-
 // :: internals
 func (t TsStringPoint) toStructC() C.qdb_ts_string_point {
 	dataSize := C.qdb_size_t(len(t.content))
 	data := convertToCharStar(string(t.content))
+
 	return C.qdb_ts_string_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
@@ -52,6 +53,7 @@ func stringPointArrayToC(pts ...TsStringPoint) *C.qdb_ts_string_point {
 	for idx, pt := range pts {
 		points[idx] = pt.toStructC()
 	}
+
 	return &points[0]
 }
 
@@ -66,6 +68,7 @@ func releaseStringPointArray(points *C.qdb_ts_string_point, length int) {
 
 func stringPointArrayToSlice(points *C.qdb_ts_string_point, length int) []C.qdb_ts_string_point {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_string_point{})]C.qdb_ts_string_point)(unsafe.Pointer(points))[:length:length]
 }
 
@@ -78,6 +81,7 @@ func stringPointArrayToGo(points *C.qdb_ts_string_point, pointsCount C.qdb_size_
 			output[i] = TsStringPointToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -106,6 +110,7 @@ func (column TsStringColumn) Insert(points ...TsStringPoint) error {
 	content := stringPointArrayToC(points...)
 	defer releaseStringPointArray(content, len(points))
 	err := C.qdb_ts_string_insert(column.parent.handle, alias, columnName, content, contentCount)
+
 	return wrapError(err, "timeseries_string_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
@@ -119,6 +124,7 @@ func (column TsStringColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+
 	return uint64(erasedCount), wrapError(err, "ts_string_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -138,8 +144,10 @@ func (column TsStringColumn) GetRanges(rgs ...TsRange) ([]TsStringPoint, error) 
 
 	if err == 0 {
 		defer column.parent.Release(unsafe.Pointer(points))
+
 		return stringPointArrayToGo(points, pointsCount), nil
 	}
+
 	return nil, wrapError(err, "ts_string_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -149,6 +157,11 @@ type TsStringAggregation struct {
 	rng   TsRange
 	count int64
 	point TsStringPoint
+}
+
+// NewStringAggregation : Create new timeseries string aggregation
+func NewStringAggregation(kind TsAggregationType, rng TsRange) *TsStringAggregation {
+	return &TsStringAggregation{kind, rng, 0, TsStringPoint{}}
 }
 
 // Type : returns the type of the aggregation
@@ -171,11 +184,6 @@ func (t TsStringAggregation) Result() TsStringPoint {
 	return t.point
 }
 
-// NewStringAggregation : Create new timeseries string aggregation
-func NewStringAggregation(kind TsAggregationType, rng TsRange) *TsStringAggregation {
-	return &TsStringAggregation{kind, rng, 0, TsStringPoint{}}
-}
-
 // :: internals
 func (t TsStringAggregation) toStructC() C.qdb_ts_string_aggregation_t {
 	var cAgg C.qdb_ts_string_aggregation_t
@@ -183,6 +191,7 @@ func (t TsStringAggregation) toStructC() C.qdb_ts_string_aggregation_t {
 	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
+
 	return cAgg
 }
 
@@ -192,6 +201,7 @@ func TsStringAggregationToStructG(t C.qdb_ts_string_aggregation_t) TsStringAggre
 	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
 	gAgg.point = TsStringPointToStructG(t.result)
+
 	return gAgg
 }
 
@@ -203,11 +213,13 @@ func stringAggregationArrayToC(ags ...*TsStringAggregation) *C.qdb_ts_string_agg
 	for _, ag := range ags {
 		stringAggregations = append(stringAggregations, ag.toStructC())
 	}
+
 	return &stringAggregations[0]
 }
 
 func stringAggregationArrayToSlice(aggregations *C.qdb_ts_string_aggregation_t, length int) []C.qdb_ts_string_aggregation_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_string_aggregation_t{})]C.qdb_ts_string_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
 }
 
@@ -221,6 +233,7 @@ func stringAggregationArrayToGo(aggregations *C.qdb_ts_string_aggregation_t, agg
 			output[i] = TsStringAggregationToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -239,6 +252,7 @@ func (column TsStringColumn) Aggregate(aggs ...*TsStringAggregation) ([]TsString
 	if err == 0 {
 		output = stringAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
+
 	return output, makeErrorOrNil(err)
 }
 
@@ -250,6 +264,7 @@ func (t *TsBulk) GetString() (string, error) {
 	err := C.qdb_ts_row_get_string(t.table, C.qdb_size_t(t.index), &content, &contentLength)
 
 	t.index++
+
 	return C.GoStringN(content, C.int(contentLength)), wrapError(err, "ts_bulk_get_string")
 }
 
@@ -259,6 +274,7 @@ func (t *TsBatch) RowSetString(index int64, content string) error {
 	contentSize := C.qdb_size_t(len(content))
 	contentPtr := convertToCharStar(content)
 	defer releaseCharStar(contentPtr)
+
 	return wrapError(C.qdb_ts_batch_row_set_string(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_string", "index", valueIndex, "value_size", len(content))
 }
 
@@ -268,5 +284,6 @@ func (t *TsBatch) RowSetStringNoCopy(index int64, content string) error {
 	contentSize := C.qdb_size_t(len(content))
 	contentPtr := convertToCharStar(content)
 	defer releaseCharStar(contentPtr)
+
 	return wrapError(C.qdb_ts_batch_row_set_string_no_copy(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_string_no_copy", "index", valueIndex, "value_size", len(content))
 }

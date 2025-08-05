@@ -9,11 +9,8 @@ import (
 
 func TestIntegerPut(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-	defer integer.Remove()
+	integer := newTestInteger(t, handle)
 
 	content := int64(13)
 	err := integer.Put(content, NeverExpires())
@@ -22,11 +19,8 @@ func TestIntegerPut(t *testing.T) {
 
 func TestIntegerPutAgain(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-	defer integer.Remove()
+	integer := newTestInteger(t, handle)
 
 	content := int64(13)
 	require.NoError(t, integer.Put(content, NeverExpires()))
@@ -36,11 +30,8 @@ func TestIntegerPutAgain(t *testing.T) {
 
 func TestIntegerUpdate(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-	defer integer.Remove()
+	integer := newTestInteger(t, handle)
 
 	content := int64(13)
 	newContent := int64(87)
@@ -55,11 +46,8 @@ func TestIntegerUpdate(t *testing.T) {
 
 func TestIntegerGet(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-	defer integer.Remove()
+	integer := newTestInteger(t, handle)
 
 	content := int64(13)
 	require.NoError(t, integer.Put(content, NeverExpires()))
@@ -71,11 +59,8 @@ func TestIntegerGet(t *testing.T) {
 
 func TestIntegerAdd(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
-	defer integer.Remove()
+	integer := newTestInteger(t, handle)
 
 	content := int64(13)
 	require.NoError(t, integer.Put(content, NeverExpires()))
@@ -90,14 +75,13 @@ func TestIntegerAdd(t *testing.T) {
 
 func TestIntegerRemove(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
-	alias := generateAlias(16)
-	integer := handle.Integer(alias)
+	integer := newTestInteger(t, handle)
 
 	content := int64(13)
 	require.NoError(t, integer.Put(content, NeverExpires()))
 
+	// Test that we can remove the integer - cleanup will handle removal
 	require.NoError(t, integer.Remove())
 
 	_, err := integer.Get()

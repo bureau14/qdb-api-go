@@ -6,6 +6,7 @@ package qdb
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -29,15 +30,22 @@ const (
 	secureURI   string = "qdb://127.0.0.1:2838"
 )
 
-// newTestHandle creates test cluster handle
+// newTestHandle creates test cluster handle with automatic cleanup
 // In: t *testing.T - test context
-// Out: HandleType - connected handle
+// Out: HandleType - connected handle with registered cleanup
 // Ex: h := newTestHandle(t) → HandleType
 func newTestHandle(t *testing.T) HandleType {
 	t.Helper()
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
 	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		err := handle.Close()
+		if err != nil && !errors.Is(err, ErrInvalidHandle) {
+			t.Errorf("Failed to close handle: %v", err)
+		}
+	})
 
 	return handle
 }
@@ -59,8 +67,8 @@ func newTestDirectHandle(t *testing.T) DirectHandleType {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
-		direct.Close()
-		handle.Close()
+		_ = direct.Close()
+		// Note: handle.Close() is handled by newTestHandle() cleanup
 	})
 
 	return direct
@@ -83,15 +91,17 @@ func newTestWriterTable(t *testing.T) WriterTable {
 	return writerTable
 }
 
-// newTestWriter creates writer fixture
+// newTestWriter creates writer fixture with automatic cleanup
 // In: t *testing.T - test context
-// Out: Writer - default writer
+// Out: Writer - default writer with registered cleanup
 // Ex: w := newTestWriter(t) → Writer
 func newTestWriter(t *testing.T) Writer {
 	t.Helper()
 
 	writer := NewWriterWithDefaultOptions()
 	require.NotNil(t, writer)
+
+	// Note: Writer does not have a Close() method, no cleanup needed
 
 	return writer
 }
@@ -117,15 +127,15 @@ func newTestNode(handle HandleType, uri string) *Node {
 	return handle.Node(uri)
 }
 
-// newTestBlobWithContent creates a blob entry with content for testing purposes.
+// newTestBlobWithContent creates a blob entry with content and automatic cleanup.
 //
 // Decision rationale:
 //   - Centralizes blob creation logic used across cluster tests.
-//   - Ensures consistent blob setup with content and proper cleanup tracking.
+//   - Ensures consistent blob setup with content and automatic cleanup registration.
 //
 // Key assumptions:
 //   - handle is valid and connected to a running daemon.
-//   - Caller is responsible for calling Remove() on the returned blob.
+//   - Cleanup is automatically registered with t.Cleanup().
 //
 // Performance trade-offs:
 //   - Negligible; just wraps blob creation and put operations.
@@ -134,7 +144,7 @@ func newTestNode(handle HandleType, uri string) *Node {
 //
 //	handle := newTestHandle(t)
 //	blob, err := newTestBlobWithContent(t, handle, []byte("test content"))
-//	defer blob.Remove()
+//	// No need for defer blob.Remove() - cleanup is automatic
 func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (BlobEntry, error) {
 	t.Helper()
 
@@ -145,7 +155,99 @@ func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (Bl
 		return blob, err
 	}
 
+	t.Cleanup(func() {
+		err := blob.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove blob: %v", err)
+		}
+	})
+
 	return blob, nil
+}
+
+// newTestBlob creates a blob entry with automatic cleanup.
+//
+// Decision rationale:
+//   - Provides a simple way to create blob entries without content for testing.
+//   - Ensures automatic cleanup registration.
+//
+// Key assumptions:
+//   - handle is valid and connected to a running daemon.
+//   - Cleanup is automatically registered with t.Cleanup().
+//
+// Usage example:
+//
+//	handle := newTestHandle(t)
+//	blob := newTestBlob(t, handle)
+//	// No need for defer blob.Remove() - cleanup is automatic
+func newTestBlob(t *testing.T, handle HandleType) BlobEntry {
+	t.Helper()
+
+	alias := generateAlias(16)
+	blob := handle.Blob(alias)
+
+	t.Cleanup(func() {
+		err := blob.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove blob: %v", err)
+		}
+	})
+
+	return blob
+}
+
+// newTestInteger creates an integer entry with automatic cleanup.
+//
+// Decision rationale:
+//   - Provides a simple way to create integer entries for testing.
+//   - Ensures automatic cleanup registration.
+//
+// Key assumptions:
+//   - handle is valid and connected to a running daemon.
+//   - Cleanup is automatically registered with t.Cleanup().
+//
+// Usage example:
+//
+//	handle := newTestHandle(t)
+//	integer := newTestInteger(t, handle)
+//	// No need for defer integer.Remove() - cleanup is automatic
+func newTestInteger(t *testing.T, handle HandleType) IntegerEntry {
+	t.Helper()
+
+	alias := generateAlias(16)
+	integer := handle.Integer(alias)
+
+	t.Cleanup(func() {
+		err := integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
+	})
+
+	return integer
+}
+
+// newTestWriterWithDefaultOptions creates a writer with default options and automatic cleanup.
+//
+// Decision rationale:
+//   - Provides a simple way to create writers with default options for testing.
+//   - Ensures automatic cleanup registration.
+//
+// Key assumptions:
+//   - Cleanup is automatically registered with t.Cleanup().
+//
+// Usage example:
+//
+//	writer := newTestWriterWithDefaultOptions(t)
+//	// No need for defer writer.Close() - cleanup is automatic
+func newTestWriterWithDefaultOptions(t *testing.T) Writer {
+	t.Helper()
+
+	writer := NewWriterWithDefaultOptions()
+
+	// Note: Writer does not have a Close() method, no cleanup needed
+
+	return writer
 }
 
 // pushWriterTables writes tables to server
@@ -158,8 +260,7 @@ func newTestBlobWithContent(t *testing.T, handle HandleType, content []byte) (Bl
 func pushWriterTables(t *testing.T, handle HandleType, tables []WriterTable) {
 	t.Helper()
 
-	writer := NewWriterWithDefaultOptions()
-	require.NotNil(t, writer)
+	writer := newTestWriterWithDefaultOptions(t)
 
 	for _, wt := range tables {
 		require.NoError(t, writer.SetTable(wt))
@@ -239,67 +340,6 @@ func genWriterColumnOfType(t *rapid.T, ctype TsColumnType) WriterColumn {
 	return WriterColumn{ColumnName: name, ColumnType: ctype}
 }
 
-// genWriterColumn creates a WriterColumn with a random name and randomly
-// selected type.
-//
-// Decision rationale:
-//   - Used in property tests where any valid column type is acceptable.
-//   - Reuses genWriterColumnOfType to centralize name generation logic.
-//
-// Performance trade-offs:
-//   - Only draws from the generator; overhead is trivial.
-//
-// Usage example:
-//
-//	col := genWriterColumn(rt)
-func genWriterColumn(t *rapid.T) WriterColumn {
-	ctype := rapid.SampledFrom(columnTypes[:]).Draw(t, "writerColumnType")
-
-	return genWriterColumnOfType(t, ctype)
-}
-
-// genWriterColumns returns between 1 and 8 randomly typed columns.
-//
-// Decision rationale:
-//   - Exercises writer behavior with varying schema widths.
-//   - Bound of eight keeps test cases manageable while covering most scenarios.
-//
-// Key assumptions:
-//   - At least one column is always generated.
-//
-// Performance trade-offs:
-//   - Linear in column count; negligible for ≤8 columns.
-//
-// Usage example:
-//
-//	cols := genWriterColumns(rt)
-func genWriterColumns(t *rapid.T) []WriterColumn {
-	genColumns := rapid.SliceOfN(rapid.Custom(genWriterColumn), 1, 8)
-
-	return genColumns.Draw(t, "writerColumns")
-}
-
-// genWriterColumnsOfAllTypes returns one column for every supported type.
-//
-// Decision rationale:
-//   - Useful when tests must cover all type-specific paths simultaneously.
-//   - Names remain random to avoid clashes across repeated calls.
-//
-// Performance trade-offs:
-//   - Allocates len(columnTypes) columns; still trivial in test context.
-//
-// Usage example:
-//
-//	cols := genWriterColumnsOfAllTypes(rt)
-func genWriterColumnsOfAllTypes(t *rapid.T) []WriterColumn {
-	cols := make([]WriterColumn, len(columnTypes))
-	for i, ctype := range columnTypes {
-		cols[i] = genWriterColumnOfType(t, ctype)
-	}
-
-	return cols
-}
-
 // genWriterColumnsOfType creates between 1 and 8 columns all sharing ctype.
 //
 // Decision rationale:
@@ -337,7 +377,7 @@ func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
 	return idx
 }
 
-func genWriterDataInt64(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataInt64(t *rapid.T, rowCount int) *ColumnDataInt64 {
 	values := make([]int64, rowCount)
 	for i := range values {
 		values[i] = rapid.Int64().Draw(t, "int64")
@@ -347,7 +387,7 @@ func genWriterDataInt64(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataDouble(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataDouble(t *rapid.T, rowCount int) *ColumnDataDouble {
 	values := make([]float64, rowCount)
 	for i := range values {
 		values[i] = rapid.Float64().Draw(t, "float64")
@@ -357,7 +397,7 @@ func genWriterDataDouble(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataTimestamp(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataTimestamp(t *rapid.T, rowCount int) *ColumnDataTimestamp {
 	values := make([]time.Time, rowCount)
 	for i := range values {
 		values[i] = genTime(t)
@@ -367,7 +407,7 @@ func genWriterDataTimestamp(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataBlob(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataBlob(t *rapid.T, rowCount int) *ColumnDataBlob {
 	values := make([][]byte, rowCount)
 	for i := range values {
 		values[i] = rapid.SliceOfN(rapid.Byte(), 1, 64).Draw(t, "blob")
@@ -377,7 +417,7 @@ func genWriterDataBlob(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterDataString(t *rapid.T, rowCount int) ColumnData {
+func genWriterDataString(t *rapid.T, rowCount int) *ColumnDataString {
 	values := make([]string, rowCount)
 	for i := range values {
 		values[i] = rapid.StringN(1, 32, 64).Draw(t, "string")
@@ -387,18 +427,28 @@ func genWriterDataString(t *rapid.T, rowCount int) ColumnData {
 	return &cd
 }
 
-func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) ColumnData {
+func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) ColumnData { //nolint:ireturn // Justified: Runtime type selection
 	switch ctype {
 	case TsColumnInt64:
+
 		return genWriterDataInt64(t, rowCount)
 	case TsColumnDouble:
+
 		return genWriterDataDouble(t, rowCount)
 	case TsColumnTimestamp:
+
 		return genWriterDataTimestamp(t, rowCount)
 	case TsColumnBlob:
+
 		return genWriterDataBlob(t, rowCount)
 	case TsColumnString:
+
 		return genWriterDataString(t, rowCount)
+	case TsColumnSymbol:
+
+		return genWriterDataString(t, rowCount) // Symbols are handled same as strings for data generation
+	case TsColumnUninitialized:
+		panic(fmt.Sprintf("cannot generate data for uninitialized column type: %v", ctype))
 	}
 	panic(fmt.Sprintf("unknown column type: %v", ctype))
 }
@@ -474,29 +524,6 @@ func genTime(t *rapid.T) time.Time {
 	return time.Unix(sec, nsec).UTC()
 }
 
-// genTimes generates a non-empty slice of UTC times for testing.
-//
-// Decision rationale:
-//   - Delegates to genTime for each element, ensuring uniform random distribution.
-//   - Uses rapid.SliceOf to vary slice length, exercising reader behavior on dynamic inputs.
-//
-// Key assumptions:
-//   - The resulting slice has length ≥1.
-//   - Each time value is independent and in UTC.
-//
-// Performance trade-offs:
-//   - Leverages rapid's generator; overhead is minimal for typical test sizes.
-//
-// Usage example:
-//
-//	t := rapid.MakeT()
-//	times := genTimes(t) // []time.Time, length ∈ [1, default upper bound]
-func genTimes(t *rapid.T) []time.Time {
-	genTimes := rapid.SliceOf(rapid.Custom(genTime))
-
-	return genTimes.Draw(t, "times")
-}
-
 // genReaderColumn produces a random ReaderColumn with an 8-letter ASCII name and a random TsColumnType.
 //
 // Decision rationale:
@@ -549,52 +576,6 @@ func genReaderColumns(t *rapid.T) []ReaderColumn {
 	return genColumns.Draw(t, "readerColumns")
 }
 
-// genReaderData generates a ReaderData instance for a random column with random row count.
-//
-// Decision rationale:
-//   - Draws rowCount ∈ [1,1024] to simulate varying data sizes.
-//   - Delegates to genReaderDataOfRowCount for type-specific value generation.
-//
-// Key assumptions:
-//   - rowCount ≥ 1 ensures non-empty data sets.
-//   - Column type selection occurs in downstream generation.
-//
-// Performance trade-offs:
-//   - Generation cost is O(rowCount); acceptable in property tests.
-//
-// Usage example:
-//
-//	t := rapid.MakeT()
-//	rd := genReaderData(t) // ReaderData with random schema and data
-func genReaderData(t *rapid.T) ColumnData {
-	rowCount := rapid.IntRange(1, 1024).Draw(t, "rowCount")
-
-	return genReaderDataOfRowCount(t, rowCount)
-}
-
-// genReaderDataOfRowCount generates ReaderData for a single randomly chosen column and given rowCount.
-//
-// Decision rationale:
-//   - Separates rowCount control from schema generation for flexible tests.
-//   - Randomly selects column type to cover all data paths.
-//
-// Key assumptions:
-//   - rowCount ≥ 1.
-//   - genReaderColumn yields valid ReaderColumn metadata.
-//
-// Performance trade-offs:
-//   - One slice creation per value; linear in rowCount.
-//
-// Usage example:
-//
-//	t := rapid.MakeT()
-//	rd := genReaderDataOfRowCount(t, 100) // 100 rows of random data for one column
-func genReaderDataOfRowCount(t *rapid.T, rowCount int) ColumnData {
-	column := rapid.Custom(genReaderColumn).Draw(t, "columnType")
-
-	return genReaderDataOfRowCountAndColumn(t, rowCount, column)
-}
-
 // genReaderDataOfRowCountAndColumn generates ReaderData matching the provided schema for a fixed row count.
 //
 // Decision rationale:
@@ -614,18 +595,25 @@ func genReaderDataOfRowCount(t *rapid.T, rowCount int) ColumnData {
 //	t := rapid.MakeT()
 //	col := genReaderColumn(t)
 //	rd := genReaderDataOfRowCountAndColumn(t, 50, col)
-func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ColumnData {
+func genReaderDataOfRowCountAndColumn(t *rapid.T, rowCount int, column ReaderColumn) ColumnData { //nolint:ireturn // Justified: Runtime type selection
 	switch column.columnType.AsValueType() {
 	case TsValueInt64:
+
 		return genReaderDataInt64(t, column.Name(), rowCount)
 	case TsValueDouble:
+
 		return genReaderDataDouble(t, column.Name(), rowCount)
 	case TsValueTimestamp:
+
 		return genReaderDataTimestamp(t, column.Name(), rowCount)
 	case TsValueBlob:
+
 		return genReaderDataBlob(t, column.Name(), rowCount)
 	case TsValueString:
+
 		return genReaderDataString(t, column.Name(), rowCount)
+	case TsValueNull:
+		panic(fmt.Sprintf("Cannot generate reader data for null value type in column: %v", column))
 	}
 
 	panic(fmt.Sprintf("Invalid column type for column: %v", column))
@@ -815,29 +803,6 @@ func genReaderChunkOfSchema(t *rapid.T, cols []ReaderColumn) ReaderChunk {
 	return ret
 }
 
-// genReaderChunk generates a ReaderChunk with randomized schema and data.
-//
-// Decision rationale:
-//   - Combines schema generation (genReaderColumns) and chunk construction for end-to-end tests.
-//   - Ensures reader logic handles variable schemas and data sizes in one flow.
-//
-// Key assumptions:
-//   - At least one column and one row are generated per chunk.
-//   - Schema and data lengths are consistent.
-//
-// Performance trade-offs:
-//   - Aggregate cost of column and row generation; acceptable for unit/property tests.
-//
-// Usage example:
-//
-//	t := rapid.MakeT()
-//	rc := genReaderChunk(t) // ReaderChunk with random schema and rows
-func genReaderChunk(t *rapid.T) ReaderChunk {
-	columns := genReaderColumns(t)
-
-	return genReaderChunkOfSchema(t, columns)
-}
-
 // genReaderChunks generates a slice of ReaderChunks sharing a consistent schema.
 //
 // Decision rationale:
@@ -917,7 +882,7 @@ func createTempFile(t *testing.T, prefix, content string) string {
 
 	name := fmt.Sprintf("%s_%s.tmp", prefix, generateAlias(8))
 	require.NoError(t, os.WriteFile(name, []byte(content), 0o600))
-	t.Cleanup(func() { os.Remove(name) })
+	t.Cleanup(func() { _ = os.Remove(name) })
 
 	return name
 }
@@ -926,6 +891,8 @@ func createTempFile(t *testing.T, prefix, content string) string {
 // predefined tag combinations and registers automatic cleanup via t.Cleanup.
 //
 // Returned slice layout: []string{blob1Alias, blob2Alias, integerAlias}
+//
+//nolint:gocritic // tooManyResultsChecker: test helper function, multiple return values needed for comprehensive setup
 func setupFindTestData(
 	t *testing.T,
 	handle HandleType,
@@ -967,9 +934,18 @@ func setupFindTestData(
 
 	// Automatic cleanup.
 	t.Cleanup(func() {
-		blob1.Remove()
-		blob2.Remove()
-		integer.Remove()
+		err := blob1.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove blob1: %v", err)
+		}
+		err = blob2.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove blob2: %v", err)
+		}
+		err = integer.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Errorf("Failed to remove integer: %v", err)
+		}
 	})
 
 	return aliases, blob1, blob2, integer, tagAll, tagFirst, tagSecond, tagThird
@@ -1100,50 +1076,6 @@ func assertReaderChunksEqualChunk(t testHelper, lhs []ReaderChunk, rhs ReaderChu
 	require.Equal(t, lhsIdx, rhsIdx, "index mismatch")
 }
 
-// Converts a writerColumn to a readerColumn
-func writerColumnToReaderColumn(wc WriterColumn) ReaderColumn {
-	ret, err := NewReaderColumn(wc.ColumnName, wc.ColumnType)
-	if err != nil {
-		panic(fmt.Sprintf("unable to convert writer column to reader column: %v", err))
-	}
-
-	return ret
-}
-
-// Converts a WriterTable to a ReaderChunk
-func writerTableToReaderChunk(wt WriterTable) ReaderChunk {
-	idx := wt.GetIndex()
-
-	// Pre-allocate all output data
-	data := make([]ColumnData, len(wt.data))
-	copy(data, wt.data)
-
-	columns := make([]ReaderColumn, len(wt.columnInfoByOffset))
-	for i, wc := range wt.columnInfoByOffset {
-		columns[i] = writerColumnToReaderColumn(wc)
-	}
-
-	ret, err := NewReaderChunk(columns, idx, data)
-	if err != nil {
-		panic(fmt.Sprintf("unable to convert writer table to reader chunk: %v", err))
-	}
-
-	return ret
-}
-
-// Converts the writer table data to reader chunks, groups all reader chunks
-// per table.
-func writerTablesToReaderChunks(xs []WriterTable) map[string]ReaderChunk {
-	ret := make(map[string]ReaderChunk, len(xs))
-
-	for _, wt := range xs {
-		rc := writerTableToReaderChunk(wt)
-		ret[wt.GetName()] = rc
-	}
-
-	return ret
-}
-
 // assertWriterTablesEqualReaderChunks checks that rc contains exactly the rows
 // written in expected tables.
 //
@@ -1163,7 +1095,11 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 
 	expectedRows := 0
 	for _, wt := range expected {
-		expectedRows += wt.RowCount()
+		rowCount := wt.RowCount()
+		if rowCount < 0 || expectedRows > int(^uint(0)>>1)-rowCount {
+			panic(fmt.Sprintf("integer overflow in row count calculation: expectedRows=%d, adding=%d", expectedRows, rowCount))
+		}
+		expectedRows += rowCount
 	}
 
 	assert.Equal(t, expectedRows, rc.RowCount(), "row count mismatch")
@@ -1185,27 +1121,6 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 
 	// The reader doesn't guarantee any order, and what is the "index" for the Writer is just a column with
 	// name "$timestamp" in the reader. Tables are not split out, and instead rely on the "$table" column name.
-}
-
-// createTestTimeseries spins up a fresh time-series with the provided
-// schema and shard size, registers automatic cleanup, and returns it.
-//
-// If cols is nil or empty the time-series is created without columns.
-func createTestTimeseries(
-	t *testing.T,
-	handle HandleType,
-	cols []TsColumnInfo,
-	shardSize time.Duration,
-) TimeseriesEntry {
-	t.Helper()
-
-	alias := generateAlias(16)
-	ts := handle.Timeseries(alias)
-
-	require.NoError(t, ts.Create(shardSize, cols...))
-	t.Cleanup(func() { ts.Remove() })
-
-	return ts
 }
 
 // -----------------------------------------------------------------
@@ -1265,11 +1180,15 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 	symbolPoints := make([]TsStringPoint, count)
 
 	for i := range count {
-		tsVal := time.Unix((i+1)*10, 0)
+		// Check for potential overflow before arithmetic
+		if i >= int64(^uint(0)>>1)/10-1 {
+			panic(fmt.Sprintf("integer overflow in timestamp calculation: i=%d", i))
+		}
+		tsVal := time.Unix((int64(i)+1)*10, 0)
 		timestamps[i] = tsVal
 		blobPoints[i] = NewTsBlobPoint(tsVal, []byte(fmt.Sprintf("content_%d", i)))
 		doublePoints[i] = NewTsDoublePoint(tsVal, float64(i))
-		int64Points[i] = NewTsInt64Point(tsVal, i)
+		int64Points[i] = NewTsInt64Point(tsVal, int64(i))
 		stringPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
 		timestampPoints[i] = NewTsTimestampPoint(tsVal, tsVal)
 		symbolPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
@@ -1282,7 +1201,7 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 	require.NoError(t, ts.TimestampColumn(timestampCol).Insert(timestampPoints...))
 	require.NoError(t, ts.SymbolColumn(symbolCol, symTable).Insert(symbolPoints...))
 
-	t.Cleanup(func() { ts.Remove() })
+	t.Cleanup(func() { _ = ts.Remove() })
 
 	return TestTimeseriesData{
 		Alias:           alias,
@@ -1319,7 +1238,12 @@ func createDoubleTimeseriesWithPoints(
 
 	ts = handle.Timeseries(alias)
 	require.NoError(t, ts.Create(24*time.Hour, colInfo))
-	t.Cleanup(func() { ts.Remove() })
+	t.Cleanup(func() {
+		err := ts.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Logf("Failed to remove timeseries in cleanup: %v", err)
+		}
+	})
 
 	column = ts.DoubleColumn(colName)
 
@@ -1361,7 +1285,12 @@ func createInt64TimeseriesWithPoints(
 
 	ts = handle.Timeseries(alias)
 	require.NoError(t, ts.Create(24*time.Hour, colInfo))
-	t.Cleanup(func() { ts.Remove() })
+	t.Cleanup(func() {
+		err := ts.Remove()
+		if err != nil && !errors.Is(err, ErrAliasNotFound) {
+			t.Logf("Failed to remove timeseries in cleanup: %v", err)
+		}
+	})
 
 	column = ts.Int64Column(colName)
 
@@ -1456,9 +1385,8 @@ func performGC(t testHelper, testName, phase string) {
 //
 //	func TestMyDatabaseFunction(t *testing.T) {
 //		handle := newTestHandle(t)
-//		defer handle.Close()
-//		
-//		WithGCAndHandle(t, handle, "TestMyDatabaseFunction", func(t *testing.T) {
+//
+//		WithGCAndHandle(t, handle, "TestMyDatabaseFunction", func() {
 //			// Your test code here
 //		})
 //	}
@@ -1488,4 +1416,3 @@ func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc 
 		postGCDuration,
 		preGCDuration+postGCDuration)
 }
-

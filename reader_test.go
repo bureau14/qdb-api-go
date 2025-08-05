@@ -10,17 +10,17 @@ import (
 )
 
 func TestReaderOptionsCanCreateNew(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
 
 	opts := NewReaderOptions()
-	assert.Empty(opts.tables)
-	assert.Empty(opts.columns)
-	assert.True(opts.rangeStart.IsZero())
-	assert.True(opts.rangeEnd.IsZero())
+	a.Empty(opts.tables)
+	a.Empty(opts.columns)
+	a.True(opts.rangeStart.IsZero())
+	a.True(opts.rangeEnd.IsZero())
 }
 
 func TestReaderOptionsCanSetProperties(t *testing.T) {
-	assert := assert.New(t)
+	a := assert.New(t)
 
 	tables := []string{"tbl1", "tbl2"}
 	columns := []string{"col1", "col2"}
@@ -29,15 +29,14 @@ func TestReaderOptionsCanSetProperties(t *testing.T) {
 
 	opts := NewReaderOptions().WithTables(tables).WithColumns(columns).WithTimeRange(start, end)
 
-	assert.Equal(tables, opts.tables)
-	assert.Equal(columns, opts.columns)
-	assert.Equal(start, opts.rangeStart)
-	assert.Equal(end, opts.rangeEnd)
+	a.Equal(tables, opts.tables)
+	a.Equal(columns, opts.columns)
+	a.Equal(start, opts.rangeStart)
+	a.Equal(end, opts.rangeEnd)
 }
 
 func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	WithGCAndHandle(t, handle, "TestReaderReturnsErrorOnInvalidRange", func() {
 		assert := assert.New(t)
@@ -66,7 +65,6 @@ func TestReaderReturnsErrorOnInvalidRange(t *testing.T) {
 
 func TestReaderCanOpenWithValidOptions(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	WithGCAndHandle(t, handle, "TestReaderCanOpenWithValidOptions", func() {
 		assert := assert.New(t)
@@ -91,15 +89,15 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 			WithColumns(columnNames)
 
 		reader, err := NewReader(handle, opts)
-		defer reader.Close()
 		assert.NoError(err)
+		defer reader.Close()
 	})
 }
 
 func TestReaderCanReadDataFromTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		handle := newTestHandle(t)
-		defer handle.Close()
+		// Cleanup handled automatically by newTestHandle()
 
 		WithGCAndHandle(rt, handle, "TestReaderCanReadDataFromTables", func() {
 			tables := genPopulatedTables(rt, handle)
@@ -107,9 +105,6 @@ func TestReaderCanReadDataFromTables(t *testing.T) {
 			pushWriterTables(t, handle, tables)
 
 			names := writerTableNames(tables)
-
-			// columns := writerTablesColumns(tables)
-			// columnNames := columnNamesFromWriterColumns(columns)
 
 			opts := NewReaderOptions().WithTables(names)
 			reader, err := NewReader(handle, opts)

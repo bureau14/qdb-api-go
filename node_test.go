@@ -9,7 +9,6 @@ import (
 
 func TestNodeStatusWithEmptyURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, "")
 	_, err := node.Status()
@@ -18,7 +17,6 @@ func TestNodeStatusWithEmptyURI(t *testing.T) {
 
 func TestNodeStatusWithInvalidURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, "qdb://127.0.0.1:36321")
 	_, err := node.Status()
@@ -27,7 +25,6 @@ func TestNodeStatusWithInvalidURI(t *testing.T) {
 
 func TestNodeStatusWithValidURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, insecureURI)
 	status, err := node.Status()
@@ -37,7 +34,6 @@ func TestNodeStatusWithValidURI(t *testing.T) {
 
 func TestNodeConfigWithEmptyURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, "")
 	_, err := node.Config()
@@ -46,7 +42,6 @@ func TestNodeConfigWithEmptyURI(t *testing.T) {
 
 func TestNodeConfigWithInvalidURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, "qdb://127.0.0.1:36321")
 	_, err := node.Config()
@@ -55,7 +50,6 @@ func TestNodeConfigWithInvalidURI(t *testing.T) {
 
 func TestNodeConfigWithValidURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, insecureURI)
 	configBytes, err := node.Config()
@@ -70,7 +64,6 @@ func TestNodeConfigWithValidURI(t *testing.T) {
 
 func TestNodeTopologyWithEmptyURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, "")
 	_, err := node.Topology()
@@ -79,7 +72,6 @@ func TestNodeTopologyWithEmptyURI(t *testing.T) {
 
 func TestNodeTopologyWithInvalidURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, "qdb://127.0.0.1:36321")
 	_, err := node.Topology()
@@ -88,7 +80,6 @@ func TestNodeTopologyWithInvalidURI(t *testing.T) {
 
 func TestNodeTopologyWithValidURI(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	node := newTestNode(handle, insecureURI)
 	topology, err := node.Topology()

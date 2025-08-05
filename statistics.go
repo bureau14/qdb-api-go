@@ -59,32 +59,42 @@ func (h DirectHandleType) getStatistics(prefix string, s interface{}) error {
 		v = reflect.ValueOf(s).Elem()
 	}
 
-	for i := 0; i < sType.NumField(); i++ {
+	for i := range sType.NumField() {
 		vType := sType.Field(i).Type
 		vTag := sType.Field(i).Tag
 
 		name := vTag.Get("json")
-		if vType.Kind() == reflect.Struct {
+		switch vType.Kind() {
+		case reflect.Struct:
 			inner := v.Field(i).Addr().Interface()
 			newPrefix := prefix + name + "."
-			h.getStatistics(newPrefix, inner)
-		} else if vType.Kind() == reflect.String {
+			err := h.getStatistics(newPrefix, inner)
+			if err != nil {
+				return err
+			}
+		case reflect.String:
 			content, err := h.Blob(prefix + name).Get()
 			if err != nil {
 				return err
 			}
-			content = bytes.Replace(content, []byte("\x00"), []byte{}, -1)
+			content = bytes.ReplaceAll(content, []byte("\x00"), []byte{})
 			v.Field(i).SetString(string(content))
-		} else if vType.Kind() == reflect.Int64 {
+		case reflect.Int64:
 			value, err := h.Integer(prefix + name).Get()
 			if err != nil {
 				return err
 			}
 			v.Field(i).SetInt(value)
-		} else {
+		case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+			reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128,
+			reflect.Array, reflect.Chan, reflect.Func, reflect.Interface, reflect.Map,
+			reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+
 			return fmt.Errorf("could not retrieve all values")
 		}
 	}
+
 	return nil
 }
 
@@ -100,6 +110,7 @@ func (h DirectHandleType) nodeStatistics() (Statistics, error) {
 	stat := Statistics{}
 	prefix := "$qdb.statistics."
 	err := h.getStatistics(prefix, &stat)
+
 	return stat, err
 }
 
@@ -126,5 +137,6 @@ func (h HandleType) Statistics() (map[string]Statistics, error) {
 
 		results[stats.NodeID] = stats
 	}
+
 	return results, err
 }

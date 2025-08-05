@@ -80,6 +80,7 @@ func (w *Writer) SetTable(t WriterTable) error {
 		if !writerTableSchemasEqual(existing, t) {
 			return wrapError(C.qdb_e_invalid_argument, "writer_set_table", "table", t.GetName(), "existing_table", existing.GetName(), "reason", "schema mismatch")
 		}
+
 		break
 	}
 
@@ -302,5 +303,6 @@ func writerTableSchemasEqual(a, b WriterTable) bool {
 			return false
 		}
 	}
+
 	return true
 }

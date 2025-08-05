@@ -17,6 +17,11 @@ type TsTimestampPoint struct {
 	content   time.Time
 }
 
+// NewTsTimestampPoint : Create new timeseries timestamp point
+func NewTsTimestampPoint(timestamp, value time.Time) TsTimestampPoint {
+	return TsTimestampPoint{timestamp, value}
+}
+
 // Timestamp : return data point timestamp
 func (t TsTimestampPoint) Timestamp() time.Time {
 	return t.timestamp
@@ -25,11 +30,6 @@ func (t TsTimestampPoint) Timestamp() time.Time {
 // Content : return data point content
 func (t TsTimestampPoint) Content() time.Time {
 	return t.content
-}
-
-// NewTsTimestampPoint : Create new timeseries timestamp point
-func NewTsTimestampPoint(timestamp, value time.Time) TsTimestampPoint {
-	return TsTimestampPoint{timestamp, value}
 }
 
 // :: internals
@@ -49,11 +49,13 @@ func timestampPointArrayToC(pts ...TsTimestampPoint) *C.qdb_ts_timestamp_point {
 	for idx, pt := range pts {
 		points[idx] = pt.toStructC()
 	}
+
 	return &points[0]
 }
 
 func timestampPointArrayToSlice(points *C.qdb_ts_timestamp_point, length int) []C.qdb_ts_timestamp_point {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_timestamp_point{})]C.qdb_ts_timestamp_point)(unsafe.Pointer(points))[:length:length]
 }
 
@@ -66,6 +68,7 @@ func timestampPointArrayToGo(points *C.qdb_ts_timestamp_point, pointsCount C.qdb
 			output[i] = TsTimestampPointToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -88,6 +91,7 @@ func (column TsTimestampColumn) Insert(points ...TsTimestampPoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := timestampPointArrayToC(points...)
 	err := C.qdb_ts_timestamp_insert(column.parent.handle, alias, columnName, content, contentCount)
+
 	return wrapError(err, "timeseries_timestamp_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
@@ -101,6 +105,7 @@ func (column TsTimestampColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+
 	return uint64(erasedCount), wrapError(err, "ts_timestamp_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -120,8 +125,10 @@ func (column TsTimestampColumn) GetRanges(rgs ...TsRange) ([]TsTimestampPoint, e
 
 	if err == 0 {
 		defer column.parent.Release(unsafe.Pointer(points))
+
 		return timestampPointArrayToGo(points, pointsCount), nil
 	}
+
 	return nil, wrapError(err, "ts_timestamp_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -131,6 +138,11 @@ type TsTimestampAggregation struct {
 	rng   TsRange
 	count int64
 	point TsTimestampPoint
+}
+
+// NewTimestampAggregation : Create new timeseries timestamp aggregation
+func NewTimestampAggregation(kind TsAggregationType, rng TsRange) *TsTimestampAggregation {
+	return &TsTimestampAggregation{kind, rng, 0, TsTimestampPoint{}}
 }
 
 // Type : returns the type of the aggregation
@@ -153,11 +165,6 @@ func (t TsTimestampAggregation) Result() TsTimestampPoint {
 	return t.point
 }
 
-// NewTimestampAggregation : Create new timeseries timestamp aggregation
-func NewTimestampAggregation(kind TsAggregationType, rng TsRange) *TsTimestampAggregation {
-	return &TsTimestampAggregation{kind, rng, 0, TsTimestampPoint{}}
-}
-
 // :: internals
 func (t TsTimestampAggregation) toStructC() C.qdb_ts_timestamp_aggregation_t {
 	var cAgg C.qdb_ts_timestamp_aggregation_t
@@ -165,6 +172,7 @@ func (t TsTimestampAggregation) toStructC() C.qdb_ts_timestamp_aggregation_t {
 	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
+
 	return cAgg
 }
 
@@ -174,6 +182,7 @@ func TsTimestampAggregationToStructG(t C.qdb_ts_timestamp_aggregation_t) TsTimes
 	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
 	gAgg.point = TsTimestampPointToStructG(t.result)
+
 	return gAgg
 }
 
@@ -185,11 +194,13 @@ func timestampAggregationArrayToC(ags ...*TsTimestampAggregation) *C.qdb_ts_time
 	for _, ag := range ags {
 		timestampAggregations = append(timestampAggregations, ag.toStructC())
 	}
+
 	return &timestampAggregations[0]
 }
 
 func timestampAggregationArrayToSlice(aggregations *C.qdb_ts_timestamp_aggregation_t, length int) []C.qdb_ts_timestamp_aggregation_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_timestamp_aggregation_t{})]C.qdb_ts_timestamp_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
 }
 
@@ -203,6 +214,7 @@ func timestampAggregationArrayToGo(aggregations *C.qdb_ts_timestamp_aggregation_
 			output[i] = TsTimestampAggregationToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -220,6 +232,7 @@ func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	var content C.qdb_timespec_t
 	err := C.qdb_ts_row_get_timestamp(t.table, C.qdb_size_t(t.index), &content)
 	t.index++
+
 	return TimespecToStructG(content), wrapError(err, "ts_bulk_get_timestamp")
 }
 
@@ -227,5 +240,6 @@ func (t *TsBulk) GetTimestamp() (time.Time, error) {
 func (t *TsBatch) RowSetTimestamp(index int64, value time.Time) error {
 	valueIndex := C.qdb_size_t(index)
 	cValue := toQdbTimespec(value)
+
 	return wrapError(C.qdb_ts_batch_row_set_timestamp(t.table, valueIndex, &cValue), "ts_batch_row_set_timestamp", "index", valueIndex)
 }

@@ -17,6 +17,11 @@ type TsDoublePoint struct {
 	content   float64
 }
 
+// NewTsDoublePoint : Create new timeseries double point
+func NewTsDoublePoint(timestamp time.Time, value float64) TsDoublePoint {
+	return TsDoublePoint{timestamp, value}
+}
+
 // Timestamp : return data point timestamp
 func (t TsDoublePoint) Timestamp() time.Time {
 	return t.timestamp
@@ -25,11 +30,6 @@ func (t TsDoublePoint) Timestamp() time.Time {
 // Content : return data point content
 func (t TsDoublePoint) Content() float64 {
 	return t.content
-}
-
-// NewTsDoublePoint : Create new timeseries double point
-func NewTsDoublePoint(timestamp time.Time, value float64) TsDoublePoint {
-	return TsDoublePoint{timestamp, value}
 }
 
 // :: internals
@@ -49,11 +49,13 @@ func doublePointArrayToC(pts ...TsDoublePoint) *C.qdb_ts_double_point {
 	for idx, pt := range pts {
 		points[idx] = pt.toStructC()
 	}
+
 	return &points[0]
 }
 
 func doublePointArrayToSlice(points *C.qdb_ts_double_point, length int) []C.qdb_ts_double_point {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_double_point{})]C.qdb_ts_double_point)(unsafe.Pointer(points))[:length:length]
 }
 
@@ -66,6 +68,7 @@ func doublePointArrayToGo(points *C.qdb_ts_double_point, pointsCount C.qdb_size_
 			output[i] = TsDoublePointToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -88,6 +91,7 @@ func (column TsDoubleColumn) Insert(points ...TsDoublePoint) error {
 	contentCount := C.qdb_size_t(len(points))
 	content := doublePointArrayToC(points...)
 	err := C.qdb_ts_double_insert(column.parent.handle, alias, columnName, content, contentCount)
+
 	return wrapError(err, "timeseries_double_insert", "alias", column.parent.alias, "column", column.name, "points", len(points))
 }
 
@@ -101,6 +105,7 @@ func (column TsDoubleColumn) EraseRanges(rgs ...TsRange) (uint64, error) {
 	rangesCount := C.qdb_size_t(len(rgs))
 	erasedCount := C.qdb_uint_t(0)
 	err := C.qdb_ts_erase_ranges(column.parent.handle, alias, columnName, ranges, rangesCount, &erasedCount)
+
 	return uint64(erasedCount), wrapError(err, "ts_double_erase_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -120,8 +125,10 @@ func (column TsDoubleColumn) GetRanges(rgs ...TsRange) ([]TsDoublePoint, error) 
 
 	if err == 0 {
 		defer column.parent.Release(unsafe.Pointer(points))
+
 		return doublePointArrayToGo(points, pointsCount), nil
 	}
+
 	return nil, wrapError(err, "ts_double_get_ranges", "alias", column.parent.alias, "column", column.name, "ranges", len(rgs))
 }
 
@@ -131,6 +138,11 @@ type TsDoubleAggregation struct {
 	rng   TsRange
 	count int64
 	point TsDoublePoint
+}
+
+// NewDoubleAggregation : Create new timeseries double aggregation
+func NewDoubleAggregation(kind TsAggregationType, rng TsRange) *TsDoubleAggregation {
+	return &TsDoubleAggregation{kind, rng, 0, TsDoublePoint{}}
 }
 
 // Type : returns the type of the aggregation
@@ -153,11 +165,6 @@ func (t TsDoubleAggregation) Result() TsDoublePoint {
 	return t.point
 }
 
-// NewDoubleAggregation : Create new timeseries double aggregation
-func NewDoubleAggregation(kind TsAggregationType, rng TsRange) *TsDoubleAggregation {
-	return &TsDoubleAggregation{kind, rng, 0, TsDoublePoint{}}
-}
-
 // :: internals
 func (t TsDoubleAggregation) toStructC() C.qdb_ts_double_aggregation_t {
 	var cAgg C.qdb_ts_double_aggregation_t
@@ -165,6 +172,7 @@ func (t TsDoubleAggregation) toStructC() C.qdb_ts_double_aggregation_t {
 	cAgg._range = t.rng.toStructC()
 	cAgg.count = C.qdb_size_t(t.count)
 	cAgg.result = t.point.toStructC()
+
 	return cAgg
 }
 
@@ -174,6 +182,7 @@ func TsDoubleAggregationToStructG(t C.qdb_ts_double_aggregation_t) TsDoubleAggre
 	gAgg.rng = TsRangeToStructG(t._range)
 	gAgg.count = int64(t.count)
 	gAgg.point = TsDoublePointToStructG(t.result)
+
 	return gAgg
 }
 
@@ -185,11 +194,13 @@ func doubleAggregationArrayToC(ags ...*TsDoubleAggregation) *C.qdb_ts_double_agg
 	for _, ag := range ags {
 		doubleAggregations = append(doubleAggregations, ag.toStructC())
 	}
+
 	return &doubleAggregations[0]
 }
 
 func doubleAggregationArrayToSlice(aggregations *C.qdb_ts_double_aggregation_t, length int) []C.qdb_ts_double_aggregation_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_double_aggregation_t{})]C.qdb_ts_double_aggregation_t)(unsafe.Pointer(aggregations))[:length:length]
 }
 
@@ -203,6 +214,7 @@ func doubleAggregationArrayToGo(aggregations *C.qdb_ts_double_aggregation_t, agg
 			output[i] = TsDoubleAggregationToStructG(s)
 		}
 	}
+
 	return output
 }
 
@@ -221,6 +233,7 @@ func (column TsDoubleColumn) Aggregate(aggs ...*TsDoubleAggregation) ([]TsDouble
 	if err == 0 {
 		output = doubleAggregationArrayToGo(aggregations, aggregationsCount, aggs)
 	}
+
 	return output, makeErrorOrNil(err)
 }
 
@@ -229,11 +242,13 @@ func (t *TsBulk) GetDouble() (float64, error) {
 	var content C.double
 	err := C.qdb_ts_row_get_double(t.table, C.qdb_size_t(t.index), &content)
 	t.index++
+
 	return float64(content), makeErrorOrNil(err)
 }
 
 // RowSetDouble : Set double at specified index in current row
 func (t *TsBatch) RowSetDouble(index int64, value float64) error {
 	valueIndex := C.qdb_size_t(index)
+
 	return wrapError(C.qdb_ts_batch_row_set_double(t.table, valueIndex, C.double(value)), "ts_batch_row_set_double", "index", valueIndex, "value", value)
 }

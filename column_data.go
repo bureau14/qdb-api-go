@@ -72,6 +72,11 @@ type ColumnDataInt64 struct {
 	xs []int64
 }
 
+// NewColumnDataInt64 creates int64 column data.
+func NewColumnDataInt64(xs []int64) ColumnDataInt64 {
+	return ColumnDataInt64{xs: xs}
+}
+
 // Length returns the number of values.
 func (cd *ColumnDataInt64) Length() int {
 	return len(cd.xs)
@@ -100,13 +105,15 @@ func (cd *ColumnDataInt64) Clear() {
 // - Pinning prevents GC movement during C operations
 //
 // Performance: Zero allocations, zero copies - maximum efficiency.
-func (cd *ColumnDataInt64) PinToC(h HandleType) (PinnableBuilder, func()) {
+func (cd *ColumnDataInt64) PinToC(h HandleType) (builder PinnableBuilder, release func()) {
 	if len(cd.xs) == 0 {
 		return PinnableBuilder{}, func() {}
 	}
 	base := &cd.xs[0]
+
 	return NewPinnableBuilderSingle(base, func() unsafe.Pointer {
 		// Executed AFTER pinning for safety
+
 		return unsafe.Pointer(base)
 	}), func() {} // No C allocations, so no cleanup needed
 }
@@ -119,6 +126,7 @@ func (cd *ColumnDataInt64) appendData(data ColumnData) error {
 	}
 
 	cd.xs = append(cd.xs, other.xs...)
+
 	return nil
 }
 
@@ -126,11 +134,6 @@ func (cd *ColumnDataInt64) appendData(data ColumnData) error {
 func (cd *ColumnDataInt64) appendDataUnsafe(data ColumnData) {
 	other := (*ColumnDataInt64)(ifaceDataPtr(data))
 	cd.xs = append(cd.xs, other.xs...)
-}
-
-// NewColumnDataInt64 creates int64 column data.
-func NewColumnDataInt64(xs []int64) ColumnDataInt64 {
-	return ColumnDataInt64{xs: xs}
 }
 
 /*
@@ -190,6 +193,7 @@ func newColumnDataInt64FromNative(name string, xs C.qdb_exp_batch_push_column_t,
 
 	// Wrap the Go-managed []int64 in a ColumnDataInt64 and return.
 	// Using NewColumnDataInt64 centralizes ColumnDataInt64 construction logic.
+
 	return NewColumnDataInt64(goSlice), nil
 }
 
@@ -199,6 +203,7 @@ func GetColumnDataInt64(cd ColumnData) ([]int64, error) {
 	if !ok {
 		return nil, fmt.Errorf("GetColumnDataInt64: type mismatch, expected ColumnDataInt64, got %T", cd)
 	}
+
 	return v.xs, nil
 }
 
@@ -211,6 +216,9 @@ func GetColumnDataInt64Unsafe(cd ColumnData) []int64 {
 
 // ColumnDataDouble stores float64 column data.
 type ColumnDataDouble struct{ xs []float64 }
+
+// NewColumnDataDouble creates float64 column data.
+func NewColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
 
 // Length returns the number of values.
 func (cd *ColumnDataDouble) Length() int {
@@ -232,22 +240,6 @@ func (cd *ColumnDataDouble) Clear() {
 	cd.xs = make([]float64, 0)
 }
 
-// appendData appends another ColumnDataDouble.
-func (cd *ColumnDataDouble) appendData(d ColumnData) error {
-	other, ok := d.(*ColumnDataDouble)
-	if !ok {
-		return fmt.Errorf("appendData: expected ColumnDataDouble, got %T", d)
-	}
-	cd.xs = append(cd.xs, other.xs...)
-	return nil
-}
-
-// appendDataUnsafe appends without type check.
-func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
-	other := (*ColumnDataDouble)(ifaceDataPtr(d))
-	cd.xs = append(cd.xs, other.xs...)
-}
-
 // PinToC prepares float64 data for zero-copy passing to C.
 //
 // ZERO-COPY STRATEGY: Numeric types (int64, float64, timestamp) can safely
@@ -260,19 +252,35 @@ func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
 // - No risk of violating string immutability or pointer rules
 //
 // Performance: Zero allocations, zero copies - maximum efficiency.
-func (cd *ColumnDataDouble) PinToC(h HandleType) (PinnableBuilder, func()) {
+func (cd *ColumnDataDouble) PinToC(h HandleType) (builder PinnableBuilder, release func()) {
 	if len(cd.xs) == 0 {
 		return PinnableBuilder{}, func() {}
 	}
 	base := &cd.xs[0]
+
 	return NewPinnableBuilderSingle(base, func() unsafe.Pointer {
 		// This executes AFTER pinning, making it safe
+
 		return unsafe.Pointer(base)
 	}), func() {} // No C allocations, so no cleanup needed
 }
 
-// NewColumnDataDouble creates float64 column data.
-func NewColumnDataDouble(xs []float64) ColumnDataDouble { return ColumnDataDouble{xs: xs} }
+// appendData appends another ColumnDataDouble.
+func (cd *ColumnDataDouble) appendData(d ColumnData) error {
+	other, ok := d.(*ColumnDataDouble)
+	if !ok {
+		return fmt.Errorf("appendData: expected ColumnDataDouble, got %T", d)
+	}
+	cd.xs = append(cd.xs, other.xs...)
+
+	return nil
+}
+
+// appendDataUnsafe appends without type check.
+func (cd *ColumnDataDouble) appendDataUnsafe(d ColumnData) {
+	other := (*ColumnDataDouble)(ifaceDataPtr(d))
+	cd.xs = append(cd.xs, other.xs...)
+}
 
 func newColumnDataDoubleFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -291,6 +299,7 @@ func newColumnDataDoubleFromNative(
 	if err != nil {
 		return ColumnDataDouble{}, err
 	}
+
 	return NewColumnDataDouble(goSlice), nil
 }
 
@@ -300,6 +309,7 @@ func GetColumnDataDouble(cd ColumnData) ([]float64, error) {
 	if !ok {
 		return nil, fmt.Errorf("GetColumnDataDouble: expected ColumnDataDouble, got %T", cd)
 	}
+
 	return v.xs, nil
 }
 
@@ -312,6 +322,11 @@ func GetColumnDataDoubleUnsafe(cd ColumnData) []float64 {
 
 // ColumnDataTimestamp stores timestamp column data.
 type ColumnDataTimestamp struct{ xs []C.qdb_timespec_t }
+
+// NewColumnDataTimestamp creates timestamp column data.
+func NewColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
+	return ColumnDataTimestamp{xs: TimeSliceToQdbTimespec(ts)}
+}
 
 // Length returns the number of values.
 func (cd *ColumnDataTimestamp) Length() int {
@@ -333,22 +348,6 @@ func (cd *ColumnDataTimestamp) Clear() {
 	cd.xs = make([]C.qdb_timespec_t, 0)
 }
 
-// appendData appends another ColumnDataTimestamp.
-func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
-	other, ok := d.(*ColumnDataTimestamp)
-	if !ok {
-		return fmt.Errorf("appendData: expected ColumnDataTimestamp, got %T", d)
-	}
-	cd.xs = append(cd.xs, other.xs...)
-	return nil
-}
-
-// appendDataUnsafe appends without type check.
-func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
-	other := (*ColumnDataTimestamp)(ifaceDataPtr(d))
-	cd.xs = append(cd.xs, other.xs...)
-}
-
 // PinToC prepares timestamp data for zero-copy passing to C.
 //
 // ZERO-COPY STRATEGY: Safe because we store data in C.qdb_timespec_t format:
@@ -357,20 +356,34 @@ func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
 // - Pinning prevents GC movement during C operations
 //
 // Performance: Zero allocations, zero copies - maximum efficiency.
-func (cd *ColumnDataTimestamp) PinToC(h HandleType) (PinnableBuilder, func()) {
+func (cd *ColumnDataTimestamp) PinToC(h HandleType) (builder PinnableBuilder, release func()) {
 	if len(cd.xs) == 0 {
 		return PinnableBuilder{}, func() {}
 	}
 	base := &cd.xs[0]
+
 	return NewPinnableBuilderSingle(base, func() unsafe.Pointer {
 		// Executed AFTER pinning for safety
+
 		return unsafe.Pointer(base)
 	}), func() {} // No C allocations, so no cleanup needed
 }
 
-// NewColumnDataTimestamp creates timestamp column data.
-func NewColumnDataTimestamp(ts []time.Time) ColumnDataTimestamp {
-	return ColumnDataTimestamp{xs: TimeSliceToQdbTimespec(ts)}
+// appendData appends another ColumnDataTimestamp.
+func (cd *ColumnDataTimestamp) appendData(d ColumnData) error {
+	other, ok := d.(*ColumnDataTimestamp)
+	if !ok {
+		return fmt.Errorf("appendData: expected ColumnDataTimestamp, got %T", d)
+	}
+	cd.xs = append(cd.xs, other.xs...)
+
+	return nil
+}
+
+// appendDataUnsafe appends without type check.
+func (cd *ColumnDataTimestamp) appendDataUnsafe(d ColumnData) {
+	other := (*ColumnDataTimestamp)(ifaceDataPtr(d))
+	cd.xs = append(cd.xs, other.xs...)
 }
 
 /*
@@ -415,6 +428,7 @@ func newColumnDataTimestampFromNative(
 		return ColumnDataTimestamp{}, err
 	}
 	// Keep data in C.qdb_timespec_t format
+
 	return ColumnDataTimestamp{xs: specs}, nil
 }
 
@@ -424,6 +438,7 @@ func GetColumnDataTimestamp(cd ColumnData) ([]time.Time, error) {
 	if !ok {
 		return nil, fmt.Errorf("GetColumnDataTimestamp: expected ColumnDataTimestamp, got %T", cd)
 	}
+
 	return QdbTimespecSliceToTime(v.xs), nil
 }
 
@@ -434,12 +449,14 @@ func GetColumnDataTimestampNative(cd ColumnData) ([]C.qdb_timespec_t, error) {
 		return nil, fmt.Errorf("GetColumnDataTimestamp: expected ColumnDataTimestamp, got %T", cd)
 	}
 	// Data is already in C.qdb_timespec_t format
+
 	return v.xs, nil
 }
 
 // GetColumnDataTimestampUnsafe extracts []time.Time without type check.
 func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
 	v := (*ColumnDataTimestamp)(ifaceDataPtr(cd))
+
 	return QdbTimespecSliceToTime(v.xs)
 }
 
@@ -447,6 +464,7 @@ func GetColumnDataTimestampUnsafe(cd ColumnData) []time.Time {
 func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 	v := (*ColumnDataTimestamp)(ifaceDataPtr(cd))
 	// Data is already in C.qdb_timespec_t format
+
 	return v.xs
 }
 
@@ -454,6 +472,9 @@ func GetColumnDataTimestampNativeUnsafe(cd ColumnData) []C.qdb_timespec_t {
 
 // ColumnDataBlob stores binary column data.
 type ColumnDataBlob struct{ xs [][]byte }
+
+// NewColumnDataBlob creates binary column data.
+func NewColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
 
 // Length returns the number of values.
 func (cd *ColumnDataBlob) Length() int {
@@ -475,22 +496,6 @@ func (cd *ColumnDataBlob) Clear() {
 	cd.xs = make([][]byte, 0)
 }
 
-// appendData appends another ColumnDataBlob.
-func (cd *ColumnDataBlob) appendData(d ColumnData) error {
-	other, ok := d.(*ColumnDataBlob)
-	if !ok {
-		return fmt.Errorf("appendData: expected ColumnDataBlob, got %T", d)
-	}
-	cd.xs = append(cd.xs, other.xs...)
-	return nil
-}
-
-// appendDataUnsafe appends without type check.
-func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
-	other := (*ColumnDataBlob)(ifaceDataPtr(d))
-	cd.xs = append(cd.xs, other.xs...)
-}
-
 // PinToC builds a C envelope for blob data and returns PinnableBuilder.
 //
 // ZERO-COPY STRATEGY: For blobs, we pin each individual blob's data pointer
@@ -506,7 +511,7 @@ func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
 //   - All blob data pointers are pinned before C access
 //   - The centralized pinning strategy ensures correctness
 //   - Blobs are immutable during C operations
-func (cd *ColumnDataBlob) PinToC(h HandleType) (PinnableBuilder, func()) {
+func (cd *ColumnDataBlob) PinToC(h HandleType) (builder PinnableBuilder, release func()) {
 	if len(cd.xs) == 0 {
 		return PinnableBuilder{}, func() {}
 	}
@@ -519,6 +524,7 @@ func (cd *ColumnDataBlob) PinToC(h HandleType) (PinnableBuilder, func()) {
 	copiedBlobs := make([]unsafe.Pointer, 0, len(cd.xs))
 
 	// No objects to pin - we're copying instead
+
 	return NewPinnableBuilderMultiple(nil, func() unsafe.Pointer {
 			// Build C structures (executed in Phase 2.5 after pinning)
 			for i, blob := range cd.xs {
@@ -533,6 +539,7 @@ func (cd *ColumnDataBlob) PinToC(h HandleType) (PinnableBuilder, func()) {
 					envelopeSlice[i].content_length = 0
 				}
 			}
+
 			return unsafe.Pointer(envelope)
 		}), func() {
 			// Release all copied blobs
@@ -544,8 +551,22 @@ func (cd *ColumnDataBlob) PinToC(h HandleType) (PinnableBuilder, func()) {
 		}
 }
 
-// NewColumnDataBlob creates binary column data.
-func NewColumnDataBlob(xs [][]byte) ColumnDataBlob { return ColumnDataBlob{xs: xs} }
+// appendData appends another ColumnDataBlob.
+func (cd *ColumnDataBlob) appendData(d ColumnData) error {
+	other, ok := d.(*ColumnDataBlob)
+	if !ok {
+		return fmt.Errorf("appendData: expected ColumnDataBlob, got %T", d)
+	}
+	cd.xs = append(cd.xs, other.xs...)
+
+	return nil
+}
+
+// appendDataUnsafe appends without type check.
+func (cd *ColumnDataBlob) appendDataUnsafe(d ColumnData) {
+	other := (*ColumnDataBlob)(ifaceDataPtr(d))
+	cd.xs = append(cd.xs, other.xs...)
+}
 
 func newColumnDataBlobFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -568,6 +589,7 @@ func newColumnDataBlobFromNative(
 	for i, b := range blobs {
 		out[i] = C.GoBytes(unsafe.Pointer(b.content), C.int(b.content_length))
 	}
+
 	return NewColumnDataBlob(out), nil
 }
 
@@ -577,6 +599,7 @@ func GetColumnDataBlob(cd ColumnData) ([][]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("GetColumnDataBlob: expected ColumnDataBlob, got %T", cd)
 	}
+
 	return v.xs, nil
 }
 
@@ -589,6 +612,9 @@ func GetColumnDataBlobUnsafe(cd ColumnData) [][]byte {
 
 // ColumnDataString stores text column data.
 type ColumnDataString struct{ xs []string }
+
+// NewColumnDataString creates string column data.
+func NewColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
 
 // Length returns the number of values.
 func (cd *ColumnDataString) Length() int {
@@ -610,22 +636,6 @@ func (cd *ColumnDataString) Clear() {
 	cd.xs = make([]string, 0)
 }
 
-// appendData appends another ColumnDataString.
-func (cd *ColumnDataString) appendData(d ColumnData) error {
-	other, ok := d.(*ColumnDataString)
-	if !ok {
-		return fmt.Errorf("appendData: expected ColumnDataString, got %T", d)
-	}
-	cd.xs = append(cd.xs, other.xs...)
-	return nil
-}
-
-// appendDataUnsafe appends without type check.
-func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
-	other := (*ColumnDataString)(ifaceDataPtr(d))
-	cd.xs = append(cd.xs, other.xs...)
-}
-
 // PinToC builds a C envelope for string data and returns PinnableBuilder.
 //
 // COPYING STRATEGY: For strings, we copy each string to C memory using qdbCopyString
@@ -642,7 +652,7 @@ func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
 //   - All string data is copied to C memory before C access
 //   - No pinning required since we use copying instead
 //   - String immutability is preserved (C cannot modify original strings)
-func (cd *ColumnDataString) PinToC(h HandleType) (PinnableBuilder, func()) {
+func (cd *ColumnDataString) PinToC(h HandleType) (builder PinnableBuilder, release func()) {
 	if len(cd.xs) == 0 {
 		return PinnableBuilder{}, func() {}
 	}
@@ -655,10 +665,11 @@ func (cd *ColumnDataString) PinToC(h HandleType) (PinnableBuilder, func()) {
 	copiedStrings := make([]*C.char, 0, len(cd.xs))
 
 	// No objects to pin - we're copying instead
+
 	return NewPinnableBuilderMultiple(nil, func() unsafe.Pointer {
 			// Build C structures (executed in Phase 2.5 after pinning)
 			for i, str := range cd.xs {
-				if len(str) > 0 {
+				if str != "" {
 					// Copy string to C memory (includes null terminator)
 					cStr := qdbCopyString(h, str)
 					copiedStrings = append(copiedStrings, cStr)
@@ -669,6 +680,7 @@ func (cd *ColumnDataString) PinToC(h HandleType) (PinnableBuilder, func()) {
 					envelopeSlice[i].length = 0
 				}
 			}
+
 			return unsafe.Pointer(envelope)
 		}), func() {
 			// Release all copied strings
@@ -680,8 +692,22 @@ func (cd *ColumnDataString) PinToC(h HandleType) (PinnableBuilder, func()) {
 		}
 }
 
-// NewColumnDataString creates string column data.
-func NewColumnDataString(xs []string) ColumnDataString { return ColumnDataString{xs: xs} }
+// appendData appends another ColumnDataString.
+func (cd *ColumnDataString) appendData(d ColumnData) error {
+	other, ok := d.(*ColumnDataString)
+	if !ok {
+		return fmt.Errorf("appendData: expected ColumnDataString, got %T", d)
+	}
+	cd.xs = append(cd.xs, other.xs...)
+
+	return nil
+}
+
+// appendDataUnsafe appends without type check.
+func (cd *ColumnDataString) appendDataUnsafe(d ColumnData) {
+	other := (*ColumnDataString)(ifaceDataPtr(d))
+	cd.xs = append(cd.xs, other.xs...)
+}
 
 func newColumnDataStringFromNative(
 	name string, xs C.qdb_exp_batch_push_column_t, n int,
@@ -704,6 +730,7 @@ func newColumnDataStringFromNative(
 	for i, v := range strs {
 		out[i] = C.GoStringN(v.data, C.int(v.length))
 	}
+
 	return NewColumnDataString(out), nil
 }
 
@@ -713,6 +740,7 @@ func GetColumnDataString(cd ColumnData) ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("GetColumnDataString: expected ColumnDataString, got %T", cd)
 	}
+
 	return v.xs, nil
 }
 

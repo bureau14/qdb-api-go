@@ -40,7 +40,6 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	columns := generateWriterColumnsOfAllTypes()
 
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	table, err := createTableOfWriterColumnsAndDefaultShardSize(handle, columns)
 	require.NoError(err)
@@ -175,7 +174,6 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	require.NoError(writer.SetTable(tbl))
 
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	err = writer.Push(handle)
 	assert.Error(err, "expect error when enabling upsert without columns")
@@ -293,7 +291,6 @@ func TestWriterReturnsErrorIfNoTables(t *testing.T) {
 
 	// Push the writer
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	err := writer.Push(handle)
 	assert.NotNil(err, "expect error when pushing an empty writer")
@@ -312,7 +309,6 @@ func TestWriterOptionsGenerator(t *testing.T) {
 func TestWriterCanPushTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		handle := newTestHandle(t)
-		defer handle.Close()
 
 		WithGCAndHandle(rt, handle, "TestWriterCanPushTables", func() {
 			tables := genPopulatedTables(rt, handle)
@@ -329,7 +325,6 @@ func TestWriterCanPushTables(t *testing.T) {
 
 func TestWriterCanDeduplicate(t *testing.T) {
 	handle := newTestHandle(t)
-	defer handle.Close()
 
 	rapid.Check(t, func(rt *rapid.T) {
 		WithGCAndHandle(rt, handle, "TestWriterCanDeduplicate", func() {
@@ -403,7 +398,6 @@ func TestWriterCGOSafety(t *testing.T) {
 	require := require.New(t)
 
 	h := newTestHandle(t)
-	defer h.Close()
 
 	w := NewWriterWithDefaultOptions()
 
@@ -428,12 +422,12 @@ func TestWriterCGOSafety(t *testing.T) {
 	table.SetIndex([]time.Time{now})
 
 	// Set data for each column type
-	table.SetData(0, &ColumnDataInt64{xs: []int64{42}})
-	table.SetData(1, &ColumnDataDouble{xs: []float64{3.14}})
-	table.SetData(2, &ColumnDataString{xs: []string{"test string"}})
-	table.SetData(3, &ColumnDataBlob{xs: [][]byte{[]byte("blob data")}})
+	_ = table.SetData(0, &ColumnDataInt64{xs: []int64{42}})
+	_ = table.SetData(1, &ColumnDataDouble{xs: []float64{3.14}})
+	_ = table.SetData(2, &ColumnDataString{xs: []string{"test string"}})
+	_ = table.SetData(3, &ColumnDataBlob{xs: [][]byte{[]byte("blob data")}})
 	timestampData := NewColumnDataTimestamp([]time.Time{now})
-	table.SetData(4, &timestampData)
+	_ = table.SetData(4, &timestampData)
 
 	err = w.SetTable(table)
 	require.NoError(err)
@@ -464,7 +458,6 @@ func TestWriterEmptyData(t *testing.T) {
 	require := require.New(t)
 
 	h := newTestHandle(t)
-	defer h.Close()
 
 	w := NewWriterWithDefaultOptions()
 
@@ -494,7 +487,6 @@ func TestWriterEmptyData(t *testing.T) {
 // pointer safety with bulk operations.
 func TestWriterLargeData(t *testing.T) {
 	h := newTestHandle(t)
-	defer h.Close()
 
 	WithGCAndHandle(t, h, "TestWriterLargeData", func() {
 		assert := assert.New(t)
@@ -525,7 +517,7 @@ func TestWriterLargeData(t *testing.T) {
 		require.NoError(err)
 
 		table.SetIndex(timestamps)
-		table.SetData(0, &ColumnDataDouble{xs: values})
+		_ = table.SetData(0, &ColumnDataDouble{xs: values})
 
 		err = w.SetTable(table)
 		require.NoError(err)
@@ -558,7 +550,6 @@ func TestWriterMixedStringLengths(t *testing.T) {
 	require := require.New(t)
 
 	h := newTestHandle(t)
-	defer h.Close()
 
 	w := NewWriterWithDefaultOptions()
 
@@ -589,7 +580,7 @@ func TestWriterMixedStringLengths(t *testing.T) {
 	require.NoError(err)
 
 	table.SetIndex(timestamps)
-	table.SetData(0, &ColumnDataString{xs: strings})
+	_ = table.SetData(0, &ColumnDataString{xs: strings})
 
 	err = w.SetTable(table)
 	require.NoError(err)
@@ -620,7 +611,6 @@ func TestWriterMixedBlobSizes(t *testing.T) {
 	require := require.New(t)
 
 	h := newTestHandle(t)
-	defer h.Close()
 
 	w := NewWriterWithDefaultOptions()
 
@@ -659,7 +649,7 @@ func TestWriterMixedBlobSizes(t *testing.T) {
 	require.NoError(err)
 
 	table.SetIndex(timestamps)
-	table.SetData(0, &ColumnDataBlob{xs: blobs})
+	_ = table.SetData(0, &ColumnDataBlob{xs: blobs})
 
 	err = w.SetTable(table)
 	require.NoError(err)
@@ -689,7 +679,6 @@ func TestWriterEdgeCases(t *testing.T) {
 	require := require.New(t)
 
 	h := newTestHandle(t)
-	defer h.Close()
 
 	testCases := []struct {
 		name         string
@@ -714,10 +703,12 @@ func TestWriterEdgeCases(t *testing.T) {
 			columnType: TsColumnTimestamp,
 			createEmpty: func() ColumnData {
 				c := NewColumnDataTimestamp([]time.Time{})
+
 				return &c
 			},
 			createSample: func() ColumnData {
 				c := NewColumnDataTimestamp([]time.Time{time.Now()})
+
 				return &c
 			},
 		},
