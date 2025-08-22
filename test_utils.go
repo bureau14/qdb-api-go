@@ -31,21 +31,36 @@ const (
 )
 
 // newTestHandle creates test cluster handle with automatic cleanup
-// In: t *testing.T - test context
+// In: t testHelper - test context (works with *testing.T and *rapid.T)
 // Out: HandleType - connected handle with registered cleanup
 // Ex: h := newTestHandle(t) → HandleType
-func newTestHandle(t *testing.T) HandleType {
+func newTestHandle(t testHelper) HandleType {
 	t.Helper()
 
 	handle, err := SetupHandle(insecureURI, 120*time.Second)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		err := handle.Close()
-		if err != nil && !errors.Is(err, ErrInvalidHandle) {
-			t.Errorf("Failed to close handle: %v", err)
-		}
-	})
+	// Use type assertion to access Cleanup method
+	switch v := t.(type) {
+	case *testing.T:
+		v.Cleanup(func() {
+			err := handle.Close()
+			if err != nil && !errors.Is(err, ErrInvalidHandle) {
+				v.Errorf("Failed to close handle: %v", err)
+			}
+		})
+	case *rapid.T:
+		v.Cleanup(func() {
+			err := handle.Close()
+			if err != nil && !errors.Is(err, ErrInvalidHandle) {
+				v.Errorf("Failed to close handle: %v", err)
+			}
+		})
+	default:
+		// For other test helpers, we need to close manually
+		// This is a fallback - ideally all test contexts should support Cleanup
+		t.Logf("Warning: test context type %T does not support Cleanup, handle may leak", t)
+	}
 
 	return handle
 }

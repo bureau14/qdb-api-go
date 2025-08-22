@@ -308,7 +308,7 @@ func TestWriterOptionsGenerator(t *testing.T) {
 // TestWriterCanPushTables verifies the writer can push one or more tables using random options.
 func TestWriterCanPushTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		handle := newTestHandle(t)
+		handle := newTestHandle(rt)
 
 		WithGCAndHandle(rt, handle, "TestWriterCanPushTables", func() {
 			tables := genPopulatedTables(rt, handle)
