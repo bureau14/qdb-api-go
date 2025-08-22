@@ -96,7 +96,7 @@ func TestReaderCanOpenWithValidOptions(t *testing.T) {
 
 func TestReaderCanReadDataFromTables(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		handle := newTestHandle(t)
+		handle := newTestHandle(rt)
 		// Cleanup handled automatically by newTestHandle()
 
 		WithGCAndHandle(rt, handle, "TestReaderCanReadDataFromTables", func() {
