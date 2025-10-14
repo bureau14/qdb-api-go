@@ -27,6 +27,16 @@ tar -czvf doc.tar.gz doc/*]]></param>
           <param name="use.custom.script" value="true" />
         </parameters>
       </runner>
+      <runner id="buildWithoutDocker" name="Build" type="simpleRunner">
+        <parameters>
+          <param name="command.executable" value="bash" />
+          <param name="command.parameters" value="scripts/teamcity/10.build.sh" />
+          <param name="plugin.docker.imageId" value="%docker_builder%" />
+          <param name="plugin.docker.imagePlatform" value="linux" />
+          <param name="script.content" value="%goroot/go build -v -x" />
+          <param name="teamcity.step.mode" value="default" />
+        </parameters>
+      </runner>
     </build-runners>
     <requirements>
       <equals id="RQ_1" name="teamcity.agent.jvm.os.name" value="Linux" />
