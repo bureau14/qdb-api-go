@@ -29,7 +29,6 @@
           <param name="command.parameters" value="scripts/teamcity/10.build.sh" />
           <param name="plugin.docker.imageId" value="%docker_builder%" />
           <param name="plugin.docker.imagePlatform" value="linux" />
-          <param name="plugin.docker.pull.enabled" value="true" />
           <param name="script.content" value="%goroot/go build -v -x" />
           <param name="teamcity.step.mode" value="default" />
         </parameters>
