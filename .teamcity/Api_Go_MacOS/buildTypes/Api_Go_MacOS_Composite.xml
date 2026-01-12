@@ -17,19 +17,8 @@
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="** =&gt; aarch64/" />
       </dependency>
-      <dependency id="ARTIFACT_DEPENDENCY_4805" sourceBuildTypeId="Api_Go_MacOS_X8664Core2" cleanDestination="false">
-        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="** =&gt; x86_64-core2/" />
-      </dependency>
     </artifact-dependencies>
     <dependencies>
-      <depend-on sourceBuildTypeId="Api_Go_MacOS_X8664Core2">
-        <options>
-          <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
-          <option name="take-started-build-with-same-revisions" value="true" />
-          <option name="take-successful-builds-only" value="true" />
-        </options>
-      </depend-on>
       <depend-on sourceBuildTypeId="Api_Go_MacOS_AArch64">
         <options>
           <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
