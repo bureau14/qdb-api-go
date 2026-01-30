@@ -8,10 +8,6 @@
       <option name="showDependenciesChanges" value="true" />
     </options>
     <artifact-dependencies>
-      <dependency id="ARTIFACT_DEPENDENCY_20286" sourceBuildTypeId="Api_Go_Windows_X86Haswell" cleanDestination="false">
-        <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
-        <artifact sourcePath="* =&gt; win32-haswell/" />
-      </dependency>
       <dependency id="ARTIFACT_DEPENDENCY_4796" sourceBuildTypeId="Api_Go_Windows_X8664Core2" cleanDestination="false">
         <revisionRule name="sameChainOrLastFinished" revision="latest.sameChainOrLastFinished" />
         <artifact sourcePath="* =&gt; win64-core2/" />
@@ -19,13 +15,6 @@
     </artifact-dependencies>
     <dependencies>
       <depend-on sourceBuildTypeId="Api_Go_Windows_X8664Core2">
-        <options>
-          <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
-          <option name="take-started-build-with-same-revisions" value="true" />
-          <option name="take-successful-builds-only" value="true" />
-        </options>
-      </depend-on>
-      <depend-on sourceBuildTypeId="Api_Go_Windows_X86Haswell">
         <options>
           <option name="run-build-if-dependency-failed" value="RUN_ADD_PROBLEM" />
           <option name="take-started-build-with-same-revisions" value="true" />
