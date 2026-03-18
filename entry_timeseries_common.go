@@ -147,6 +147,8 @@ type TsColumnInfo struct {
 	symtable string
 }
 
+const tsTimestampColumnName = "$timestamp"
+
 // NewTsColumnInfo : create a column info structure
 func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
 	return TsColumnInfo{columnName, columnType, ""}
@@ -190,6 +192,32 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_ex_t {
 	}
 
 	return &columns[0]
+}
+
+func ensureTimestampColumnFirst(cols ...TsColumnInfo) []TsColumnInfo {
+	if len(cols) == 0 {
+		return []TsColumnInfo{NewTsColumnInfo(tsTimestampColumnName, TsColumnTimestamp)}
+	}
+
+	for idx, col := range cols {
+		if col.Name() != tsTimestampColumnName {
+			continue
+		}
+
+		normalized := append([]TsColumnInfo(nil), cols...)
+		normalized[idx] = NewTsColumnInfo(tsTimestampColumnName, TsColumnTimestamp)
+		if idx == 0 {
+			return normalized
+		}
+
+		timestampColumn := normalized[idx]
+		copy(normalized[1:idx+1], normalized[0:idx])
+		normalized[0] = timestampColumn
+
+		return normalized
+	}
+
+	return append([]TsColumnInfo{NewTsColumnInfo(tsTimestampColumnName, TsColumnTimestamp)}, cols...)
 }
 
 func oldColumnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
@@ -353,6 +381,7 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
 	duration := C.qdb_uint_t(shardSize / time.Millisecond)
+	cols = ensureTimestampColumnFirst(cols...)
 	columns := columnInfoArrayToC(cols...)
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))
