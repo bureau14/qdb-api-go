@@ -28,3 +28,7 @@
 /share/doc/qdb/README.md
 /.idea/vcs.xml
 .aider*
+
+.gocache
+.gomodcache
+
