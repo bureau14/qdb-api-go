@@ -147,6 +147,8 @@ type TsColumnInfo struct {
 	symtable string
 }
 
+const tsTimestampColumnName = "$timestamp"
+
 // NewTsColumnInfo : create a column info structure
 func NewTsColumnInfo(columnName string, columnType TsColumnType) TsColumnInfo {
 	return TsColumnInfo{columnName, columnType, ""}
@@ -190,6 +192,32 @@ func columnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_ex_t {
 	}
 
 	return &columns[0]
+}
+
+func ensureTimestampColumnFirst(cols ...TsColumnInfo) ([]TsColumnInfo, error) {
+	if len(cols) == 0 {
+		return []TsColumnInfo{NewTsColumnInfo(tsTimestampColumnName, TsColumnTimestamp)}, nil
+	}
+
+	for idx, col := range cols {
+		if col.Name() != tsTimestampColumnName {
+			continue
+		}
+
+		if idx != 0 {
+			return nil, fmt.Errorf("special column %q must be the first column", tsTimestampColumnName)
+		}
+		if col.Type() != TsColumnTimestamp {
+			return nil, fmt.Errorf("special column %q must have type %v", tsTimestampColumnName, TsColumnTimestamp)
+		}
+		if col.Symtable() != "" {
+			return nil, fmt.Errorf("special column %q must not define symtable", tsTimestampColumnName)
+		}
+
+		return cols, nil
+	}
+
+	return append([]TsColumnInfo{NewTsColumnInfo(tsTimestampColumnName, TsColumnTimestamp)}, cols...), nil
 }
 
 func oldColumnInfoArrayToC(cols ...TsColumnInfo) *C.qdb_ts_column_info_t {
@@ -353,6 +381,11 @@ func (entry TimeseriesEntry) Create(shardSize time.Duration, cols ...TsColumnInf
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
 	duration := C.qdb_uint_t(shardSize / time.Millisecond)
+	normalizedCols, normalizeErr := ensureTimestampColumnFirst(cols...)
+	if normalizeErr != nil {
+		return normalizeErr
+	}
+	cols = normalizedCols
 	columns := columnInfoArrayToC(cols...)
 	defer releaseColumnInfoArray(columns, len(cols))
 	columnsCount := C.qdb_size_t(len(cols))

@@ -126,7 +126,7 @@ func TestQueryCreateTableReturnsNil(t *testing.T) {
 
 	alias := generateAlias(16)
 	result, err := handle.Query(
-		fmt.Sprintf("create table %s (id INT64, price DOUBLE)", alias),
+		fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64, price DOUBLE)", alias),
 	).Execute()
 	require.NoError(t, err)
 	assert.Nil(t, result)
@@ -140,7 +140,7 @@ func TestQueryDropTableReturnsNil(t *testing.T) {
 
 	alias := generateAlias(16)
 	_, _ = handle.Query(
-		fmt.Sprintf("create table %s (id INT64, price DOUBLE)", alias),
+		fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64, price DOUBLE)", alias),
 	).Execute()
 
 	result, err := handle.Query(
