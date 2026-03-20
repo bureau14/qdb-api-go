@@ -205,13 +205,13 @@ func ensureTimestampColumnFirst(cols ...TsColumnInfo) ([]TsColumnInfo, error) {
 		}
 
 		if idx != 0 {
-			return nil, fmt.Errorf("timeseries_create: special column %q must be the first column", tsTimestampColumnName)
+			return nil, fmt.Errorf("special column %q must be the first column", tsTimestampColumnName)
 		}
 		if col.Type() != TsColumnTimestamp {
-			return nil, fmt.Errorf("timeseries_create: special column %q must have type %v", tsTimestampColumnName, TsColumnTimestamp)
+			return nil, fmt.Errorf("special column %q must have type %v", tsTimestampColumnName, TsColumnTimestamp)
 		}
 		if col.Symtable() != "" {
-			return nil, fmt.Errorf("timeseries_create: special column %q must not define symtable", tsTimestampColumnName)
+			return nil, fmt.Errorf("special column %q must not define symtable", tsTimestampColumnName)
 		}
 
 		return cols, nil
