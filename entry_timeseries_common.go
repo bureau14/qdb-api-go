@@ -2,7 +2,6 @@ package qdb
 
 /*
 	#include <qdb/ts.h>
-	#include <stdlib.h>
 */
 import "C"
 
@@ -60,14 +59,6 @@ const (
 	TsValueBlob
 	TsValueString
 )
-
-var TsValueTypes = []TsValueType{
-	TsValueBlob,
-	TsValueDouble,
-	TsValueInt64,
-	TsValueString,
-	TsValueTimestamp,
-}
 
 func (v TsValueType) AsColumnType() TsColumnType {
 	switch v {
