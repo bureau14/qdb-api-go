@@ -31,10 +31,6 @@ func (t TsBlobPoint) Content() []byte {
 	return t.content
 }
 
-func TsBlobPointToStructG(t C.qdb_ts_blob_point) TsBlobPoint {
-	return TsBlobPoint{TimespecToStructG(t.timestamp), C.GoBytes(t.content, C.int(t.content_length))}
-}
-
 // GetBlob : gets a blob in row
 func (t *TsBulk) GetBlob() ([]byte, error) {
 	var content unsafe.Pointer

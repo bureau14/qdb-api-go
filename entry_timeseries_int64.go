@@ -30,10 +30,6 @@ func (t TsInt64Point) Content() int64 {
 	return t.content
 }
 
-func TsInt64PointToStructG(t C.qdb_ts_int64_point) TsInt64Point {
-	return TsInt64Point{TimespecToStructG(t.timestamp), int64(t.value)}
-}
-
 // GetInt64 : gets an int64 in row
 func (t *TsBulk) GetInt64() (int64, error) {
 	var content C.qdb_int_t

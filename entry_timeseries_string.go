@@ -31,10 +31,6 @@ func (t TsStringPoint) Content() string {
 	return t.content
 }
 
-func TsStringPointToStructG(t C.qdb_ts_string_point) TsStringPoint {
-	return TsStringPoint{TimespecToStructG(t.timestamp), C.GoStringN(t.content, C.int(t.content_length))}
-}
-
 // GetString : gets a string in row
 func (t *TsBulk) GetString() (string, error) {
 	var content *C.char

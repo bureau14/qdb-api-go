@@ -30,10 +30,6 @@ func (t TsDoublePoint) Content() float64 {
 	return t.content
 }
 
-func TsDoublePointToStructG(t C.qdb_ts_double_point) TsDoublePoint {
-	return TsDoublePoint{TimespecToStructG(t.timestamp), float64(t.value)}
-}
-
 // GetDouble : gets a double in row
 func (t *TsBulk) GetDouble() (float64, error) {
 	var content C.double

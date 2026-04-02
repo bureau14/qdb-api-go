@@ -386,34 +386,6 @@ func rangeArrayToC(rs ...TsRange) *C.qdb_ts_range_t {
 	return &ranges[0]
 }
 
-// TsAggregationType typedef of C.qdb_ts_aggregation_type
-type TsAggregationType C.qdb_ts_aggregation_type_t
-
-// Each type gets its value between the begin and end timestamps of aggregation
-const (
-	AggFirst              TsAggregationType = C.qdb_agg_first
-	AggLast               TsAggregationType = C.qdb_agg_last
-	AggMin                TsAggregationType = C.qdb_agg_min
-	AggMax                TsAggregationType = C.qdb_agg_max
-	AggArithmeticMean     TsAggregationType = C.qdb_agg_arithmetic_mean
-	AggHarmonicMean       TsAggregationType = C.qdb_agg_harmonic_mean
-	AggGeometricMean      TsAggregationType = C.qdb_agg_geometric_mean
-	AggQuadraticMean      TsAggregationType = C.qdb_agg_quadratic_mean
-	AggCount              TsAggregationType = C.qdb_agg_count
-	AggSum                TsAggregationType = C.qdb_agg_sum
-	AggSumOfSquares       TsAggregationType = C.qdb_agg_sum_of_squares
-	AggSpread             TsAggregationType = C.qdb_agg_spread
-	AggSampleVariance     TsAggregationType = C.qdb_agg_sample_variance
-	AggSampleStddev       TsAggregationType = C.qdb_agg_sample_stddev
-	AggPopulationVariance TsAggregationType = C.qdb_agg_population_variance
-	AggPopulationStddev   TsAggregationType = C.qdb_agg_population_stddev
-	AggAbsMin             TsAggregationType = C.qdb_agg_abs_min
-	AggAbsMax             TsAggregationType = C.qdb_agg_abs_max
-	AggProduct            TsAggregationType = C.qdb_agg_product
-	AggSkewness           TsAggregationType = C.qdb_agg_skewness
-	AggKurtosis           TsAggregationType = C.qdb_agg_kurtosis
-)
-
 // TsBulk : A structure that permits to append data to a timeseries
 type TsBulk struct {
 	h         HandleType

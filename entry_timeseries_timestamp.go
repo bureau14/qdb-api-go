@@ -30,10 +30,6 @@ func (t TsTimestampPoint) Content() time.Time {
 	return t.content
 }
 
-func TsTimestampPointToStructG(t C.qdb_ts_timestamp_point) TsTimestampPoint {
-	return TsTimestampPoint{TimespecToStructG(t.timestamp), TimespecToStructG(t.value)}
-}
-
 // GetTimestamp : gets a timestamp in row
 func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	var content C.qdb_timespec_t
