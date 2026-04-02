@@ -1209,12 +1209,28 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 		symbolPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
 	}
 
-	require.NoError(t, ts.BlobColumn(blobCol).Insert(blobPoints...))
-	require.NoError(t, ts.DoubleColumn(doubleCol).Insert(doublePoints...))
-	require.NoError(t, ts.Int64Column(int64Col).Insert(int64Points...))
-	require.NoError(t, ts.StringColumn(stringCol).Insert(stringPoints...))
-	require.NoError(t, ts.TimestampColumn(timestampCol).Insert(timestampPoints...))
-	require.NoError(t, ts.SymbolColumn(symbolCol, symTable).Insert(symbolPoints...))
+	batchColumnInfo := []TsBatchColumnInfo{
+		NewTsBatchColumnInfo(alias, blobCol, count),
+		NewTsBatchColumnInfo(alias, doubleCol, count),
+		NewTsBatchColumnInfo(alias, int64Col, count),
+		NewTsBatchColumnInfo(alias, stringCol, count),
+		NewTsBatchColumnInfo(alias, timestampCol, count),
+		NewTsBatchColumnInfo(alias, symbolCol, count),
+	}
+	batch, err := handle.TsBatch(batchColumnInfo...)
+	require.NoError(t, err)
+	defer batch.Release()
+
+	for i := range count {
+		require.NoError(t, batch.StartRow(timestamps[i]))
+		require.NoError(t, batch.RowSetBlob(0, blobPoints[i].Content()))
+		require.NoError(t, batch.RowSetDouble(1, doublePoints[i].Content()))
+		require.NoError(t, batch.RowSetInt64(2, int64Points[i].Content()))
+		require.NoError(t, batch.RowSetString(3, stringPoints[i].Content()))
+		require.NoError(t, batch.RowSetTimestamp(4, timestampPoints[i].Content()))
+		require.NoError(t, batch.RowSetString(5, symbolPoints[i].Content()))
+	}
+	require.NoError(t, batch.Push())
 
 	t.Cleanup(func() { _ = ts.Remove() })
 
@@ -1227,100 +1243,6 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 		TimestampPoints: timestampPoints,
 		SymbolPoints:    symbolPoints,
 	}
-}
-
-// createDoubleTimeseriesWithPoints spins up a fresh time-series containing one
-// double column.  If count > 0 it pre-inserts <count> deterministic points.
-//
-// Returned values:
-//   - alias      – random alias of the created time-series
-//   - ts         – TimeseriesEntry handle
-//   - column     – typed handle to the single double column
-//   - timestamps – slice of inserted timestamps (nil when count == 0)
-//   - points     – slice of inserted TsDoublePoint values (nil when count == 0)
-func createDoubleTimeseriesWithPoints(
-	t *testing.T,
-	handle HandleType,
-	count int64,
-) (alias string, ts TimeseriesEntry, column TsDoubleColumn,
-	timestamps []time.Time, points []TsDoublePoint,
-) {
-	t.Helper()
-
-	alias = generateAlias(16)
-	colName := generateColumnName()
-	colInfo := NewTsColumnInfo(colName, TsColumnDouble)
-
-	ts = handle.Timeseries(alias)
-	require.NoError(t, ts.Create(24*time.Hour, colInfo))
-	t.Cleanup(func() {
-		err := ts.Remove()
-		if err != nil && !errors.Is(err, ErrAliasNotFound) {
-			t.Logf("Failed to remove timeseries in cleanup: %v", err)
-		}
-	})
-
-	column = ts.DoubleColumn(colName)
-
-	if count > 0 {
-		timestamps = make([]time.Time, count)
-		points = make([]TsDoublePoint, count)
-		for i := range count {
-			tsVal := time.Unix((i+1)*10, 0)
-			timestamps[i] = tsVal
-			points[i] = NewTsDoublePoint(tsVal, float64(i))
-		}
-		require.NoError(t, column.Insert(points...))
-	}
-
-	return
-}
-
-// createInt64TimeseriesWithPoints spins up a fresh time-series containing one
-// int64 column. If count > 0 it pre-inserts <count> deterministic points.
-//
-// Returned values:
-//   - alias      – random alias of the created time-series
-//   - ts         – TimeseriesEntry handle
-//   - column     – typed handle to the single int64 column
-//   - timestamps – slice of inserted timestamps (nil when count == 0)
-//   - points     – slice of inserted TsInt64Point values (nil when count == 0)
-func createInt64TimeseriesWithPoints(
-	t *testing.T,
-	handle HandleType,
-	count int64,
-) (alias string, ts TimeseriesEntry, column TsInt64Column,
-	timestamps []time.Time, points []TsInt64Point,
-) {
-	t.Helper()
-
-	alias = generateAlias(16)
-	colName := generateColumnName()
-	colInfo := NewTsColumnInfo(colName, TsColumnInt64)
-
-	ts = handle.Timeseries(alias)
-	require.NoError(t, ts.Create(24*time.Hour, colInfo))
-	t.Cleanup(func() {
-		err := ts.Remove()
-		if err != nil && !errors.Is(err, ErrAliasNotFound) {
-			t.Logf("Failed to remove timeseries in cleanup: %v", err)
-		}
-	})
-
-	column = ts.Int64Column(colName)
-
-	if count > 0 {
-		timestamps = make([]time.Time, count)
-		points = make([]TsInt64Point, count)
-		for i := range count {
-			tsVal := time.Unix((i+1)*10, 0)
-			timestamps[i] = tsVal
-			points[i] = NewTsInt64Point(tsVal, i)
-		}
-		require.NoError(t, column.Insert(points...))
-	}
-
-	return
 }
 
 // WithGC provides memory isolation for tests by invoking garbage collection
