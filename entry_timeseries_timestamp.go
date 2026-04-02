@@ -6,9 +6,7 @@ package qdb
 import "C"
 
 import (
-	"math"
 	"time"
-	"unsafe"
 )
 
 // TsTimestampPoint : timestamped timestamp data point
@@ -39,37 +37,6 @@ func (t TsTimestampPoint) toStructC() C.qdb_ts_timestamp_point {
 
 func TsTimestampPointToStructG(t C.qdb_ts_timestamp_point) TsTimestampPoint {
 	return TsTimestampPoint{TimespecToStructG(t.timestamp), TimespecToStructG(t.value)}
-}
-
-func timestampPointArrayToC(pts ...TsTimestampPoint) *C.qdb_ts_timestamp_point {
-	if len(pts) == 0 {
-		return nil
-	}
-	points := make([]C.qdb_ts_timestamp_point, len(pts))
-	for idx, pt := range pts {
-		points[idx] = pt.toStructC()
-	}
-
-	return &points[0]
-}
-
-func timestampPointArrayToSlice(points *C.qdb_ts_timestamp_point, length int) []C.qdb_ts_timestamp_point {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_timestamp_point{})]C.qdb_ts_timestamp_point)(unsafe.Pointer(points))[:length:length]
-}
-
-func timestampPointArrayToGo(points *C.qdb_ts_timestamp_point, pointsCount C.qdb_size_t) []TsTimestampPoint {
-	length := int(pointsCount)
-	output := make([]TsTimestampPoint, length)
-	if length > 0 {
-		slice := timestampPointArrayToSlice(points, length)
-		for i, s := range slice {
-			output[i] = TsTimestampPointToStructG(s)
-		}
-	}
-
-	return output
 }
 
 // GetTimestamp : gets a timestamp in row

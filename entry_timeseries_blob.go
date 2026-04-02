@@ -7,7 +7,6 @@ package qdb
 import "C"
 
 import (
-	"math"
 	"time"
 	"unsafe"
 )
@@ -46,46 +45,6 @@ func (t TsBlobPoint) toStructC() C.qdb_ts_blob_point {
 
 func TsBlobPointToStructG(t C.qdb_ts_blob_point) TsBlobPoint {
 	return TsBlobPoint{TimespecToStructG(t.timestamp), C.GoBytes(t.content, C.int(t.content_length))}
-}
-
-func blobPointArrayToC(pts ...TsBlobPoint) *C.qdb_ts_blob_point {
-	if len(pts) == 0 {
-		return nil
-	}
-	points := make([]C.qdb_ts_blob_point, len(pts))
-	for idx, pt := range pts {
-		points[idx] = pt.toStructC()
-	}
-
-	return &points[0]
-}
-
-func releaseBlobPointArray(points *C.qdb_ts_blob_point, length int) {
-	if length > 0 {
-		slice := blobPointArrayToSlice(points, length)
-		for _, s := range slice {
-			C.free(unsafe.Pointer(s.content))
-		}
-	}
-}
-
-func blobPointArrayToSlice(points *C.qdb_ts_blob_point, length int) []C.qdb_ts_blob_point {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_blob_point{})]C.qdb_ts_blob_point)(unsafe.Pointer(points))[:length:length]
-}
-
-func blobPointArrayToGo(points *C.qdb_ts_blob_point, pointsCount C.qdb_size_t) []TsBlobPoint {
-	length := int(pointsCount)
-	output := make([]TsBlobPoint, length)
-	if length > 0 {
-		slice := blobPointArrayToSlice(points, length)
-		for i, s := range slice {
-			output[i] = TsBlobPointToStructG(s)
-		}
-	}
-
-	return output
 }
 
 // GetBlob : gets a blob in row

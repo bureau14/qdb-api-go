@@ -6,9 +6,7 @@ package qdb
 import "C"
 
 import (
-	"math"
 	"time"
-	"unsafe"
 )
 
 // TsInt64Point : timestamped int64 data point
@@ -39,37 +37,6 @@ func (t TsInt64Point) toStructC() C.qdb_ts_int64_point {
 
 func TsInt64PointToStructG(t C.qdb_ts_int64_point) TsInt64Point {
 	return TsInt64Point{TimespecToStructG(t.timestamp), int64(t.value)}
-}
-
-func int64PointArrayToC(pts ...TsInt64Point) *C.qdb_ts_int64_point {
-	if len(pts) == 0 {
-		return nil
-	}
-	points := make([]C.qdb_ts_int64_point, len(pts))
-	for idx, pt := range pts {
-		points[idx] = pt.toStructC()
-	}
-
-	return &points[0]
-}
-
-func int64PointArrayToSlice(points *C.qdb_ts_int64_point, length int) []C.qdb_ts_int64_point {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_int64_point{})]C.qdb_ts_int64_point)(unsafe.Pointer(points))[:length:length]
-}
-
-func int64PointArrayToGo(points *C.qdb_ts_int64_point, pointsCount C.qdb_size_t) []TsInt64Point {
-	length := int(pointsCount)
-	output := make([]TsInt64Point, length)
-	if length > 0 {
-		slice := int64PointArrayToSlice(points, length)
-		for i, s := range slice {
-			output[i] = TsInt64PointToStructG(s)
-		}
-	}
-
-	return output
 }
 
 // GetInt64 : gets an int64 in row
