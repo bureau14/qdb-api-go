@@ -30,11 +30,6 @@ func (t TsDoublePoint) Content() float64 {
 	return t.content
 }
 
-// :: internals
-func (t TsDoublePoint) toStructC() C.qdb_ts_double_point {
-	return C.qdb_ts_double_point{toQdbTimespec(t.timestamp), C.double(t.content)}
-}
-
 func TsDoublePointToStructG(t C.qdb_ts_double_point) TsDoublePoint {
 	return TsDoublePoint{TimespecToStructG(t.timestamp), float64(t.value)}
 }

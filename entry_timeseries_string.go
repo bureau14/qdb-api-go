@@ -2,7 +2,6 @@ package qdb
 
 /*
 	#include <qdb/ts.h>
-	#include <stdlib.h>
 */
 import "C"
 
@@ -30,14 +29,6 @@ func (t TsStringPoint) Timestamp() time.Time {
 // Content : return data point content
 func (t TsStringPoint) Content() string {
 	return t.content
-}
-
-// :: internals
-func (t TsStringPoint) toStructC() C.qdb_ts_string_point {
-	dataSize := C.qdb_size_t(len(t.content))
-	data := convertToCharStar(string(t.content))
-
-	return C.qdb_ts_string_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
 func TsStringPointToStructG(t C.qdb_ts_string_point) TsStringPoint {

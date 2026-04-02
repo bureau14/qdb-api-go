@@ -30,11 +30,6 @@ func (t TsInt64Point) Content() int64 {
 	return t.content
 }
 
-// :: internals
-func (t TsInt64Point) toStructC() C.qdb_ts_int64_point {
-	return C.qdb_ts_int64_point{toQdbTimespec(t.timestamp), C.qdb_int_t(t.content)}
-}
-
 func TsInt64PointToStructG(t C.qdb_ts_int64_point) TsInt64Point {
 	return TsInt64Point{TimespecToStructG(t.timestamp), int64(t.value)}
 }

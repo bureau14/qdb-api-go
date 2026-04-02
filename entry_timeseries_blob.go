@@ -2,7 +2,6 @@ package qdb
 
 /*
 	#include <qdb/ts.h>
-	#include <stdlib.h>
 */
 import "C"
 
@@ -30,17 +29,6 @@ func (t TsBlobPoint) Timestamp() time.Time {
 // Content : return data point content
 func (t TsBlobPoint) Content() []byte {
 	return t.content
-}
-
-// :: internals
-
-// TODO(vianney) : do a better conversion without losing the capacity to pass a pointer
-// solution may be in go 1.7: func C.CBytes([]byte) unsafe.Pointer
-func (t TsBlobPoint) toStructC() C.qdb_ts_blob_point {
-	dataSize := C.qdb_size_t(len(t.content))
-	data := unsafe.Pointer(convertToCharStar(string(t.content)))
-
-	return C.qdb_ts_blob_point{toQdbTimespec(t.timestamp), data, dataSize}
 }
 
 func TsBlobPointToStructG(t C.qdb_ts_blob_point) TsBlobPoint {

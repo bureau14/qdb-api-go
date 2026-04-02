@@ -30,11 +30,6 @@ func (t TsTimestampPoint) Content() time.Time {
 	return t.content
 }
 
-// :: internals
-func (t TsTimestampPoint) toStructC() C.qdb_ts_timestamp_point {
-	return C.qdb_ts_timestamp_point{toQdbTimespec(t.timestamp), toQdbTimespec(t.content)}
-}
-
 func TsTimestampPointToStructG(t C.qdb_ts_timestamp_point) TsTimestampPoint {
 	return TsTimestampPoint{TimespecToStructG(t.timestamp), TimespecToStructG(t.value)}
 }
