@@ -309,27 +309,29 @@ func oldColumnInfoArrayToSlice(columns *C.qdb_ts_column_info_t, length int) []C.
 }
 
 func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
-	length := int(columnsCount)
+	return columnsInfoToColumns(entry, columnInfoArrayToGo(columns, columnsCount))
+}
+
+func columnsInfoToColumns(entry TimeseriesEntry, columnsInfo []TsColumnInfo) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
 	blobColumns := []TsBlobColumn{}
 	doubleColumns := []TsDoubleColumn{}
 	int64Columns := []TsInt64Column{}
 	stringColumns := []TsStringColumn{}
 	timestampColumns := []TsTimestampColumn{}
-	if length > 0 {
-		slice := columnInfoArrayToSlice(columns, length)
-		for _, s := range slice {
-			switch s._type {
-			case C.qdb_ts_column_blob:
-				blobColumns = append(blobColumns, TsBlobColumn{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_double:
-				doubleColumns = append(doubleColumns, TsDoubleColumn{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_int64:
-				int64Columns = append(int64Columns, TsInt64Column{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_string, C.qdb_ts_column_symbol:
-				stringColumns = append(stringColumns, TsStringColumn{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_timestamp:
-				timestampColumns = append(timestampColumns, TsTimestampColumn{TsColumnInfoExToStructG(s, entry)})
-			}
+
+	for _, columnInfo := range columnsInfo {
+		column := tsColumn{columnInfo, entry}
+		switch columnInfo.Type() {
+		case TsColumnBlob:
+			blobColumns = append(blobColumns, TsBlobColumn{column})
+		case TsColumnDouble:
+			doubleColumns = append(doubleColumns, TsDoubleColumn{column})
+		case TsColumnInt64:
+			int64Columns = append(int64Columns, TsInt64Column{column})
+		case TsColumnString, TsColumnSymbol:
+			stringColumns = append(stringColumns, TsStringColumn{column})
+		case TsColumnTimestamp:
+			timestampColumns = append(timestampColumns, TsTimestampColumn{column})
 		}
 	}
 
