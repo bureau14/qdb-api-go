@@ -1,6 +1,10 @@
 package qdb
 
-import "testing"
+import (
+	"errors"
+	"testing"
+	"time"
+)
 
 func TestEnsureTimestampColumnFirstAddsMissingColumn(t *testing.T) {
 	cols, err := ensureTimestampColumnFirst(
@@ -76,77 +80,145 @@ func TestEnsureTimestampColumnFirstRejectsSymtable(t *testing.T) {
 	}
 }
 
-func TestColumnsInfoToColumnsClassifiesColumnTypes(t *testing.T) {
-	entry := TimeseriesEntry{}
-	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns := columnsInfoToColumns(entry, []TsColumnInfo{
-		NewTsColumnInfo("blob", TsColumnBlob),
-		NewTsColumnInfo("double", TsColumnDouble),
-		NewTsColumnInfo("int64", TsColumnInt64),
-		NewTsColumnInfo("string", TsColumnString),
-		NewSymbolColumnInfo("symbol", "symbols"),
-		NewTsColumnInfo("timestamp", TsColumnTimestamp),
-	})
+func TestTimeseriesColumnsInfoReturnsCreatedColumns(t *testing.T) {
+	entry, expectedColumns := newTestTimeseriesMetadataTable(t)
 
-	if len(blobColumns) != 1 {
-		t.Fatalf("expected 1 blob column, got %d", len(blobColumns))
-	}
-	if blobColumns[0].Name() != "blob" || blobColumns[0].Type() != TsColumnBlob {
-		t.Fatalf("unexpected blob column: name=%q type=%v", blobColumns[0].Name(), blobColumns[0].Type())
+	columns, err := entry.ColumnsInfo()
+	if err != nil {
+		t.Fatalf("expected ColumnsInfo to succeed, got %v", err)
 	}
 
-	if len(doubleColumns) != 1 {
-		t.Fatalf("expected 1 double column, got %d", len(doubleColumns))
-	}
-	if doubleColumns[0].Name() != "double" || doubleColumns[0].Type() != TsColumnDouble {
-		t.Fatalf("unexpected double column: name=%q type=%v", doubleColumns[0].Name(), doubleColumns[0].Type())
-	}
+	assertColumnInfos(t, columns, expectedColumns)
+}
 
-	if len(int64Columns) != 1 {
-		t.Fatalf("expected 1 int64 column, got %d", len(int64Columns))
-	}
-	if int64Columns[0].Name() != "int64" || int64Columns[0].Type() != TsColumnInt64 {
-		t.Fatalf("unexpected int64 column: name=%q type=%v", int64Columns[0].Name(), int64Columns[0].Type())
-	}
+func TestTimeseriesColumnsInfoReturnsAliasNotFound(t *testing.T) {
+	handle := newTestHandle(t)
+	entry := handle.Timeseries(generateAlias(16))
 
-	if len(stringColumns) != 2 {
-		t.Fatalf("expected 2 string columns, got %d", len(stringColumns))
+	columns, err := entry.ColumnsInfo()
+	if !errors.Is(err, ErrAliasNotFound) {
+		t.Fatalf("expected ErrAliasNotFound, got columns=%v err=%v", columns, err)
 	}
-	if stringColumns[0].Name() != "string" || stringColumns[0].Type() != TsColumnString {
-		t.Fatalf("unexpected string column: name=%q type=%v", stringColumns[0].Name(), stringColumns[0].Type())
-	}
-	if stringColumns[1].Name() != "symbol" || stringColumns[1].Type() != TsColumnSymbol || stringColumns[1].Symtable() != "symbols" {
-		t.Fatalf(
-			"unexpected symbol column: name=%q type=%v symtable=%q",
-			stringColumns[1].Name(),
-			stringColumns[1].Type(),
-			stringColumns[1].Symtable(),
-		)
-	}
-
-	if len(timestampColumns) != 1 {
-		t.Fatalf("expected 1 timestamp column, got %d", len(timestampColumns))
-	}
-	if timestampColumns[0].Name() != "timestamp" || timestampColumns[0].Type() != TsColumnTimestamp {
-		t.Fatalf("unexpected timestamp column: name=%q type=%v", timestampColumns[0].Name(), timestampColumns[0].Type())
+	if columns != nil {
+		t.Fatalf("expected nil columns on error, got %+v", columns)
 	}
 }
 
-func TestColumnsInfoToColumnsHandlesEmptyInput(t *testing.T) {
-	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns := columnsInfoToColumns(TimeseriesEntry{}, nil)
+func TestTimeseriesColumnsReturnsTypedColumns(t *testing.T) {
+	entry, expectedColumns := newTestTimeseriesMetadataTable(t)
 
-	if len(blobColumns) != 0 {
-		t.Fatalf("expected no blob columns, got %d", len(blobColumns))
+	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, err := entry.Columns()
+	if err != nil {
+		t.Fatalf("expected Columns to succeed, got %v", err)
 	}
-	if len(doubleColumns) != 0 {
-		t.Fatalf("expected no double columns, got %d", len(doubleColumns))
+
+	assertColumns(t, blobColumns, columnInfosOfTypes(expectedColumns, TsColumnBlob))
+	assertColumns(t, doubleColumns, columnInfosOfTypes(expectedColumns, TsColumnDouble))
+	assertColumns(t, int64Columns, columnInfosOfTypes(expectedColumns, TsColumnInt64))
+	assertColumns(t, stringColumns, columnInfosOfTypes(expectedColumns, TsColumnString, TsColumnSymbol))
+	assertColumns(t, timestampColumns, columnInfosOfTypes(expectedColumns, TsColumnTimestamp))
+}
+
+func TestTimeseriesColumnsReturnsAliasNotFound(t *testing.T) {
+	handle := newTestHandle(t)
+	entry := handle.Timeseries(generateAlias(16))
+
+	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, err := entry.Columns()
+	if !errors.Is(err, ErrAliasNotFound) {
+		t.Fatalf("expected ErrAliasNotFound, got err=%v", err)
 	}
-	if len(int64Columns) != 0 {
-		t.Fatalf("expected no int64 columns, got %d", len(int64Columns))
+	if blobColumns != nil || doubleColumns != nil || int64Columns != nil || stringColumns != nil || timestampColumns != nil {
+		t.Fatalf(
+			"expected nil column slices on error, got blob=%v double=%v int64=%v string=%v timestamp=%v",
+			blobColumns,
+			doubleColumns,
+			int64Columns,
+			stringColumns,
+			timestampColumns,
+		)
 	}
-	if len(stringColumns) != 0 {
-		t.Fatalf("expected no string columns, got %d", len(stringColumns))
+}
+
+func newTestTimeseriesMetadataTable(t *testing.T) (TimeseriesEntry, []TsColumnInfo) {
+	t.Helper()
+
+	handle := newTestHandle(t)
+	entry := handle.Timeseries(generateAlias(16))
+	symtable := generateAlias(16)
+	columns := []TsColumnInfo{
+		NewTsColumnInfo("blob_col", TsColumnBlob),
+		NewTsColumnInfo("double_col", TsColumnDouble),
+		NewTsColumnInfo("int64_col", TsColumnInt64),
+		NewTsColumnInfo("string_col", TsColumnString),
+		NewTsColumnInfo("timestamp_col", TsColumnTimestamp),
+		NewSymbolColumnInfo("symbol_col", symtable),
 	}
-	if len(timestampColumns) != 0 {
-		t.Fatalf("expected no timestamp columns, got %d", len(timestampColumns))
+
+	if err := entry.Create(24*time.Hour, columns...); err != nil {
+		t.Fatalf("expected Create to succeed, got %v", err)
+	}
+	t.Cleanup(func() { _ = entry.Remove() })
+
+	expectedColumns := append([]TsColumnInfo{NewTsColumnInfo(tsTimestampColumnName, TsColumnTimestamp)}, columns...)
+
+	return entry, expectedColumns
+}
+
+func columnInfosOfTypes(columns []TsColumnInfo, types ...TsColumnType) []TsColumnInfo {
+	matchingColumns := []TsColumnInfo{}
+	for _, column := range columns {
+		for _, columnType := range types {
+			if column.Type() == columnType {
+				matchingColumns = append(matchingColumns, column)
+
+				break
+			}
+		}
+	}
+
+	return matchingColumns
+}
+
+func assertColumnInfos(t *testing.T, got, want []TsColumnInfo) {
+	t.Helper()
+
+	if len(got) != len(want) {
+		t.Fatalf("expected %d columns, got %d: %+v", len(want), len(got), got)
+	}
+	for i := range want {
+		assertColumnInfo(t, got[i], want[i])
+	}
+}
+
+type columnMetadata interface {
+	Name() string
+	Type() TsColumnType
+	Symtable() string
+}
+
+func assertColumns[T columnMetadata](t *testing.T, got []T, want []TsColumnInfo) {
+	t.Helper()
+
+	if len(got) != len(want) {
+		t.Fatalf("expected %d columns, got %d: %+v", len(want), len(got), got)
+	}
+	for i := range want {
+		assertColumnInfo(t, got[i], want[i])
+	}
+}
+
+func assertColumnInfo(t *testing.T, got columnMetadata, want TsColumnInfo) {
+	t.Helper()
+
+	if got.Name() != want.Name() || got.Type() != want.Type() || got.Symtable() != want.Symtable() {
+		t.Fatalf(
+			"unexpected column: got name=%q type=%v symtable=%q; want name=%q type=%v symtable=%q",
+			got.Name(),
+			got.Type(),
+			got.Symtable(),
+			want.Name(),
+			want.Type(),
+			want.Symtable(),
+		)
 	}
 }
