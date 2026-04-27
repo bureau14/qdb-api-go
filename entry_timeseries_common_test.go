@@ -159,9 +159,7 @@ func newTestTimeseriesMetadataTable(t *testing.T) (TimeseriesEntry, []TsColumnIn
 	}
 	t.Cleanup(func() { _ = entry.Remove() })
 
-	expectedColumns := append([]TsColumnInfo{NewTsColumnInfo(tsTimestampColumnName, TsColumnTimestamp)}, columns...)
-
-	return entry, expectedColumns
+	return entry, columns
 }
 
 func columnInfosOfTypes(columns []TsColumnInfo, types ...TsColumnType) []TsColumnInfo {
