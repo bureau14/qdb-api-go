@@ -131,31 +131,6 @@ type tsColumn struct {
 	parent TimeseriesEntry
 }
 
-// TsBlobColumn : a time series blob column
-type TsBlobColumn struct {
-	tsColumn
-}
-
-// TsDoubleColumn : a time series double column
-type TsDoubleColumn struct {
-	tsColumn
-}
-
-// TsInt64Column : a time series int64 column
-type TsInt64Column struct {
-	tsColumn
-}
-
-// TsStringColumn : a time series string column
-type TsStringColumn struct {
-	tsColumn
-}
-
-// TsTimestampColumn : a time series timestamp column
-type TsTimestampColumn struct {
-	tsColumn
-}
-
 // TsColumnInfo : column information in timeseries
 type TsColumnInfo struct {
 	name     string
@@ -292,6 +267,10 @@ func (t TimeseriesEntry) Name() string {
 
 // :: internals
 
+func TsColumnInfoExToStructG(t C.qdb_ts_column_info_ex_t, entry TimeseriesEntry) tsColumn {
+	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type), C.GoString(t.symtable)}, entry}
+}
+
 func columnInfoArrayToSlice(columns *C.qdb_ts_column_info_ex_t, length int) []C.qdb_ts_column_info_ex_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 
@@ -305,29 +284,27 @@ func oldColumnInfoArrayToSlice(columns *C.qdb_ts_column_info_t, length int) []C.
 }
 
 func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
-	return columnsInfoToColumns(entry, columnInfoArrayToGo(columns, columnsCount))
-}
-
-func columnsInfoToColumns(entry TimeseriesEntry, columnsInfo []TsColumnInfo) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
+	length := int(columnsCount)
 	blobColumns := []TsBlobColumn{}
 	doubleColumns := []TsDoubleColumn{}
 	int64Columns := []TsInt64Column{}
 	stringColumns := []TsStringColumn{}
 	timestampColumns := []TsTimestampColumn{}
-
-	for _, columnInfo := range columnsInfo {
-		column := tsColumn{columnInfo, entry}
-		switch columnInfo.Type() {
-		case TsColumnBlob:
-			blobColumns = append(blobColumns, TsBlobColumn{column})
-		case TsColumnDouble:
-			doubleColumns = append(doubleColumns, TsDoubleColumn{column})
-		case TsColumnInt64:
-			int64Columns = append(int64Columns, TsInt64Column{column})
-		case TsColumnString, TsColumnSymbol:
-			stringColumns = append(stringColumns, TsStringColumn{column})
-		case TsColumnTimestamp:
-			timestampColumns = append(timestampColumns, TsTimestampColumn{column})
+	if length > 0 {
+		slice := columnInfoArrayToSlice(columns, length)
+		for _, s := range slice {
+			switch s._type {
+			case C.qdb_ts_column_blob:
+				blobColumns = append(blobColumns, TsBlobColumn{TsColumnInfoExToStructG(s, entry)})
+			case C.qdb_ts_column_double:
+				doubleColumns = append(doubleColumns, TsDoubleColumn{TsColumnInfoExToStructG(s, entry)})
+			case C.qdb_ts_column_int64:
+				int64Columns = append(int64Columns, TsInt64Column{TsColumnInfoExToStructG(s, entry)})
+			case C.qdb_ts_column_string, C.qdb_ts_column_symbol:
+				stringColumns = append(stringColumns, TsStringColumn{TsColumnInfoExToStructG(s, entry)})
+			case C.qdb_ts_column_timestamp:
+				timestampColumns = append(timestampColumns, TsTimestampColumn{TsColumnInfoExToStructG(s, entry)})
+			}
 		}
 	}
 

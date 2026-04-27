@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+// TsInt64Column : a time series int64 column
+type TsInt64Column struct {
+	tsColumn
+}
+
 // TsInt64Point : timestamped int64 data point
 type TsInt64Point struct {
 	timestamp time.Time
