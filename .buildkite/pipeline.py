@@ -101,8 +101,8 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     # XXX (igor)
     # we can rely on referencing env variables instead of hardcoded paths but we need to update agents first to support this
     go_slug = go_version.replace(".", "")
-    go_root_env = f"$$QDB_CICD_AGENT_GO{go_slug}_GOROOT"
-    go_path_env = f"$$QDB_CICD_AGENT_GO{go_slug}_GOPATH"
+    go_root_env = f"${{QDB_CICD_AGENT_GO{go_slug}_GOROOT}}"
+    go_path_env = f"${{QDB_CICD_AGENT_GO{go_slug}_GOPATH}}"
 
     return {
         "GOROOT": go_root_env,
@@ -118,7 +118,7 @@ def _apply_doc_command(step: dict, platform: Platform) -> None:
         # TODO (igor): inspect what this does in teacmity and implement it here, if needed
         pass
         # doc_commands = [
-        #     'echo "+++ Generate documentation"',
+        #     'echo "+++ Generate documentation"',  
         #     "bash scripts/teamcity/30.doc.sh",
         # ]
         # existing_commands = step.get("commands", [])
@@ -143,6 +143,8 @@ def generate_pipeline() -> Pipeline:
                     "slug": slug,
                     "queue": f"{p.queue_os}-{p.arch}",
                     "name": slug.replace("-", " ").title(),
+                    "go_root": _get_agent_go_env(p, go)["GOROOT"],
+                    "go_path": _get_agent_go_env(p, go)["GOPATH"],
                 }
 
                 artifact_vars_per_step = {
@@ -152,7 +154,6 @@ def generate_pipeline() -> Pipeline:
                 step = load_template(STEPS_DIR / "_build.yml", **tvars)
                 env = _env(p, "test", bt)
                 env.update(step.get("env") or {})
-                env.update(_get_agent_go_env(p, go))
                 step["env"] = env
                 apply_docker(step, p.docker_image)
                 set_artifact_plugin_options(step, artifact_vars_per_step)

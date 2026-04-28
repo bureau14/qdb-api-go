@@ -1,5 +1,3 @@
-#!/bin/bash
-
 SCRIPT_PATH="scripts/tests/setup/stop-services.sh"
 
 if [ -f "$SCRIPT_PATH" ]; then
