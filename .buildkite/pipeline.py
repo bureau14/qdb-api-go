@@ -100,14 +100,28 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     """
     # XXX (igor)
     # we can rely on referencing env variables instead of hardcoded paths but we need to update agents first to support this
-    go_slug = go_version.replace(".", "")
-    go_root_env = f"$$QDB_CICD_AGENT_GO{go_slug}_GOROOT"
-    go_path_env = f"$$QDB_CICD_AGENT_GO{go_slug}_GOPATH"
+    if platform.os == "freebsd":
+        return {
+            "GOPATH": f"/var/lib/buildkite-agent/go{go_version}",
+            "GOROOT": f"/usr/local/go{go_version}",
+        }
+    elif platform.os == "windows":
+        return {
+            "GOPATH": fr"C:\Users\teamcity\Go-{go_version}-64",
+            "GOROOT": fr"C:\Go-{go_version}-64",
+        }
 
-    return {
-        "GOROOT": go_root_env,
-        "GOPATH": go_path_env,
-    }
+    elif platform.os == "linux":
+        return {
+            "GOPATH": f"/var/lib/buildkite-agent/go{go_version}",
+            "GOROOT": f"/usr/local/go{go_version}",
+        }
+    elif platform.os == "macos":
+        return {
+            "GOPATH": f"/Users/teamcity/go{go_version}",
+            "GOROOT": f"/opt/local/go{go_version}",
+        }
+    return {}
 
 
 def _apply_doc_command(step: dict, platform: Platform) -> None:
@@ -143,8 +157,6 @@ def generate_pipeline() -> Pipeline:
                     "slug": slug,
                     "queue": f"{p.queue_os}-{p.arch}",
                     "name": slug.replace("-", " ").title(),
-                    "go_root": f"$$QDB_CICD_AGENT_GO{go.replace('.', '')}_GOROOT",
-                    "go_path": f"$$QDB_CICD_AGENT_GO{go.replace('.', '')}_GOPATH",
                 }
 
                 artifact_vars_per_step = {
@@ -154,7 +166,7 @@ def generate_pipeline() -> Pipeline:
                 step = load_template(STEPS_DIR / "_build.yml", **tvars)
                 env = _env(p, "test", bt)
                 env.update(step.get("env") or {})
-                # env.update(_get_agent_go_env(p, go))
+                env.update(_get_agent_go_env(p, go))
                 step["env"] = env
                 apply_docker(step, p.docker_image)
                 set_artifact_plugin_options(step, artifact_vars_per_step)
