@@ -9,8 +9,7 @@ label: "{name} ({slug})"
 key: "build-{slug}"
 
 commands:
-  - export GOPATH="{go_path}"
-  - export GOROOT="{go_root}"
+  - env | grep QDB
   - echo \"+++ Start Services\"
   - bash scripts/tests/setup/start-services.sh
   - echo \"+++ Build\"
