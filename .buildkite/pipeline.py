@@ -123,8 +123,8 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
         return {
             "GOPATH": f"/Users/teamcity/go{go_version}",
             "GOROOT": f"/opt/local/go{go_version}",
-            "GOMODCACHE": f"/home/buildkite/{go_version}/pkg/mod",
-            "GOCACHE": f"/home/buildkite/{go_version}/cache",
+            "GOMODCACHE": f"/Users/buildkite/go{go_version}/pkg/mod",
+            "GOCACHE": f"/Users/buildkite/go{go_version}/cache",
         }
     return {}
 
