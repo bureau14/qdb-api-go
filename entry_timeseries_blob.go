@@ -21,6 +21,11 @@ func NewTsBlobPoint(timestamp time.Time, value []byte) TsBlobPoint {
 	return TsBlobPoint{timestamp, value}
 }
 
+// TsBlobColumn : a time series blob column
+type TsBlobColumn struct {
+	tsColumn
+}
+
 // Timestamp : return data point timestamp
 func (t TsBlobPoint) Timestamp() time.Time {
 	return t.timestamp

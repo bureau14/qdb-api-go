@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+// TsDoubleColumn : a time series double column
+type TsDoubleColumn struct {
+	tsColumn
+}
+
 // TsDoublePoint : timestamped double data point
 type TsDoublePoint struct {
 	timestamp time.Time
