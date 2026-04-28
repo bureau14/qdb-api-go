@@ -166,7 +166,7 @@ def generate_pipeline() -> Pipeline:
                 step = load_template(STEPS_DIR / "_build.yml", **tvars)
                 env = _env(p, "test", bt)
                 env.update(step.get("env") or {})
-                env.update(_get_agent_go_env(p, go))
+                # env.update(_get_agent_go_env(p, go))
                 step["env"] = env
                 apply_docker(step, p.docker_image)
                 set_artifact_plugin_options(step, artifact_vars_per_step)
