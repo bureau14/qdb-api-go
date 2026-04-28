@@ -23,10 +23,8 @@ key: "build-{slug}"
 #   - bash scripts/tests/setup/stop-services.sh
 
 commands:
+  - export GOROOT="$QDB_CICD_AGENT_GO125_ROOT"
   - bash scripts/teamcity/10.build.sh
-
-env:
-  GOROOT: $$QDB_CICD_AGENT_GO125_ROOT
 
 # plugins:
 #   - bureau14/qdb-artifacts#master:
