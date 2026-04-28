@@ -101,8 +101,8 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     # XXX (igor)
     # we can rely on referencing env variables instead of hardcoded paths but we need to update agents first to support this
     go_slug = go_version.replace(".", "")
-    go_root_env = f"${{QDB_CICD_AGENT_GO{go_slug}_GOROOT}}"
-    go_path_env = f"${{QDB_CICD_AGENT_GO{go_slug}_GOPATH}}"
+    go_root_env = f"\${{QDB_CICD_AGENT_GO{go_slug}_GOROOT}}"
+    go_path_env = f"\${{QDB_CICD_AGENT_GO{go_slug}_GOPATH}}"
 
     return {
         "GOROOT": go_root_env,
