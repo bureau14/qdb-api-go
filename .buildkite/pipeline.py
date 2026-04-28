@@ -102,23 +102,23 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     # we can rely on referencing env variables instead of hardcoded paths but we need to update agents first to support this
     if platform.os == "freebsd":
         return {
-            "GOPATH": f"/usr/home/buildkite/go{go_version}",
+            "GOPATH": f"/usr/home/teamcity/go{go_version}",
             "GOROOT": f"/usr/local/go{go_version}",
         }
     elif platform.os == "windows":
         return {
-            "GOPATH": fr"C:\Users\buildkite\Go-{go_version}-64",
+            "GOPATH": fr"C:\Users\teamcity\Go-{go_version}-64",
             "GOROOT": fr"C:\Go-{go_version}-64",
         }
 
     elif platform.os == "linux":
         return {
-            "GOPATH": f"/home/buildkite/go{go_version}",
+            "GOPATH": f"/home/teamcity/go{go_version}",
             "GOROOT": f"/usr/local/go{go_version}",
         }
     elif platform.os == "macos":
         return {
-            "GOPATH": f"/Users/buildkite/go{go_version}",
+            "GOPATH": f"/Users/teamcity/go{go_version}",
             "GOROOT": f"/opt/local/go{go_version}",
         }
     return {}
