@@ -1,0 +1,10 @@
+#!/bin/bash
+
+SCRIPT_PATH="scripts/tests/setup/stop-services.sh"
+
+if [ -f "$SCRIPT_PATH" ]; then
+    bash "$SCRIPT_PATH" > /dev/null 2>&1 || true
+    echo "Stopped services"
+fi
+
+exit 0
