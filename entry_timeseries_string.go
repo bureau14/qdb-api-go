@@ -10,6 +10,11 @@ import (
 	"unsafe"
 )
 
+// TsStringColumn : a time series string column
+type TsStringColumn struct {
+	tsColumn
+}
+
 // TsStringPoint : timestamped data
 type TsStringPoint struct {
 	timestamp time.Time
