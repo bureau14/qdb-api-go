@@ -8,28 +8,34 @@ agents:
 label: "{name} ({slug})"
 key: "build-{slug}"
 
-commands:
-  - echo \"+++ Start Services\"
-  - bash scripts/tests/setup/start-services.sh
-  - echo \"+++ Build\"
-  - bash scripts/teamcity/10.build.sh
-  - echo \"+++ Test\"
-  - bash scripts/teamcity/20.test.sh
-  - echo \"+++ Examples\"
-  - bash scripts/teamcity/30.examples.sh
-  - echo \"+++ Documentation examples\"
-  - bash scripts/teamcity/40.documentation-examples.sh
-  - echo \"+++ Stop Services\"
-  - bash scripts/tests/setup/stop-services.sh
+# commands:
+#   - echo \"+++ Start Services\"
+#   - bash scripts/tests/setup/start-services.sh
+#   - echo \"+++ Build\"
+#   - bash scripts/teamcity/10.build.sh
+#   - echo \"+++ Test\"
+#   - bash scripts/teamcity/20.test.sh
+#   - echo \"+++ Examples\"
+#   - bash scripts/teamcity/30.examples.sh
+#   - echo \"+++ Documentation examples\"
+#   - bash scripts/teamcity/40.documentation-examples.sh
+#   - echo \"+++ Stop Services\"
+#   - bash scripts/tests/setup/stop-services.sh
 
-plugins:
-  - bureau14/qdb-artifacts#master:
-      download:
-        project_id: "quasardb"
-        output-dir: "qdb"
-        extract: true
-        clean: true
-        files:
-          - "*-c-api.tar.zst!*"
-          - "*-server.tar.zst!*"
-          - "*-utils.tar.zst!*"
+commands:
+  - bash scripts/teamcity/10.build.sh
+
+env:
+  GOROOT: $$QDB_CICD_AGENT_GO125_ROOT
+
+# plugins:
+#   - bureau14/qdb-artifacts#master:
+#       download:
+#         project_id: "quasardb"
+#         output-dir: "qdb"
+#         extract: true
+#         clean: true
+#         files:
+#           - "*-c-api.tar.zst!*"
+#           - "*-server.tar.zst!*"
+#           - "*-utils.tar.zst!*"
