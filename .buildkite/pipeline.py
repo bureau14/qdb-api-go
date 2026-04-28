@@ -113,13 +113,18 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
 
     elif platform.os == "linux":
         return {
-            "GOPATH": f"/var/lib/buildkite-agent/go{go_version}",
+            # "GOPATH": f"/var/lib/buildkite-agent/go{go_version}",
+            "GOPATH": f"/home/teamcity/go{go_version}",
             "GOROOT": f"/usr/local/go{go_version}",
+            "GOMODCACHE": f"/home/builder/{go_version}/pkg/mod",
+            "GOCACHE": f"/home/builder/{go_version}/cache",
         }
     elif platform.os == "macos":
         return {
             "GOPATH": f"/Users/teamcity/go{go_version}",
             "GOROOT": f"/opt/local/go{go_version}",
+            "GOMODCACHE": f"/home/buildkite/{go_version}/pkg/mod",
+            "GOCACHE": f"/home/buildkite/{go_version}/cache",
         }
     return {}
 
@@ -166,7 +171,7 @@ def generate_pipeline() -> Pipeline:
                 step = load_template(STEPS_DIR / "_build.yml", **tvars)
                 env = _env(p, "test", bt)
                 env.update(step.get("env") or {})
-                # env.update(_get_agent_go_env(p, go))
+                env.update(_get_agent_go_env(p, go))
                 step["env"] = env
                 apply_docker(step, p.docker_image)
                 set_artifact_plugin_options(step, artifact_vars_per_step)
