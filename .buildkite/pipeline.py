@@ -160,7 +160,7 @@ def generate_pipeline() -> Pipeline:
                 }
 
                 artifact_vars_per_step = {
-                    "download": {"variant": dependency_slug, "git-ref": "sc-18547/buildkite"},
+                    "download": {"variant": dependency_slug, "git-ref": "refs/heads/sc-18547/buildkite"},
                 }
 
                 step = load_template(STEPS_DIR / "_build.yml", **tvars)
