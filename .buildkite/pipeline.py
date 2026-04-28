@@ -100,28 +100,14 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     """
     # XXX (igor)
     # we can rely on referencing env variables instead of hardcoded paths but we need to update agents first to support this
-    if platform.os == "freebsd":
-        return {
-            "GOPATH": f"/usr/home/teamcity/go{go_version}",
-            "GOROOT": f"/usr/local/go{go_version}",
-        }
-    elif platform.os == "windows":
-        return {
-            "GOPATH": fr"C:\Users\teamcity\Go-{go_version}-64",
-            "GOROOT": fr"C:\Go-{go_version}-64",
-        }
+    go_slug = go_version.replace(".", "")
+    go_root_env = f"${{QDB_CICD_AGENT_GO{go_slug}_GOROOT}}"
+    go_path_env = f"${{QDB_CICD_AGENT_GO{go_slug}_GOPATH}}"
 
-    elif platform.os == "linux":
-        return {
-            "GOPATH": f"/home/teamcity/go{go_version}",
-            "GOROOT": f"/usr/local/go{go_version}",
-        }
-    elif platform.os == "macos":
-        return {
-            "GOPATH": f"/Users/teamcity/go{go_version}",
-            "GOROOT": f"/opt/local/go{go_version}",
-        }
-    return {}
+    return {
+        "GOROOT": go_root_env,
+        "GOPATH": go_path_env,
+    }
 
 
 def _apply_doc_command(step: dict, platform: Platform) -> None:
