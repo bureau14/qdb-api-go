@@ -143,6 +143,8 @@ def generate_pipeline() -> Pipeline:
                     "slug": slug,
                     "queue": f"{p.queue_os}-{p.arch}",
                     "name": slug.replace("-", " ").title(),
+                    "go_root": f"$$QDB_CICD_AGENT_GO{go.replace('.', '')}_GOROOT",
+                    "go_path": f"$$QDB_CICD_AGENT_GO{go.replace('.', '')}_GOPATH",
                 }
 
                 artifact_vars_per_step = {
