@@ -100,6 +100,8 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     """
     # XXX (igor)
     # we can rely on referencing env variables instead of hardcoded paths but we need to update agents first to support this
+    # GOMODCACHE and GOCACHE are a workaround: go is installed in home `teamcity` user directory, but buildkite agent runs as `builder` or `buildkite` user, so we need to set these to point to a location writable by builder
+    # can be removed once we have a more standard Go installation on agents
     if platform.os == "freebsd":
         return {
             "GOPATH": f"/var/lib/buildkite-agent/go{go_version}",
