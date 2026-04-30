@@ -99,36 +99,25 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     Applies to Windows and macOS where we have multiple Go versions installed in different locations.
     """
     # XXX (igor)
-    # we can rely on referencing env variables instead of hardcoded paths but we need to update agents first to support this
     # GOMODCACHE and GOCACHE are a workaround: go is installed in home `teamcity` user directory, but buildkite agent runs as `builder` or `buildkite` user, so we need to set these to point to a location writable by builder
     # can be removed once we have a more standard Go installation on agents
-    if platform.os == "freebsd":
-        return {
-            "GOPATH": f"/var/lib/buildkite-agent/go{go_version}",
-            "GOROOT": f"/usr/local/go{go_version}",
-        }
-    elif platform.os == "windows":
-        return {
-            "GOPATH": fr"C:\Users\teamcity\Go-{go_version}-64",
-            "GOROOT": fr"C:\Go-{go_version}-64",
-        }
-
-    elif platform.os == "linux":
-        return {
-            # "GOPATH": f"/var/lib/buildkite-agent/go{go_version}",
-            "GOPATH": f"/home/teamcity/go{go_version}",
-            "GOROOT": f"/usr/local/go{go_version}",
+    go_slug = go_version.replace(".", "")
+    go_env = {
+        "GOPATH": f"$$QDB_CICD_AGENT_GO{go_slug}_PATH",
+        "GOROOT": f"$$QDB_CICD_AGENT_GO{go_slug}_ROOT"
+    }
+    
+    if platform.os == "linux":
+        go_env.update({
             "GOMODCACHE": f"/home/builder/{go_version}/pkg/mod",
             "GOCACHE": f"/home/builder/{go_version}/cache",
-        }
+        })
     elif platform.os == "macos":
-        return {
-            "GOPATH": f"/Users/teamcity/go{go_version}",
-            "GOROOT": f"/opt/local/go{go_version}",
+        go_env.update({
             "GOMODCACHE": f"/Users/buildkite/go{go_version}/pkg/mod",
             "GOCACHE": f"/Users/buildkite/go{go_version}/cache",
-        }
-    return {}
+        })
+    return go_env
 
 
 def _apply_doc_command(step: dict, platform: Platform) -> None:
