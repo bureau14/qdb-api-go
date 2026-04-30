@@ -98,15 +98,14 @@ def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
     Returns environment variables to set for Go executable on the agent, based on platform and Go version.
     Applies to Windows and macOS where we have multiple Go versions installed in different locations.
     """
-    # XXX (igor)
-    # GOMODCACHE and GOCACHE are a workaround: go is installed in home `teamcity` user directory, but buildkite agent runs as `builder` or `buildkite` user, so we need to set these to point to a location writable by builder
-    # can be removed once we have a more standard Go installation on agents
     go_slug = go_version.replace(".", "")
     go_env = {
         "GOPATH": f"$$QDB_CICD_AGENT_GO{go_slug}_PATH",
         "GOROOT": f"$$QDB_CICD_AGENT_GO{go_slug}_ROOT"
     }
-    
+
+    # GOMODCACHE and GOCACHE are a workaround: go is installed in home `teamcity` user directory, but buildkite agent runs as `builder` or `buildkite` user, so we need to set these to point to a location writable by builder
+    # can be removed once we have a more standard Go installation on agents
     if platform.os == "linux":
         go_env.update({
             "GOMODCACHE": f"/home/builder/{go_version}/pkg/mod",
