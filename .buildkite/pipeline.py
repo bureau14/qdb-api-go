@@ -9,6 +9,7 @@ Usage:
     python3 pipeline.py           # emit pipeline YAML to stdout
     python3 pipeline.py check     # validate without emitting
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -65,10 +66,8 @@ GLOBAL_ENV: dict[str, str] = {
 STEP_ENV: dict[str, dict[str, str]] = {}
 
 OS_ENV: dict[str, dict[str, str]] = {
-    "linux": {
-    },
-    "freebsd": {
-    },
+    "linux": {},
+    "freebsd": {},
     "macos": {},
     "windows": {},
 }
@@ -93,45 +92,33 @@ def _env(p: Platform, step_name: str, build_type: str) -> dict[str, str]:
     )
 
 
-def _get_agent_go_env(platform: Platform, go_version: str) -> dict[str, str]:
+def _get_go_path_on_agent(platform: Platform, go_version: str) -> dict[str, str]:
     """
     Returns environment variables to set for Go executable on the agent, based on platform and Go version.
-    Applies to Windows and macOS where we have multiple Go versions installed in different locations.
     """
     go_slug = go_version.replace(".", "")
     go_env = {
         "GOPATH": f"$$QDB_CICD_AGENT_GO{go_slug}_PATH",
-        "GOROOT": f"$$QDB_CICD_AGENT_GO{go_slug}_ROOT"
+        "GOROOT": f"$$QDB_CICD_AGENT_GO{go_slug}_ROOT",
     }
 
     # GOMODCACHE and GOCACHE are a workaround: go is installed in home `teamcity` user directory, but buildkite agent runs as `builder` or `buildkite` user, so we need to set these to point to a location writable by builder
     # can be removed once we have a more standard Go installation on agents
     if platform.os == "linux":
-        go_env.update({
-            "GOMODCACHE": f"/home/builder/{go_version}/pkg/mod",
-            "GOCACHE": f"/home/builder/{go_version}/cache",
-        })
+        go_env.update(
+            {
+                "GOMODCACHE": f"/home/builder/{go_version}/pkg/mod",
+                "GOCACHE": f"/home/builder/{go_version}/cache",
+            }
+        )
     elif platform.os == "macos":
-        go_env.update({
-            "GOMODCACHE": f"/Users/buildkite/go{go_version}/pkg/mod",
-            "GOCACHE": f"/Users/buildkite/go{go_version}/cache",
-        })
+        go_env.update(
+            {
+                "GOMODCACHE": f"/Users/buildkite/go{go_version}/pkg/mod",
+                "GOCACHE": f"/Users/buildkite/go{go_version}/cache",
+            }
+        )
     return go_env
-
-
-def _apply_doc_command(step: dict, platform: Platform) -> None:
-    """
-    Adds a command to the step to generate documentation using pdoc to linux-amd64-core2 platform builds.
-    """
-    if platform.os == "linux" :
-        # TODO (igor): inspect what this does in teacmity and implement it here, if needed
-        pass
-        # doc_commands = [
-        #     'echo "+++ Generate documentation"',  
-        #     "bash scripts/teamcity/30.doc.sh",
-        # ]
-        # existing_commands = step.get("commands", [])
-        # existing_commands += doc_commands
 
 
 def generate_pipeline() -> Pipeline:
@@ -146,7 +133,7 @@ def generate_pipeline() -> Pipeline:
                 slug = p.slug(bt.lower(), f"go{go.replace('.', '')}")
 
                 # We want to use Release QuasarDB binaries when building Go API (debug and release)
-                dependency_slug =  p.slug("release")
+                dependency_slug = p.slug("release")
 
                 tvars = {
                     "slug": slug,
@@ -155,17 +142,19 @@ def generate_pipeline() -> Pipeline:
                 }
 
                 artifact_vars_per_step = {
-                    "download": {"variant": dependency_slug, "git-ref": "refs/heads/sc-18547/buildkite"},
+                    "download": {
+                        "variant": dependency_slug,
+                        "git-ref": "refs/heads/sc-18547/buildkite", # TODO: should be a `git_ref` var
+                    },
                 }
 
                 step = load_template(STEPS_DIR / "_build.yml", **tvars)
-                env = _env(p, "test", bt)
+                env = _env(p, "build", bt)
                 env.update(step.get("env") or {})
-                env.update(_get_agent_go_env(p, go))
+                env.update(_get_go_path_on_agent(p, go))
                 step["env"] = env
                 apply_docker(step, p.docker_image)
                 set_artifact_plugin_options(step, artifact_vars_per_step)
-                _apply_doc_command(step, p)
 
                 # add step to group
                 group_name = p.slug(bt.lower()).replace("-", " ").title()
