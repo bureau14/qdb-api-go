@@ -1,9 +1,9 @@
 agents:
   queue: "default-{queue}"
 
-# retry:
-#   automatic:
-#       limit: 3
+retry:
+  automatic:
+      limit: 3
 
 label: "{name} ({slug})"
 key: "build-{slug}"
