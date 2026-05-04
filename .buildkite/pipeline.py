@@ -143,7 +143,7 @@ def generate_pipeline() -> Pipeline:
                 artifact_vars_per_step = {
                     "download": {
                         "variant": dependency_slug,
-                        "git-ref": git_ref,
+                        "git-ref": "refs/heads/sc-18547/buildkite",
                     },
                 }
 
