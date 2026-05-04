@@ -110,13 +110,13 @@ def _get_go_path_on_agent(platform: Platform, go_version: str) -> dict[str, str]
                 "GOCACHE": f"/home/builder/{go_version}/cache",
             }
         )
-    elif platform.os == "macos":
-        go_env.update(
-            {
-                "GOMODCACHE": f"/Users/buildkite/go{go_version}/pkg/mod",
-                "GOCACHE": f"/Users/buildkite/go{go_version}/cache",
-            }
-        )
+    # elif platform.os == "macos":
+    #     go_env.update(
+    #         {
+    #             "GOMODCACHE": f"/Users/buildkite/go{go_version}/pkg/mod",
+    #             "GOCACHE": f"/Users/buildkite/go{go_version}/cache",
+    #         }
+    #     )
     return go_env
 
 
