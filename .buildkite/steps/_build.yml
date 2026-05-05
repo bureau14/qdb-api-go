@@ -25,7 +25,7 @@ commands:
 plugins:
   - bureau14/qdb-artifacts#master:
       download:
-        project_id: "quasardb"
+        project_id: "quasardb-build"
         output-dir: "qdb"
         extract: true
         clean: true
