@@ -96,7 +96,7 @@ def _get_go_path_on_agent(platform: Platform, go_version: str) -> dict[str, str]
     """
     go_slug = go_version.replace(".", "")
     go_env = {
-        # "GOPATH": f"$$QDB_CICD_AGENT_GO{go_slug}_PATH",
+        "GOPATH": f"$$QDB_CICD_AGENT_GO{go_slug}_PATH",
         "GOROOT": f"$$QDB_CICD_AGENT_GO{go_slug}_ROOT",
     }
 
@@ -108,13 +108,6 @@ def _get_go_path_on_agent(platform: Platform, go_version: str) -> dict[str, str]
     #         {
     #             "GOMODCACHE": f"/home/builder/{go_version}/pkg/mod",
     #             "GOCACHE": f"/home/builder/{go_version}/cache",
-    #         }
-    #     )
-    # elif platform.os == "macos":
-    #     go_env.update(
-    #         {
-    #             "GOMODCACHE": f"/Users/buildkite/go{go_version}/pkg/mod",
-    #             "GOCACHE": f"/Users/buildkite/go{go_version}/cache",
     #         }
     #     )
     return go_env
