@@ -19,8 +19,6 @@ commands:
   - bash scripts/teamcity/30.examples.sh
   - echo \"+++ Documentation examples\"
   - bash scripts/teamcity/40.documentation-examples.sh
-  - echo \"+++ Stop Services\"
-  - bash scripts/tests/setup/stop-services.sh
 
 plugins:
   - bureau14/qdb-artifacts#master:
