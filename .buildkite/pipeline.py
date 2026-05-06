@@ -99,17 +99,6 @@ def _get_go_path_on_agent(platform: Platform, go_version: str) -> dict[str, str]
         "GOPATH": f"$$QDB_CICD_AGENT_GO{go_slug}_PATH",
         "GOROOT": f"$$QDB_CICD_AGENT_GO{go_slug}_ROOT",
     }
-
-    # Go builds need a writable directory for module cache and build cache. Currently we install go in the home directory of different user (teamcity/root), but the buildkite agent runs as builder/buildkite
-    # we need to set GOMODCACHE and GOCACHE to point to a location writable by builder/buildkite.
-    # can be removed once we have a more standard Go installation on agents
-    # if platform.os == "linux":
-    #     go_env.update(
-    #         {
-    #             "GOMODCACHE": f"/home/builder/{go_version}/pkg/mod",
-    #             "GOCACHE": f"/home/builder/{go_version}/cache",
-    #         }
-    #     )
     return go_env
 
 
