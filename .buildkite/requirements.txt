@@ -1,0 +1,2 @@
+buildkite-sdk==0.8.0
+-r tools/requirements.txt
