@@ -2,3 +2,6 @@
 	path = scripts/tests/setup
 	url = https://github.com/bureau14/qdb-test-setup.git
 	branch = master
+[submodule ".buildkite/tools"]
+	path = .buildkite/tools
+	url = https://github.com/bureau14/qdb-cicd-tools.git

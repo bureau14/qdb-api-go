@@ -1,0 +1,34 @@
+agents:
+  queue: "default-{queue}"
+
+retry:
+  automatic:
+      limit: 3
+
+label: "{name} ({slug})"
+key: "build-{slug}"
+
+commands:
+  - echo \"+++ Start Services\"
+  - bash scripts/tests/setup/start-services.sh
+  - echo \"+++ Build\"
+  - bash scripts/teamcity/10.build.sh
+  - echo \"+++ Test\"
+  - bash scripts/teamcity/20.test.sh
+  - echo \"+++ Examples\"
+  - bash scripts/teamcity/30.examples.sh
+  - echo \"+++ Documentation examples\"
+  - bash scripts/teamcity/40.documentation-examples.sh
+
+plugins:
+  - bureau14/qdb-artifacts#master:
+      download:
+        clean: true
+        projects:
+        - project_id: "quasardb-build"
+          output-dir: "qdb"
+          extract: true
+          files:
+            - "*-c-api.tar.zst!*"
+            - "*-server.tar.zst!*"
+            - "*-utils.tar.zst!*"
