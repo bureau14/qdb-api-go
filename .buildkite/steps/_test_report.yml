@@ -1,0 +1,16 @@
+agents:
+  queue: "default-debian-amd64"
+
+label: ":bar_chart: Aggregate test report"
+key: "full-test-report"
+
+command: "true"
+
+allow_dependency_failure: true
+
+depends_on:
+
+plugins:
+  - bureau14/qdb-test-report#master:
+      title: "Full test report"
+      aggregate: {}

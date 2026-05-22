@@ -16,7 +16,7 @@ import dataclasses
 import sys
 from pathlib import Path
 
-from buildkite_sdk import Pipeline, GroupStep
+from buildkite_sdk import CommandStep, Pipeline, GroupStep
 
 sys.path.insert(0, str(Path(__file__).parent / "tools"))
 from qdb_pipeline import (
@@ -108,11 +108,12 @@ def generate_pipeline() -> Pipeline:
     git_ref = get_git_ref()
     group_steps = {}
 
+    variants = []
     for p in PLATFORMS:
         for bt in BUILD_TYPES:
             for go in GO_VERSIONS:
                 slug = p.slug(bt.lower(), f"go{go.replace('.', '')}")
-
+                variants.append(slug)
                 # We want to use Release QuasarDB binaries when building Go API (debug and release)
                 dependency_slug = p.slug("release")
 
@@ -147,6 +148,11 @@ def generate_pipeline() -> Pipeline:
     for group, steps in group_steps.items():
         group_step = GroupStep(group=group, steps=steps)
         pipeline.add_step(group_step)
+    
+    # collect test reports
+    step = load_template(STEPS_DIR / "_test_report.yml", **{"slug": "test-report"})
+    step["depends_on"] = [f"build-{variant}" for variant in variants]
+    pipeline.add_step(CommandStep.from_dict(step))
 
     return pipeline
 
