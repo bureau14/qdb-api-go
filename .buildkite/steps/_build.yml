@@ -32,3 +32,8 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
+  - bureau14/qdb-test-report#master:
+      title: "Test report {slug}"
+      job:
+        variant: {slug}
+        junit_input_path: "test-reports/*.xml"
