@@ -55,6 +55,8 @@ DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}
 CGO_CFLAGS=${CGO_CFLAGS:-}
 CGO_LDFLAGS=${CGO_LDFLAGS:-}
 
+# We need the output of `go test` to be in JUnit format for Buildkite's test reporting, but `go test` doesn't support that natively.
+# We use the go-junit-report tool to convert the output of `go test` into JUnit XML format.
 # Validate that go-junit-report is installed, if not install it
 if ! command -v go-junit-report > /dev/null 2>&1; then
     echo "go-junit-report not found, installing"
