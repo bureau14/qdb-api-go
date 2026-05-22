@@ -55,6 +55,20 @@ DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}
 CGO_CFLAGS=${CGO_CFLAGS:-}
 CGO_LDFLAGS=${CGO_LDFLAGS:-}
 
+# We need the output of `go test` to be in JUnit format for Buildkite's test reporting, but `go test` doesn't support that natively.
+# We use the go-junit-report tool to convert the output of `go test` into JUnit XML format.
+# Validate that go-junit-report is installed, if not install it
+if ! command -v go-junit-report > /dev/null 2>&1; then
+    echo "go-junit-report not found, installing"
+    ${GO} install github.com/jstemmer/go-junit-report/v2@latest
+else
+    echo "go-junit-report is already installed; skipping installation."
+fi
+export GO_JUNIT_REPORT="${GOPATH}/bin/go-junit-report"
+$GO_JUNIT_REPORT --version
+export TEST_REPORT_DIR="${BASE_DIR}/test-reports"
+mkdir -p "${TEST_REPORT_DIR}"
+
 ##
 # Add QuasarDB's library path to LD_LIBRARY_PATH since we dynamically
 # link libqdb_api.so/dylib
