@@ -211,8 +211,9 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 	//
 	// RIGHT (what we do here):
 	pinnableBuilders = append(pinnableBuilders, NewPinnableBuilderSingle(&t.idx[0], func() unsafe.Pointer {
-		// This code runs in Phase 2.5, AFTER t.idx[0] is pinned
-		out.timestamps = (*C.qdb_timespec_t)(unsafe.Pointer(&t.idx[0]))
+		// This code runs in Phase 2.5, AFTER t.idx[0] is pinned. Barrier-free
+		// store: out lives in C memory; t.idx[0] is pinned + KeepAlive'd.
+		setCPtr(unsafe.Pointer(&out.timestamps), unsafe.Pointer(&t.idx[0]))
 
 		return unsafe.Pointer(&t.idx[0])
 	}))
@@ -229,10 +230,11 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 	for i, column := range t.columnInfoByOffset {
 		elem := &colSlice[i]
 
-		// Allocate C string for column name
+		// Allocate C string for column name. Store barrier-free (elem is C
+		// memory) and release via releaseCPtr (no C pointer kept in a Go closure).
 		cName := qdbCopyString(h, column.ColumnName)
-		releases = append(releases, func() { qdbReleasePointer(h, unsafe.Pointer(cName)) })
-		elem.name = cName
+		releases = append(releases, releaseCPtr(h, unsafe.Pointer(cName)))
+		setCPtr(unsafe.Pointer(&elem.name), unsafe.Pointer(cName))
 		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
 
 		// Convert column data based on type:
@@ -246,15 +248,18 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		// WRONG (all builders would use the last elem):
 		//   Builder: func() { elem.data = ... }  // elem changes each iteration!
 		//
-		// RIGHT (each builder uses its own elem):
-		currentElem := elem     // Capture current iteration's pointer
-		localBuilder := builder // Capture current iteration's builder
+		// RIGHT (each builder uses its own elem): capture the element address as
+		// uintptr, not as a *C pointer -- the closure lives on the Go heap, and a
+		// captured C pointer would be scanned and rejected by the GC.
+		currentElemU := uintptr(unsafe.Pointer(elem)) // Capture current iteration's element addr
+		localBuilder := builder                       // Capture current iteration's builder
 
 		wrappedBuilder := NewPinnableBuilderMultiple(localBuilder.Objects, func() unsafe.Pointer {
 			// This executes in Phase 2.5 with captured variables
 			ptr := localBuilder.Builder()
-			// Store the pointer in the C structure
-			*(*unsafe.Pointer)(unsafe.Pointer(&currentElem.data[0])) = ptr
+			// Store the pointer in the C structure (barrier-free; C memory).
+			currentElem := (*C.qdb_exp_batch_push_column_t)(unsafe.Pointer(currentElemU)) //nolint:govet // stable C pointer held as uintptr
+			setCPtr(unsafe.Pointer(&currentElem.data[0]), ptr)
 
 			return ptr
 		})
@@ -262,8 +267,8 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		releases = append(releases, rel)
 	}
 
-	// Store the pointer to the first element.
-	out.columns = cols
+	// Store the pointer to the first element (barrier-free; out is C memory).
+	setCPtr(unsafe.Pointer(&out.columns), unsafe.Pointer(cols))
 
 	// Create a single release function that cleans up all allocations
 	releaseAll := func() {
@@ -301,21 +306,19 @@ func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_
 
 	var releases []func()
 
-	// Allocate C string for table name
+	// Allocate C string for table name. Store barrier-free (out is C memory) and
+	// release via releaseCPtr (no C pointer kept in a Go closure).
 	cTableName := qdbCopyString(h, t.TableName)
-	// Add table name release to releases
-	releases = append(releases, func() {
-		qdbReleasePointer(h, unsafe.Pointer(cTableName))
-	})
+	releases = append(releases, releaseCPtr(h, unsafe.Pointer(cTableName)))
 
-	out.name = cTableName
+	setCPtr(unsafe.Pointer(&out.name), unsafe.Pointer(cTableName))
 
 	// Zero-initialize the rest of the struct. This should already be the case,
 	// but just in case, we are very explicit about all the default values we
 	// use.
 	//
 	// Insert truncate -- not supported yet
-	out.truncate_ranges = nil
+	setCPtr(unsafe.Pointer(&out.truncate_ranges), nil)
 	out.truncate_range_count = 0
 
 	// Deduplication parameters
@@ -338,14 +341,15 @@ func (t *WriterTable) toNative(h HandleType, opts WriterOptions, out *C.qdb_exp_
 		dupSlice := unsafe.Slice(ptr, count)
 		for i := range opts.dropDuplicateColumns {
 			cDupCol := qdbCopyString(h, opts.dropDuplicateColumns[i])
-			releases = append(releases, func() { qdbReleasePointer(h, unsafe.Pointer(cDupCol)) })
-			dupSlice[i] = cDupCol
+			releases = append(releases, releaseCPtr(h, unsafe.Pointer(cDupCol)))
+			// dupSlice backs onto C memory; barrier-free store.
+			setCPtr(unsafe.Pointer(&dupSlice[i]), unsafe.Pointer(cDupCol))
 		}
 
-		out.where_duplicate = ptr
+		setCPtr(unsafe.Pointer(&out.where_duplicate), unsafe.Pointer(ptr))
 		out.where_duplicate_count = C.qdb_size_t(count)
 	} else {
-		out.where_duplicate = nil
+		setCPtr(unsafe.Pointer(&out.where_duplicate), nil)
 		out.where_duplicate_count = 0
 	}
 
