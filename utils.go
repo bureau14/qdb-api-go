@@ -417,6 +417,22 @@ func qdbAllocBuffer[T any](h HandleType, count int) *T {
 	return (*T)(ptr)
 }
 
+// qdbAllocBufferZeroed allocates `count` elements of T in C memory and zeroes
+// them. Use this (not qdbAllocBuffer) whenever the C API reads struct fields
+// that the caller does not explicitly set: qdbAllocBuffer returns uninitialized
+// memory, so unset fields would be garbage.
+//
+// Zeroing is done byte-wise through a []byte view rather than a struct
+// assignment. Assigning a zero struct value to a cgo struct with pointer-typed
+// fields would emit Go write barriers over the (uninitialized) destination, the
+// exact hazard setCPtr exists to avoid. Byte stores emit no barrier.
+func qdbAllocBufferZeroed[T any](h HandleType, count int) *T {
+	ptr := qdbAllocBuffer[T](h, count)
+	clear(unsafe.Slice((*byte)(unsafe.Pointer(ptr)), int(unsafe.Sizeof(*ptr))*count))
+
+	return ptr
+}
+
 // qdbAllocAndCopyBytes allocates a buffer via C.qdb_copy_alloc_buffer and copies the provided Go slice into it.
 // Returns an arbitrary unsafe.Pointer to C-managed memory. Caller must free via qdbReleasePointer.
 //
@@ -557,6 +573,40 @@ func qdbRelease[T any](h HandleType, ptr *T) {
 //	qdbReleasePointer(h, rawPtr) // release when finished
 func qdbReleasePointer(h HandleType, ptr unsafe.Pointer) {
 	C.qdb_release(h.handle, ptr)
+}
+
+// setCPtr stores a C pointer into a cgo pointer-typed field WITHOUT emitting a
+// Go write barrier. A normal assignment to such a field makes the compiler emit
+// a barrier that (a) reads the slot's prior bytes -- often uninitialized C
+// memory -- as a Go pointer, and (b) hands the GC the C address being stored.
+// Either aborts the runtime ("found bad pointer in Go heap" / "marked free
+// object") when a C address happens to overlap a Go heap arena (data-dependent;
+// seen on amd64 and aarch64). The barrier serves no purpose here: C pointers are
+// never moved or freed by the Go GC. The pinning + runtime.KeepAlive machinery
+// in Writer.Push keeps any referenced Go memory alive across the C call.
+//
+// `field` must be the address of the destination pointer field; `p` is the C
+// pointer (or nil) to store.
+func setCPtr(field, p unsafe.Pointer) {
+	*(*uintptr)(field) = uintptr(p)
+}
+
+// releaseCU frees a C pointer that is held as a uintptr. This is the single
+// place the (safe) uintptr -> unsafe.Pointer round-trip happens: it is valid
+// because C pointers are stable -- the Go GC never moves or frees them -- so the
+// uintptr cannot dangle. Callers hold C pointers as uintptr (not unsafe.Pointer)
+// so the GC neither scans nor rejects them.
+func releaseCU(h HandleType, u uintptr) {
+	qdbReleasePointer(h, unsafe.Pointer(u)) //nolint:govet // stable C pointer held as uintptr
+}
+
+// releaseCPtr returns a cleanup closure that frees the C pointer `p`, holding it
+// as a uintptr so the (Go-heap) closure keeps no C pointer for the GC to scan
+// and reject.
+func releaseCPtr(h HandleType, p unsafe.Pointer) func() {
+	u := uintptr(p)
+
+	return func() { releaseCU(h, u) }
 }
 
 // qdbCopyString allocates a C-style null-terminated copy of a Go string via QDB C API.
