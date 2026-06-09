@@ -396,15 +396,20 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	// the QuasarDB allocator so it is compatible with the C API.  Each table name must also be
 	// allocated using qdbCopyString and is immediately deferred for release.
 	tableCount := len(options.tables)
-	cTables := qdbAllocBuffer[C.qdb_bulk_reader_table_t](h, tableCount)
-	defer qdbRelease(h, cTables)
+	// Zeroed C memory: the table name is stored barrier-free via setCPtr, but
+	// `ranges` keeps a normal assignment (it is a Go pointer that the barrier
+	// must shade); zeroing makes that assignment safe (the barrier reads a nil
+	// prior value, not uninitialized garbage). Freed via releaseCPtr so no C
+	// pointer sits in a GC-scanned defer record.
+	cTables := qdbAllocBufferZeroed[C.qdb_bulk_reader_table_t](h, tableCount)
+	defer releaseCPtr(h, unsafe.Pointer(cTables))()
 	tblSlice := unsafe.Slice(cTables, tableCount)
 
 	for i, tbl := range options.tables {
 		name := qdbCopyString(h, tbl)
-		defer qdbRelease(h, name) //nolint:gocritic
+		defer releaseCPtr(h, unsafe.Pointer(name))() //nolint:gocritic
 
-		tblSlice[i].name = name
+		setCPtr(unsafe.Pointer(&tblSlice[i].name), unsafe.Pointer(name))
 		tblSlice[i].ranges = cRangePtr
 		tblSlice[i].range_count = cRangeCount
 	}
@@ -416,12 +421,13 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var cColumns **C.char
 	if columnCount > 0 {
 		ptr := qdbAllocBuffer[*C.char](h, columnCount)
-		defer qdbRelease(h, ptr)
+		defer releaseCPtr(h, unsafe.Pointer(ptr))()
 		colSlice := unsafe.Slice(ptr, columnCount)
 		for i, col := range options.columns {
 			cname := qdbCopyString(h, col)
-			defer qdbRelease(h, cname) //nolint:gocritic
-			colSlice[i] = cname
+			defer releaseCPtr(h, unsafe.Pointer(cname))() //nolint:gocritic
+			// colSlice backs onto C memory; barrier-free store.
+			setCPtr(unsafe.Pointer(&colSlice[i]), unsafe.Pointer(cname))
 		}
 		cColumns = ptr
 	} else {
