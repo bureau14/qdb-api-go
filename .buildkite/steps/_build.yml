@@ -6,7 +6,7 @@ retry:
       limit: 3
 
 label: "{name} ({slug})"
-key: "{slug}"
+key: "build-{slug}"
 
 commands:
   - echo \"+++ Start Services\"
