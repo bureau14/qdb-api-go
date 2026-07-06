@@ -119,7 +119,11 @@ def generate_pipeline() -> Pipeline:
 
                 tvars = {
                     "slug": slug,
-                    "queue": f"{p.queue_os}-{p.arch}",
+                    "queue": (
+                        f"{p.queue_os}-{p.arch}"
+                        if p.os == "macos"
+                        else f"siege-{p.queue_os}-{p.arch}"
+                    ),
                     "name": slug.replace("-", " ").title(),
                 }
 
