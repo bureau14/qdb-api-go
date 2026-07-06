@@ -1,5 +1,5 @@
 agents:
-  queue: "default-{queue}"
+  queue: "{queue}"
 
 retry:
   automatic:
