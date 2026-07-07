@@ -323,6 +323,43 @@ func TestWriterCanPushTables(t *testing.T) {
 	})
 }
 
+// TestWriterCanPushSymbolColumns pins the client-side data_type mapping for
+// symbol columns: the batch push carries string data and must declare it as
+// such (asWriterDataType); declaring TsColumnSymbol verbatim is rejected by
+// the server with qdb_e_invalid_argument. Data is verified through a full
+// write-read round-trip.
+func TestWriterCanPushSymbolColumns(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		handle := newTestHandle(rt)
+
+		WithGCAndHandle(rt, handle, "TestWriterCanPushSymbolColumns", func() {
+			tables := genPopulatedTablesOfType(rt, handle, TsColumnSymbol)
+
+			writer := NewWriterWithDefaultOptions()
+			for _, wt := range tables {
+				require.NoError(rt, writer.SetTable(wt))
+			}
+
+			require.NoError(rt, writer.Push(handle))
+
+			// Read back per table: a single bulk reader across tables whose
+			// symbol columns reference different symtables is rejected by
+			// the server with qdb_e_invalid_argument.
+			names := writerTableNames(tables)
+			for i := range tables {
+				opts := NewReaderOptions().WithTables(names[i : i+1])
+				reader, err := NewReader(handle, opts)
+				require.NoError(rt, err)
+
+				data, err := reader.FetchAll()
+				reader.Close()
+				require.NoError(rt, err)
+				assertWriterTablesEqualReaderChunks(rt, tables[i:i+1], names[i:i+1], data)
+			}
+		})
+	})
+}
+
 func TestWriterCanDeduplicate(t *testing.T) {
 	handle := newTestHandle(t)
 

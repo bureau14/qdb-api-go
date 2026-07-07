@@ -126,6 +126,18 @@ func (v TsColumnType) AsValueType() TsValueType {
 	panic(fmt.Sprintf("Unrecognized column type: %v", v))
 }
 
+// asWriterDataType returns the column type describing how batch push data is
+// stored client-side (qdb_exp_batch_push_column_t.data_type). Symbols travel
+// as strings -- the server resolves the symtable from the table schema -- so
+// TsColumnSymbol maps to TsColumnString; every other type maps to itself.
+func (v TsColumnType) asWriterDataType() TsColumnType {
+	if v == TsColumnSymbol {
+		return TsColumnString
+	}
+
+	return v
+}
+
 type tsColumn struct {
 	TsColumnInfo
 	parent TimeseriesEntry
