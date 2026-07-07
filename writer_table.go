@@ -235,7 +235,11 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		cName := qdbCopyString(h, column.ColumnName)
 		releases = append(releases, releaseCPtr(h, unsafe.Pointer(cName)))
 		setCPtr(unsafe.Pointer(&elem.name), unsafe.Pointer(cName))
-		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType)
+		// data_type is the CLIENT-side representation: symbol columns are
+		// pushed as string data (see asWriterDataType); passing
+		// TsColumnSymbol verbatim makes the server reject the push with
+		// qdb_e_invalid_argument.
+		elem.data_type = C.qdb_ts_column_type_t(column.ColumnType.asWriterDataType())
 
 		// Convert column data based on type:
 		// - Numeric types: Zero-copy with pinning (efficient but requires pinning)

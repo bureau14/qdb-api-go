@@ -442,6 +442,19 @@ func genWriterDataString(t *rapid.T, rowCount int) *ColumnDataString {
 	return &cd
 }
 
+// genWriterDataSymbol generates symbol column data. Unlike string columns,
+// symbol values become symtable entries and the server rejects arbitrary
+// bytes (e.g. NUL), so values are restricted to alphanumeric strings.
+func genWriterDataSymbol(t *rapid.T, rowCount int) *ColumnDataString {
+	values := make([]string, rowCount)
+	for i := range values {
+		values[i] = rapid.StringMatching(`[a-zA-Z0-9]{1,16}`).Draw(t, "symbol")
+	}
+	cd := NewColumnDataString(values)
+
+	return &cd
+}
+
 func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) ColumnData { //nolint:ireturn // Justified: Runtime type selection
 	switch ctype {
 	case TsColumnInt64:
@@ -461,7 +474,7 @@ func genWriterData(t *rapid.T, rowCount int, ctype TsColumnType) ColumnData { //
 		return genWriterDataString(t, rowCount)
 	case TsColumnSymbol:
 
-		return genWriterDataString(t, rowCount) // Symbols are handled same as strings for data generation
+		return genWriterDataSymbol(t, rowCount) // Symbol values must be valid symtable entries
 	case TsColumnUninitialized:
 		panic(fmt.Sprintf("cannot generate data for uninitialized column type: %v", ctype))
 	}
@@ -491,10 +504,16 @@ func genWriterDatas(t *rapid.T, rowCount int, columns []WriterColumn) []ColumnDa
 // Performance trade-offs:
 //   - Table creation involves network I/O; keep tableCount small for speed.
 func genPopulatedTables(t *rapid.T, handle HandleType) []WriterTable {
+	return genPopulatedTablesOfType(t, handle, TsColumnInt64)
+}
+
+// genPopulatedTablesOfType is genPopulatedTables with all value columns
+// sharing ctype (e.g. TsColumnSymbol to exercise symbol pushes).
+func genPopulatedTablesOfType(t *rapid.T, handle HandleType, ctype TsColumnType) []WriterTable {
 	tableCount := rapid.IntRange(1, 4).Draw(t, "tableCount")
 	rowCount := rapid.IntRange(1, 64).Draw(t, "rowCount")
 
-	columns := genWriterColumnsOfType(t, TsColumnInt64)
+	columns := genWriterColumnsOfType(t, ctype)
 	idx := genIndexAscending(t, rowCount)
 	datas := genWriterDatas(t, rowCount, columns)
 
