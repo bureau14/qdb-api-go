@@ -44,9 +44,3 @@ func (t *TsBulk) GetInt64() (int64, error) {
 	return int64(content), wrapError(err, "ts_bulk_get_int64")
 }
 
-// RowSetInt64 : Set int64 at specified index in current row
-func (t *TsBatch) RowSetInt64(index, value int64) error {
-	valueIndex := C.qdb_size_t(index)
-
-	return wrapError(C.qdb_ts_batch_row_set_int64(t.table, valueIndex, C.qdb_int_t(value)), "ts_batch_row_set_int64", "index", valueIndex, "value", value)
-}

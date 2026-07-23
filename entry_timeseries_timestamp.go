@@ -44,10 +44,3 @@ func (t *TsBulk) GetTimestamp() (time.Time, error) {
 	return TimespecToStructG(content), wrapError(err, "ts_bulk_get_timestamp")
 }
 
-// RowSetTimestamp : Add a timestamp to current row
-func (t *TsBatch) RowSetTimestamp(index int64, value time.Time) error {
-	valueIndex := C.qdb_size_t(index)
-	cValue := toQdbTimespec(value)
-
-	return wrapError(C.qdb_ts_batch_row_set_timestamp(t.table, valueIndex, &cValue), "ts_batch_row_set_timestamp", "index", valueIndex)
-}
