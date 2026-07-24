@@ -1171,35 +1171,6 @@ func (h HandleType) Query(query string) *Query {
 	return &Query{h, query}
 }
 
-// TsBatch creates an entry accessor for batch timeseries operations.
-//
-// Args:
-//
-//	cols: Column information for batch operations
-//
-// Returns:
-//
-//	*TsBatch: Batch operations accessor
-//	error: Creation error if any
-//
-// Example:
-//
-//	batch, err := h.TsBatch(columns...)
-//	if err != nil {
-//	    return nil, err
-//	}
-//	defer batch.Release()
-func (h HandleType) TsBatch(cols ...TsBatchColumnInfo) (*TsBatch, error) {
-	columns := tsBatchColumnInfoArrayToC(cols...)
-	defer releaseTsBatchColumnInfoArray(columns, len(cols))
-	columnsCount := C.qdb_size_t(len(cols))
-	batch := &TsBatch{}
-	batch.h = h
-	err := C.qdb_ts_batch_table_init(h.handle, columns, columnsCount, &batch.table)
-
-	return batch, wrapError(err, "ts_batch_init", "columns", len(cols))
-}
-
 // GetLastError retrieves last operation error.
 //
 // Args:

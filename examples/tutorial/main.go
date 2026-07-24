@@ -110,28 +110,37 @@ func createTable(handle *qdb.HandleType) error {
 
 func batchInsert(handle *qdb.HandleType) error {
 	// batch-insert-start
-	batchColumnInfo := []qdb.TsBatchColumnInfo{
-		qdb.NewTsBatchColumnInfo("stocks", "open", 2),
-		qdb.NewTsBatchColumnInfo("stocks", "close", 2),
-		qdb.NewTsBatchColumnInfo("stocks", "volume", 2),
+	columns := []qdb.WriterColumn{
+		{ColumnName: "open", ColumnType: qdb.TsColumnDouble},
+		{ColumnName: "close", ColumnType: qdb.TsColumnDouble},
+		{ColumnName: "volume", ColumnType: qdb.TsColumnInt64},
 	}
 
-	batch, err := handle.TsBatch(batchColumnInfo...)
+	table, err := qdb.NewWriterTable("stocks", columns)
 	if err != nil {
 		return err
 	}
 
-	batch.StartRow(time.Unix(1548979200, 0))
-	batch.RowSetDouble(0, 3.40)
-	batch.RowSetDouble(1, 3.50)
-	batch.RowSetInt64(2, 10000)
+	table.SetIndex([]time.Time{
+		time.Unix(1548979200, 0),
+		time.Unix(1549065600, 0),
+	})
 
-	batch.StartRow(time.Unix(1549065600, 0))
-	batch.RowSetDouble(0, 3.50)
-	batch.RowSetDouble(1, 3.55)
-	batch.RowSetInt64(2, 7500)
+	open := qdb.NewColumnDataDouble([]float64{3.40, 3.50})
+	close := qdb.NewColumnDataDouble([]float64{3.50, 3.55})
+	volume := qdb.NewColumnDataInt64([]int64{10000, 7500})
+	err = table.SetDatas([]qdb.ColumnData{&open, &close, &volume})
+	if err != nil {
+		return err
+	}
 
-	err = batch.Push()
+	writer := qdb.NewWriterWithDefaultOptions()
+	err = writer.SetTable(table)
+	if err != nil {
+		return err
+	}
+
+	err = writer.Push(*handle)
 	// batch-insert-end
 
 	return err

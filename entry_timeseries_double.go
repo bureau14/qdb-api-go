@@ -44,9 +44,3 @@ func (t *TsBulk) GetDouble() (float64, error) {
 	return float64(content), makeErrorOrNil(err)
 }
 
-// RowSetDouble : Set double at specified index in current row
-func (t *TsBatch) RowSetDouble(index int64, value float64) error {
-	valueIndex := C.qdb_size_t(index)
-
-	return wrapError(C.qdb_ts_batch_row_set_double(t.table, valueIndex, C.double(value)), "ts_batch_row_set_double", "index", valueIndex, "value", value)
-}
