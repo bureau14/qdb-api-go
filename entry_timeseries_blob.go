@@ -49,26 +49,3 @@ func (t *TsBulk) GetBlob() ([]byte, error) {
 	return output, wrapError(err, "ts_bulk_get_blob")
 }
 
-// RowSetBlob : Set blob at specified index in current row
-func (t *TsBatch) RowSetBlob(index int64, content []byte) error {
-	valueIndex := C.qdb_size_t(index)
-	contentSize := C.qdb_size_t(len(content))
-	contentPtr := unsafe.Pointer(nil)
-	if contentSize != 0 {
-		contentPtr = unsafe.Pointer(&content[0])
-	}
-
-	return wrapError(C.qdb_ts_batch_row_set_blob(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_blob", "index", valueIndex, "content_size", len(content))
-}
-
-// RowSetBlobNoCopy : Set blob at specified index in current row without copying it
-func (t *TsBatch) RowSetBlobNoCopy(index int64, content []byte) error {
-	valueIndex := C.qdb_size_t(index)
-	contentSize := C.qdb_size_t(len(content))
-	contentPtr := unsafe.Pointer(nil)
-	if contentSize != 0 {
-		contentPtr = unsafe.Pointer(&content[0])
-	}
-
-	return wrapError(C.qdb_ts_batch_row_set_blob_no_copy(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_blob_no_copy", "index", valueIndex, "content_size", len(content))
-}

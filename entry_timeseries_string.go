@@ -48,22 +48,3 @@ func (t *TsBulk) GetString() (string, error) {
 	return C.GoStringN(content, C.int(contentLength)), wrapError(err, "ts_bulk_get_string")
 }
 
-// RowSetString : Set string at specified index in current row
-func (t *TsBatch) RowSetString(index int64, content string) error {
-	valueIndex := C.qdb_size_t(index)
-	contentSize := C.qdb_size_t(len(content))
-	contentPtr := convertToCharStar(content)
-	defer releaseCharStar(contentPtr)
-
-	return wrapError(C.qdb_ts_batch_row_set_string(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_string", "index", valueIndex, "value_size", len(content))
-}
-
-// RowSetStringNoCopy : Set string at specified index in current row without copying it
-func (t *TsBatch) RowSetStringNoCopy(index int64, content string) error {
-	valueIndex := C.qdb_size_t(index)
-	contentSize := C.qdb_size_t(len(content))
-	contentPtr := convertToCharStar(content)
-	defer releaseCharStar(contentPtr)
-
-	return wrapError(C.qdb_ts_batch_row_set_string_no_copy(t.table, valueIndex, contentPtr, contentSize), "ts_batch_row_set_string_no_copy", "index", valueIndex, "value_size", len(content))
-}
