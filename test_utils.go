@@ -1228,28 +1228,45 @@ func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) T
 		symbolPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
 	}
 
-	batchColumnInfo := []TsBatchColumnInfo{
-		NewTsBatchColumnInfo(alias, blobCol, count),
-		NewTsBatchColumnInfo(alias, doubleCol, count),
-		NewTsBatchColumnInfo(alias, int64Col, count),
-		NewTsBatchColumnInfo(alias, stringCol, count),
-		NewTsBatchColumnInfo(alias, timestampCol, count),
-		NewTsBatchColumnInfo(alias, symbolCol, count),
+	writerColumns := []WriterColumn{
+		{ColumnName: blobCol, ColumnType: TsColumnBlob},
+		{ColumnName: doubleCol, ColumnType: TsColumnDouble},
+		{ColumnName: int64Col, ColumnType: TsColumnInt64},
+		{ColumnName: stringCol, ColumnType: TsColumnString},
+		{ColumnName: timestampCol, ColumnType: TsColumnTimestamp},
+		{ColumnName: symbolCol, ColumnType: TsColumnSymbol},
 	}
-	batch, err := handle.TsBatch(batchColumnInfo...)
+	writerTable, err := NewWriterTable(alias, writerColumns)
 	require.NoError(t, err)
-	defer batch.Release()
+	writerTable.SetIndex(timestamps)
+
+	blobValues := make([][]byte, count)
+	doubleValues := make([]float64, count)
+	int64Values := make([]int64, count)
+	stringValues := make([]string, count)
+	timestampValues := make([]time.Time, count)
+	symbolValues := make([]string, count)
 
 	for i := range count {
-		require.NoError(t, batch.StartRow(timestamps[i]))
-		require.NoError(t, batch.RowSetBlob(0, blobPoints[i].Content()))
-		require.NoError(t, batch.RowSetDouble(1, doublePoints[i].Content()))
-		require.NoError(t, batch.RowSetInt64(2, int64Points[i].Content()))
-		require.NoError(t, batch.RowSetString(3, stringPoints[i].Content()))
-		require.NoError(t, batch.RowSetTimestamp(4, timestampPoints[i].Content()))
-		require.NoError(t, batch.RowSetString(5, symbolPoints[i].Content()))
+		blobValues[i] = blobPoints[i].Content()
+		doubleValues[i] = doublePoints[i].Content()
+		int64Values[i] = int64Points[i].Content()
+		stringValues[i] = stringPoints[i].Content()
+		timestampValues[i] = timestampPoints[i].Content()
+		symbolValues[i] = symbolPoints[i].Content()
 	}
-	require.NoError(t, batch.Push())
+
+	blobData := NewColumnDataBlob(blobValues)
+	doubleData := NewColumnDataDouble(doubleValues)
+	int64Data := NewColumnDataInt64(int64Values)
+	stringData := NewColumnDataString(stringValues)
+	timestampData := NewColumnDataTimestamp(timestampValues)
+	symbolData := NewColumnDataString(symbolValues)
+	require.NoError(t, writerTable.SetDatas([]ColumnData{&blobData, &doubleData, &int64Data, &stringData, &timestampData, &symbolData}))
+
+	writer := NewWriterWithDefaultOptions()
+	require.NoError(t, writer.SetTable(writerTable))
+	require.NoError(t, writer.Push(handle))
 
 	t.Cleanup(func() { _ = ts.Remove() })
 
