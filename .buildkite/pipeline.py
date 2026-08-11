@@ -130,7 +130,7 @@ def generate_pipeline() -> Pipeline:
                 artifact_vars_per_step = {
                     "download": {
                         "variant": dependency_slug,
-                        "git-ref": git_ref,
+                        "git_ref": git_ref,
                     },
                 }
 
