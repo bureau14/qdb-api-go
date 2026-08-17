@@ -36,6 +36,8 @@ curl -s -L http://download.quasar.ai/quasardb/nightly/utils/qdb-3.15.0.dev0-linu
 1. `go get -d github.com/bureau14/qdb-api-go`
 1. Extract the downloaded C API into `$GOPATH/src/github.com/bureau14/qdb-api-go/qdb`
 
+On Linux the API links `qdb/lib/libqdb_api.a` statically (see `library_link.go`), so the resulting binaries need neither `libqdb_api.so` nor `LD_LIBRARY_PATH` at runtime. This requires a C API package that ships `lib/libqdb_api.a` (nightly builds and releases after 3.14.2) and GCC 13 or newer for its libstdc++. The other platforms link the shared library from `qdb/lib` (or `qdb/bin` on Windows).
+
 ### Test instructions:
 1.  `export QDB_SERVER_PATH=/path/to/qdb-server/bin` # a path to a dir containing qdbd, qdb_cluster_keygen and qdb_user_add executables
 1. `cd $GOPATH/src/github.com/bureau14/qdb-api-go`
