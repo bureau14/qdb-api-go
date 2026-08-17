@@ -70,11 +70,16 @@ export TEST_REPORT_DIR="${BASE_DIR}/test-reports"
 mkdir -p "${TEST_REPORT_DIR}"
 
 ##
-# Add QuasarDB's library path to LD_LIBRARY_PATH since we dynamically
-# link libqdb_api.so/dylib
+# Add QuasarDB's library path to LD_LIBRARY_PATH where we dynamically
+# link libqdb_api.so/dylib. Linux links the static archive (library_link.go)
+# and needs no loader path.
 
 case $(uname) in
-    Linux | FreeBSD )
+    Linux )
+        echo "Linux links libqdb_api statically; LD_LIBRARY_PATH left untouched"
+        ;;
+
+    FreeBSD )
         export LD_LIBRARY_PATH="${QDB_LIB_DIR}:${LD_LIBRARY_PATH}"
         echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
         ;;

@@ -65,8 +65,18 @@ GLOBAL_ENV: dict[str, str] = {
 
 STEP_ENV: dict[str, dict[str, str]] = {}
 
+# Linux builds run inside bureau14/builder:rhel7, whose default /usr/bin/gcc
+# is 7.3.1; the static libqdb_api.a linked on Linux (library_link.go) is
+# built with gcc15 and needs its libstdc++, so pin CC/CXX to the agent's
+# gcc15.  The doubled $$ escapes Buildkite's upload-time interpolation so
+# the literal $QDB_CICD_AGENT_GCC15_* reaches the agent shell, which
+# substitutes the concrete path; the docker plugin propagates the resolved
+# CC/CXX into the container.  Same idiom as _get_go_path_on_agent().
 OS_ENV: dict[str, dict[str, str]] = {
-    "linux": {},
+    "linux": {
+        "CC": "$$QDB_CICD_AGENT_GCC15_CC",
+        "CXX": "$$QDB_CICD_AGENT_GCC15_CXX",
+    },
     "freebsd": {},
     "macos": {},
     "windows": {},
