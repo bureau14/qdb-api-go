@@ -10,11 +10,6 @@ package qdb
 	#include <qdb/tag.h>
 	#include <qdb/ts.h>
 	#include <qdb/prefix.h>
-
-	#cgo noescape qdb_option_set_connection_per_address_soft_limit
-	#cgo nocallback qdb_option_set_connection_per_address_soft_limit
-	#cgo noescape qdb_option_get_connection_per_address_soft_limit
-	#cgo nocallback qdb_option_get_connection_per_address_soft_limit
 */
 import "C"
 
