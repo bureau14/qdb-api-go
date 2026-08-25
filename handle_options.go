@@ -49,7 +49,7 @@ type HandleOptions struct {
 //   - Compression: CompBalanced
 //   - Encryption: EncryptNone
 //   - Timeout: 120 seconds
-//   - Connections per address: library default (8)
+//   - Connections per address: C API default
 //
 // Example:
 //
@@ -174,8 +174,8 @@ func (o *HandleOptions) WithClientMaxInBufSize(size uint) *HandleOptions {
 }
 
 // WithConnectionsPerAddress sets the soft limit on connections per IP address.
-// The C API default is 8, split evenly between synchronous and asynchronous
-// pools; valid values are in [2, 100000]. A value of 0 keeps the library default.
+// The limit is split evenly between synchronous and asynchronous pools; valid
+// values are in [2, 100000]. A value of 0 keeps the C API default.
 // The option is applied before connecting, as required by the C API.
 func (o *HandleOptions) WithConnectionsPerAddress(n int) *HandleOptions {
 	// Create a copy to maintain immutability

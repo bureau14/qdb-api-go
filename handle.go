@@ -815,7 +815,7 @@ func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
 //
 // Example:
 //
-//	count, err := h.GetConnectionsPerAddress() // -> 8
+//	count, err := h.GetConnectionsPerAddress() // -> 16
 //	if err != nil {
 //	    return 0, err
 //	}
@@ -837,8 +837,9 @@ func (h HandleType) GetConnectionsPerAddress() (uint, error) {
 //	error: Configuration error if any
 //
 // Note: This is an advanced network setting. The limit is soft and may be
-// temporarily exceeded. The default is 8, split evenly between the synchronous
-// and asynchronous connection pools. MUST be called before Connect: the limit
+// temporarily exceeded. The default is set by the C API and depends on its
+// version; the limit is split evenly between the synchronous and asynchronous
+// connection pools. MUST be called before Connect: the limit
 // is captured when the pool for an address is first created, so addresses that
 // are already connected keep their previous limit. Prefer configuring this via
 // HandleOptions.WithConnectionsPerAddress.

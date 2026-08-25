@@ -172,9 +172,12 @@ func TestHandleGetConnectionsPerAddressDefault(t *testing.T) {
 		_ = h.Close()
 	}()
 
+	// The default is set by the C API and differs between versions; only
+	// require that it falls within the accepted range.
 	v, err := h.GetConnectionsPerAddress()
 	require.NoError(t, err)
-	assert.Equal(t, uint(8), v)
+	assert.GreaterOrEqual(t, v, uint(2))
+	assert.LessOrEqual(t, v, uint(100000))
 }
 
 func TestHandleSetConnectionsPerAddressRoundTrip(t *testing.T) {
@@ -184,16 +187,16 @@ func TestHandleSetConnectionsPerAddressRoundTrip(t *testing.T) {
 		_ = h.Close()
 	}()
 
-	require.NoError(t, h.SetConnectionsPerAddress(16))
+	require.NoError(t, h.SetConnectionsPerAddress(32))
 	v, err := h.GetConnectionsPerAddress()
 	require.NoError(t, err)
-	assert.Equal(t, uint(16), v)
+	assert.Equal(t, uint(32), v)
 
 	// The limit must survive connecting, as it is applied when pools are created
 	require.NoError(t, h.Connect(insecureURI))
 	v, err = h.GetConnectionsPerAddress()
 	require.NoError(t, err)
-	assert.Equal(t, uint(16), v)
+	assert.Equal(t, uint(32), v)
 }
 
 func TestHandleSetConnectionsPerAddressInvalid(t *testing.T) {
