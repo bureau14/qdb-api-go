@@ -190,6 +190,14 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 		}
 	}
 
+	// Set connections per address if specified (must be before Connect)
+	if options.connectionsPerAddress > 0 {
+		setupErr = h.SetConnectionsPerAddress(uint(options.connectionsPerAddress))
+		if setupErr != nil {
+			return HandleType{}, fmt.Errorf("failed to set connections per address: %w", setupErr)
+		}
+	}
+
 	// Handle cluster public key
 	if options.clusterPublicKeyFile != "" {
 		clusterKey, err := ClusterKeyFromFile(options.clusterPublicKeyFile)
