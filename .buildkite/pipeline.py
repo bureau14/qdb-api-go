@@ -54,8 +54,8 @@ PLATFORMS: list[Platform] = [
 BUILD_TYPES = ["Release"]
 
 GO_VERSIONS = [
-    "1.23",
-    "1.24",
+    "1.26",
+    "1.27",
 ]
 
 # Environment variable layering: global → step → os → os+step → platform compilers.
