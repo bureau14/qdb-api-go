@@ -27,11 +27,12 @@ type HandleOptions struct {
 	userSecret       string
 
 	// Network & Performance
-	encryption           Encryption
-	compression          Compression
-	clientMaxParallelism int
-	clientMaxInBufSize   uint
-	timeout              time.Duration
+	encryption            Encryption
+	compression           Compression
+	clientMaxParallelism  int
+	clientMaxInBufSize    uint
+	connectionsPerAddress int
+	timeout               time.Duration
 }
 
 // NewHandleOptions creates a new HandleOptions builder.
@@ -48,6 +49,7 @@ type HandleOptions struct {
 //   - Compression: CompBalanced
 //   - Encryption: EncryptNone
 //   - Timeout: 120 seconds
+//   - Connections per address: library default (8)
 //
 // Example:
 //
@@ -70,7 +72,8 @@ type HandleOptions struct {
 //	    WithClusterUri("qdb://cluster:2836").
 //	    WithCompression(qdb.CompNone).
 //	    WithClientMaxParallelism(16).
-//	    WithClientMaxInBufSize(64 * 1024 * 1024)
+//	    WithClientMaxInBufSize(64 * 1024 * 1024).
+//	    WithConnectionsPerAddress(16)
 //	handle, err := qdb.NewHandleFromOptions(opts)
 func NewHandleOptions() *HandleOptions {
 	return &HandleOptions{
@@ -170,6 +173,18 @@ func (o *HandleOptions) WithClientMaxInBufSize(size uint) *HandleOptions {
 	return &opts
 }
 
+// WithConnectionsPerAddress sets the soft limit on connections per IP address.
+// The C API default is 8, split evenly between synchronous and asynchronous
+// pools; valid values are in [2, 100000]. A value of 0 keeps the library default.
+// The option is applied before connecting, as required by the C API.
+func (o *HandleOptions) WithConnectionsPerAddress(n int) *HandleOptions {
+	// Create a copy to maintain immutability
+	opts := *o
+	opts.connectionsPerAddress = n
+
+	return &opts
+}
+
 // WithTimeout sets the timeout option.
 func (o *HandleOptions) WithTimeout(timeout time.Duration) *HandleOptions {
 	// Create a copy to maintain immutability
@@ -228,6 +243,11 @@ func (o *HandleOptions) GetClientMaxParallelism() int {
 // GetClientMaxInBufSize returns the current client max input buffer size value.
 func (o *HandleOptions) GetClientMaxInBufSize() uint {
 	return o.clientMaxInBufSize
+}
+
+// GetConnectionsPerAddress returns the current connections per address value.
+func (o *HandleOptions) GetConnectionsPerAddress() int {
+	return o.connectionsPerAddress
 }
 
 // GetTimeout returns the current timeout value.
@@ -303,6 +323,17 @@ func (o *HandleOptions) validate() error {
 		return fmt.Errorf("client max parallelism %d exceeds maximum allowed value %d", o.clientMaxParallelism, maxParallelism)
 	}
 
+	// Validate connections per address: 0 means library default, otherwise the C API range
+	if o.connectionsPerAddress < 0 {
+		return errors.New("connections per address cannot be negative")
+	}
+
+	const minConnectionsPerAddress = 2
+	const maxConnectionsPerAddress = 100000
+	if o.connectionsPerAddress != 0 && (o.connectionsPerAddress < minConnectionsPerAddress || o.connectionsPerAddress > maxConnectionsPerAddress) {
+		return fmt.Errorf("connections per address %d must be between %d and %d", o.connectionsPerAddress, minConnectionsPerAddress, maxConnectionsPerAddress)
+	}
+
 	// Validate timeout
 	if o.timeout < 0 {
 		return errors.New("timeout cannot be negative")
@@ -332,6 +363,7 @@ type HandleOptionsProvider interface {
 	GetCompression() Compression
 	GetClientMaxParallelism() int
 	GetClientMaxInBufSize() uint
+	GetConnectionsPerAddress() int
 	GetTimeout() time.Duration
 }
 
@@ -365,10 +397,11 @@ func FromHandleOptionsProvider(provider HandleOptionsProvider) *HandleOptions {
 		userSecurityFile:     provider.GetUserSecurityFile(),
 		userName:             provider.GetUserName(),
 		// userSecret is intentionally not copied for security
-		encryption:           provider.GetEncryption(),
-		compression:          provider.GetCompression(),
-		clientMaxParallelism: provider.GetClientMaxParallelism(),
-		clientMaxInBufSize:   provider.GetClientMaxInBufSize(),
-		timeout:              provider.GetTimeout(),
+		encryption:            provider.GetEncryption(),
+		compression:           provider.GetCompression(),
+		clientMaxParallelism:  provider.GetClientMaxParallelism(),
+		clientMaxInBufSize:    provider.GetClientMaxInBufSize(),
+		connectionsPerAddress: provider.GetConnectionsPerAddress(),
+		timeout:               provider.GetTimeout(),
 	}
 }
