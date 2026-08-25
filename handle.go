@@ -10,6 +10,11 @@ package qdb
 	#include <qdb/tag.h>
 	#include <qdb/ts.h>
 	#include <qdb/prefix.h>
+
+	#cgo noescape qdb_option_set_connection_per_address_soft_limit
+	#cgo nocallback qdb_option_set_connection_per_address_soft_limit
+	#cgo noescape qdb_option_get_connection_per_address_soft_limit
+	#cgo nocallback qdb_option_get_connection_per_address_soft_limit
 */
 import "C"
 
@@ -790,6 +795,59 @@ func (h HandleType) GetClientMaxParallelism() (uint, error) {
 //	}
 func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
 	err := C.qdb_option_set_client_max_parallelism(h.handle, C.size_t(threadCount))
+
+	return makeErrorOrNil(err)
+}
+
+// GetConnectionsPerAddress gets the soft limit on connections per IP address.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	uint: Current connections per address soft limit
+//	error: Retrieval error if any
+//
+// Example:
+//
+//	count, err := h.GetConnectionsPerAddress() // -> 8
+//	if err != nil {
+//	    return 0, err
+//	}
+func (h HandleType) GetConnectionsPerAddress() (uint, error) {
+	var maxCount C.qdb_size_t
+	err := C.qdb_option_get_connection_per_address_soft_limit(h.handle, &maxCount)
+
+	return uint(maxCount), makeErrorOrNil(err)
+}
+
+// SetConnectionsPerAddress sets the soft limit on connections per IP address.
+//
+// Args:
+//
+//	maxCount: Maximum number of connections per address, in [2, 100000]
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: This is an advanced network setting. The limit is soft and may be
+// temporarily exceeded. The default is 8, split evenly between the synchronous
+// and asynchronous connection pools. MUST be called before Connect: the limit
+// is captured when the pool for an address is first created, so addresses that
+// are already connected keep their previous limit. Prefer configuring this via
+// HandleOptions.WithConnectionsPerAddress.
+//
+// Example:
+//
+//	err := h.SetConnectionsPerAddress(16)
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) SetConnectionsPerAddress(maxCount uint) error {
+	err := C.qdb_option_set_connection_per_address_soft_limit(h.handle, C.qdb_size_t(maxCount))
 
 	return makeErrorOrNil(err)
 }
