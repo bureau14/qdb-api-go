@@ -5,7 +5,33 @@
 package qdb
 
 /*
+	#cgo noescape qdb_go_success
+	#cgo nocallback qdb_go_success
+	#cgo noescape qdb_go_error_origin
+	#cgo nocallback qdb_go_error_origin
+	#cgo noescape qdb_go_error_severity
+	#cgo nocallback qdb_go_error_severity
+
 	#include <qdb/error.h>
+
+	// cgo cannot call function-like macros; expose the ones from qdb/error.h
+	// through static inline wrappers so the C API stays the authority on
+	// what a code's bits mean.
+
+	static inline int qdb_go_success(qdb_error_t e)
+	{
+		return QDB_SUCCESS(e);
+	}
+
+	static inline qdb_error_origin_t qdb_go_error_origin(qdb_error_t e)
+	{
+		return (qdb_error_origin_t)QDB_ERROR_ORIGIN(e);
+	}
+
+	static inline qdb_error_severity_t qdb_go_error_severity(qdb_error_t e)
+	{
+		return (qdb_error_severity_t)QDB_ERROR_SEVERITY(e);
+	}
 */
 import "C"
 
@@ -26,7 +52,7 @@ import (
 //	}
 //
 //	if IsFatal(err) {
-//	    // Caller's fault: report, do not count towards a circuit breaker
+//	    // Caller's fault: report the error, do not retry
 //	}
 //
 // 2. Use errors.Is() for specific error checks:
@@ -60,8 +86,9 @@ type ErrorType C.qdb_error_t
 //     ErrOutOfBounds, ErrInvalidQuery, ErrAliasNotFound,
 //     ErrAliasAlreadyExists, ErrInvalidArgument
 //
-// Informational (status signals, not failures; C's QDB_SUCCESS treats them
-// as success, Go still returns them so callers can errors.Is() on them):
+// Informational (status signals, not failures, as defined by the C API's
+// QDB_SUCCESS macro; Go still returns them so callers can errors.Is() on
+// them):
 //   - Success, Created, ErrIteratorEnd, ErrElementNotFound,
 //     ErrElementAlreadyExists, ErrTagAlreadySet, ErrTagNotSet,
 //     ErrUnmatchedContent
@@ -150,7 +177,7 @@ const (
 
 // ErrorSeverity: how the C API rates the code, wraps C.qdb_error_severity_t.
 // Advisory only: e.g. ErrConnectionRefused is "unrecoverable" here yet
-// retryable for a circuit breaker.
+// retryable in practice.
 type ErrorSeverity C.qdb_error_severity_t
 
 const (
@@ -158,12 +185,6 @@ const (
 	ErrorSeverityError         ErrorSeverity = C.qdb_e_severity_error
 	ErrorSeverityWarning       ErrorSeverity = C.qdb_e_severity_warning
 	ErrorSeverityInfo          ErrorSeverity = C.qdb_e_severity_info
-)
-
-// Bit masks mirroring QDB_ERROR_ORIGIN / QDB_ERROR_SEVERITY in qdb/error.h
-const (
-	errorOriginMask   uint32 = 0xF0000000
-	errorSeverityMask uint32 = 0x0F000000
 )
 
 // ErrorClass: what a failure means for the caller.
@@ -174,12 +195,11 @@ const (
 	// Nothing failed; there is nothing to retry.
 	ErrorClassNone ErrorClass = iota
 
-	// ErrorClassRetryable: transient, or not yet classified. Safe to retry;
-	// counts towards a circuit breaker.
+	// ErrorClassRetryable: transient, or not yet classified. Safe to retry.
 	ErrorClassRetryable
 
 	// ErrorClassFatal: the caller's fault. Retrying the identical call
-	// cannot succeed; must not count towards a circuit breaker.
+	// cannot succeed.
 	ErrorClassFatal
 )
 
@@ -224,32 +244,32 @@ func (e ErrorType) Is(target error) bool {
 	return false
 }
 
-// Origin extracts the origin bits, mirroring QDB_ERROR_ORIGIN. Advisory only.
+// Origin extracts the origin via QDB_ERROR_ORIGIN. Advisory only.
 func (e ErrorType) Origin() ErrorOrigin {
-	return ErrorOrigin(uint32(e) & errorOriginMask)
+	return ErrorOrigin(C.qdb_go_error_origin(C.qdb_error_t(e)))
 }
 
-// Severity extracts the severity bits, mirroring QDB_ERROR_SEVERITY. Advisory only.
+// Severity extracts the severity via QDB_ERROR_SEVERITY. Advisory only.
 func (e ErrorType) Severity() ErrorSeverity {
-	return ErrorSeverity(uint32(e) & errorSeverityMask)
+	return ErrorSeverity(C.qdb_go_error_severity(C.qdb_error_t(e)))
 }
 
 // ErrorClass is the single source of truth for the retry policy.
 //
-// The policy is deliberately open: only codes we have positively identified
-// as the caller's fault are fatal, only status signals are none, and every
-// other code -- including codes added to qdb/error.h after this was
-// written -- is retryable. The C origin/severity bits are not consulted;
-// they disagree with retry semantics (e.g. ErrConnectionRefused is
-// "unrecoverable").
+// The policy is deliberately open: the C API decides what is not a failure
+// at all (QDB_SUCCESS), only codes we have positively identified as the
+// caller's fault are fatal, and every other code -- including codes added
+// to qdb/error.h after this was written -- is retryable. The C severity
+// bits are not consulted for retryability; they disagree with it (e.g.
+// ErrConnectionRefused is "unrecoverable").
 //
 //nolint:exhaustive // unclassified codes are retryable by policy; the default case is the design
 func (e ErrorType) ErrorClass() ErrorClass {
-	switch e {
-	case Success, Created, ErrIteratorEnd, ErrElementNotFound, ErrElementAlreadyExists,
-		ErrTagAlreadySet, ErrTagNotSet, ErrUnmatchedContent:
+	if e.isSuccess() {
 		return ErrorClassNone
+	}
 
+	switch e {
 	case ErrNotImplemented, ErrIncompatibleType, ErrUninitialized, ErrOutOfBounds,
 		ErrInvalidQuery, ErrAliasNotFound, ErrAliasAlreadyExists, ErrInvalidArgument:
 		return ErrorClassFatal
@@ -257,6 +277,12 @@ func (e ErrorType) ErrorClass() ErrorClass {
 	default:
 		return ErrorClassRetryable
 	}
+}
+
+// isSuccess reports whether the C API considers the code a success or an
+// informational status, via QDB_SUCCESS.
+func (e ErrorType) isSuccess() bool {
+	return C.qdb_go_success(C.qdb_error_t(e)) != 0
 }
 
 func makeErrorOrNil(err C.qdb_error_t) error {
@@ -314,8 +340,8 @@ func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
 //
 // Returns:
 //
-//	ErrorClassNone: err is nil, or the innermost classifier says so
-//	ErrorClassFatal: the caller's fault; do not retry, do not trip breakers
+//	ErrorClassNone: err is nil, or the outermost classifier says so
+//	ErrorClassFatal: the caller's fault; retrying cannot succeed
 //	ErrorClassRetryable: transient, unclassified, or not a qdb error at all
 //
 // The outermost ErrorClassifier in the chain decides; ErrorType implements
@@ -337,10 +363,10 @@ func ClassifyError(err error) ErrorClass {
 
 // IsRetryable reports whether err is not known to be the caller's fault.
 //
-// "Retryable" answers "may the environment be at fault?", which is what a
-// circuit breaker needs. It does not promise that an immediate retry will
-// succeed; qdb-api-python's retry helper answers that narrower question and
-// therefore retries far fewer codes.
+// "Retryable" means the failure is not known to be caused by the caller. It
+// does not promise that an immediate retry will succeed; qdb-api-python's
+// retry helper answers that narrower question and therefore retries far
+// fewer codes.
 //
 // Returns:
 //
@@ -355,8 +381,7 @@ func IsRetryable(err error) bool {
 }
 
 // IsFatal reports whether err is the caller's fault: retrying the identical
-// call cannot succeed and the failure must not count towards a circuit
-// breaker. nil and informational codes are not fatal.
+// call cannot succeed. nil and informational codes are not fatal.
 //
 // Example:
 //

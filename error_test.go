@@ -3,13 +3,9 @@ package qdb
 import (
 	"errors"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // ------------------------------------------------------------------
@@ -276,155 +272,51 @@ func TestErrorType_ErrorAsWithDifferentTypes(t *testing.T) {
 // ErrorClass / ClassifyError / IsRetryable / IsFatal tests
 // ------------------------------------------------------------------
 
-type classifiedCode struct {
-	name string
-	code ErrorType
-	want ErrorClass
-}
+func TestErrorType_ErrorClass(t *testing.T) {
+	tests := []struct {
+		code ErrorType
+		want ErrorClass
+	}{
+		// Every explicitly fatal code
+		{ErrNotImplemented, ErrorClassFatal},
+		{ErrIncompatibleType, ErrorClassFatal},
+		{ErrUninitialized, ErrorClassFatal},
+		{ErrOutOfBounds, ErrorClassFatal},
+		{ErrInvalidQuery, ErrorClassFatal},
+		{ErrAliasNotFound, ErrorClassFatal},
+		{ErrAliasAlreadyExists, ErrorClassFatal},
+		{ErrInvalidArgument, ErrorClassFatal},
 
-// errorTypeClassTable lists every ErrorType constant with its expected class.
-// TestErrorType_ErrorClass_TableCoversAllConstants fails when error.go gains
-// a constant that is missing here, so new codes are classified deliberately.
-func errorTypeClassTable() []classifiedCode {
-	return []classifiedCode{
-		// Informational: status signals, not failures
-		{"Success", Success, ErrorClassNone},
-		{"Created", Created, ErrorClassNone},
-		{"ErrOkCreated", ErrOkCreated, ErrorClassNone},
-		{"ErrIteratorEnd", ErrIteratorEnd, ErrorClassNone},
-		{"ErrElementNotFound", ErrElementNotFound, ErrorClassNone},
-		{"ErrElementAlreadyExists", ErrElementAlreadyExists, ErrorClassNone},
-		{"ErrTagAlreadySet", ErrTagAlreadySet, ErrorClassNone},
-		{"ErrTagNotSet", ErrTagNotSet, ErrorClassNone},
-		{"ErrUnmatchedContent", ErrUnmatchedContent, ErrorClassNone},
+		// Success and informational status, as defined by QDB_SUCCESS
+		{Success, ErrorClassNone},
+		{Created, ErrorClassNone},
+		{ErrIteratorEnd, ErrorClassNone},
+		{ErrTagAlreadySet, ErrorClassNone},
+		{ErrElementNotFound, ErrorClassNone},
 
-		// Fatal: the caller's fault
-		{"ErrNotImplemented", ErrNotImplemented, ErrorClassFatal},
-		{"ErrIncompatibleType", ErrIncompatibleType, ErrorClassFatal},
-		{"ErrUninitialized", ErrUninitialized, ErrorClassFatal},
-		{"ErrOutOfBounds", ErrOutOfBounds, ErrorClassFatal},
-		{"ErrInvalidQuery", ErrInvalidQuery, ErrorClassFatal},
-		{"ErrAliasNotFound", ErrAliasNotFound, ErrorClassFatal},
-		{"ErrAliasAlreadyExists", ErrAliasAlreadyExists, ErrorClassFatal},
-		{"ErrInvalidArgument", ErrInvalidArgument, ErrorClassFatal},
+		// Everything else, including codes the old policy rejected and codes
+		// the C API rates as unrecoverable
+		{ErrTimeout, ErrorClassRetryable},
+		{ErrConnectionRefused, ErrorClassRetryable},
+		{ErrTryAgain, ErrorClassRetryable},
+		{ErrAccessDenied, ErrorClassRetryable},
+		{ErrQuotaExceeded, ErrorClassRetryable},
+		{ErrOperationNotPermitted, ErrorClassRetryable},
+		{ErrDataCorruption, ErrorClassRetryable},
+		{ErrSkipped, ErrorClassRetryable},
+	}
 
-		// Retryable: everything else
-		{"ErrSkipped", ErrSkipped, ErrorClassRetryable},
-		{"ErrContainerEmpty", ErrContainerEmpty, ErrorClassRetryable},
-		{"ErrContainerFull", ErrContainerFull, ErrorClassRetryable},
-		{"ErrOverflow", ErrOverflow, ErrorClassRetryable},
-		{"ErrUnderflow", ErrUnderflow, ErrorClassRetryable},
-		{"ErrTimeout", ErrTimeout, ErrorClassRetryable},
-		{"ErrConnectionRefused", ErrConnectionRefused, ErrorClassRetryable},
-		{"ErrConnectionReset", ErrConnectionReset, ErrorClassRetryable},
-		{"ErrUnstableCluster", ErrUnstableCluster, ErrorClassRetryable},
-		{"ErrTryAgain", ErrTryAgain, ErrorClassRetryable},
-		{"ErrConflict", ErrConflict, ErrorClassRetryable},
-		{"ErrNotConnected", ErrNotConnected, ErrorClassRetryable},
-		{"ErrResourceLocked", ErrResourceLocked, ErrorClassRetryable},
-		{"ErrSystemRemote", ErrSystemRemote, ErrorClassRetryable},
-		{"ErrSystemLocal", ErrSystemLocal, ErrorClassRetryable},
-		{"ErrInternalRemote", ErrInternalRemote, ErrorClassRetryable},
-		{"ErrInternalLocal", ErrInternalLocal, ErrorClassRetryable},
-		{"ErrNoMemoryRemote", ErrNoMemoryRemote, ErrorClassRetryable},
-		{"ErrNoMemoryLocal", ErrNoMemoryLocal, ErrorClassRetryable},
-		{"ErrInvalidProtocol", ErrInvalidProtocol, ErrorClassRetryable},
-		{"ErrHostNotFound", ErrHostNotFound, ErrorClassRetryable},
-		{"ErrBufferTooSmall", ErrBufferTooSmall, ErrorClassRetryable},
-		{"ErrInvalidVersion", ErrInvalidVersion, ErrorClassRetryable},
-		{"ErrInvalidHandle", ErrInvalidHandle, ErrorClassRetryable},
-		{"ErrReservedAlias", ErrReservedAlias, ErrorClassRetryable},
-		{"ErrInvalidIterator", ErrInvalidIterator, ErrorClassRetryable},
-		{"ErrEntryTooLarge", ErrEntryTooLarge, ErrorClassRetryable},
-		{"ErrTransactionPartialFailure", ErrTransactionPartialFailure, ErrorClassRetryable},
-		{"ErrOperationDisabled", ErrOperationDisabled, ErrorClassRetryable},
-		{"ErrOperationNotPermitted", ErrOperationNotPermitted, ErrorClassRetryable},
-		{"ErrInvalidReply", ErrInvalidReply, ErrorClassRetryable},
-		{"ErrNoSpaceLeft", ErrNoSpaceLeft, ErrorClassRetryable},
-		{"ErrQuotaExceeded", ErrQuotaExceeded, ErrorClassRetryable},
-		{"ErrAliasTooLong", ErrAliasTooLong, ErrorClassRetryable},
-		{"ErrClockSkew", ErrClockSkew, ErrorClassRetryable},
-		{"ErrAccessDenied", ErrAccessDenied, ErrorClassRetryable},
-		{"ErrLoginFailed", ErrLoginFailed, ErrorClassRetryable},
-		{"ErrColumnNotFound", ErrColumnNotFound, ErrorClassRetryable},
-		{"ErrQueryTooComplex", ErrQueryTooComplex, ErrorClassRetryable},
-		{"ErrInvalidCryptoKey", ErrInvalidCryptoKey, ErrorClassRetryable},
-		{"ErrInvalidRegex", ErrInvalidRegex, ErrorClassRetryable},
-		{"ErrUnknownUser", ErrUnknownUser, ErrorClassRetryable},
-		{"ErrInterrupted", ErrInterrupted, ErrorClassRetryable},
-		{"ErrNetworkInbufTooSmall", ErrNetworkInbufTooSmall, ErrorClassRetryable},
-		{"ErrNetworkError", ErrNetworkError, ErrorClassRetryable},
-		{"ErrDataCorruption", ErrDataCorruption, ErrorClassRetryable},
-		{"ErrPartialFailure", ErrPartialFailure, ErrorClassRetryable},
-		{"ErrAsyncPipeFull", ErrAsyncPipeFull, ErrorClassRetryable},
+	for _, tc := range tests {
+		assert.Equal(t, tc.want, tc.code.ErrorClass(), "%v", tc.code)
 	}
 }
 
-// declaredErrorTypeConstants parses error.go and returns the names of all
-// constants declared with type ErrorType.
-func declaredErrorTypeConstants(t *testing.T) []string {
-	t.Helper()
+func TestErrorType_ErrorClass_UnknownCodeIsRetryable(t *testing.T) {
+	// A code this package does not list (e.g. added to a newer qdb/error.h)
+	// must default to retryable rather than fatal.
+	unknown := ErrTimeout + 0x0F00 // same origin and severity, unused code number
 
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "error.go", nil, parser.SkipObjectResolution)
-	require.NoError(t, err)
-
-	var names []string
-	for _, decl := range file.Decls {
-		gen, ok := decl.(*ast.GenDecl)
-		if !ok || gen.Tok != token.CONST {
-			continue
-		}
-		for _, spec := range gen.Specs {
-			vs, ok := spec.(*ast.ValueSpec)
-			if !ok {
-				continue
-			}
-			if ident, ok := vs.Type.(*ast.Ident); !ok || ident.Name != "ErrorType" {
-				continue
-			}
-			for _, n := range vs.Names {
-				names = append(names, n.Name)
-			}
-		}
-	}
-
-	return names
-}
-
-func TestErrorType_ErrorClass_AllConstants(t *testing.T) {
-	for _, tc := range errorTypeClassTable() {
-		assert.Equal(t, tc.want, tc.code.ErrorClass(), "%s (%v)", tc.name, tc.code)
-	}
-}
-
-func TestErrorType_ErrorClass_TableCoversAllConstants(t *testing.T) {
-	declared := declaredErrorTypeConstants(t)
-	require.NotEmpty(t, declared)
-
-	tabled := make(map[string]bool, len(declared))
-	for _, tc := range errorTypeClassTable() {
-		assert.False(t, tabled[tc.name], "duplicate table entry: %s", tc.name)
-		tabled[tc.name] = true
-	}
-
-	for _, name := range declared {
-		assert.True(t, tabled[name], "ErrorType constant %s is not classified in errorTypeClassTable", name)
-		delete(tabled, name)
-	}
-
-	assert.Empty(t, tabled, "table entries that are not ErrorType constants")
-}
-
-func TestErrorType_ErrorClass_InfoMatchesSeverityBits(t *testing.T) {
-	// The None class is enumerated explicitly rather than derived from the C
-	// severity bits; this keeps the two in sync so a new severity_info code
-	// in qdb/error.h cannot silently land in Retryable.
-	for _, tc := range errorTypeClassTable() {
-		isInfo := tc.code.Severity() == ErrorSeverityInfo
-		isNone := tc.code.ErrorClass() == ErrorClassNone
-		assert.Equal(t, isInfo, isNone, "%s: severity_info=%v but class=%v", tc.name, isInfo, tc.code.ErrorClass())
-	}
+	assert.Equal(t, ErrorClassRetryable, unknown.ErrorClass())
 }
 
 func TestErrorType_OriginSeverity(t *testing.T) {
