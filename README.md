@@ -1,5 +1,6 @@
 Quasardb Go API
 =================
+
 [![GoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/bureau14/qdb-api-go)
 
 **Note:** The Go API works on Windows x64 and Unix-like operating systems. 32-bit Windows is not currently supported.
@@ -10,44 +11,49 @@ Quasardb Go API
 
 Go API for [quasardb](https://www.quasar.ai/).
 
-
 ### Requirements
 
 1. [Go compiler and tools](https://golang.org/)
 1. [Gcc compiler and tool](https://gcc.gnu.org/)
 1. [quasardb daemon](https://download.quasar.ai/quasardb/nightly/server/)
 1. [quasardb C API](https://download.quasar.ai/quasardb/nightly/api/c/) version corresponding to the OS you use
-1. The version of the quasardb C API *must match* the current git branch, the master branch corresponds to the nightly C API
+1. The version of the quasardb C API _must match_ the current git branch, the master branch corresponds to the nightly C API
 
 #### Check your system
-1. ```go version ``` -> should not lower thatn 1.19
-1. ```gcc  --version``` -> should be not lower than 11
 
+1. `go version ` -> should not lower thatn 1.19
+1. `gcc  --version` -> should be not lower than 11
 
 ```
 #Example of downloading server binaries
 
-curl -s -L http://download.quasar.ai/quasardb/nightly/server/qdb-3.15.0.dev0-linux-64bit-server.tar.gz | tar -xzvf - 
+curl -s -L http://download.quasar.ai/quasardb/nightly/server/qdb-3.15.0.dev0-linux-64bit-server.tar.gz | tar -xzvf -
 curl -s -L http://download.quasar.ai/quasardb/nightly/api/c/qdb-3.15.0.dev0-linux-64bit-c-api.tar.gz | tar -xzvf -
 curl -s -L http://download.quasar.ai/quasardb/nightly/utils/qdb-3.15.0.dev0-linux-64bit-utils.tar.gz | tar -xzvf -
 ```
 
 ### Build instructions:
+
 1. `go get -d github.com/bureau14/qdb-api-go`
 1. Extract the downloaded C API into `$GOPATH/src/github.com/bureau14/qdb-api-go/qdb`
 
+On Linux the API links `qdb/lib/libqdb_api.a` statically (see `library_link.go`), so the resulting binaries need neither `libqdb_api.so` nor `LD_LIBRARY_PATH` at runtime. This requires a C API package that ships `lib/libqdb_api.a` (nightly builds and releases after 3.14.2) and GCC 13 or newer for its libstdc++. The other platforms link the shared library from `qdb/lib` (or `qdb/bin` on Windows).
+
 ### Test instructions:
+
 1.  `export QDB_SERVER_PATH=/path/to/qdb-server/bin` # a path to a dir containing qdbd, qdb_cluster_keygen and qdb_user_add executables
-1. `cd $GOPATH/src/github.com/bureau14/qdb-api-go`
-1. `go test`
+1.  `cd $GOPATH/src/github.com/bureau14/qdb-api-go`
+1.  `go test`
 
 ### Coverage instructions:
+
 1. `export QDB_SERVER_PATH=/path/to/qdb-server/bin` # a path to a dir containing qdbd, qdb_cluster_keygen and qdb_user_add executables
 1. `cd $GOPATH/src/github.com/bureau14/qdb-api-go`
 1. `go test -coverprofile=coverage.out`
 1. `go tool cover -html=coverage.out` # if you want to see coverage detail in a browser
 
 ### Usage (OS X)
+
 1. `mkdir $GOPATH/src/<PROJECT>`
 1. Extract the downloaded C API into `$GOPATH/src/<PROJECT>/qdb`
 1. Ensure quasardb C library is in the **`DYLD_LIBRARY_PATH`**: `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$GOPATH/src/<PROJECT>/qdb/lib`
@@ -57,8 +63,11 @@ curl -s -L http://download.quasar.ai/quasardb/nightly/utils/qdb-3.15.0.dev0-linu
 If you encounter any problems, please create an issue in the bug tracker.
 
 ### Getting started
+
 ## Simple test
+
 Assuming a non secured database (see "Setup a secured connection" section for secured databases)
+
 ```
 import qdb "github.com/bureau14/qdb-api-go"
 import "time"
@@ -92,6 +101,7 @@ The following tests samples are presuming you import as specified in the previou
 The error checking will be omitted for brevity.
 
 ## Setup a non secure connection
+
 ```
     handle, err := qdb.SetupHandle("qdb://127.0.0.1:2836", time.Duration(120) * time.Second)
 
@@ -100,6 +110,7 @@ The error checking will be omitted for brevity.
 ```
 
 ## Setup a secured connection
+
 ```
     handle, err := qdb.SetupSecureHandle("qdb://127.0.0.1:2836", "/path/to/cluster_public.key", "/path/to/user_private.key", time.Duration(120) * time.Second, qdb.EncryptNone)
 
@@ -108,7 +119,9 @@ The error checking will be omitted for brevity.
 ```
 
 ## Setup a handle manually
+
 This could prove useful if you need to manage the flow of creation of your handle.
+
 ```
     handle, err := qdb.NewHandle()
 
