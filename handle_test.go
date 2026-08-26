@@ -165,6 +165,51 @@ func TestHandleCredentialsFromFileValid(t *testing.T) {
 	assert.Equal(t, "SeVUamemy6GWb8npfh9lum1zhdAu76W+l0PAW03G5yl4=", secret)
 }
 
+func TestHandleGetConnectionsPerAddressDefault(t *testing.T) {
+	h, err := NewHandle()
+	require.NoError(t, err)
+	defer func() {
+		_ = h.Close()
+	}()
+
+	// The default is set by the C API and differs between versions; only
+	// require that it falls within the accepted range.
+	v, err := h.GetConnectionsPerAddress()
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, v, uint(2))
+	assert.LessOrEqual(t, v, uint(100000))
+}
+
+func TestHandleSetConnectionsPerAddressRoundTrip(t *testing.T) {
+	h, err := NewHandle()
+	require.NoError(t, err)
+	defer func() {
+		_ = h.Close()
+	}()
+
+	require.NoError(t, h.SetConnectionsPerAddress(32))
+	v, err := h.GetConnectionsPerAddress()
+	require.NoError(t, err)
+	assert.Equal(t, uint(32), v)
+
+	// The limit must survive connecting, as it is applied when pools are created
+	require.NoError(t, h.Connect(insecureURI))
+	v, err = h.GetConnectionsPerAddress()
+	require.NoError(t, err)
+	assert.Equal(t, uint(32), v)
+}
+
+func TestHandleSetConnectionsPerAddressInvalid(t *testing.T) {
+	h, err := NewHandle()
+	require.NoError(t, err)
+	defer func() {
+		_ = h.Close()
+	}()
+
+	assert.Error(t, h.SetConnectionsPerAddress(1))
+	assert.Error(t, h.SetConnectionsPerAddress(100001))
+}
+
 //----------------------------------------------------
 // Connected handle checks
 //----------------------------------------------------

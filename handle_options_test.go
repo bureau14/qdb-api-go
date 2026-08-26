@@ -39,6 +39,7 @@ func TestHandleOptions(t *testing.T) {
 			WithCompression(CompNone).
 			WithClientMaxParallelism(8).
 			WithClientMaxInBufSize(1024 * 1024).
+			WithConnectionsPerAddress(16).
 			WithTimeout(30 * time.Second)
 
 		if opts.clusterURI != "qdb://localhost:2836" {
@@ -65,6 +66,9 @@ func TestHandleOptions(t *testing.T) {
 		if opts.clientMaxInBufSize != 1024*1024 {
 			t.Errorf("unexpected client max in buf size: %d", opts.clientMaxInBufSize)
 		}
+		if opts.connectionsPerAddress != 16 {
+			t.Errorf("unexpected connections per address: %d", opts.connectionsPerAddress)
+		}
 		if opts.timeout != 30*time.Second {
 			t.Errorf("unexpected timeout: %v", opts.timeout)
 		}
@@ -79,6 +83,7 @@ func TestHandleOptions(t *testing.T) {
 			WithCompression(CompBalanced).
 			WithClientMaxParallelism(16).
 			WithClientMaxInBufSize(2048 * 1024).
+			WithConnectionsPerAddress(32).
 			WithTimeout(60 * time.Second)
 
 		if opts.GetClusterURI() != "qdb://localhost:2836" {
@@ -101,6 +106,9 @@ func TestHandleOptions(t *testing.T) {
 		}
 		if opts.GetClientMaxInBufSize() != 2048*1024 {
 			t.Errorf("GetClientMaxInBufSize() returned unexpected value")
+		}
+		if opts.GetConnectionsPerAddress() != 32 {
+			t.Errorf("GetConnectionsPerAddress() returned unexpected value")
 		}
 		if opts.GetTimeout() != 60*time.Second {
 			t.Errorf("GetTimeout() returned unexpected value")
@@ -265,6 +273,30 @@ func TestHandleOptionsValidation(t *testing.T) {
 			wantErr: "client max parallelism 65537 exceeds maximum allowed value 65536",
 		},
 		{
+			name: "negative connections per address",
+			opts: &HandleOptions{
+				clusterURI:            "qdb://localhost:2836",
+				connectionsPerAddress: -1,
+			},
+			wantErr: "connections per address cannot be negative",
+		},
+		{
+			name: "connections per address below minimum",
+			opts: &HandleOptions{
+				clusterURI:            "qdb://localhost:2836",
+				connectionsPerAddress: 1,
+			},
+			wantErr: "connections per address 1 must be between 2 and 100000",
+		},
+		{
+			name: "connections per address above maximum",
+			opts: &HandleOptions{
+				clusterURI:            "qdb://localhost:2836",
+				connectionsPerAddress: 100001,
+			},
+			wantErr: "connections per address 100001 must be between 2 and 100000",
+		},
+		{
 			name: "negative timeout",
 			opts: &HandleOptions{
 				clusterURI: "qdb://localhost:2836",
@@ -293,6 +325,24 @@ func TestHandleOptionsValidation(t *testing.T) {
 			opts: &HandleOptions{
 				clusterURI: "qdb://localhost:2836",
 				timeout:    30 * time.Second,
+			},
+			wantErr: "",
+		},
+		{
+			name: "valid minimum connections per address",
+			opts: &HandleOptions{
+				clusterURI:            "qdb://localhost:2836",
+				connectionsPerAddress: 2,
+				timeout:               30 * time.Second,
+			},
+			wantErr: "",
+		},
+		{
+			name: "valid maximum connections per address",
+			opts: &HandleOptions{
+				clusterURI:            "qdb://localhost:2836",
+				connectionsPerAddress: 100000,
+				timeout:               30 * time.Second,
 			},
 			wantErr: "",
 		},
@@ -433,6 +483,7 @@ func TestHandleOptionsProvider(t *testing.T) {
 			WithCompression(CompNone).
 			WithClientMaxParallelism(8).
 			WithClientMaxInBufSize(1024 * 1024).
+			WithConnectionsPerAddress(16).
 			WithTimeout(30 * time.Second)
 
 		copied := FromHandleOptionsProvider(original)
@@ -464,8 +515,33 @@ func TestHandleOptionsProvider(t *testing.T) {
 		if copied.GetClientMaxInBufSize() != original.GetClientMaxInBufSize() {
 			t.Errorf("client max in buf size mismatch")
 		}
+		if copied.GetConnectionsPerAddress() != original.GetConnectionsPerAddress() {
+			t.Errorf("connections per address mismatch")
+		}
 		if copied.GetTimeout() != original.GetTimeout() {
 			t.Errorf("timeout mismatch")
 		}
 	})
+}
+
+func TestNewHandleFromOptionsConnectionsPerAddress(t *testing.T) {
+	opts := NewHandleOptions().
+		WithClusterUri(insecureURI).
+		WithConnectionsPerAddress(16)
+
+	h, err := NewHandleFromOptions(opts)
+	if err != nil {
+		t.Fatalf("NewHandleFromOptions() failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = h.Close()
+	})
+
+	v, err := h.GetConnectionsPerAddress()
+	if err != nil {
+		t.Fatalf("GetConnectionsPerAddress() failed: %v", err)
+	}
+	if v != 16 {
+		t.Errorf("expected connections per address 16, got %d", v)
+	}
 }
