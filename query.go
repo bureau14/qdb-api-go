@@ -146,7 +146,7 @@ func (r *QueryPoint) GetDouble() (float64, error) {
 	return 0, wrapError(C.qdb_e_incompatible_type, "query_point_get_double", "wrong_type", "expected_double")
 }
 
-// GetBlob : retrieve a double from the interface
+// GetBlob : retrieve a blob from the interface
 func (r *QueryPoint) GetBlob() ([]byte, error) {
 	if r._type == C.qdb_query_result_blob {
 		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
