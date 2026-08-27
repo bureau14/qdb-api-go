@@ -277,7 +277,7 @@ func TestErrorType_ErrorClass(t *testing.T) {
 		code ErrorType
 		want ErrorClass
 	}{
-		// Every explicitly fatal code
+		// fatal
 		{ErrNotImplemented, ErrorClassFatal},
 		{ErrIncompatibleType, ErrorClassFatal},
 		{ErrUninitialized, ErrorClassFatal},
@@ -287,15 +287,14 @@ func TestErrorType_ErrorClass(t *testing.T) {
 		{ErrAliasAlreadyExists, ErrorClassFatal},
 		{ErrInvalidArgument, ErrorClassFatal},
 
-		// Success and informational status, as defined by QDB_SUCCESS
+		// QDB_SUCCESS
 		{Success, ErrorClassNone},
 		{Created, ErrorClassNone},
 		{ErrIteratorEnd, ErrorClassNone},
 		{ErrTagAlreadySet, ErrorClassNone},
 		{ErrElementNotFound, ErrorClassNone},
 
-		// Everything else, including codes the old policy rejected and codes
-		// the C API rates as unrecoverable
+		// retryable
 		{ErrTimeout, ErrorClassRetryable},
 		{ErrConnectionRefused, ErrorClassRetryable},
 		{ErrTryAgain, ErrorClassRetryable},
@@ -312,9 +311,7 @@ func TestErrorType_ErrorClass(t *testing.T) {
 }
 
 func TestErrorType_ErrorClass_UnknownCodeIsRetryable(t *testing.T) {
-	// A code this package does not list (e.g. added to a newer qdb/error.h)
-	// must default to retryable rather than fatal.
-	unknown := ErrTimeout + 0x0F00 // same origin and severity, unused code number
+	unknown := ErrTimeout + 0x0F00 // unlisted code number
 
 	assert.Equal(t, ErrorClassRetryable, unknown.ErrorClass())
 }
@@ -348,7 +345,7 @@ func TestErrorClass_String(t *testing.T) {
 	assert.Equal(t, "unknown", ErrorClass(42).String())
 }
 
-// fatalWrapper overrides the class of whatever it wraps.
+// fatalWrapper: ErrorClassifier that reports fatal
 type fatalWrapper struct{ err error }
 
 func (w fatalWrapper) Error() string          { return "fatal: " + w.err.Error() }
@@ -358,23 +355,18 @@ func (w fatalWrapper) ErrorClass() ErrorClass { return ErrorClassFatal }
 func TestClassifyError_Propagation(t *testing.T) {
 	assert.Equal(t, ErrorClassNone, ClassifyError(nil))
 
-	// Bare ErrorType
 	assert.Equal(t, ErrorClassRetryable, ClassifyError(ErrTimeout))
 	assert.Equal(t, ErrorClassFatal, ClassifyError(ErrInvalidQuery))
 	assert.Equal(t, ErrorClassNone, ClassifyError(ErrIteratorEnd))
 
-	// Single wrap, as produced by wrapError
 	wrapped := fmt.Errorf("blob_put (operation=blob_put, alias=x): %w", ErrAliasAlreadyExists)
 	assert.Equal(t, ErrorClassFatal, ClassifyError(wrapped))
 
-	// Double wrap, as produced by callers wrapping our errors
 	doubleWrapped := fmt.Errorf("sink write failed: %w", fmt.Errorf("push: %w", ErrUnstableCluster))
 	assert.Equal(t, ErrorClassRetryable, ClassifyError(doubleWrapped))
 
-	// Plain Go error with no qdb code: cannot be shown to be the caller's fault
 	assert.Equal(t, ErrorClassRetryable, ClassifyError(errors.New("something else")))
 
-	// Outermost classifier wins, and the wrapped code is still reachable
 	overridden := fmt.Errorf("outer: %w", fatalWrapper{err: ErrTimeout})
 	assert.Equal(t, ErrorClassFatal, ClassifyError(overridden))
 	assert.True(t, errors.Is(overridden, ErrTimeout))
@@ -384,21 +376,17 @@ func TestIsRetryable_IsFatal(t *testing.T) {
 	assert.False(t, IsRetryable(nil))
 	assert.False(t, IsFatal(nil))
 
-	// Informational: neither
 	assert.False(t, IsRetryable(ErrTagAlreadySet))
 	assert.False(t, IsFatal(ErrTagAlreadySet))
 
-	// Fatal
 	assert.False(t, IsRetryable(ErrIncompatibleType))
 	assert.True(t, IsFatal(ErrIncompatibleType))
 
-	// Retryable, including codes the old policy rejected
 	for _, code := range []ErrorType{ErrTimeout, ErrAccessDenied, ErrQuotaExceeded, ErrOperationNotPermitted} {
 		assert.True(t, IsRetryable(code), "%v", code)
 		assert.False(t, IsFatal(code), "%v", code)
 	}
 
-	// Shape of the errors returned by QueryPoint getters on a type mismatch
 	getterErr := fmt.Errorf("query_point_get_double (operation=query_point_get_double, wrong_type=expected_double): %w", ErrIncompatibleType)
 	assert.True(t, IsFatal(getterErr))
 	assert.True(t, errors.Is(getterErr, ErrIncompatibleType))
