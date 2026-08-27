@@ -272,6 +272,12 @@ func TestErrorType_ErrorAsWithDifferentTypes(t *testing.T) {
 // ErrorClass / ClassifyError / IsRetryable / IsFatal tests
 // ------------------------------------------------------------------
 
+// TestErrorType_ErrorClass validates the classification policy itself:
+// every code listed as fatal in ErrorType.ErrorClass, a sample of codes
+// the C API marks as success via QDB_SUCCESS, and a sample of the rest.
+// The retryable sample includes codes the C API rates as unrecoverable
+// (ErrConnectionRefused) and codes the previous IsRetryable rejected
+// (ErrAccessDenied), to pin down that neither influences the result.
 func TestErrorType_ErrorClass(t *testing.T) {
 	tests := []struct {
 		code ErrorType
@@ -310,12 +316,18 @@ func TestErrorType_ErrorClass(t *testing.T) {
 	}
 }
 
+// TestErrorType_ErrorClass_UnknownCodeIsRetryable validates the default
+// branch of ErrorType.ErrorClass: a code this package does not list, such
+// as one introduced by a newer C API, must be retryable and never fatal.
 func TestErrorType_ErrorClass_UnknownCodeIsRetryable(t *testing.T) {
 	unknown := ErrTimeout + 0x0F00 // unlisted code number
 
 	assert.Equal(t, ErrorClassRetryable, unknown.ErrorClass())
 }
 
+// TestErrorType_OriginSeverity validates that Origin and Severity decode
+// the bits the way qdb/error.h defines them, one case per origin and
+// severity value. ErrorClass relies on the severity bits via QDB_SUCCESS.
 func TestErrorType_OriginSeverity(t *testing.T) {
 	tests := []struct {
 		code     ErrorType
@@ -338,6 +350,9 @@ func TestErrorType_OriginSeverity(t *testing.T) {
 	}
 }
 
+// TestErrorClass_String validates the names used in log output and in the
+// failure messages of the other tests, including the fallback for values
+// outside the defined constants.
 func TestErrorClass_String(t *testing.T) {
 	assert.Equal(t, "none", ErrorClassNone.String())
 	assert.Equal(t, "retryable", ErrorClassRetryable.String())
@@ -345,37 +360,56 @@ func TestErrorClass_String(t *testing.T) {
 	assert.Equal(t, "unknown", ErrorClass(42).String())
 }
 
-// fatalWrapper: ErrorClassifier that reports fatal
+// fatalWrapper: ErrorClassifier that reports fatal regardless of the
+// wrapped error, standing in for a caller-defined error type.
 type fatalWrapper struct{ err error }
 
 func (w fatalWrapper) Error() string          { return "fatal: " + w.err.Error() }
 func (w fatalWrapper) Unwrap() error          { return w.err }
 func (w fatalWrapper) ErrorClass() ErrorClass { return ErrorClassFatal }
 
+// TestClassifyError_Propagation validates how ClassifyError walks an error
+// chain. Every error this package returns is either a bare ErrorType or one
+// wrapped by wrapError, and callers wrap those again, so the class must
+// survive any depth of wrapping. It also validates the two edges of the
+// chain: errors with no ErrorType at all, and callers overriding the class
+// through ErrorClassifier.
 func TestClassifyError_Propagation(t *testing.T) {
 	assert.Equal(t, ErrorClassNone, ClassifyError(nil))
 
+	// bare ErrorType, one per class
 	assert.Equal(t, ErrorClassRetryable, ClassifyError(ErrTimeout))
 	assert.Equal(t, ErrorClassFatal, ClassifyError(ErrInvalidQuery))
 	assert.Equal(t, ErrorClassNone, ClassifyError(ErrIteratorEnd))
 
+	// wrapped once, as wrapError does
 	wrapped := fmt.Errorf("blob_put (operation=blob_put, alias=x): %w", ErrAliasAlreadyExists)
 	assert.Equal(t, ErrorClassFatal, ClassifyError(wrapped))
 
+	// wrapped again by the caller
 	doubleWrapped := fmt.Errorf("sink write failed: %w", fmt.Errorf("push: %w", ErrUnstableCluster))
 	assert.Equal(t, ErrorClassRetryable, ClassifyError(doubleWrapped))
 
+	// no ErrorType anywhere in the chain: retryable by default
 	assert.Equal(t, ErrorClassRetryable, ClassifyError(errors.New("something else")))
 
+	// caller-defined ErrorClassifier overrides the wrapped ErrorType, while
+	// errors.Is still reaches the ErrorType
 	overridden := fmt.Errorf("outer: %w", fatalWrapper{err: ErrTimeout})
 	assert.Equal(t, ErrorClassFatal, ClassifyError(overridden))
 	assert.True(t, errors.Is(overridden, ErrTimeout))
 }
 
+// TestIsRetryable_IsFatal validates the two boolean views over
+// ClassifyError that callers actually use. The two are not complements:
+// nil and informational codes are neither retryable nor fatal, which is
+// what makes "!IsRetryable(err)" safe in a retry loop that already checked
+// err != nil.
 func TestIsRetryable_IsFatal(t *testing.T) {
 	assert.False(t, IsRetryable(nil))
 	assert.False(t, IsFatal(nil))
 
+	// informational: neither
 	assert.False(t, IsRetryable(ErrTagAlreadySet))
 	assert.False(t, IsFatal(ErrTagAlreadySet))
 
@@ -387,6 +421,8 @@ func TestIsRetryable_IsFatal(t *testing.T) {
 		assert.False(t, IsFatal(code), "%v", code)
 	}
 
+	// the error QueryPoint getters return on a type mismatch (query.go);
+	// covers that change without needing a server
 	getterErr := fmt.Errorf("query_point_get_double (operation=query_point_get_double, wrong_type=expected_double): %w", ErrIncompatibleType)
 	assert.True(t, IsFatal(getterErr))
 	assert.True(t, errors.Is(getterErr, ErrIncompatibleType))

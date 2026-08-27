@@ -246,7 +246,8 @@ func (e ErrorType) ErrorClass() ErrorClass {
 	}
 }
 
-// isSuccess: QDB_SUCCESS
+// isSuccess returns true when the C API considers the code a success or an
+// informational status rather than a failure (QDB_SUCCESS).
 func (e ErrorType) isSuccess() bool {
 	return C.qdb_go_success(C.qdb_error_t(e)) != 0
 }
@@ -302,8 +303,9 @@ func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
 	return fmt.Errorf("%s%w", sb.String(), baseErr)
 }
 
-// ClassifyError returns the class of the outermost ErrorClassifier in err's
-// chain.
+// ClassifyError returns whether err is a status signal, a retryable failure
+// or a fatal one. Wrapped errors are unwrapped; the outermost
+// ErrorClassifier in the chain decides.
 //
 // Returns:
 //
@@ -323,7 +325,9 @@ func ClassifyError(err error) ErrorClass {
 	return ErrorClassRetryable
 }
 
-// IsRetryable reports whether ClassifyError(err) is ErrorClassRetryable.
+// IsRetryable returns true when the error is retryable: the failure is
+// transient, or at least not caused by the caller. nil, informational
+// status codes and fatal errors are not retryable.
 //
 // Example:
 //
@@ -332,7 +336,9 @@ func IsRetryable(err error) bool {
 	return ClassifyError(err) == ErrorClassRetryable
 }
 
-// IsFatal reports whether ClassifyError(err) is ErrorClassFatal.
+// IsFatal returns true when the error is caused by the caller and retrying
+// the same call cannot succeed. nil and informational status codes are not
+// fatal.
 //
 // Example:
 //
