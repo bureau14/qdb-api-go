@@ -5,7 +5,31 @@
 package qdb
 
 /*
+	#cgo noescape qdb_go_success
+	#cgo nocallback qdb_go_success
+	#cgo noescape qdb_go_error_origin
+	#cgo nocallback qdb_go_error_origin
+	#cgo noescape qdb_go_error_severity
+	#cgo nocallback qdb_go_error_severity
+
 	#include <qdb/error.h>
+
+	// Wrappers for the qdb/error.h macros, which cgo cannot call directly.
+
+	static inline int qdb_go_success(qdb_error_t e)
+	{
+		return QDB_SUCCESS(e);
+	}
+
+	static inline qdb_error_origin_t qdb_go_error_origin(qdb_error_t e)
+	{
+		return (qdb_error_origin_t)QDB_ERROR_ORIGIN(e);
+	}
+
+	static inline qdb_error_severity_t qdb_go_error_severity(qdb_error_t e)
+	{
+		return (qdb_error_severity_t)QDB_ERROR_SEVERITY(e);
+	}
 */
 import "C"
 
@@ -48,30 +72,7 @@ import (
 // ErrorType: QuasarDB error codes, wraps C.qdb_error_t
 type ErrorType C.qdb_error_t
 
-// Error codes: retryable errors default true except logic/constraint/permission failures
-//
-// Network/transient (retryable):
-// - ErrTimeout: network timeout
-// - ErrConnectionRefused/Reset: connection failed
-// - ErrUnstableCluster: temporary cluster issue
-// - ErrTryAgain: explicit retry request
-// - ErrResourceLocked: concurrent access conflict
-// - ErrNetworkError: generic network failure
-//
-// Logic/programming (non-retryable):
-// - ErrInvalidArgument: bad parameter
-// - ErrIncompatibleType: type mismatch
-// - ErrInvalidQuery: malformed query
-// - ErrBufferTooSmall: insufficient buffer
-//
-// Constraints (non-retryable):
-// - ErrAliasAlreadyExists: duplicate key
-// - ErrEntryTooLarge: size limit exceeded
-// - ErrQuotaExceeded: storage quota reached
-//
-// Permissions (non-retryable):
-// - ErrAccessDenied: insufficient privileges
-// - ErrOperationNotPermitted: forbidden operation
+// Error codes, wraps the qdb_error_t enum. See ErrorType.ErrorClass.
 const (
 	Success                      ErrorType = C.qdb_e_ok
 	Created                      ErrorType = C.qdb_e_ok_created
@@ -140,6 +141,62 @@ const (
 	ErrAsyncPipeFull             ErrorType = C.qdb_e_async_pipe_full
 )
 
+// ErrorOrigin: origin bits of an error code, wraps C.qdb_error_origin_t
+type ErrorOrigin C.qdb_error_origin_t
+
+const (
+	ErrorOriginSystemRemote ErrorOrigin = C.qdb_e_origin_system_remote
+	ErrorOriginSystemLocal  ErrorOrigin = C.qdb_e_origin_system_local
+	ErrorOriginConnection   ErrorOrigin = C.qdb_e_origin_connection
+	ErrorOriginInput        ErrorOrigin = C.qdb_e_origin_input
+	ErrorOriginOperation    ErrorOrigin = C.qdb_e_origin_operation
+	ErrorOriginProtocol     ErrorOrigin = C.qdb_e_origin_protocol
+)
+
+// ErrorSeverity: severity bits of an error code, wraps C.qdb_error_severity_t
+type ErrorSeverity C.qdb_error_severity_t
+
+const (
+	ErrorSeverityUnrecoverable ErrorSeverity = C.qdb_e_severity_unrecoverable
+	ErrorSeverityError         ErrorSeverity = C.qdb_e_severity_error
+	ErrorSeverityWarning       ErrorSeverity = C.qdb_e_severity_warning
+	ErrorSeverityInfo          ErrorSeverity = C.qdb_e_severity_info
+)
+
+// ErrorClass: retry classification of an error
+type ErrorClass uint8
+
+const (
+	// ErrorClassNone: nil, success, or an informational status code
+	ErrorClassNone ErrorClass = iota
+
+	// ErrorClassRetryable: transient or unclassified
+	ErrorClassRetryable
+
+	// ErrorClassFatal: caused by the caller; retrying cannot succeed
+	ErrorClassFatal
+)
+
+// String returns the class name
+func (c ErrorClass) String() string {
+	switch c {
+	case ErrorClassNone:
+		return "none"
+	case ErrorClassRetryable:
+		return "retryable"
+	case ErrorClassFatal:
+		return "fatal"
+	default:
+		return "unknown"
+	}
+}
+
+// ErrorClassifier: errors that report their own ErrorClass. The outermost
+// implementation in an error chain wins.
+type ErrorClassifier interface {
+	ErrorClass() ErrorClass
+}
+
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
 
 // Is enables errors.Is() comparison for wrapped errors.
@@ -158,6 +215,41 @@ func (e ErrorType) Is(target error) bool {
 	}
 
 	return false
+}
+
+// Origin returns the origin bits (QDB_ERROR_ORIGIN)
+func (e ErrorType) Origin() ErrorOrigin {
+	return ErrorOrigin(C.qdb_go_error_origin(C.qdb_error_t(e)))
+}
+
+// Severity returns the severity bits (QDB_ERROR_SEVERITY)
+func (e ErrorType) Severity() ErrorSeverity {
+	return ErrorSeverity(C.qdb_go_error_severity(C.qdb_error_t(e)))
+}
+
+// ErrorClass classifies the code: QDB_SUCCESS codes are none, the listed
+// codes are fatal, everything else is retryable.
+//
+//nolint:exhaustive // unlisted codes are retryable
+func (e ErrorType) ErrorClass() ErrorClass {
+	if e.isSuccess() {
+		return ErrorClassNone
+	}
+
+	switch e {
+	case ErrNotImplemented, ErrIncompatibleType, ErrUninitialized, ErrOutOfBounds,
+		ErrInvalidQuery, ErrAliasNotFound, ErrAliasAlreadyExists, ErrInvalidArgument:
+		return ErrorClassFatal
+
+	default:
+		return ErrorClassRetryable
+	}
+}
+
+// isSuccess returns true when the C API considers the code a success or an
+// informational status rather than a failure (QDB_SUCCESS).
+func (e ErrorType) isSuccess() bool {
+	return C.qdb_go_success(C.qdb_error_t(e)) != 0
 }
 
 func makeErrorOrNil(err C.qdb_error_t) error {
@@ -211,111 +303,46 @@ func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
 	return fmt.Errorf("%s%w", sb.String(), baseErr)
 }
 
-// IsRetryable checks if error is transient/retryable.
-// Args:
-//
-//	err: any error (wrapped or direct)
+// ClassifyError returns whether err is a status signal, a retryable failure
+// or a fatal one. Wrapped errors are unwrapped; the outermost
+// ErrorClassifier in the chain decides.
 //
 // Returns:
 //
-//	true: network/resource errors → retry
-//	false: logic/permission errors → fail fast
+	//	ErrorClassNone: err is nil, or the classifier reports none (success / informational status codes)
+	//	ErrorClassRetryable: no ErrorClassifier in the chain
+	//	otherwise: the classifier's ErrorClass()
+func ClassifyError(err error) ErrorClass {
+	if err == nil {
+		return ErrorClassNone
+	}
+
+	var classifier ErrorClassifier
+	if errors.As(err, &classifier) {
+		return classifier.ErrorClass()
+	}
+
+	return ErrorClassRetryable
+}
+
+// IsRetryable returns true when the error is retryable: the failure is
+// transient, or at least not caused by the caller. nil, informational
+// status codes and fatal errors are not retryable.
 //
 // Example:
 //
 //	if IsRetryable(err) { time.Sleep(backoff); retry() }
 func IsRetryable(err error) bool {
-	if err == nil {
-		return false
-	}
+	return ClassifyError(err) == ErrorClassRetryable
+}
 
-	// Extract ErrorType from wrapped errors - enables retry logic
-	// to work with contextual errors from wrapError()
-	var errorType ErrorType
-	if !errors.As(err, &errorType) {
-		return true // Unknown errors assumed retryable to avoid data loss
-	}
-
-	// Retry decision matrix - prevents infinite loops on permanent failures
-	// while allowing recovery from transient issues
-	switch errorType {
-	// Success - no retry needed
-	case Success, Created:
-
-		return false
-
-	// Retryable network/transient errors
-	case ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrUnstableCluster,
-		ErrTryAgain, ErrResourceLocked, ErrNetworkError, ErrNetworkInbufTooSmall:
-
-		return true
-
-	// Retryable system errors - may be temporary
-	case ErrSystemRemote, ErrSystemLocal, ErrInternalRemote, ErrInternalLocal,
-		ErrNoMemoryRemote, ErrNoMemoryLocal, ErrConflict, ErrNotConnected,
-		ErrInterrupted, ErrAsyncPipeFull:
-
-		return true
-
-	// Partial failures - some operations succeeded, worth retrying remainder
-	case ErrTransactionPartialFailure, ErrPartialFailure:
-
-		return true
-
-	// Clock skew - may resolve over time
-	case ErrClockSkew:
-
-		return true
-
-	// Logic errors - retrying won't fix bad code
-	case ErrInvalidArgument, ErrInvalidHandle, ErrInvalidIterator, ErrInvalidVersion,
-		ErrInvalidProtocol, ErrInvalidReply, ErrInvalidQuery, ErrInvalidRegex,
-		ErrInvalidCryptoKey, ErrBufferTooSmall, ErrNotImplemented, ErrIteratorEnd,
-		ErrUninitialized:
-
-		return false
-
-	// Schema errors - retrying won't change schema
-	case ErrIncompatibleType, ErrColumnNotFound, ErrQueryTooComplex:
-
-		return false
-
-	// Constraint violations - retrying won't resolve conflicts
-	case ErrAliasAlreadyExists, ErrElementAlreadyExists, ErrTagAlreadySet,
-		ErrOutOfBounds, ErrOverflow, ErrUnderflow, ErrEntryTooLarge,
-		ErrAliasTooLong, ErrUnmatchedContent, ErrReservedAlias, ErrSkipped:
-
-		return false
-
-	// Auth failures - retrying won't fix credentials
-	case ErrAccessDenied, ErrLoginFailed, ErrOperationNotPermitted, ErrUnknownUser:
-
-		return false
-
-	// Config errors - retrying won't enable features
-	case ErrOperationDisabled:
-
-		return false
-
-	// State errors - retrying won't create missing data
-	case ErrContainerEmpty, ErrContainerFull, ErrElementNotFound, ErrTagNotSet,
-		ErrAliasNotFound, ErrHostNotFound:
-
-		return false
-
-	// Data integrity - retrying won't fix corruption
-	case ErrDataCorruption:
-
-		return false
-
-	// Resource exhaustion - retrying won't free disk space
-	case ErrNoSpaceLeft, ErrQuotaExceeded:
-
-		return false
-
-	// Unknown errors assumed retryable - prevents data loss from new errors
-	default:
-
-		return true
-	}
+// IsFatal returns true when the error is caused by the caller and retrying
+// the same call cannot succeed. nil and informational status codes are not
+// fatal.
+//
+// Example:
+//
+//	if IsFatal(err) { return err }
+func IsFatal(err error) bool {
+	return ClassifyError(err) == ErrorClassFatal
 }
