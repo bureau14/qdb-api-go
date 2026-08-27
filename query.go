@@ -143,10 +143,10 @@ func (r *QueryPoint) GetDouble() (float64, error) {
 		return float64(C.get_double_from_payload(result)), nil
 	}
 
-	return 0, wrapError(C.qdb_e_operation_not_permitted, "query_point_get_double", "wrong_type", "expected_double")
+	return 0, wrapError(C.qdb_e_incompatible_type, "query_point_get_double", "wrong_type", "expected_double")
 }
 
-// GetBlob : retrieve a double from the interface
+// GetBlob : retrieve a blob from the interface
 func (r *QueryPoint) GetBlob() ([]byte, error) {
 	if r._type == C.qdb_query_result_blob {
 		result := (*C.qdb_point_result_t)(unsafe.Pointer(r))
@@ -154,7 +154,7 @@ func (r *QueryPoint) GetBlob() ([]byte, error) {
 		return getBlobUnsafe(result), nil
 	}
 
-	return []byte{}, wrapError(C.qdb_e_operation_not_permitted, "query_point_get_blob", "wrong_type", "expected_blob")
+	return []byte{}, wrapError(C.qdb_e_incompatible_type, "query_point_get_blob", "wrong_type", "expected_blob")
 }
 
 // GetInt64 : retrieve an int64 from the interface
@@ -164,7 +164,7 @@ func (r *QueryPoint) GetInt64() (int64, error) {
 		return int64(C.get_int64_from_payload(result)), nil
 	}
 
-	return 0, wrapError(C.qdb_e_operation_not_permitted, "query_point_get_int64", "wrong_type", "expected_int64")
+	return 0, wrapError(C.qdb_e_incompatible_type, "query_point_get_int64", "wrong_type", "expected_int64")
 }
 
 // GetString : retrieve a string from the interface
@@ -175,7 +175,7 @@ func (r *QueryPoint) GetString() (string, error) {
 		return getStringUnsafe(result), nil
 	}
 
-	return "", wrapError(C.qdb_e_operation_not_permitted, "query_point_get_string", "wrong_type", "expected_string")
+	return "", wrapError(C.qdb_e_incompatible_type, "query_point_get_string", "wrong_type", "expected_string")
 }
 
 // GetTimestamp : retrieve a timestamp from the interface
@@ -185,7 +185,7 @@ func (r *QueryPoint) GetTimestamp() (time.Time, error) {
 		return TimespecToStructG(C.get_timestamp_from_payload(result)), nil
 	}
 
-	return time.Unix(-1, -1), wrapError(C.qdb_e_operation_not_permitted, "query_point_get_timestamp", "wrong_type", "expected_timestamp")
+	return time.Unix(-1, -1), wrapError(C.qdb_e_incompatible_type, "query_point_get_timestamp", "wrong_type", "expected_timestamp")
 }
 
 // GetCount : retrieve the count from the interface
@@ -195,7 +195,7 @@ func (r *QueryPoint) GetCount() (int64, error) {
 		return int64(C.get_count_from_payload(result)), nil
 	}
 
-	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
+	return 0, wrapError(C.qdb_e_incompatible_type, "query_point_get_count", "wrong_type", "expected_count")
 }
 
 // QueryResult : a query result
