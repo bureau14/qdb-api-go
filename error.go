@@ -309,9 +309,9 @@ func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
 //
 // Returns:
 //
-//	ErrorClassNone: err is nil
-//	ErrorClassRetryable: no ErrorClassifier in the chain
-//	otherwise: the classifier's ErrorClass()
+	//	ErrorClassNone: err is nil, or the classifier reports none (success / informational status codes)
+	//	ErrorClassRetryable: no ErrorClassifier in the chain
+	//	otherwise: the classifier's ErrorClass()
 func ClassifyError(err error) ErrorClass {
 	if err == nil {
 		return ErrorClassNone
