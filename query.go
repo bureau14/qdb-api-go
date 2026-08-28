@@ -227,6 +227,10 @@ func (r *QueryResult) Close() {
 //
 //	The actual number of scanned points may be greater
 func (r QueryResult) ScannedPoints() int64 {
+	if r.result == nil {
+		return 0
+	}
+
 	return int64(r.result.scanned_point_count)
 }
 
@@ -250,6 +254,10 @@ func qdbStringArrayToSlice(strings *C.qdb_string_t, length int64) []C.qdb_string
 
 // Columns : create columns from a row
 func (r QueryResult) Columns(row *QueryPoint) QueryRow {
+	if r.result == nil {
+		return QueryRow{}
+	}
+
 	count := int64(r.result.column_count)
 
 	return queryPointArrayToSlice(row, count)
@@ -257,6 +265,10 @@ func (r QueryResult) Columns(row *QueryPoint) QueryRow {
 
 // Rows : get rows of a query table result
 func (r QueryResult) Rows() QueryRows {
+	if r.result == nil {
+		return QueryRows{}
+	}
+
 	count := int64(r.result.row_count)
 	if count == 0 {
 		return []*QueryPoint{}
@@ -267,6 +279,10 @@ func (r QueryResult) Rows() QueryRows {
 
 // ColumnsNames : get the number of columns names of each row
 func (r QueryResult) ColumnsNames() []string {
+	if r.result == nil {
+		return []string{}
+	}
+
 	count := int64(r.result.column_count)
 	result := make([]string, count)
 	rawNames := qdbStringArrayToSlice(r.result.column_names, count)
@@ -279,6 +295,10 @@ func (r QueryResult) ColumnsNames() []string {
 
 // ColumnsCount : get the number of columns of each row
 func (r QueryResult) ColumnsCount() int64 {
+	if r.result == nil {
+		return 0
+	}
+
 	return int64(r.result.column_count)
 }
 
@@ -293,6 +313,10 @@ func (r QueryResult) RowCount() int64 {
 
 // ErrorMessage : the error message in case of failure
 func (r QueryResult) ErrorMessage() string {
+	if r.result == nil {
+		return ""
+	}
+
 	return C.GoStringN(r.result.error_message.data, C.int(r.result.error_message.length))
 }
 
