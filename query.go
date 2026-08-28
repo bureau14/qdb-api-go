@@ -198,9 +198,29 @@ func (r *QueryPoint) GetCount() (int64, error) {
 	return 0, wrapError(C.qdb_e_incompatible_type, "query_point_get_count", "wrong_type", "expected_count")
 }
 
-// QueryResult : a query result
+// QueryResult holds the rows returned by Query.Execute. The underlying buffer
+// is API-allocated and lives until Close is called or the handle is closed;
+// callers must call Close. Accessors return zero values once closed.
 type QueryResult struct {
+	// Handle the query was executed on; qdb_release must use the same handle.
+	handle HandleType
+
+	// API-allocated result set. Nil once closed, or when the statement
+	// produced no result set (e.g. DDL).
 	result *C.qdb_query_result_t
+}
+
+// Close releases the API-allocated result buffer. Safe to call on a nil
+// receiver and more than once. Rows, columns and points obtained from this
+// result must not be used after Close.
+func (r *QueryResult) Close() {
+	if r == nil || r.result == nil {
+		return
+	}
+
+	qdbReleasePointer(r.handle, unsafe.Pointer(r.result))
+	// Barrier-free nil store; see setCPtr.
+	setCPtr(unsafe.Pointer(&r.result), nil)
 }
 
 // ScannedPoints : number of points scanned
@@ -282,11 +302,32 @@ type Query struct {
 	query string
 }
 
-// Execute : execute a query
+// Execute runs the query against the cluster.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	*QueryResult: Result set, or nil when the statement produces none (e.g. DDL)
+//	error: Query error, if any
+//
+// A non-nil result is owned by the caller and must be released with Close,
+// including when an error is returned alongside it. Close is nil-safe, so it
+// can be deferred before checking the error.
+//
+// Example:
+//
+//	result, err := h.Query("SELECT * FROM measurements").Execute()
+//	defer result.Close()
+//	if err != nil {
+//	    return err
+//	}
 func (q Query) Execute() (*QueryResult, error) {
 	query := convertToCharStar(q.query)
 	defer releaseCharStar(query)
-	var r QueryResult
+	r := QueryResult{handle: q.HandleType}
 	err := C.qdb_query(q.handle, query, &r.result)
 	if r.result == nil {
 		return nil, wrapError(err, "query_execute", "query", q.query)
