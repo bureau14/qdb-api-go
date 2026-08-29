@@ -16,6 +16,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"time"
 	"unsafe"
@@ -126,12 +127,6 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 //	}
 //	defer h.Close()
 func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
-	// Validate options
-	err := options.validate()
-	if err != nil {
-		return HandleType{}, fmt.Errorf("invalid options: %w", err)
-	}
-
 	// Create new handle
 	h, err := NewHandle()
 	if err != nil {
@@ -168,9 +163,15 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 		return HandleType{}, fmt.Errorf("failed to set timeout: %w", setupErr)
 	}
 
-	// Set client max parallelism if specified
+	// Set client max parallelism if specified. The C parameter is unsigned:
+	// a negative Go int would wrap to a huge thread count, so it is rejected
+	// here, out of the C API's sight.
+	if options.clientMaxParallelism < 0 {
+		setupErr = wrapError(C.qdb_e_invalid_argument, "handle_set_client_max_parallelism", "value", options.clientMaxParallelism, "reason", "negative")
+
+		return HandleType{}, setupErr
+	}
 	if options.clientMaxParallelism > 0 {
-		// Ensure the value fits in uint (validation already checks this)
 		setupErr = h.SetClientMaxParallelism(uint(options.clientMaxParallelism))
 		if setupErr != nil {
 			return HandleType{}, fmt.Errorf("failed to set client max parallelism: %w", setupErr)
@@ -185,7 +186,13 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 		}
 	}
 
-	// Set connections per address if specified (must be before Connect)
+	// Set connections per address if specified (must be before Connect); same
+	// unsigned conversion as parallelism.
+	if options.connectionsPerAddress < 0 {
+		setupErr = wrapError(C.qdb_e_invalid_argument, "handle_set_connections_per_address", "value", options.connectionsPerAddress, "reason", "negative")
+
+		return HandleType{}, setupErr
+	}
 	if options.connectionsPerAddress > 0 {
 		setupErr = h.SetConnectionsPerAddress(uint(options.connectionsPerAddress))
 		if setupErr != nil {
@@ -193,13 +200,15 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 		}
 	}
 
-	// Handle cluster public key
+	// Handle cluster public key. A file that cannot be read is a
+	// configuration mistake: it is reported as ErrInvalidArgument so that
+	// IsFatal holds, at the cost of errors.Is against the os error.
 	if options.clusterPublicKeyFile != "" {
 		clusterKey, err := ClusterKeyFromFile(options.clusterPublicKeyFile)
 		if err != nil {
-			setupErr = err
+			setupErr = wrapError(C.qdb_e_invalid_argument, "load_cluster_public_key", "file", options.clusterPublicKeyFile, "error", err)
 
-			return HandleType{}, fmt.Errorf("failed to load cluster public key from file: %w", err)
+			return HandleType{}, setupErr
 		}
 		setupErr = h.AddClusterPublicKey(clusterKey)
 		if setupErr != nil {
@@ -216,9 +225,9 @@ func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
 	if options.userSecurityFile != "" {
 		userName, userSecret, err := UserCredentialFromFile(options.userSecurityFile)
 		if err != nil {
-			setupErr = err
+			setupErr = wrapError(C.qdb_e_invalid_argument, "load_user_credentials", "file", options.userSecurityFile, "error", err)
 
-			return HandleType{}, fmt.Errorf("failed to load user credentials from file: %w", err)
+			return HandleType{}, setupErr
 		}
 		setupErr = h.AddUserCredentials(userName, userSecret)
 		if setupErr != nil {
@@ -476,6 +485,11 @@ func (h HandleType) Open(protocol Protocol) error {
 //	    return err
 //	}
 func (h HandleType) SetTimeout(timeout time.Duration) error {
+	// The C API takes int milliseconds; a larger value would be truncated
+	// before the C API could reject it.
+	if timeout/time.Millisecond > math.MaxInt32 {
+		return wrapError(C.qdb_e_invalid_argument, "handle_set_timeout", "timeout", timeout, "reason", "exceeds C int milliseconds")
+	}
 	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
 
 	return wrapError(err, "handle_set_timeout", "timeout_ms", timeout/time.Millisecond)
