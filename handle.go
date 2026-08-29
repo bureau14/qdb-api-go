@@ -1229,6 +1229,7 @@ func (h HandleType) Cluster() *Cluster {
 //
 //	q := h.Query("SELECT * FROM measurements WHERE value > 100")
 //	result, err := q.Execute()
+//	defer result.Close()
 func (h HandleType) Query(query string) *Query {
 	return &Query{h, query}
 }

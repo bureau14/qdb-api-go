@@ -198,15 +198,39 @@ func (r *QueryPoint) GetCount() (int64, error) {
 	return 0, makeErrorOrNil(C.qdb_e_operation_not_permitted)
 }
 
-// QueryResult : a query result
+// QueryResult holds the rows returned by Query.Execute. The underlying buffer
+// is API-allocated and lives until Close is called or the handle is closed;
+// callers must call Close. Accessors return zero values once closed.
 type QueryResult struct {
+	// Handle the query was executed on; qdb_release must use the same handle.
+	handle HandleType
+
+	// API-allocated result set. Nil once closed, or when the statement
+	// produced no result set (e.g. DDL).
 	result *C.qdb_query_result_t
+}
+
+// Close releases the API-allocated result buffer. Safe to call on a nil
+// receiver and more than once. Rows, columns and points obtained from this
+// result must not be used after Close.
+func (r *QueryResult) Close() {
+	if r == nil || r.result == nil {
+		return
+	}
+
+	qdbReleasePointer(r.handle, unsafe.Pointer(r.result))
+	// Barrier-free nil store; see setCPtr.
+	setCPtr(unsafe.Pointer(&r.result), nil)
 }
 
 // ScannedPoints : number of points scanned
 //
 //	The actual number of scanned points may be greater
 func (r QueryResult) ScannedPoints() int64 {
+	if r.result == nil {
+		return 0
+	}
+
 	return int64(r.result.scanned_point_count)
 }
 
@@ -230,6 +254,10 @@ func qdbStringArrayToSlice(strings *C.qdb_string_t, length int64) []C.qdb_string
 
 // Columns : create columns from a row
 func (r QueryResult) Columns(row *QueryPoint) QueryRow {
+	if r.result == nil {
+		return QueryRow{}
+	}
+
 	count := int64(r.result.column_count)
 
 	return queryPointArrayToSlice(row, count)
@@ -237,6 +265,10 @@ func (r QueryResult) Columns(row *QueryPoint) QueryRow {
 
 // Rows : get rows of a query table result
 func (r QueryResult) Rows() QueryRows {
+	if r.result == nil {
+		return QueryRows{}
+	}
+
 	count := int64(r.result.row_count)
 	if count == 0 {
 		return []*QueryPoint{}
@@ -247,6 +279,10 @@ func (r QueryResult) Rows() QueryRows {
 
 // ColumnsNames : get the number of columns names of each row
 func (r QueryResult) ColumnsNames() []string {
+	if r.result == nil {
+		return []string{}
+	}
+
 	count := int64(r.result.column_count)
 	result := make([]string, count)
 	rawNames := qdbStringArrayToSlice(r.result.column_names, count)
@@ -259,6 +295,10 @@ func (r QueryResult) ColumnsNames() []string {
 
 // ColumnsCount : get the number of columns of each row
 func (r QueryResult) ColumnsCount() int64 {
+	if r.result == nil {
+		return 0
+	}
+
 	return int64(r.result.column_count)
 }
 
@@ -273,6 +313,10 @@ func (r QueryResult) RowCount() int64 {
 
 // ErrorMessage : the error message in case of failure
 func (r QueryResult) ErrorMessage() string {
+	if r.result == nil {
+		return ""
+	}
+
 	return C.GoStringN(r.result.error_message.data, C.int(r.result.error_message.length))
 }
 
@@ -282,11 +326,32 @@ type Query struct {
 	query string
 }
 
-// Execute : execute a query
+// Execute runs the query against the cluster.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	*QueryResult: Result set, or nil when the statement produces none (e.g. DDL)
+//	error: Query error, if any
+//
+// A non-nil result is owned by the caller and must be released with Close,
+// including when an error is returned alongside it. Close is nil-safe, so it
+// can be deferred before checking the error.
+//
+// Example:
+//
+//	result, err := h.Query("SELECT * FROM measurements").Execute()
+//	defer result.Close()
+//	if err != nil {
+//	    return err
+//	}
 func (q Query) Execute() (*QueryResult, error) {
 	query := convertToCharStar(q.query)
 	defer releaseCharStar(query)
-	var r QueryResult
+	r := QueryResult{handle: q.HandleType}
 	err := C.qdb_query(q.handle, query, &r.result)
 	if r.result == nil {
 		return nil, wrapError(err, "query_execute", "query", q.query)
