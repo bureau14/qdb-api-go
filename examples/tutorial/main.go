@@ -192,6 +192,7 @@ func query(handle *qdb.HandleType) error {
 	if err != nil {
 		return err
 	}
+	defer table.Close()
 
 	for _, row := range table.Rows() {
 		for _, col := range table.Columns(row) {

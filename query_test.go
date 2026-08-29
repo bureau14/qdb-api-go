@@ -3,7 +3,6 @@ package qdb
 import (
 	"fmt"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 	result, err := handle.Query(query).Execute()
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	defer handle.Release(unsafe.Pointer(result)) //nolint:gosec // Safe CGO conversion for QuasarDB API
+	defer result.Close()
 
 	for rowIdx, row := range result.Rows() {
 		cols := result.Columns(row)
@@ -101,7 +100,7 @@ func TestQueryWrongTypeReturnsError(t *testing.T) {
 	query := fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
 	result, err := handle.Query(query).Execute()
 	require.NoError(t, err)
-	defer handle.Release(unsafe.Pointer(result)) //nolint:gosec // Safe CGO conversion for QuasarDB API
+	defer result.Close()
 
 	for _, row := range result.Rows() {
 		cols := result.Columns(row)
@@ -117,6 +116,7 @@ func TestQueryReturnsNoResults(t *testing.T) {
 	query := fmt.Sprintf("select * from %s in range(1971, +10d)", td.Alias)
 	result, err := handle.Query(query).Execute()
 	require.NoError(t, err)
+	defer result.Close()
 	assert.Equal(t, int64(0), result.ScannedPoints())
 	assert.Equal(t, int64(0), result.RowCount())
 }
@@ -148,4 +148,27 @@ func TestQueryDropTableReturnsNil(t *testing.T) {
 	).Execute()
 	require.NoError(t, err)
 	assert.Nil(t, result)
+}
+
+func TestQueryResultCloseIsIdempotentAndNilSafe(t *testing.T) {
+	var nilResult *QueryResult
+	nilResult.Close()
+
+	handle := newTestHandle(t)
+
+	td := newTestTimeseriesAllColumns(t, handle, 1)
+	query := fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
+	result, err := handle.Query(query).Execute()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), result.RowCount())
+
+	result.Close()
+	result.Close()
+
+	assert.Equal(t, int64(0), result.RowCount())
+	assert.Equal(t, int64(0), result.ColumnsCount())
+	assert.Equal(t, int64(0), result.ScannedPoints())
+	assert.Empty(t, result.Rows())
+	assert.Empty(t, result.ColumnsNames())
+	assert.Empty(t, result.ErrorMessage())
 }
