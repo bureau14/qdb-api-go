@@ -634,6 +634,41 @@ func (h HandleType) AddClusterPublicKey(secret string) error {
 	return wrapError(qdbErr, "add_cluster_public_key")
 }
 
+// LoadSecurityFiles sets the cluster public key and the user credentials
+// from their files, read by the C API.
+//
+// Args:
+//
+//	clusterPublicKeyFile: Path to the cluster public key file
+//	userCredentialFile: Path to the user credentials JSON file
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Must be called before Connect. Both paths are required: the C API
+// rejects a NULL path and has no single-file variant. The files are read
+// inside the C API at the time of the call, so the secret never passes
+// through Go memory; prefer this over ClusterKeyFromFile and
+// UserCredentialFromFile combined with the string setters whenever both
+// halves come from files.
+//
+// Example:
+//
+//	err := handle.LoadSecurityFiles("/path/to/cluster.key", "/path/to/user.json")
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) LoadSecurityFiles(clusterPublicKeyFile, userCredentialFile string) error {
+	clusterKeyFile := convertToCharStar(clusterPublicKeyFile)
+	defer releaseCharStar(clusterKeyFile)
+	userFile := convertToCharStar(userCredentialFile)
+	defer releaseCharStar(userFile)
+	qdbErr := C.qdb_option_load_security_files(h.handle, clusterKeyFile, userFile)
+
+	return wrapError(qdbErr, "load_security_files", "cluster_public_key_file", clusterPublicKeyFile, "user_credentials_file", userCredentialFile)
+}
+
 // SetMaxCardinality sets the maximum allowed cardinality for queries.
 //
 // Args:
