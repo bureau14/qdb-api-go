@@ -238,7 +238,8 @@ func (e ErrorType) ErrorClass() ErrorClass {
 
 	switch e {
 	case ErrNotImplemented, ErrIncompatibleType, ErrUninitialized, ErrOutOfBounds,
-		ErrInvalidQuery, ErrAliasNotFound, ErrAliasAlreadyExists, ErrInvalidArgument:
+		ErrInvalidQuery, ErrAliasNotFound, ErrAliasAlreadyExists, ErrInvalidArgument,
+		ErrNetworkInbufTooSmall:
 		return ErrorClassFatal
 
 	default:
