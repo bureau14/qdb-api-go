@@ -195,6 +195,38 @@ func TestSessionPoolReaperClosesIdle(t *testing.T) {
 	require.Equal(t, SessionPoolStats{Dialed: 1}, p.Stats())
 }
 
+// The closer runs once per closed session, after the lease ended, and for
+// none that is merely idle: the caller told when a session begins is told
+// when it ends.
+func TestSessionPoolCloserRunsOncePerClosedSession(t *testing.T) {
+	var closes atomic.Uint64
+	d := newTestDialer()
+	var p *SessionPool
+	closer := func(s Session) error {
+		require.Zero(t, p.Stats().InUse, "the closer runs after the lease ended")
+		closes.Add(1)
+
+		return s.Close()
+	}
+	p = newTestPool(t, d, NewSessionPoolOptions().WithMaxSessions(1).WithCloser(closer))
+
+	l, err := p.Acquire(context.Background())
+	require.NoError(t, err)
+	l.Discard()
+	waitClosed(t, p)
+	require.Equal(t, uint64(1), closes.Load())
+
+	l, err = p.Acquire(context.Background())
+	require.NoError(t, err)
+	l.Release()
+	require.Equal(t, uint64(1), closes.Load(), "an idle session is not closed")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	require.NoError(t, p.Close(ctx))
+	require.Equal(t, d.calls.Load(), closes.Load(), "every dialed session is closed once")
+}
+
 // A fatal error is the cluster rejecting the request, not the session:
 // Do hands the session back and the next Do reuses it without a dial.
 func TestSessionPoolDoReusesSessionAfterFatalError(t *testing.T) {

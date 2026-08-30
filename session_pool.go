@@ -28,11 +28,12 @@ type SessionPoolOptions struct {
 	reapInterval time.Duration
 	now          func() time.Time
 	dialer       func(context.Context) (Session, error)
+	closer       func(Session) error
 }
 
 // NewSessionPoolOptions returns options with the defaults: 8 sessions, 5
 // minutes idle, 15 minutes lifetime, a reaper every 10 seconds, the wall
-// clock, and the factory as dialer.
+// clock, the factory as dialer, and Session.Close as closer.
 //
 // Example:
 //
@@ -104,6 +105,18 @@ func (o *SessionPoolOptions) WithClock(now func() time.Time) *SessionPoolOptions
 func (o *SessionPoolOptions) WithDialer(dial func(context.Context) (Session, error)) *SessionPoolOptions {
 	opts := *o
 	opts.dialer = dial
+
+	return &opts
+}
+
+// WithCloser replaces Session.Close as the way a session is closed: on
+// discard, idle or lifetime expiry, and at Close. Intended for callers
+// that wrap the close, for instance to account for the session once
+// qdb_close has returned, which can be minutes after the lease ended. The
+// pool still runs it on its own goroutine.
+func (o *SessionPoolOptions) WithCloser(closer func(Session) error) *SessionPoolOptions {
+	opts := *o
+	opts.closer = closer
 
 	return &opts
 }
@@ -211,8 +224,9 @@ type acquireStep struct {
 //	err = lease.Session().Blob("alias").Put(data, qdb.NeverExpires())
 //	lease.Done(err)
 type SessionPool struct {
-	opts *SessionPoolOptions
-	dial func(context.Context) (Session, error)
+	opts  *SessionPoolOptions
+	dial  func(context.Context) (Session, error)
+	close func(Session) error
 
 	// reaperStop ends the reaper goroutine and reaperDone closes once it
 	// has ended; both are nil when no reaper runs. reaperOnce lets Close be
@@ -257,7 +271,11 @@ func NewSessionPool(f *SessionFactory, o *SessionPoolOptions) (*SessionPool, err
 	if dial == nil {
 		dial = factoryDialer(f)
 	}
-	p := &SessionPool{opts: o, dial: dial, changed: make(chan struct{})}
+	closer := o.closer
+	if closer == nil {
+		closer = Session.Close
+	}
+	p := &SessionPool{opts: o, dial: dial, close: closer, changed: make(chan struct{})}
 	if o.reapInterval > 0 && o.idleTimeout > 0 {
 		p.reaperStop = make(chan struct{})
 		p.reaperDone = make(chan struct{})
@@ -431,7 +449,7 @@ func (p *SessionPool) dialLease(ctx context.Context) (*Lease, error) {
 func (p *SessionPool) closeSessionLocked(s Session) {
 	p.closing++
 	go func() {
-		err := s.Close()
+		err := p.close(s)
 		if err != nil {
 			L().Debug("session pool: close failed", "error", err)
 		}
