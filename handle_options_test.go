@@ -1,6 +1,8 @@
 package qdb
 
 import (
+	"errors"
+	"math"
 	"testing"
 	"time"
 )
@@ -135,333 +137,6 @@ func TestHandleOptions(t *testing.T) {
 	})
 }
 
-func TestHandleOptionsValidation(t *testing.T) {
-	tests := []struct {
-		name    string
-		opts    *HandleOptions
-		wantErr string
-	}{
-		{
-			name:    "missing cluster URI",
-			opts:    &HandleOptions{},
-			wantErr: "cluster URI is required",
-		},
-		{
-			name: "invalid cluster URI",
-			opts: &HandleOptions{
-				clusterURI: "http://localhost:2836",
-			},
-			wantErr: "cluster URI must start with 'qdb://'",
-		},
-		{
-			name: "empty cluster URI after trim",
-			opts: &HandleOptions{
-				clusterURI: "   ",
-			},
-			wantErr: "cluster URI is required",
-		},
-		{
-			name: "whitespace-only user name",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				userName:   "   ",
-				userSecret: "valid-secret",
-			},
-			wantErr: "both user name and user secret must be provided together",
-		},
-		{
-			name: "whitespace-only user secret",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				userName:   "valid-user",
-				userSecret: "   ",
-			},
-			wantErr: "both user name and user secret must be provided together",
-		},
-		{
-			name: "both cluster key methods",
-			opts: &HandleOptions{
-				clusterURI:           "qdb://localhost:2836",
-				clusterPublicKeyFile: "key.file",
-				clusterPublicKey:     "direct-key",
-			},
-			wantErr: "cannot specify both cluster public key file and direct cluster public key",
-		},
-		{
-			name: "both user credential methods",
-			opts: &HandleOptions{
-				clusterURI:       "qdb://localhost:2836",
-				userSecurityFile: "user.file",
-				userName:         "user",
-			},
-			wantErr: "cannot specify both user security file and direct user credentials",
-		},
-		{
-			name: "missing user secret",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				userName:   "user",
-			},
-			wantErr: "both user name and user secret must be provided together",
-		},
-		{
-			name: "missing user name",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				userSecret: "secret",
-			},
-			wantErr: "both user name and user secret must be provided together",
-		},
-		{
-			name: "cluster key without user credentials",
-			opts: &HandleOptions{
-				clusterURI:       "qdb://localhost:2836",
-				clusterPublicKey: "key",
-			},
-			wantErr: "user credentials are required when cluster public key is set",
-		},
-		{
-			name: "encryption without cluster key",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				encryption: EncryptAES,
-			},
-			wantErr: "encryption requires cluster public key to be set",
-		},
-		{
-			name: "encryption without user credentials",
-			opts: &HandleOptions{
-				clusterURI:       "qdb://localhost:2836",
-				encryption:       EncryptAES,
-				clusterPublicKey: "key",
-			},
-			wantErr: "encryption requires user credentials to be set",
-		},
-		{
-			name: "encryption with cluster key file but no user credentials",
-			opts: &HandleOptions{
-				clusterURI:           "qdb://localhost:2836",
-				encryption:           EncryptAES,
-				clusterPublicKeyFile: "cluster.key",
-			},
-			wantErr: "encryption requires user credentials to be set",
-		},
-		{
-			name: "encryption with user credentials but no cluster key",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				encryption: EncryptAES,
-				userName:   "user",
-				userSecret: "secret",
-			},
-			wantErr: "encryption requires cluster public key to be set",
-		},
-		{
-			name: "negative client max parallelism",
-			opts: &HandleOptions{
-				clusterURI:           "qdb://localhost:2836",
-				clientMaxParallelism: -1,
-			},
-			wantErr: "client max parallelism cannot be negative",
-		},
-		{
-			name: "client max parallelism overflow",
-			opts: &HandleOptions{
-				clusterURI:           "qdb://localhost:2836",
-				clientMaxParallelism: 65537,
-			},
-			wantErr: "client max parallelism 65537 exceeds maximum allowed value 65536",
-		},
-		{
-			name: "negative connections per address",
-			opts: &HandleOptions{
-				clusterURI:            "qdb://localhost:2836",
-				connectionsPerAddress: -1,
-			},
-			wantErr: "connections per address cannot be negative",
-		},
-		{
-			name: "connections per address below minimum",
-			opts: &HandleOptions{
-				clusterURI:            "qdb://localhost:2836",
-				connectionsPerAddress: 1,
-			},
-			wantErr: "connections per address 1 must be between 2 and 100000",
-		},
-		{
-			name: "connections per address above maximum",
-			opts: &HandleOptions{
-				clusterURI:            "qdb://localhost:2836",
-				connectionsPerAddress: 100001,
-			},
-			wantErr: "connections per address 100001 must be between 2 and 100000",
-		},
-		{
-			name: "negative timeout",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				timeout:    -1 * time.Second,
-			},
-			wantErr: "timeout cannot be negative",
-		},
-		{
-			name: "zero timeout",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				timeout:    0,
-			},
-			wantErr: "timeout cannot be zero",
-		},
-		{
-			name: "timeout overflow",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				timeout:    25 * 24 * time.Hour, // > 24.8 days
-			},
-			wantErr: "timeout 600h0m0s exceeds maximum allowed value (approximately 24.8 days)",
-		},
-		{
-			name: "valid unsecured",
-			opts: &HandleOptions{
-				clusterURI: "qdb://localhost:2836",
-				timeout:    30 * time.Second,
-			},
-			wantErr: "",
-		},
-		{
-			name: "valid minimum connections per address",
-			opts: &HandleOptions{
-				clusterURI:            "qdb://localhost:2836",
-				connectionsPerAddress: 2,
-				timeout:               30 * time.Second,
-			},
-			wantErr: "",
-		},
-		{
-			name: "valid maximum connections per address",
-			opts: &HandleOptions{
-				clusterURI:            "qdb://localhost:2836",
-				connectionsPerAddress: 100000,
-				timeout:               30 * time.Second,
-			},
-			wantErr: "",
-		},
-		{
-			name: "valid secured with files",
-			opts: &HandleOptions{
-				clusterURI:           "qdb://localhost:2836",
-				clusterPublicKeyFile: "cluster.key",
-				userSecurityFile:     "user.json",
-				timeout:              30 * time.Second,
-			},
-			wantErr: "",
-		},
-		{
-			name: "valid secured with direct credentials",
-			opts: &HandleOptions{
-				clusterURI:       "qdb://localhost:2836",
-				clusterPublicKey: "key",
-				userName:         "user",
-				userSecret:       "secret",
-				timeout:          30 * time.Second,
-			},
-			wantErr: "",
-		},
-		{
-			name: "valid encrypted with all requirements",
-			opts: &HandleOptions{
-				clusterURI:       "qdb://localhost:2836",
-				encryption:       EncryptAES,
-				clusterPublicKey: "key",
-				userName:         "user",
-				userSecret:       "secret",
-				timeout:          30 * time.Second,
-			},
-			wantErr: "",
-		},
-		{
-			name: "valid encrypted with files",
-			opts: &HandleOptions{
-				clusterURI:           "qdb://localhost:2836",
-				encryption:           EncryptAES,
-				clusterPublicKeyFile: "cluster.key",
-				userSecurityFile:     "user.json",
-				timeout:              30 * time.Second,
-			},
-			wantErr: "",
-		},
-		{
-			name: "strings are trimmed during validation",
-			opts: &HandleOptions{
-				clusterURI:       "  qdb://localhost:2836  ",
-				clusterPublicKey: "  key  ",
-				userName:         "  user  ",
-				userSecret:       "  secret  ",
-				timeout:          30 * time.Second,
-			},
-			wantErr: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Make a copy to verify trimming behavior
-			originalURI := tt.opts.clusterURI
-
-			err := tt.opts.validate()
-			if tt.wantErr != "" {
-				// Expected error case
-				if err == nil {
-					t.Errorf("expected error containing %q, got nil", tt.wantErr)
-
-					return
-				}
-				if err.Error() != tt.wantErr {
-					t.Errorf("expected error %q, got %q", tt.wantErr, err.Error())
-				}
-
-				return
-			}
-
-			// Expected success case
-			if err != nil {
-				t.Errorf("expected no error, got: %v", err)
-
-				return
-			}
-
-			// Verify strings were trimmed for specific test case
-			if tt.name == "strings are trimmed during validation" {
-				verifyStringsTrimmed(t, tt.opts)
-
-				return
-			}
-
-			// Check if URI was trimmed
-			if tt.opts.clusterURI != "" && tt.opts.clusterURI != originalURI && len(originalURI) > len(tt.opts.clusterURI) {
-				// String was trimmed, which is expected
-				t.Logf("cluster URI was trimmed from %q to %q", originalURI, tt.opts.clusterURI)
-			}
-		})
-	}
-}
-
-// verifyStringsTrimmed checks that all string fields in the options have been properly trimmed
-func verifyStringsTrimmed(t *testing.T, opts *HandleOptions) {
-	if opts.clusterURI != "qdb://localhost:2836" {
-		t.Errorf("cluster URI not properly trimmed, got %q", opts.clusterURI)
-	}
-	if opts.clusterPublicKey != "key" {
-		t.Errorf("cluster public key not properly trimmed, got %q", opts.clusterPublicKey)
-	}
-	if opts.userName != "user" {
-		t.Errorf("user name not properly trimmed, got %q", opts.userName)
-	}
-	if opts.userSecret != "secret" {
-		t.Errorf("user secret not properly trimmed, got %q", opts.userSecret)
-	}
-}
-
 func TestHandleOptionsProvider(t *testing.T) {
 	// Test that HandleOptions implements HandleOptionsProvider
 	var _ HandleOptionsProvider = (*HandleOptions)(nil)
@@ -543,5 +218,54 @@ func TestNewHandleFromOptionsConnectionsPerAddress(t *testing.T) {
 	}
 	if v != 16 {
 		t.Errorf("expected connections per address 16, got %d", v)
+	}
+}
+
+func TestHandleOptionsLastSetWins(t *testing.T) {
+	t.Run("cluster key slot", func(t *testing.T) {
+		opts := NewHandleOptions().WithClusterPublicKey("inline").WithClusterPublicKeyFile("cluster.key")
+		if opts.clusterPublicKey != "" || opts.clusterPublicKeyFile != "cluster.key" {
+			t.Errorf("file did not replace inline key: %+v", opts)
+		}
+		opts = opts.WithClusterPublicKey("inline")
+		if opts.clusterPublicKey != "inline" || opts.clusterPublicKeyFile != "" {
+			t.Errorf("inline key did not replace file: %+v", opts)
+		}
+	})
+
+	t.Run("user slot", func(t *testing.T) {
+		opts := NewHandleOptions().WithUserName("user").WithUserSecret("secret").WithUserSecurityFile("user.json")
+		if opts.userName != "" || opts.userSecret != "" || opts.userSecurityFile != "user.json" {
+			t.Errorf("file did not replace inline credentials: %+v", opts)
+		}
+		opts = opts.WithUserName("user")
+		if opts.userName != "user" || opts.userSecurityFile != "" {
+			t.Errorf("inline name did not replace file: %+v", opts)
+		}
+	})
+}
+
+// The only Go-side rejections left are values the C types cannot carry;
+// everything else is the C API's to judge.
+func TestNewHandleFromOptionsRejectsUnrepresentable(t *testing.T) {
+	base := NewHandleOptions().WithClusterUri(insecureURI)
+	tests := []struct {
+		name string
+		opts *HandleOptions
+	}{
+		{"negative parallelism", base.WithClientMaxParallelism(-1)},
+		{"negative connections per address", base.WithConnectionsPerAddress(-1)},
+		{"timeout beyond C int milliseconds", base.WithTimeout(time.Duration(math.MaxInt32+1) * time.Millisecond)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewHandleFromOptions(tt.opts)
+			if !errors.Is(err, ErrInvalidArgument) {
+				t.Fatalf("want ErrInvalidArgument, got %v", err)
+			}
+			if !IsFatal(err) {
+				t.Errorf("want a fatal classification, got %v", ClassifyError(err))
+			}
+		})
 	}
 }

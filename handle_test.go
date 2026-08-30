@@ -118,6 +118,25 @@ func TestHandleMustSetupSecureInvalidParameters(t *testing.T) {
 	})
 }
 
+func TestHandleLoadSecurityFiles(t *testing.T) {
+	t.Run("connects to the secure cluster", func(t *testing.T) {
+		h, err := NewHandle()
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = h.Close() })
+
+		require.NoError(t, h.LoadSecurityFiles(clusterPublicKeyFile, userPrivateKeyFile))
+		require.NoError(t, h.Connect(secureURI))
+	})
+
+	t.Run("missing user file", func(t *testing.T) {
+		h, err := NewHandle()
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = h.Close() })
+
+		assert.Error(t, h.LoadSecurityFiles(clusterPublicKeyFile, "nonexistent.file"))
+	})
+}
+
 //----------------------------------------------------
 // NewHandle-based checks – no connection
 //----------------------------------------------------

@@ -5,10 +5,6 @@
 package qdb
 
 import (
-	"errors"
-	"fmt"
-	"math"
-	"strings"
 	"time"
 )
 
@@ -17,11 +13,13 @@ type HandleOptions struct {
 	// Connection
 	clusterURI string
 
-	// Security - Cluster
+	// Security - Cluster: one slot, inline or by file. The C API holds one
+	// key per handle, so the last With... call wins.
 	clusterPublicKeyFile string
 	clusterPublicKey     string
 
-	// Security - User
+	// Security - User: one slot, inline name/secret or a security file, same
+	// rule.
 	userSecurityFile string
 	userName         string
 	userSecret       string
@@ -92,47 +90,57 @@ func (o *HandleOptions) WithClusterUri(uri string) *HandleOptions {
 	return &opts
 }
 
-// WithClusterPublicKeyFile sets the cluster public key file path option.
+// WithClusterPublicKeyFile sets the cluster public key file path option,
+// replacing an inline key.
 func (o *HandleOptions) WithClusterPublicKeyFile(path string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.clusterPublicKeyFile = path
+	opts.clusterPublicKey = ""
 
 	return &opts
 }
 
-// WithClusterPublicKey sets the cluster public key option.
+// WithClusterPublicKey sets the cluster public key option, replacing a key
+// file.
 func (o *HandleOptions) WithClusterPublicKey(key string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.clusterPublicKey = key
+	opts.clusterPublicKeyFile = ""
 
 	return &opts
 }
 
-// WithUserSecurityFile sets the user security file path option.
+// WithUserSecurityFile sets the user security file path option, replacing
+// inline credentials.
 func (o *HandleOptions) WithUserSecurityFile(path string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.userSecurityFile = path
+	opts.userName = ""
+	opts.userSecret = ""
 
 	return &opts
 }
 
-// WithUserName sets the username option.
+// WithUserName sets the username option, replacing a user security file.
 func (o *HandleOptions) WithUserName(name string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.userName = name
+	opts.userSecurityFile = ""
 
 	return &opts
 }
 
-// WithUserSecret sets the user secret option.
+// WithUserSecret sets the user secret option, replacing a user security
+// file.
 func (o *HandleOptions) WithUserSecret(secret string) *HandleOptions {
 	// Create a copy to maintain immutability
 	opts := *o
 	opts.userSecret = secret
+	opts.userSecurityFile = ""
 
 	return &opts
 }
@@ -253,101 +261,6 @@ func (o *HandleOptions) GetConnectionsPerAddress() int {
 // GetTimeout returns the current timeout value.
 func (o *HandleOptions) GetTimeout() time.Duration {
 	return o.timeout
-}
-
-// validate checks options consistency
-// In: HandleOptions to validate
-// Out: error if invalid
-// Ex: validate() → nil|error
-func (o *HandleOptions) validate() error {
-	// Trim all string fields first and apply them back
-	o.clusterURI = strings.TrimSpace(o.clusterURI)
-	o.clusterPublicKeyFile = strings.TrimSpace(o.clusterPublicKeyFile)
-	o.clusterPublicKey = strings.TrimSpace(o.clusterPublicKey)
-	o.userSecurityFile = strings.TrimSpace(o.userSecurityFile)
-	o.userName = strings.TrimSpace(o.userName)
-	o.userSecret = strings.TrimSpace(o.userSecret)
-
-	// Check cluster URI is provided and valid
-	if o.clusterURI == "" {
-		return errors.New("cluster URI is required")
-	}
-	if !strings.HasPrefix(o.clusterURI, "qdb://") {
-		return errors.New("cluster URI must start with 'qdb://'")
-	}
-
-	// Check that only one cluster public key method is used
-	if o.clusterPublicKeyFile != "" && o.clusterPublicKey != "" {
-		return errors.New("cannot specify both cluster public key file and direct cluster public key")
-	}
-
-	// Check that only one user credential method is used
-	if o.userSecurityFile != "" && (o.userName != "" || o.userSecret != "") {
-		return errors.New("cannot specify both user security file and direct user credentials")
-	}
-
-	// If direct user credentials are provided, both must be present
-	if (o.userName != "" && o.userSecret == "") || (o.userName == "" && o.userSecret != "") {
-		return errors.New("both user name and user secret must be provided together")
-	}
-
-	// Encryption validation: if encryption is enabled, require BOTH cluster public key AND user credentials
-	if o.encryption != EncryptNone {
-		hasClusterKey := o.clusterPublicKeyFile != "" || o.clusterPublicKey != ""
-		hasUserCreds := o.userSecurityFile != "" || (o.userName != "" && o.userSecret != "")
-
-		if !hasClusterKey {
-			return errors.New("encryption requires cluster public key to be set")
-		}
-		if !hasUserCreds {
-			return errors.New("encryption requires user credentials to be set")
-		}
-	}
-
-	// If cluster public key is set, user credentials must also be set
-	hasClusterKey := o.clusterPublicKeyFile != "" || o.clusterPublicKey != ""
-	hasUserCreds := o.userSecurityFile != "" || (o.userName != "" && o.userSecret != "")
-
-	if hasClusterKey && !hasUserCreds {
-		return errors.New("user credentials are required when cluster public key is set")
-	}
-
-	// Validate client max parallelism
-	if o.clientMaxParallelism < 0 {
-		return errors.New("client max parallelism cannot be negative")
-	}
-
-	// Check if the parallelism value is reasonable, we want to avoid people doing wrong things
-	const maxParallelism = 65536 // 2^16
-	if o.clientMaxParallelism > maxParallelism {
-		return fmt.Errorf("client max parallelism %d exceeds maximum allowed value %d", o.clientMaxParallelism, maxParallelism)
-	}
-
-	// Validate connections per address: 0 means library default, otherwise the C API range
-	if o.connectionsPerAddress < 0 {
-		return errors.New("connections per address cannot be negative")
-	}
-
-	const minConnectionsPerAddress = 2
-	const maxConnectionsPerAddress = 100000
-	if o.connectionsPerAddress != 0 && (o.connectionsPerAddress < minConnectionsPerAddress || o.connectionsPerAddress > maxConnectionsPerAddress) {
-		return fmt.Errorf("connections per address %d must be between %d and %d", o.connectionsPerAddress, minConnectionsPerAddress, maxConnectionsPerAddress)
-	}
-
-	// Validate timeout
-	if o.timeout < 0 {
-		return errors.New("timeout cannot be negative")
-	}
-	if o.timeout == 0 {
-		return errors.New("timeout cannot be zero")
-	}
-	// Check if timeout in milliseconds fits in int32 (C API expects int)
-	timeoutValue := o.timeout / time.Millisecond
-	if timeoutValue > math.MaxInt32 {
-		return fmt.Errorf("timeout %v exceeds maximum allowed value (approximately 24.8 days)", o.timeout)
-	}
-
-	return nil
 }
 
 // HandleOptionsProvider provides methods to retrieve handle configuration values.
