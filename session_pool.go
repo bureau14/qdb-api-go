@@ -208,6 +208,13 @@ type SessionPool struct {
 	opts *SessionPoolOptions
 	dial func(context.Context) (Session, error)
 
+	// reaperStop ends the reaper goroutine and reaperDone closes once it
+	// has ended; both are nil when no reaper runs. reaperOnce lets Close be
+	// called more than once.
+	reaperStop chan struct{}
+	reaperDone chan struct{}
+	reaperOnce sync.Once
+
 	mu sync.Mutex
 	// idle is ordered by lastUsed, oldest first: expiry removes a prefix
 	// and reuse takes the tail, the session most likely still warm.
@@ -244,8 +251,14 @@ func NewSessionPool(f *SessionFactory, o *SessionPoolOptions) (*SessionPool, err
 	if dial == nil {
 		dial = factoryDialer(f)
 	}
+	p := &SessionPool{opts: o, dial: dial, changed: make(chan struct{})}
+	if o.reapInterval > 0 && o.idleTimeout > 0 {
+		p.reaperStop = make(chan struct{})
+		p.reaperDone = make(chan struct{})
+		go p.runReaper(o.reapInterval)
+	}
 
-	return &SessionPool{opts: o, dial: dial, changed: make(chan struct{})}, nil
+	return p, nil
 }
 
 // Acquire returns a leased session: the freshest idle one, else a freshly
@@ -282,12 +295,35 @@ func (p *SessionPool) Acquire(ctx context.Context) (*Lease, error) {
 	}
 }
 
-// Close refuses further acquires, closes every idle session and waits for
-// the leases, dials and closes still outstanding, until ctx ends. It
-// returns ctx.Err() when something was still outstanding: those sessions
-// are closed by their holders' Release or Discard, or by their own close
-// goroutine, whenever they finish. Calling Close again waits again.
+// Reap closes every idle session past the idle timeout. The reaper
+// goroutine calls it on its interval; a pool built without one leaves it
+// to the caller.
+func (p *SessionPool) Reap() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := p.opts.now()
+	kept := p.idle[:0]
+	for _, e := range p.idle {
+		if p.expired(e.lastUsed, now) {
+			p.closeSessionLocked(e.session)
+		} else {
+			kept = append(kept, e)
+		}
+	}
+	if len(kept) != len(p.idle) {
+		p.notifyLocked()
+	}
+	p.idle = kept
+}
+
+// Close stops the reaper, refuses further acquires, closes every idle
+// session and waits for the leases, dials and closes still outstanding,
+// until ctx ends. It returns ctx.Err() when something was still
+// outstanding: those sessions are closed by their holders' Release or
+// Discard, or by their own close goroutine, whenever they finish. Calling
+// Close again waits again.
 func (p *SessionPool) Close(ctx context.Context) error {
+	p.stopReaper()
 	p.mu.Lock()
 	p.shutdownLocked()
 	p.mu.Unlock()
@@ -424,6 +460,33 @@ func (p *SessionPool) expired(lastUsed, now time.Time) bool {
 // maximum lifetime.
 func (p *SessionPool) outlived(created, now time.Time) bool {
 	return p.opts.maxLifetime > 0 && now.Sub(created) >= p.opts.maxLifetime
+}
+
+// runReaper reaps on every tick until stopped.
+func (p *SessionPool) runReaper(interval time.Duration) {
+	defer close(p.reaperDone)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			p.Reap()
+		case <-p.reaperStop:
+			return
+		}
+	}
+}
+
+// stopReaper ends the reaper goroutine and waits for it, once. It must
+// not hold mu: Reap takes it.
+func (p *SessionPool) stopReaper() {
+	p.reaperOnce.Do(func() {
+		if p.reaperStop == nil {
+			return
+		}
+		close(p.reaperStop)
+		<-p.reaperDone
+	})
 }
 
 // Lease is one checked-out session. It belongs to the holder until

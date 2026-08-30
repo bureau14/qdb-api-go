@@ -178,3 +178,18 @@ func TestSessionPoolCloseWaitsForLeases(t *testing.T) {
 	require.NoError(t, p.Close(ctx))
 	require.Equal(t, SessionPoolStats{Dialed: 1}, p.Stats())
 }
+
+// The reaper goroutine runs on the wall clock and closes an idle session
+// on its own; the cleanup's Close pins that it stops.
+func TestSessionPoolReaperClosesIdle(t *testing.T) {
+	p := newTestPool(t, newTestDialer(), NewSessionPoolOptions().
+		WithIdleTimeout(50*time.Millisecond).
+		WithReapInterval(10*time.Millisecond))
+	l, err := p.Acquire(context.Background())
+	require.NoError(t, err)
+	l.Release()
+
+	require.Eventually(t, func() bool { return p.Stats().Idle == 0 }, 5*time.Second, time.Millisecond)
+	waitClosed(t, p)
+	require.Equal(t, SessionPoolStats{Dialed: 1}, p.Stats())
+}
