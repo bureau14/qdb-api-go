@@ -172,6 +172,15 @@ type idleSession struct {
 	lastUsed time.Time
 }
 
+// acquireStep is the outcome of one attempt to acquire under the lock:
+// exactly one of the three is set, and the caller acts on it once the
+// lock is released.
+type acquireStep struct {
+	lease *Lease        // an idle session was taken
+	dial  bool          // a slot was reserved; the caller dials into it
+	wait  chan struct{} // the pool is full; the caller waits on it
+}
+
 // SessionPool is a bounded set of sessions dialed from one factory: at
 // most MaxSessions leased or idle at once, dialed on demand, never at
 // construction.
@@ -218,11 +227,11 @@ type SessionPool struct {
 	// idle is ordered by lastUsed, oldest first: expiry removes a prefix
 	// and reuse takes the tail, the session most likely still warm.
 	idle      []idleSession
-	leased    int
-	dialing   int
-	closing   int
-	dialed    uint64
-	discarded uint64
+	leased    int    // sessions checked out, each holding a slot
+	dialing   int    // dials in flight, each holding a slot
+	closing   int    // closes in flight, holding no slot
+	dialed    uint64 // dials that succeeded, ever
+	discarded uint64 // leases discarded, ever
 	closed    bool
 	// changed is closed and replaced on every state change. A waiter takes
 	// the current channel under mu and selects on it and its context, which
@@ -266,28 +275,18 @@ func NewSessionPool(f *SessionFactory, o *SessionPoolOptions) (*SessionPool, err
 // IsFatal holds.
 func (p *SessionPool) Acquire(ctx context.Context) (*Lease, error) {
 	for {
-		p.mu.Lock()
-		if p.closed {
-			p.mu.Unlock()
-
-			return nil, sessionPoolClosedError()
+		step, err := p.tryAcquire()
+		if err != nil {
+			return nil, err
 		}
-		l, ok := p.takeIdleLocked()
-		if ok {
-			p.mu.Unlock()
-
-			return l, nil
+		if step.lease != nil {
+			return step.lease, nil
 		}
-		if p.leased+len(p.idle)+p.dialing < p.opts.maxSessions {
-			p.dialing++
-			p.mu.Unlock()
-
+		if step.dial {
 			return p.dialLease(ctx)
 		}
-		wait := p.changed
-		p.mu.Unlock()
 		select {
-		case <-wait:
+		case <-step.wait:
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
@@ -314,19 +313,7 @@ func (p *SessionPool) Do(ctx context.Context, op func(Session) error) (err error
 func (p *SessionPool) Reap() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	now := p.opts.now()
-	kept := p.idle[:0]
-	for _, e := range p.idle {
-		if p.expired(e.lastUsed, now) {
-			p.closeSessionLocked(e.session)
-		} else {
-			kept = append(kept, e)
-		}
-	}
-	if len(kept) != len(p.idle) {
-		p.notifyLocked()
-	}
-	p.idle = kept
+	p.reapLocked()
 }
 
 // Close stops the reaper, refuses further acquires, closes every idle
@@ -337,9 +324,7 @@ func (p *SessionPool) Reap() {
 // Close again waits again.
 func (p *SessionPool) Close(ctx context.Context) error {
 	p.stopReaper()
-	p.mu.Lock()
-	p.shutdownLocked()
-	p.mu.Unlock()
+	p.shutdown()
 
 	return p.awaitDrained(ctx)
 }
@@ -349,14 +334,7 @@ func (p *SessionPool) Stats() SessionPoolStats {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return SessionPoolStats{
-		InUse:     p.leased,
-		Idle:      len(p.idle),
-		Dialing:   p.dialing,
-		Closing:   p.closing,
-		Dialed:    p.dialed,
-		Discarded: p.discarded,
-	}
+	return p.statsLocked()
 }
 
 // takeIdleLocked hands out the freshest idle session. An expired one is
@@ -380,16 +358,44 @@ func (p *SessionPool) takeIdleLocked() (*Lease, bool) {
 	return nil, false
 }
 
-// dialLease dials on the caller's goroutine, outside the lock because a
-// dial blocks for as long as the connect takes, with the slot reserved
-// through dialing. A dial that fails gives the slot back; one that
-// completes after Close is closed at once.
-func (p *SessionPool) dialLease(ctx context.Context) (*Lease, error) {
-	s, err := p.dial(ctx)
+// slotFreeLocked reports whether another session may be dialed. Leased,
+// idle and dialing sessions all hold a slot: a dial reserves its slot
+// before it connects, so concurrent acquires cannot overshoot the cap
+// while a connect is in flight.
+func (p *SessionPool) slotFreeLocked() bool {
+	return p.leased+len(p.idle)+p.dialing < p.opts.maxSessions
+}
 
+// tryAcquireLocked makes one attempt: an idle session, else a reserved
+// slot to dial into, else the channel to wait on. After Close it fails.
+func (p *SessionPool) tryAcquireLocked() (acquireStep, error) {
+	if p.closed {
+		return acquireStep{}, sessionPoolClosedError()
+	}
+	l, ok := p.takeIdleLocked()
+	if ok {
+		return acquireStep{lease: l}, nil
+	}
+	if p.slotFreeLocked() {
+		p.dialing++
+
+		return acquireStep{dial: true}, nil
+	}
+
+	return acquireStep{wait: p.changed}, nil
+}
+
+func (p *SessionPool) tryAcquire() (acquireStep, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	defer p.notifyLocked()
+
+	return p.tryAcquireLocked()
+}
+
+// admitDialedLocked settles a dial: on an error the slot goes back;
+// otherwise the session is leased, or closed at once when the pool was
+// closed while the dial was in flight.
+func (p *SessionPool) admitDialedLocked(s Session, err error) (*Lease, error) {
 	p.dialing--
 	if err != nil {
 		return nil, err
@@ -403,6 +409,19 @@ func (p *SessionPool) dialLease(ctx context.Context) (*Lease, error) {
 	p.leased++
 
 	return &Lease{pool: p, session: s, created: p.opts.now()}, nil
+}
+
+// dialLease dials on the caller's goroutine, outside the lock because a
+// dial blocks for as long as the connect takes, into the slot reserved by
+// tryAcquireLocked.
+func (p *SessionPool) dialLease(ctx context.Context) (*Lease, error) {
+	s, err := p.dial(ctx)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	defer p.notifyLocked()
+
+	return p.admitDialedLocked(s, err)
 }
 
 // closeSessionLocked closes s on its own goroutine: qdb_close joins the
@@ -425,6 +444,12 @@ func (p *SessionPool) closeSessionLocked(s Session) {
 	}()
 }
 
+func (p *SessionPool) shutdown() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.shutdownLocked()
+}
+
 // shutdownLocked refuses further acquires and closes every idle session.
 func (p *SessionPool) shutdownLocked() {
 	p.closed = true
@@ -435,15 +460,20 @@ func (p *SessionPool) shutdownLocked() {
 	p.notifyLocked()
 }
 
-// awaitDrained waits until no lease, dial or close is outstanding, or
-// until ctx ends.
+// outstanding reports whether a lease, dial or close is still out, and
+// the channel that closes on the next state change.
+func (p *SessionPool) outstanding() (busy bool, changed chan struct{}) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.leased > 0 || p.dialing > 0 || p.closing > 0, p.changed
+}
+
+// awaitDrained waits until nothing is outstanding, or until ctx ends.
 func (p *SessionPool) awaitDrained(ctx context.Context) error {
 	for {
-		p.mu.Lock()
-		outstanding := p.leased > 0 || p.dialing > 0 || p.closing > 0
-		wait := p.changed
-		p.mu.Unlock()
-		if !outstanding {
+		busy, wait := p.outstanding()
+		if !busy {
 			return nil
 		}
 		select {
@@ -454,6 +484,34 @@ func (p *SessionPool) awaitDrained(ctx context.Context) error {
 
 			return ctx.Err()
 		}
+	}
+}
+
+// reapLocked closes every idle session past the idle timeout.
+func (p *SessionPool) reapLocked() {
+	now := p.opts.now()
+	kept := p.idle[:0]
+	for _, e := range p.idle {
+		if p.expired(e.lastUsed, now) {
+			p.closeSessionLocked(e.session)
+		} else {
+			kept = append(kept, e)
+		}
+	}
+	if len(kept) != len(p.idle) {
+		p.notifyLocked()
+	}
+	p.idle = kept
+}
+
+func (p *SessionPool) statsLocked() SessionPoolStats {
+	return SessionPoolStats{
+		InUse:     p.leased,
+		Idle:      len(p.idle),
+		Dialing:   p.dialing,
+		Closing:   p.closing,
+		Dialed:    p.dialed,
+		Discarded: p.discarded,
 	}
 }
 
@@ -520,33 +578,17 @@ func (l *Lease) Session() Session {
 // outlived MaxLifetime or the pool is closed. A second Release or Discard
 // is a no-op.
 func (l *Lease) Release() {
-	p := l.pool
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if !l.endLocked() {
-		return
-	}
-	now := p.opts.now()
-	if p.closed || p.outlived(l.created, now) {
-		p.closeSessionLocked(l.session)
-	} else {
-		p.idle = append(p.idle, idleSession{session: l.session, created: l.created, lastUsed: now})
-	}
-	p.notifyLocked()
+	l.pool.mu.Lock()
+	defer l.pool.mu.Unlock()
+	l.releaseLocked()
 }
 
 // Discard closes the session; it is never handed out again. For a session
 // that can no longer be trusted; Done decides that from the error.
 func (l *Lease) Discard() {
-	p := l.pool
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if !l.endLocked() {
-		return
-	}
-	p.discarded++
-	p.closeSessionLocked(l.session)
-	p.notifyLocked()
+	l.pool.mu.Lock()
+	defer l.pool.mu.Unlock()
+	l.discardLocked()
 }
 
 // Done ends the lease according to err, the outcome of the calls made on
@@ -568,6 +610,33 @@ func (l *Lease) Done(err error) {
 		return
 	}
 	l.Release()
+}
+
+// releaseLocked puts the session back in the idle set, or closes it when
+// it has outlived MaxLifetime or the pool is closed.
+func (l *Lease) releaseLocked() {
+	p := l.pool
+	if !l.endLocked() {
+		return
+	}
+	now := p.opts.now()
+	if p.closed || p.outlived(l.created, now) {
+		p.closeSessionLocked(l.session)
+	} else {
+		p.idle = append(p.idle, idleSession{session: l.session, created: l.created, lastUsed: now})
+	}
+	p.notifyLocked()
+}
+
+// discardLocked closes the session and counts the discard.
+func (l *Lease) discardLocked() {
+	p := l.pool
+	if !l.endLocked() {
+		return
+	}
+	p.discarded++
+	p.closeSessionLocked(l.session)
+	p.notifyLocked()
 }
 
 // endLocked marks the lease over and frees its slot; false when it already
