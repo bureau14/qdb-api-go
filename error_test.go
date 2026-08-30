@@ -416,6 +416,11 @@ func TestIsRetryable_IsFatal(t *testing.T) {
 	assert.False(t, IsRetryable(ErrIncompatibleType))
 	assert.True(t, IsFatal(ErrIncompatibleType))
 
+	// a reply larger than the client in-buffer: the caller sized the buffer,
+	// so a reconnect cannot help
+	assert.False(t, IsRetryable(ErrNetworkInbufTooSmall))
+	assert.True(t, IsFatal(ErrNetworkInbufTooSmall))
+
 	for _, code := range []ErrorType{ErrTimeout, ErrAccessDenied, ErrQuotaExceeded, ErrOperationNotPermitted} {
 		assert.True(t, IsRetryable(code), "%v", code)
 		assert.False(t, IsFatal(code), "%v", code)
