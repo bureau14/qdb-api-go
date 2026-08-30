@@ -15,7 +15,7 @@ import "C"
 
 import (
 	"encoding/json"
-	"fmt"
+	"math"
 	"os"
 	"time"
 	"unsafe"
@@ -105,6 +105,8 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 }
 
 // NewHandleFromOptions creates and configures a new handle using the provided options.
+// It is one session from NewSessionFactory(options); use the factory to dial
+// repeatedly from the same options.
 //
 // Args:
 //
@@ -126,121 +128,7 @@ func NewHandleWithNativeLogs() (HandleType, error) {
 //	}
 //	defer h.Close()
 func NewHandleFromOptions(options *HandleOptions) (HandleType, error) {
-	// Validate options
-	err := options.validate()
-	if err != nil {
-		return HandleType{}, fmt.Errorf("invalid options: %w", err)
-	}
-
-	// Create new handle
-	h, err := NewHandle()
-	if err != nil {
-		return HandleType{}, fmt.Errorf("failed to create handle: %w", err)
-	}
-
-	// Setup cleanup on error
-	var setupErr error
-	defer func() {
-		if setupErr != nil {
-			// Log close error but don't override the original error
-			closeErr := h.Close()
-			if closeErr != nil {
-				L().Debug("failed to close handle during cleanup", "error", closeErr)
-			}
-		}
-	}()
-
-	// Set compression (must be before Connect)
-	setupErr = h.SetCompression(options.compression)
-	if setupErr != nil {
-		return HandleType{}, fmt.Errorf("failed to set compression: %w", setupErr)
-	}
-
-	// Set encryption (must be before Connect)
-	setupErr = h.SetEncryption(options.encryption)
-	if setupErr != nil {
-		return HandleType{}, fmt.Errorf("failed to set encryption: %w", setupErr)
-	}
-
-	// Set timeout
-	setupErr = h.SetTimeout(options.timeout)
-	if setupErr != nil {
-		return HandleType{}, fmt.Errorf("failed to set timeout: %w", setupErr)
-	}
-
-	// Set client max parallelism if specified
-	if options.clientMaxParallelism > 0 {
-		// Ensure the value fits in uint (validation already checks this)
-		setupErr = h.SetClientMaxParallelism(uint(options.clientMaxParallelism))
-		if setupErr != nil {
-			return HandleType{}, fmt.Errorf("failed to set client max parallelism: %w", setupErr)
-		}
-	}
-
-	// Set client max in buffer size if specified
-	if options.clientMaxInBufSize > 0 {
-		setupErr = h.SetClientMaxInBufSize(options.clientMaxInBufSize)
-		if setupErr != nil {
-			return HandleType{}, fmt.Errorf("failed to set client max in buffer size: %w", setupErr)
-		}
-	}
-
-	// Set connections per address if specified (must be before Connect)
-	if options.connectionsPerAddress > 0 {
-		setupErr = h.SetConnectionsPerAddress(uint(options.connectionsPerAddress))
-		if setupErr != nil {
-			return HandleType{}, fmt.Errorf("failed to set connections per address: %w", setupErr)
-		}
-	}
-
-	// Handle cluster public key
-	if options.clusterPublicKeyFile != "" {
-		clusterKey, err := ClusterKeyFromFile(options.clusterPublicKeyFile)
-		if err != nil {
-			setupErr = err
-
-			return HandleType{}, fmt.Errorf("failed to load cluster public key from file: %w", err)
-		}
-		setupErr = h.AddClusterPublicKey(clusterKey)
-		if setupErr != nil {
-			return HandleType{}, fmt.Errorf("failed to add cluster public key: %w", setupErr)
-		}
-	} else if options.clusterPublicKey != "" {
-		setupErr = h.AddClusterPublicKey(options.clusterPublicKey)
-		if setupErr != nil {
-			return HandleType{}, fmt.Errorf("failed to add cluster public key: %w", setupErr)
-		}
-	}
-
-	// Handle user credentials
-	if options.userSecurityFile != "" {
-		userName, userSecret, err := UserCredentialFromFile(options.userSecurityFile)
-		if err != nil {
-			setupErr = err
-
-			return HandleType{}, fmt.Errorf("failed to load user credentials from file: %w", err)
-		}
-		setupErr = h.AddUserCredentials(userName, userSecret)
-		if setupErr != nil {
-			return HandleType{}, fmt.Errorf("failed to add user credentials: %w", setupErr)
-		}
-	} else if options.userName != "" && options.userSecret != "" {
-		setupErr = h.AddUserCredentials(options.userName, options.userSecret)
-		if setupErr != nil {
-			return HandleType{}, fmt.Errorf("failed to add user credentials: %w", setupErr)
-		}
-	}
-
-	// Connect to cluster
-	setupErr = h.Connect(options.clusterURI)
-	if setupErr != nil {
-		return HandleType{}, fmt.Errorf("failed to connect to cluster: %w", setupErr)
-	}
-
-	// Success - clear setupErr to prevent cleanup
-	setupErr = nil
-
-	return h, nil
+	return NewSessionFactory(options).NewSession()
 }
 
 // SetupHandle creates and connects a handle to a QuasarDB cluster.
@@ -476,6 +364,11 @@ func (h HandleType) Open(protocol Protocol) error {
 //	    return err
 //	}
 func (h HandleType) SetTimeout(timeout time.Duration) error {
+	// The C API takes int milliseconds; a larger value would be truncated
+	// before the C API could reject it.
+	if timeout/time.Millisecond > math.MaxInt32 {
+		return wrapError(C.qdb_e_invalid_argument, "handle_set_timeout", "timeout", timeout, "reason", "exceeds C int milliseconds")
+	}
 	err := C.qdb_option_set_timeout(h.handle, C.int(timeout/time.Millisecond))
 
 	return wrapError(err, "handle_set_timeout", "timeout_ms", timeout/time.Millisecond)
@@ -634,6 +527,41 @@ func (h HandleType) AddClusterPublicKey(secret string) error {
 	return wrapError(qdbErr, "add_cluster_public_key")
 }
 
+// LoadSecurityFiles sets the cluster public key and the user credentials
+// from their files, read by the C API.
+//
+// Args:
+//
+//	clusterPublicKeyFile: Path to the cluster public key file
+//	userCredentialFile: Path to the user credentials JSON file
+//
+// Returns:
+//
+//	error: Configuration error if any
+//
+// Note: Must be called before Connect. Both paths are required: the C API
+// rejects a NULL path and has no single-file variant. The files are read
+// inside the C API at the time of the call, so the secret never passes
+// through Go memory; prefer this over ClusterKeyFromFile and
+// UserCredentialFromFile combined with the string setters whenever both
+// halves come from files.
+//
+// Example:
+//
+//	err := handle.LoadSecurityFiles("/path/to/cluster.key", "/path/to/user.json")
+//	if err != nil {
+//	    return err
+//	}
+func (h HandleType) LoadSecurityFiles(clusterPublicKeyFile, userCredentialFile string) error {
+	clusterKeyFile := convertToCharStar(clusterPublicKeyFile)
+	defer releaseCharStar(clusterKeyFile)
+	userFile := convertToCharStar(userCredentialFile)
+	defer releaseCharStar(userFile)
+	qdbErr := C.qdb_option_load_security_files(h.handle, clusterKeyFile, userFile)
+
+	return wrapError(qdbErr, "load_security_files", "cluster_public_key_file", clusterPublicKeyFile, "user_credentials_file", userCredentialFile)
+}
+
 // SetMaxCardinality sets the maximum allowed cardinality for queries.
 //
 // Args:
@@ -679,7 +607,7 @@ func (h HandleType) SetMaxCardinality(maxCardinality uint) error {
 func (h HandleType) SetCompression(compressionLevel Compression) error {
 	err := C.qdb_option_set_compression(h.handle, C.qdb_compression_t(compressionLevel))
 
-	return makeErrorOrNil(err)
+	return wrapError(err, "set_compression", "level", compressionLevel)
 }
 
 // SetClientMaxInBufSize sets the maximum incoming buffer size for client network operations.
@@ -703,7 +631,7 @@ func (h HandleType) SetCompression(compressionLevel Compression) error {
 func (h HandleType) SetClientMaxInBufSize(bufSize uint) error {
 	err := C.qdb_option_set_client_max_in_buf_size(h.handle, C.size_t(bufSize))
 
-	return makeErrorOrNil(err)
+	return wrapError(err, "set_client_max_in_buf_size", "size", bufSize)
 }
 
 // GetClientMaxInBufSize gets the maximum incoming buffer size for client network operations.
@@ -799,7 +727,7 @@ func (h HandleType) GetClientMaxParallelism() (uint, error) {
 func (h HandleType) SetClientMaxParallelism(threadCount uint) error {
 	err := C.qdb_option_set_client_max_parallelism(h.handle, C.size_t(threadCount))
 
-	return makeErrorOrNil(err)
+	return wrapError(err, "set_client_max_parallelism", "threads", threadCount)
 }
 
 // GetConnectionsPerAddress gets the soft limit on connections per IP address.
@@ -853,7 +781,7 @@ func (h HandleType) GetConnectionsPerAddress() (uint, error) {
 func (h HandleType) SetConnectionsPerAddress(maxCount uint) error {
 	err := C.qdb_option_set_connection_per_address_soft_limit(h.handle, C.qdb_size_t(maxCount))
 
-	return makeErrorOrNil(err)
+	return wrapError(err, "set_connections_per_address", "count", maxCount)
 }
 
 // Connect connects a previously opened handle to a QuasarDB cluster.
