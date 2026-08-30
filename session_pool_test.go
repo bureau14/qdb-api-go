@@ -239,21 +239,29 @@ func (c *fakeClock) advance(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
-// poolModel mirrors what the pool must be doing: which sessions are
-// leased, which are idle and since when, how many were dialed and
-// discarded. Sessions compare by value, that is by C pointer, which the C
-// API reuses after a close; an idle session is open, though, so a match
-// against the model's idle set is unambiguous.
+// poolModel is the oracle of TestSessionPoolInvariants. pool is a real
+// SessionPool dialing real sessions; the model keeps its own book of what
+// that pool should hold. Every action drives the pool through its public
+// methods, then updates the book the way the pool is specified to
+// behave; check compares pool.Stats() with the book. The clock is faked
+// so that ages move without waiting, and the reaper is off so that
+// sessions expire only inside Reap and Acquire, at moments the book sees.
+//
+// Sessions compare by value, that is by C pointer, which the C API reuses
+// after a close; an idle session is open, though, so a match against the
+// book's idle set is unambiguous.
 type poolModel struct {
-	pool      *SessionPool
+	pool      *SessionPool // the pool under test
 	dialer    *testDialer
 	clock     *fakeClock
 	opts      *SessionPoolOptions
-	leases    []*Lease
-	idle      []idleSession
-	discarded uint64
+	leases    []*Lease      // what the pool should have leased
+	idle      []idleSession // what it should hold idle, in its order
+	discarded uint64        // what Stats().Discarded should read
 }
 
+// newPoolModel draws the sizing, builds the real pool over the fake
+// clock, and starts with an empty book.
 func newPoolModel(t *rapid.T) *poolModel {
 	clock := newFakeClock()
 	dialer := newTestDialer()
@@ -271,9 +279,10 @@ func (m *poolModel) expired(e idleSession) bool {
 	return m.clock.Now().Sub(e.lastUsed) >= m.opts.idleTimeout
 }
 
-// acquire mirrors Acquire: the freshest idle session when it has not
-// expired; otherwise every idle session has, the pool closes them all,
-// and a slot is either free to dial or not.
+// acquire drives Acquire and books what the pool must have done: reused
+// the freshest idle session when it has not expired; otherwise every
+// idle session has expired and was closed, and a slot was either free to
+// dial into or not.
 func (m *poolModel) acquire(t *rapid.T) {
 	n := len(m.idle)
 	if n > 0 && !m.expired(m.idle[n-1]) {
