@@ -2,6 +2,7 @@ package qdb
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,7 +17,7 @@ import (
 // the only way to make a dial fail without a server fault.
 type testDialer struct {
 	f        *SessionFactory
-	calls    atomic.Int64
+	calls    atomic.Uint64
 	failNext atomic.Int64
 }
 
@@ -211,5 +212,191 @@ func TestSessionPoolDoReusesSessionAfterFatalError(t *testing.T) {
 	require.Equal(t, SessionPoolStats{Idle: 1, Dialed: 1}, p.Stats())
 
 	require.NoError(t, p.Do(ctx, func(Session) error { return nil }))
-	require.Equal(t, int64(1), d.calls.Load())
+	require.Equal(t, uint64(1), d.calls.Load())
+}
+
+// fakeClock is the clock behind WithClock; advance moves it, nothing
+// sleeps.
+type fakeClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newFakeClock() *fakeClock {
+	return &fakeClock{now: time.Unix(1_700_000_000, 0)}
+}
+
+func (c *fakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.now
+}
+
+func (c *fakeClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
+// poolModel mirrors what the pool must be doing: which sessions are
+// leased, which are idle and since when, how many were dialed and
+// discarded. Sessions compare by value, that is by C pointer, which the C
+// API reuses after a close; an idle session is open, though, so a match
+// against the model's idle set is unambiguous.
+type poolModel struct {
+	pool      *SessionPool
+	dialer    *testDialer
+	clock     *fakeClock
+	opts      *SessionPoolOptions
+	leases    []*Lease
+	idle      []idleSession
+	discarded uint64
+}
+
+func newPoolModel(t *rapid.T) *poolModel {
+	clock := newFakeClock()
+	dialer := newTestDialer()
+	opts := NewSessionPoolOptions().
+		WithMaxSessions(rapid.IntRange(1, 4).Draw(t, "max_sessions")).
+		WithIdleTimeout(time.Duration(rapid.IntRange(1, 100).Draw(t, "idle_timeout")) * time.Second).
+		WithMaxLifetime(time.Duration(rapid.IntRange(1, 300).Draw(t, "max_lifetime")) * time.Second).
+		WithReapInterval(0).
+		WithClock(clock.Now)
+
+	return &poolModel{pool: newTestPool(t, dialer, opts), dialer: dialer, clock: clock, opts: opts}
+}
+
+func (m *poolModel) expired(e idleSession) bool {
+	return m.clock.Now().Sub(e.lastUsed) >= m.opts.idleTimeout
+}
+
+// acquire mirrors Acquire: the freshest idle session when it has not
+// expired; otherwise every idle session has, the pool closes them all,
+// and a slot is either free to dial or not.
+func (m *poolModel) acquire(t *rapid.T) {
+	n := len(m.idle)
+	if n > 0 && !m.expired(m.idle[n-1]) {
+		m.acquireIdle(t)
+
+		return
+	}
+	m.idle = nil
+	if len(m.leases) >= m.opts.maxSessions {
+		m.acquireFull(t)
+
+		return
+	}
+	m.acquireFresh(t)
+}
+
+func (m *poolModel) acquireIdle(t *rapid.T) {
+	before := m.dialer.calls.Load()
+	l, err := m.pool.Acquire(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, before, m.dialer.calls.Load(), "an idle session is reused, not dialed")
+	n := len(m.idle)
+	require.Equal(t, m.idle[n-1].session, l.Session(), "the freshest idle session is reused")
+	m.idle = m.idle[:n-1]
+	m.leases = append(m.leases, l)
+}
+
+func (m *poolModel) acquireFresh(t *rapid.T) {
+	before := m.dialer.calls.Load()
+	l, err := m.pool.Acquire(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, before+1, m.dialer.calls.Load(), "a free slot with nothing idle dials")
+	m.leases = append(m.leases, l)
+}
+
+func (m *poolModel) acquireFull(t *rapid.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err := m.pool.Acquire(ctx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// pick removes and returns one leased session; Skip when none is out.
+func (m *poolModel) pick(t *rapid.T) *Lease {
+	if len(m.leases) == 0 {
+		t.Skip("nothing leased")
+	}
+	i := rapid.IntRange(0, len(m.leases)-1).Draw(t, "lease")
+	l := m.leases[i]
+	m.leases = slices.Delete(m.leases, i, i+1)
+
+	return l
+}
+
+// released mirrors Release: back to the idle set unless outlived.
+func (m *poolModel) released(l *Lease) {
+	now := m.clock.Now()
+	if now.Sub(l.created) >= m.opts.maxLifetime {
+		return
+	}
+	m.idle = append(m.idle, idleSession{session: l.Session(), created: l.created, lastUsed: now})
+}
+
+func (m *poolModel) release(t *rapid.T) {
+	l := m.pick(t)
+	l.Release()
+	m.released(l)
+}
+
+func (m *poolModel) discard(t *rapid.T) {
+	m.pick(t).Discard()
+	m.discarded++
+}
+
+func (m *poolModel) done(t *rapid.T) {
+	fate := rapid.SampledFrom([]error{nil, ErrInvalidQuery, ErrConnectionRefused, context.DeadlineExceeded}).Draw(t, "fate")
+	l := m.pick(t)
+	l.Done(fate)
+	if IsRetryable(fate) {
+		m.discarded++
+
+		return
+	}
+	m.released(l)
+}
+
+func (m *poolModel) advance(t *rapid.T) {
+	m.clock.advance(time.Duration(rapid.IntRange(0, 120).Draw(t, "seconds")) * time.Second)
+}
+
+func (m *poolModel) reap(*rapid.T) {
+	m.pool.Reap()
+	m.idle = slices.DeleteFunc(m.idle, m.expired)
+}
+
+func (m *poolModel) check(t *rapid.T) {
+	waitClosed(t, m.pool)
+	s := m.pool.Stats()
+	require.Equal(t, len(m.leases), s.InUse)
+	require.Equal(t, len(m.idle), s.Idle)
+	require.Zero(t, s.Dialing)
+	require.Equal(t, m.discarded, s.Discarded)
+	require.Equal(t, m.dialer.calls.Load(), s.Dialed)
+	require.LessOrEqual(t, s.InUse+s.Idle, m.opts.maxSessions)
+}
+
+// The pool against a model of itself under a fake clock: the cap, the
+// reuse order, idle expiry, lifetime and the counters hold under any
+// interleaving of the operations.
+func TestSessionPoolInvariants(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		m := newPoolModel(rt)
+		rt.Repeat(map[string]func(*rapid.T){
+			"":        m.check,
+			"acquire": m.acquire,
+			"release": m.release,
+			"discard": m.discard,
+			"done":    m.done,
+			"advance": m.advance,
+			"reap":    m.reap,
+		})
+		for _, l := range m.leases {
+			l.Release()
+		}
+	})
 }
