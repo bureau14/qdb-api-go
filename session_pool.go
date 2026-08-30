@@ -18,11 +18,9 @@ import (
 // SessionPoolOptions sizes a SessionPool. Options are immutable: every
 // With... method returns a copy.
 //
-// Two facts set the scale. Each handle is itself a pool, of worker threads
-// and of TCP connections per node, so a session costs far more than a
-// socket. And qdbd's session table is finite: once exhausted it refuses
-// new sessions for fifteen minutes, closes in flight still counting. Tens
-// of sessions, not hundreds.
+// Each handle has a thread pool of its own, there to make a single
+// operation faster, over several connections. Pooling handles is what
+// lets one user run operations concurrently, each on its own handle.
 type SessionPoolOptions struct {
 	maxSessions  int
 	idleTimeout  time.Duration
@@ -592,17 +590,9 @@ func (l *Lease) Discard() {
 }
 
 // Done ends the lease according to err, the outcome of the calls made on
-// the session: Discard when IsRetryable holds, Release otherwise.
-//
-// A retryable error is one the cluster did not answer, or answered in a
-// way that says nothing about the request: a connection failure, a
-// timeout, an unknown code. The session may be broken, and a reconnect
-// is what a retry needs. A fatal error is the caller's fault and the
-// cluster answered it, so the session is fine; so is nil, and so is an
-// informational code. An error that is not from this package at all,
-// context.DeadlineExceeded above all, classifies as retryable: a call
-// that outlived its deadline may still be running on the handle, and
-// closing it is the only safe end.
+// the session: Discard when IsRetryable holds, Release otherwise. An
+// error from outside this package, a context deadline included, counts
+// as retryable and discards.
 func (l *Lease) Done(err error) {
 	if IsRetryable(err) {
 		l.Discard()
