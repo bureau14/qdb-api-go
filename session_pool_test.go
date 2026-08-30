@@ -193,3 +193,23 @@ func TestSessionPoolReaperClosesIdle(t *testing.T) {
 	waitClosed(t, p)
 	require.Equal(t, SessionPoolStats{Dialed: 1}, p.Stats())
 }
+
+// A fatal error is the cluster rejecting the request, not the session:
+// Do hands the session back and the next Do reuses it without a dial.
+func TestSessionPoolDoReusesSessionAfterFatalError(t *testing.T) {
+	d := newTestDialer()
+	p := newTestPool(t, d, NewSessionPoolOptions().WithMaxSessions(1))
+	ctx := context.Background()
+
+	err := p.Do(ctx, func(s Session) error {
+		_, err := s.Query("select").Execute()
+
+		return err
+	})
+	require.Error(t, err)
+	require.True(t, IsFatal(err))
+	require.Equal(t, SessionPoolStats{Idle: 1, Dialed: 1}, p.Stats())
+
+	require.NoError(t, p.Do(ctx, func(Session) error { return nil }))
+	require.Equal(t, int64(1), d.calls.Load())
+}

@@ -194,16 +194,17 @@ type idleSession struct {
 //	}
 //	defer pool.Close(ctx)
 //
+//	err = pool.Do(ctx, func(s qdb.Session) error {
+//	    return s.Blob("alias").Put(data, qdb.NeverExpires())
+//	})
+//
+//	// Or, holding the session across several calls:
 //	lease, err := pool.Acquire(ctx)
 //	if err != nil {
 //	    return err
 //	}
 //	err = lease.Session().Blob("alias").Put(data, qdb.NeverExpires())
-//	if qdb.IsRetryable(err) {
-//	    lease.Discard()
-//	} else {
-//	    lease.Release()
-//	}
+//	lease.Done(err)
 type SessionPool struct {
 	opts *SessionPoolOptions
 	dial func(context.Context) (Session, error)
@@ -293,6 +294,20 @@ func (p *SessionPool) Acquire(ctx context.Context) (*Lease, error) {
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// Do runs op on a leased session and returns op's error, the lease ended
+// through Done so that the error decides the session's fate. The lease
+// ends in a defer: an op that panics still gives its slot back, or Close
+// would wait for it forever.
+func (p *SessionPool) Do(ctx context.Context, op func(Session) error) (err error) {
+	l, err := p.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { l.Done(err) }()
+
+	return op(l.Session())
 }
 
 // Reap closes every idle session past the idle timeout. The reaper
@@ -523,8 +538,7 @@ func (l *Lease) Release() {
 }
 
 // Discard closes the session; it is never handed out again. For a session
-// that can no longer be trusted: one that failed with an error for which
-// IsRetryable holds, or whose call outlived a deadline.
+// that can no longer be trusted; Done decides that from the error.
 func (l *Lease) Discard() {
 	p := l.pool
 	p.mu.Lock()
@@ -535,6 +549,27 @@ func (l *Lease) Discard() {
 	p.discarded++
 	p.closeSessionLocked(l.session)
 	p.notifyLocked()
+}
+
+// Done ends the lease according to err, the outcome of the calls made on
+// the session: Discard when IsRetryable holds, Release otherwise.
+//
+// A retryable error is one the cluster did not answer, or answered in a
+// way that says nothing about the request: a connection failure, a
+// timeout, an unknown code. The session may be broken, and a reconnect
+// is what a retry needs. A fatal error is the caller's fault and the
+// cluster answered it, so the session is fine; so is nil, and so is an
+// informational code. An error that is not from this package at all,
+// context.DeadlineExceeded above all, classifies as retryable: a call
+// that outlived its deadline may still be running on the handle, and
+// closing it is the only safe end.
+func (l *Lease) Done(err error) {
+	if IsRetryable(err) {
+		l.Discard()
+
+		return
+	}
+	l.Release()
 }
 
 // endLocked marks the lease over and frees its slot; false when it already
