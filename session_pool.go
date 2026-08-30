@@ -18,13 +18,11 @@ import (
 // SessionPoolOptions sizes a SessionPool. Options are immutable: every
 // With... method returns a copy.
 //
-// Size with care. A session is one handle, and each handle owns a thread
-// pool of client-max-parallelism threads (default: half the cores) plus a
-// TCP connection pool per node address, so N sessions cost N times that.
-// The cluster's session table is finite as well: once exhausted, qdbd
-// refuses new sessions for fifteen minutes, and a session counts until its
-// close returns, so a pool holds up to MaxSessions plus the closes still in
-// flight. Tens of sessions is the right order of magnitude.
+// Two facts set the scale. Each handle is itself a pool, of worker threads
+// and of TCP connections per node, so a session costs far more than a
+// socket. And qdbd's session table is finite: once exhausted it refuses
+// new sessions for fifteen minutes, closes in flight still counting. Tens
+// of sessions, not hundreds.
 type SessionPoolOptions struct {
 	maxSessions  int
 	idleTimeout  time.Duration
@@ -92,8 +90,8 @@ func (o *SessionPoolOptions) WithReapInterval(d time.Duration) *SessionPoolOptio
 	return &opts
 }
 
-// WithClock replaces the clock every age is measured against. Tests use it
-// to advance time without waiting.
+// WithClock replaces the clock every age is measured against. Intended
+// for testing only.
 func (o *SessionPoolOptions) WithClock(now func() time.Time) *SessionPoolOptions {
 	opts := *o
 	opts.now = now
@@ -101,11 +99,10 @@ func (o *SessionPoolOptions) WithClock(now func() time.Time) *SessionPoolOptions
 	return &opts
 }
 
-// WithDialer replaces the factory as the source of sessions: for wrapping
-// the dial in a deadline, counting it, or injecting failures. The default
-// calls SessionFactory.NewSession and ignores the context, because the C
-// API cannot cancel a connect in flight; the context bounds only the wait
-// for a free slot in Acquire.
+// WithDialer replaces the session factory as the source of sessions.
+// Intended for tests, and for callers that wrap the dial, for instance
+// under a deadline. The default ignores the context: the C API cannot
+// cancel a connect in flight.
 func (o *SessionPoolOptions) WithDialer(dial func(context.Context) (Session, error)) *SessionPoolOptions {
 	opts := *o
 	opts.dialer = dial
@@ -179,12 +176,13 @@ type idleSession struct {
 // most MaxSessions leased or idle at once, dialed on demand, never at
 // construction.
 //
-// A handle is not thread-safe, so a session is used by one goroutine at a
-// time and the Lease is the token of that ownership: the pool never closes
-// a leased session, not even in Close. Every close runs on its own
-// goroutine because qdb_close joins the handle's worker threads and can
-// block for minutes. Acquire's context bounds the wait for a free slot;
-// the dial itself cannot be cancelled (see WithDialer).
+// A handle must not be treated as thread-safe: never share a leased
+// session between goroutines, or synchronize access to it yourself. The
+// Lease is the token of that ownership: the pool never closes a leased
+// session, not even in Close. Every close runs on its own goroutine
+// because qdb_close joins the handle's worker threads and can block for
+// minutes. Acquire's context bounds the wait for a free slot; the dial
+// itself cannot be cancelled (see WithDialer).
 //
 // Example:
 //
