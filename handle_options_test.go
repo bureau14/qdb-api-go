@@ -263,9 +263,6 @@ func TestNewHandleFromOptionsRejectsUnrepresentable(t *testing.T) {
 			if !errors.Is(err, ErrInvalidArgument) {
 				t.Fatalf("want ErrInvalidArgument, got %v", err)
 			}
-			if !IsFatal(err) {
-				t.Errorf("want a fatal classification, got %v", ClassifyError(err))
-			}
 		})
 	}
 }

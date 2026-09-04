@@ -72,7 +72,7 @@ func waitClosed(t testHelper, p *SessionPool) {
 }
 
 // Pool options never reach the C API, so unlike handle options they are
-// judged at construction; a mistake is fatal, never retried.
+// judged at construction; a mistake is not retryable.
 func TestSessionPoolOptionsRejected(t *testing.T) {
 	d := newTestDialer()
 	tests := []struct {
@@ -89,7 +89,6 @@ func TestSessionPoolOptionsRejected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := NewSessionPool(d.f, tt.opts)
 			require.ErrorIs(t, err, ErrInvalidArgument)
-			require.True(t, IsFatal(err))
 		})
 	}
 
@@ -170,7 +169,6 @@ func TestSessionPoolCloseWaitsForLeases(t *testing.T) {
 
 	_, err = p.Acquire(context.Background())
 	require.ErrorIs(t, err, ErrUninitialized)
-	require.True(t, IsFatal(err))
 	require.Equal(t, SessionPoolStats{InUse: 1, Dialed: 1}, p.Stats())
 
 	l.Release()

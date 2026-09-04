@@ -5,8 +5,6 @@
 package qdb
 
 /*
-	#cgo noescape qdb_go_success
-	#cgo nocallback qdb_go_success
 	#cgo noescape qdb_go_error_origin
 	#cgo nocallback qdb_go_error_origin
 	#cgo noescape qdb_go_error_severity
@@ -15,11 +13,6 @@ package qdb
 	#include <qdb/error.h>
 
 	// Wrappers for the qdb/error.h macros, which cgo cannot call directly.
-
-	static inline int qdb_go_success(qdb_error_t e)
-	{
-		return QDB_SUCCESS(e);
-	}
 
 	static inline qdb_error_origin_t qdb_go_error_origin(qdb_error_t e)
 	{
@@ -72,7 +65,9 @@ import (
 // ErrorType: QuasarDB error codes, wraps C.qdb_error_t
 type ErrorType C.qdb_error_t
 
-// Error codes, wraps the qdb_error_t enum. See ErrorType.ErrorClass.
+// Error codes, wraps the qdb_error_t enum. Three predicates answer what a
+// code means for the caller: IsRetryable, IsBadSession and
+// IsClusterUnavailable.
 const (
 	Success                      ErrorType = C.qdb_e_ok
 	Created                      ErrorType = C.qdb_e_ok_created
@@ -163,40 +158,6 @@ const (
 	ErrorSeverityInfo          ErrorSeverity = C.qdb_e_severity_info
 )
 
-// ErrorClass: retry classification of an error
-type ErrorClass uint8
-
-const (
-	// ErrorClassNone: nil, success, or an informational status code
-	ErrorClassNone ErrorClass = iota
-
-	// ErrorClassRetryable: transient or unclassified
-	ErrorClassRetryable
-
-	// ErrorClassFatal: caused by the caller; retrying cannot succeed
-	ErrorClassFatal
-)
-
-// String returns the class name
-func (c ErrorClass) String() string {
-	switch c {
-	case ErrorClassNone:
-		return "none"
-	case ErrorClassRetryable:
-		return "retryable"
-	case ErrorClassFatal:
-		return "fatal"
-	default:
-		return "unknown"
-	}
-}
-
-// ErrorClassifier: errors that report their own ErrorClass. The outermost
-// implementation in an error chain wins.
-type ErrorClassifier interface {
-	ErrorClass() ErrorClass
-}
-
 func (e ErrorType) Error() string { return C.GoString(C.qdb_error(C.qdb_error_t(e))) }
 
 // Is enables errors.Is() comparison for wrapped errors.
@@ -225,32 +186,6 @@ func (e ErrorType) Origin() ErrorOrigin {
 // Severity returns the severity bits (QDB_ERROR_SEVERITY)
 func (e ErrorType) Severity() ErrorSeverity {
 	return ErrorSeverity(C.qdb_go_error_severity(C.qdb_error_t(e)))
-}
-
-// ErrorClass classifies the code: QDB_SUCCESS codes are none, the listed
-// codes are fatal, everything else is retryable.
-//
-//nolint:exhaustive // unlisted codes are retryable
-func (e ErrorType) ErrorClass() ErrorClass {
-	if e.isSuccess() {
-		return ErrorClassNone
-	}
-
-	switch e {
-	case ErrNotImplemented, ErrIncompatibleType, ErrUninitialized, ErrOutOfBounds,
-		ErrInvalidQuery, ErrAliasNotFound, ErrAliasAlreadyExists, ErrInvalidArgument,
-		ErrNetworkInbufTooSmall:
-		return ErrorClassFatal
-
-	default:
-		return ErrorClassRetryable
-	}
-}
-
-// isSuccess returns true when the C API considers the code a success or an
-// informational status rather than a failure (QDB_SUCCESS).
-func (e ErrorType) isSuccess() bool {
-	return C.qdb_go_success(C.qdb_error_t(e)) != 0
 }
 
 func makeErrorOrNil(err C.qdb_error_t) error {
@@ -304,48 +239,33 @@ func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
 	return fmt.Errorf("%s%w", sb.String(), baseErr)
 }
 
-// ClassifyError returns whether err is a status signal, a retryable failure
-// or a fatal one. Wrapped errors are unwrapped; the outermost
-// ErrorClassifier in the chain decides.
-//
-// Returns:
-//
-	//	ErrorClassNone: err is nil, or the classifier reports none (success / informational status codes)
-	//	ErrorClassRetryable: no ErrorClassifier in the chain
-	//	otherwise: the classifier's ErrorClass()
-func ClassifyError(err error) ErrorClass {
-	if err == nil {
-		return ErrorClassNone
-	}
-
-	var classifier ErrorClassifier
-	if errors.As(err, &classifier) {
-		return classifier.ErrorClass()
-	}
-
-	return ErrorClassRetryable
-}
-
-// IsRetryable returns true when the error is retryable: the failure is
-// transient, or at least not caused by the caller. nil, informational
-// status codes and fatal errors are not retryable.
+// IsRetryable reports whether the same request may succeed on a later
+// attempt: the question a retry loop asks. Answers false for nil, for
+// success and informational codes, and for an error without an ErrorType
+// in its chain. ErrTransactionPartialFailure keeps failing until the
+// transaction is rolled back (qdb/error.h), so a retry needs a delay.
 //
 // Example:
 //
 //	if IsRetryable(err) { time.Sleep(backoff); retry() }
+//
+//nolint:exhaustive // unlisted codes are not retryable
 func IsRetryable(err error) bool {
-	return ClassifyError(err) == ErrorClassRetryable
-}
+	var e ErrorType
+	if !errors.As(err, &e) {
+		return false
+	}
 
-// IsFatal returns true when the error is caused by the caller and retrying
-// the same call cannot succeed. nil and informational status codes are not
-// fatal.
-//
-// Example:
-//
-//	if IsFatal(err) { return err }
-func IsFatal(err error) bool {
-	return ClassifyError(err) == ErrorClassFatal
+	switch e {
+	case ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound,
+		ErrNetworkError, ErrUnstableCluster, ErrTryAgain, ErrResourceLocked, ErrConflict,
+		ErrTransactionPartialFailure, ErrPartialFailure, ErrAsyncPipeFull, ErrNoMemoryRemote,
+		ErrInterrupted, ErrInvalidReply:
+		return true
+
+	default:
+		return false
+	}
 }
 
 // IsBadSession reports whether the handle that produced err can no longer
