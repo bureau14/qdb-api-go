@@ -38,8 +38,8 @@ type SessionFactory struct {
 
 // NewSessionFactory creates a factory dialing with opts. It cannot fail: the
 // options are judged by the C API when a session is dialed, so a
-// configuration mistake surfaces on the first NewSession as an error for
-// which IsFatal holds.
+// configuration mistake surfaces on the first NewSession as an error
+// IsRetryable rejects.
 func NewSessionFactory(opts *HandleOptions) *SessionFactory {
 	return &SessionFactory{opts: opts}
 }
@@ -156,7 +156,7 @@ func authenticateSession(h HandleType, o *HandleOptions) error {
 
 // setClusterPublicKey applies the cluster key half, from its file or
 // inline. A file that cannot be read is a configuration mistake and is
-// reported as ErrInvalidArgument so that IsFatal holds, at the cost of
+// reported as ErrInvalidArgument, which IsRetryable rejects, at the cost of
 // errors.Is against the os error.
 func setClusterPublicKey(h HandleType, o *HandleOptions) error {
 	switch {

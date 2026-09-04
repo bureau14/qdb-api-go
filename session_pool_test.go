@@ -72,7 +72,7 @@ func waitClosed(t testHelper, p *SessionPool) {
 }
 
 // Pool options never reach the C API, so unlike handle options they are
-// judged at construction; a mistake is fatal, never retried.
+// judged at construction; a mistake is not retryable.
 func TestSessionPoolOptionsRejected(t *testing.T) {
 	d := newTestDialer()
 	tests := []struct {
@@ -89,7 +89,6 @@ func TestSessionPoolOptionsRejected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := NewSessionPool(d.f, tt.opts)
 			require.ErrorIs(t, err, ErrInvalidArgument)
-			require.True(t, IsFatal(err))
 		})
 	}
 
@@ -170,7 +169,6 @@ func TestSessionPoolCloseWaitsForLeases(t *testing.T) {
 
 	_, err = p.Acquire(context.Background())
 	require.ErrorIs(t, err, ErrUninitialized)
-	require.True(t, IsFatal(err))
 	require.Equal(t, SessionPoolStats{InUse: 1, Dialed: 1}, p.Stats())
 
 	l.Release()
@@ -227,24 +225,39 @@ func TestSessionPoolCloserRunsOncePerClosedSession(t *testing.T) {
 	require.Equal(t, d.calls.Load(), closes.Load(), "every dialed session is closed once")
 }
 
-// A fatal error is the cluster rejecting the request, not the session:
-// Do hands the session back and the next Do reuses it without a dial.
-func TestSessionPoolDoReusesSessionAfterFatalError(t *testing.T) {
-	d := newTestDialer()
-	p := newTestPool(t, d, NewSessionPoolOptions().WithMaxSessions(1))
-	ctx := context.Background()
-
-	err := p.Do(ctx, func(s Session) error {
+// An error that is not IsBadSession says nothing against the session: the
+// cluster judged the request, or the op failed on its own. Do hands the
+// session back and the next Do reuses it without a dial.
+func TestSessionPoolDoReusesSessionAfterError(t *testing.T) {
+	invalidQuery := func(s Session) error {
 		_, err := s.Query("select").Execute()
 
 		return err
-	})
-	require.Error(t, err)
-	require.True(t, IsFatal(err))
-	require.Equal(t, SessionPoolStats{Idle: 1, Dialed: 1}, p.Stats())
+	}
+	tests := []struct {
+		name string
+		op   func(Session) error
+		want error
+	}{
+		{"query judged by the cluster", invalidQuery, ErrInvalidQuery},
+		{"judged code from the op", func(Session) error { return ErrColumnNotFound }, ErrColumnNotFound},
+		{"context deadline from the op", func(Session) error { return context.DeadlineExceeded }, context.DeadlineExceeded},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newTestDialer()
+			p := newTestPool(t, d, NewSessionPoolOptions().WithMaxSessions(1))
+			ctx := context.Background()
 
-	require.NoError(t, p.Do(ctx, func(Session) error { return nil }))
-	require.Equal(t, uint64(1), d.calls.Load())
+			err := p.Do(ctx, tt.op)
+			require.ErrorIs(t, err, tt.want)
+			require.False(t, IsBadSession(err))
+			require.Equal(t, SessionPoolStats{Idle: 1, Dialed: 1}, p.Stats())
+
+			require.NoError(t, p.Do(ctx, func(Session) error { return nil }))
+			require.Equal(t, uint64(1), d.calls.Load(), "the idle session is reused, not dialed")
+		})
+	}
 }
 
 // fakeClock is the clock behind WithClock; advance moves it, nothing
@@ -390,10 +403,13 @@ func (m *poolModel) discard(t *rapid.T) {
 }
 
 func (m *poolModel) done(t *rapid.T) {
-	fate := rapid.SampledFrom([]error{nil, ErrInvalidQuery, ErrConnectionRefused, context.DeadlineExceeded}).Draw(t, "fate")
+	// one of each: success, judged input, judged operation, retryable but
+	// not poisoning, the wire failed, not a C API error
+	fates := []error{nil, ErrInvalidQuery, ErrColumnNotFound, ErrTryAgain, ErrConnectionRefused, context.DeadlineExceeded}
+	fate := rapid.SampledFrom(fates).Draw(t, "fate")
 	l := m.pick(t)
 	l.Done(fate)
-	if IsRetryable(fate) {
+	if IsBadSession(fate) {
 		m.discarded++
 
 		return

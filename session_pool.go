@@ -157,7 +157,7 @@ func factoryDialer(f *SessionFactory) func(context.Context) (Session, error) {
 }
 
 // sessionPoolClosedError is what Acquire returns after Close. The code is
-// one for which IsFatal holds, so a caller's retry loop stops.
+// one IsRetryable rejects, so a caller's retry loop stops.
 func sessionPoolClosedError() error {
 	return wrapError(C.qdb_e_uninitialized, "session_pool_acquire", "reason", "closed")
 }
@@ -253,7 +253,7 @@ type SessionPool struct {
 
 // NewSessionPool returns an empty pool dialing from f; nothing is dialed
 // before Acquire. Nil options are the defaults. An option the pool cannot
-// honour is rejected with an error for which IsFatal holds; a factory
+// honour is rejected with an error IsRetryable rejects; a factory
 // misconfiguration surfaces on the first Acquire instead, judged by the C
 // API at dial time.
 func NewSessionPool(f *SessionFactory, o *SessionPoolOptions) (*SessionPool, error) {
@@ -287,8 +287,8 @@ func NewSessionPool(f *SessionFactory, o *SessionPoolOptions) (*SessionPool, err
 
 // Acquire returns a leased session: the freshest idle one, else a freshly
 // dialed one when a slot is free, else it waits for a release or for ctx
-// to end, returning ctx.Err(). After Close it returns an error for which
-// IsFatal holds.
+// to end, returning ctx.Err(). After Close it returns an error IsRetryable
+// rejects, so a retry loop stops.
 func (p *SessionPool) Acquire(ctx context.Context) (*Lease, error) {
 	for {
 		step, err := p.tryAcquire()
@@ -608,11 +608,11 @@ func (l *Lease) Discard() {
 }
 
 // Done ends the lease according to err, the outcome of the calls made on
-// the session: Discard when IsRetryable holds, Release otherwise. An
-// error from outside this package, a context deadline included, counts
-// as retryable and discards.
+// the session: Discard when IsBadSession holds, Release otherwise. An
+// error that is not a C API error, a context deadline included, says
+// nothing about the session and releases.
 func (l *Lease) Done(err error) {
-	if IsRetryable(err) {
+	if IsBadSession(err) {
 		l.Discard()
 
 		return

@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -269,65 +270,12 @@ func TestErrorType_ErrorAsWithDifferentTypes(t *testing.T) {
 }
 
 // ------------------------------------------------------------------
-// ErrorClass / ClassifyError / IsRetryable / IsFatal tests
+// Origin / Severity tests
 // ------------------------------------------------------------------
-
-// TestErrorType_ErrorClass validates the classification policy itself:
-// every code listed as fatal in ErrorType.ErrorClass, a sample of codes
-// the C API marks as success via QDB_SUCCESS, and a sample of the rest.
-// The retryable sample includes codes the C API rates as unrecoverable
-// (ErrConnectionRefused) and codes the previous IsRetryable rejected
-// (ErrAccessDenied), to pin down that neither influences the result.
-func TestErrorType_ErrorClass(t *testing.T) {
-	tests := []struct {
-		code ErrorType
-		want ErrorClass
-	}{
-		// fatal
-		{ErrNotImplemented, ErrorClassFatal},
-		{ErrIncompatibleType, ErrorClassFatal},
-		{ErrUninitialized, ErrorClassFatal},
-		{ErrOutOfBounds, ErrorClassFatal},
-		{ErrInvalidQuery, ErrorClassFatal},
-		{ErrAliasNotFound, ErrorClassFatal},
-		{ErrAliasAlreadyExists, ErrorClassFatal},
-		{ErrInvalidArgument, ErrorClassFatal},
-
-		// QDB_SUCCESS
-		{Success, ErrorClassNone},
-		{Created, ErrorClassNone},
-		{ErrIteratorEnd, ErrorClassNone},
-		{ErrTagAlreadySet, ErrorClassNone},
-		{ErrElementNotFound, ErrorClassNone},
-
-		// retryable
-		{ErrTimeout, ErrorClassRetryable},
-		{ErrConnectionRefused, ErrorClassRetryable},
-		{ErrTryAgain, ErrorClassRetryable},
-		{ErrAccessDenied, ErrorClassRetryable},
-		{ErrQuotaExceeded, ErrorClassRetryable},
-		{ErrOperationNotPermitted, ErrorClassRetryable},
-		{ErrDataCorruption, ErrorClassRetryable},
-		{ErrSkipped, ErrorClassRetryable},
-	}
-
-	for _, tc := range tests {
-		assert.Equal(t, tc.want, tc.code.ErrorClass(), "%v", tc.code)
-	}
-}
-
-// TestErrorType_ErrorClass_UnknownCodeIsRetryable validates the default
-// branch of ErrorType.ErrorClass: a code this package does not list, such
-// as one introduced by a newer C API, must be retryable and never fatal.
-func TestErrorType_ErrorClass_UnknownCodeIsRetryable(t *testing.T) {
-	unknown := ErrTimeout + 0x0F00 // unlisted code number
-
-	assert.Equal(t, ErrorClassRetryable, unknown.ErrorClass())
-}
 
 // TestErrorType_OriginSeverity validates that Origin and Severity decode
 // the bits the way qdb/error.h defines them, one case per origin and
-// severity value. ErrorClass relies on the severity bits via QDB_SUCCESS.
+// severity value.
 func TestErrorType_OriginSeverity(t *testing.T) {
 	tests := []struct {
 		code     ErrorType
@@ -350,85 +298,150 @@ func TestErrorType_OriginSeverity(t *testing.T) {
 	}
 }
 
-// TestErrorClass_String validates the names used in log output and in the
-// failure messages of the other tests, including the fallback for values
-// outside the defined constants.
-func TestErrorClass_String(t *testing.T) {
-	assert.Equal(t, "none", ErrorClassNone.String())
-	assert.Equal(t, "retryable", ErrorClassRetryable.String())
-	assert.Equal(t, "fatal", ErrorClassFatal.String())
-	assert.Equal(t, "unknown", ErrorClass(42).String())
+// ------------------------------------------------------------------
+// IsRetryable / IsBadSession / IsClusterUnavailable tests
+// ------------------------------------------------------------------
+
+// predicateCase is one row of a predicate table: the error and the
+// answer the predicate must give for it.
+type predicateCase struct {
+	err  error
+	want bool
 }
 
-// fatalWrapper: ErrorClassifier that reports fatal regardless of the
-// wrapped error, standing in for a caller-defined error type.
-type fatalWrapper struct{ err error }
-
-func (w fatalWrapper) Error() string          { return "fatal: " + w.err.Error() }
-func (w fatalWrapper) Unwrap() error          { return w.err }
-func (w fatalWrapper) ErrorClass() ErrorClass { return ErrorClassFatal }
-
-// TestClassifyError_Propagation validates how ClassifyError walks an error
-// chain. Every error this package returns is either a bare ErrorType or one
-// wrapped by wrapError, and callers wrap those again, so the class must
-// survive any depth of wrapping. It also validates the two edges of the
-// chain: errors with no ErrorType at all, and callers overriding the class
-// through ErrorClassifier.
-func TestClassifyError_Propagation(t *testing.T) {
-	assert.Equal(t, ErrorClassNone, ClassifyError(nil))
-
-	// bare ErrorType, one per class
-	assert.Equal(t, ErrorClassRetryable, ClassifyError(ErrTimeout))
-	assert.Equal(t, ErrorClassFatal, ClassifyError(ErrInvalidQuery))
-	assert.Equal(t, ErrorClassNone, ClassifyError(ErrIteratorEnd))
-
-	// wrapped once, as wrapError does
-	wrapped := fmt.Errorf("blob_put (operation=blob_put, alias=x): %w", ErrAliasAlreadyExists)
-	assert.Equal(t, ErrorClassFatal, ClassifyError(wrapped))
-
-	// wrapped again by the caller
-	doubleWrapped := fmt.Errorf("sink write failed: %w", fmt.Errorf("push: %w", ErrUnstableCluster))
-	assert.Equal(t, ErrorClassRetryable, ClassifyError(doubleWrapped))
-
-	// no ErrorType anywhere in the chain: retryable by default
-	assert.Equal(t, ErrorClassRetryable, ClassifyError(errors.New("something else")))
-
-	// caller-defined ErrorClassifier overrides the wrapped ErrorType, while
-	// errors.Is still reaches the ErrorType
-	overridden := fmt.Errorf("outer: %w", fatalWrapper{err: ErrTimeout})
-	assert.Equal(t, ErrorClassFatal, ClassifyError(overridden))
-	assert.True(t, errors.Is(overridden, ErrTimeout))
+// checkPredicate runs pred over cases, failing on each mismatch with the
+// predicate's name and the input.
+func checkPredicate(t *testing.T, name string, pred func(error) bool, cases []predicateCase) {
+	t.Helper()
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, pred(tc.err), "%s(%v)", name, tc.err)
+	}
 }
 
-// TestIsRetryable_IsFatal validates the two boolean views over
-// ClassifyError that callers actually use. The two are not complements:
-// nil and informational codes are neither retryable nor fatal, which is
-// what makes "!IsRetryable(err)" safe in a retry loop that already checked
-// err != nil.
-func TestIsRetryable_IsFatal(t *testing.T) {
-	assert.False(t, IsRetryable(nil))
-	assert.False(t, IsFatal(nil))
-
-	// informational: neither
-	assert.False(t, IsRetryable(ErrTagAlreadySet))
-	assert.False(t, IsFatal(ErrTagAlreadySet))
-
-	assert.False(t, IsRetryable(ErrIncompatibleType))
-	assert.True(t, IsFatal(ErrIncompatibleType))
-
-	// a reply larger than the client in-buffer: the caller sized the buffer,
-	// so a reconnect cannot help
-	assert.False(t, IsRetryable(ErrNetworkInbufTooSmall))
-	assert.True(t, IsFatal(ErrNetworkInbufTooSmall))
-
-	for _, code := range []ErrorType{ErrTimeout, ErrAccessDenied, ErrQuotaExceeded, ErrOperationNotPermitted} {
-		assert.True(t, IsRetryable(code), "%v", code)
-		assert.False(t, IsFatal(code), "%v", code)
+// yesCases builds one true row per code.
+func yesCases(codes ...ErrorType) []predicateCase {
+	cases := make([]predicateCase, 0, len(codes))
+	for _, c := range codes {
+		cases = append(cases, predicateCase{c, true})
 	}
 
-	// the error QueryPoint getters return on a type mismatch (query.go);
-	// covers that change without needing a server
-	getterErr := fmt.Errorf("query_point_get_double (operation=query_point_get_double, wrong_type=expected_double): %w", ErrIncompatibleType)
-	assert.True(t, IsFatal(getterErr))
-	assert.True(t, errors.Is(getterErr, ErrIncompatibleType))
+	return cases
+}
+
+// noCases builds one false row per code.
+func noCases(codes ...ErrorType) []predicateCase {
+	cases := make([]predicateCase, 0, len(codes))
+	for _, c := range codes {
+		cases = append(cases, predicateCase{c, false})
+	}
+
+	return cases
+}
+
+// foreignCases are the rows every predicate answers false to: nil, and
+// errors without an ErrorType in their chain.
+func foreignCases() []predicateCase {
+	return []predicateCase{
+		{nil, false},
+		{errors.New("something else"), false},
+		{context.DeadlineExceeded, false},
+		{fmt.Errorf("outer: %w", context.Canceled), false},
+	}
+}
+
+// TestIsRetryable validates the full retryable list, one code from every
+// group that answers false, a wrapped code, nil and non-C errors.
+func TestIsRetryable(t *testing.T) {
+	cases := yesCases(
+		ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound,
+		ErrNetworkError, ErrUnstableCluster, ErrTryAgain, ErrResourceLocked, ErrConflict,
+		ErrTransactionPartialFailure, ErrPartialFailure, ErrAsyncPipeFull, ErrNoMemoryRemote,
+		ErrInterrupted, ErrInvalidReply,
+	)
+	cases = append(cases, noCases(
+		Success, Created, ErrIteratorEnd, ErrTagAlreadySet, // success and informational
+		ErrInvalidArgument, ErrInvalidQuery, ErrOutOfBounds, // judged, input side
+		ErrAliasNotFound, ErrAliasAlreadyExists, ErrIncompatibleType, ErrAccessDenied, ErrColumnNotFound, // judged, operation side
+		ErrNotImplemented, ErrQuotaExceeded, ErrLoginFailed, // answered with a condition
+		ErrInvalidProtocol, ErrInvalidHandle, ErrSystemLocal, ErrNetworkInbufTooSmall, // bad session, same request fails again
+	)...)
+	cases = append(
+		cases,
+		predicateCase{fmt.Errorf("outer: %w", ErrTimeout), true},
+		// the error QueryPoint getters return on a type mismatch (query.go)
+		predicateCase{fmt.Errorf("query_point_get_double (operation=query_point_get_double, wrong_type=expected_double): %w", ErrIncompatibleType), false},
+	)
+	cases = append(cases, foreignCases()...)
+
+	checkPredicate(t, "IsRetryable", IsRetryable, cases)
+}
+
+// TestIsBadSession validates the full bad-session list, one code from
+// every group that answers false, a wrapped code, nil and non-C errors.
+func TestIsBadSession(t *testing.T) {
+	cases := yesCases(
+		ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound, ErrNetworkError,
+		ErrUnstableCluster,
+		ErrInvalidProtocol, ErrInvalidVersion, ErrInvalidReply,
+		ErrSystemLocal, ErrInternalLocal, ErrNoMemoryLocal, ErrNetworkInbufTooSmall,
+		ErrSystemRemote, ErrInternalRemote, ErrNoMemoryRemote, ErrDataCorruption, ErrInterrupted,
+		ErrInvalidHandle, ErrUninitialized,
+	)
+	cases = append(cases, noCases(
+		Success, Created, ErrOkCreated, ErrIteratorEnd, // success and informational
+		ErrInvalidArgument, ErrInvalidQuery, // judged, input side
+		ErrAliasNotFound, ErrColumnNotFound, ErrAccessDenied, ErrResourceLocked, ErrConflict, // judged, operation side
+		ErrTryAgain, ErrAsyncPipeFull, ErrNotImplemented, ErrQuotaExceeded, // answered with a condition
+	)...)
+	cases = append(
+		cases,
+		predicateCase{fmt.Errorf("outer: %w", ErrTimeout), true},
+		predicateCase{fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", ErrColumnNotFound)), false},
+	)
+	cases = append(cases, foreignCases()...)
+
+	checkPredicate(t, "IsBadSession", IsBadSession, cases)
+}
+
+// TestIsClusterUnavailable validates the full cluster-unavailable list,
+// codes that are retryable or bad-session without being evidence about
+// the cluster, a wrapped code, nil and non-C errors.
+func TestIsClusterUnavailable(t *testing.T) {
+	cases := yesCases(
+		ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound,
+		ErrNetworkError, ErrUnstableCluster, ErrTryAgain, ErrAsyncPipeFull, ErrNoMemoryRemote,
+	)
+	cases = append(cases, noCases(
+		Success, ErrIteratorEnd,
+		ErrResourceLocked, ErrConflict, ErrTransactionPartialFailure, ErrInterrupted, // retryable, not the cluster
+		ErrInvalidProtocol, ErrInvalidHandle, ErrSystemLocal, ErrInternalRemote, // bad session, not the cluster
+		ErrAccessDenied, ErrColumnNotFound, ErrInvalidQuery, ErrQuotaExceeded, ErrLoginFailed,
+	)...)
+	cases = append(cases, predicateCase{fmt.Errorf("outer: %w", ErrConnectionRefused), true})
+	cases = append(cases, foreignCases()...)
+
+	checkPredicate(t, "IsClusterUnavailable", IsClusterUnavailable, cases)
+}
+
+// TestErrorPredicates_Independent pins that the three questions are
+// independent: one code may answer yes to any subset of them.
+func TestErrorPredicates_Independent(t *testing.T) {
+	tests := []struct {
+		code        ErrorType
+		retryable   bool
+		badSession  bool
+		unavailable bool
+	}{
+		{ErrTimeout, true, true, true},
+		{ErrResourceLocked, true, false, false},
+		{ErrTryAgain, true, false, true},
+		{ErrInvalidProtocol, false, true, false},
+		{ErrAccessDenied, false, false, false},
+	}
+
+	for _, tc := range tests {
+		assert.Equal(t, tc.retryable, IsRetryable(tc.code), "IsRetryable(%v)", tc.code)
+		assert.Equal(t, tc.badSession, IsBadSession(tc.code), "IsBadSession(%v)", tc.code)
+		assert.Equal(t, tc.unavailable, IsClusterUnavailable(tc.code), "IsClusterUnavailable(%v)", tc.code)
+	}
 }
