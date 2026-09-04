@@ -347,3 +347,85 @@ func IsRetryable(err error) bool {
 func IsFatal(err error) bool {
 	return ClassifyError(err) == ErrorClassFatal
 }
+
+// IsBadSession reports whether the handle that produced err can no longer
+// be trusted, so that a session pool discards it instead of reusing it:
+// the question Lease.Done asks. Answers false for nil, for success and
+// informational codes, and for an error without an ErrorType in its
+// chain, which says nothing about the handle.
+func IsBadSession(err error) bool {
+	var e ErrorType
+
+	return errors.As(err, &e) && e.isBadSession()
+}
+
+// isBadSession lists every code, exhaustive by lint: a code added later
+// fails the build until it is classified. Created and ErrOkCreated share
+// a value, so only one can appear.
+func (e ErrorType) isBadSession() bool {
+	switch e {
+	case
+		// the wire failed
+		ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound, ErrNetworkError,
+		// the handle's topology view is stale
+		ErrUnstableCluster,
+		// the protocol is confused
+		ErrInvalidProtocol, ErrInvalidVersion, ErrInvalidReply,
+		// the client side failed; ErrNetworkInbufTooSmall leaves the body of
+		// the oversized reply unread on the socket
+		ErrSystemLocal, ErrInternalLocal, ErrNoMemoryLocal, ErrNetworkInbufTooSmall,
+		// the server failed internally; the handle is probably fine, discard
+		// costs one reconnect
+		ErrSystemRemote, ErrInternalRemote, ErrNoMemoryRemote, ErrDataCorruption, ErrInterrupted,
+		// the handle itself is unusable
+		ErrInvalidHandle, ErrUninitialized:
+		return true
+
+	// success and informational
+	case Success, Created, ErrElementNotFound, ErrElementAlreadyExists, ErrTagAlreadySet, ErrTagNotSet,
+		ErrUnmatchedContent, ErrIteratorEnd:
+		return false
+
+	// the request was judged, input side
+	case ErrOutOfBounds, ErrBufferTooSmall, ErrInvalidArgument, ErrReservedAlias, ErrInvalidIterator,
+		ErrEntryTooLarge, ErrAliasTooLong, ErrInvalidCryptoKey, ErrInvalidQuery, ErrInvalidRegex, ErrUnknownUser:
+		return false
+
+	// the request was judged, operation side
+	case ErrAliasNotFound, ErrAliasAlreadyExists, ErrSkipped, ErrIncompatibleType, ErrContainerEmpty,
+		ErrContainerFull, ErrOverflow, ErrUnderflow, ErrConflict, ErrResourceLocked,
+		ErrTransactionPartialFailure, ErrOperationDisabled, ErrOperationNotPermitted, ErrAccessDenied,
+		ErrColumnNotFound, ErrQueryTooComplex, ErrPartialFailure:
+		return false
+
+	// the server answered with a condition
+	case ErrTryAgain, ErrAsyncPipeFull, ErrNotImplemented, ErrNoSpaceLeft, ErrQuotaExceeded, ErrClockSkew,
+		ErrLoginFailed:
+		return false
+	}
+
+	return false
+}
+
+// IsClusterUnavailable reports whether err is evidence that the cluster
+// was unreachable or too busy to answer: the question a circuit breaker
+// asks. Answers false for nil and for an error without an ErrorType in
+// its chain. ErrTimeout is listed although a query slower than the socket
+// timeout produces it too; consecutive-failure counting bounds that.
+//
+//nolint:exhaustive // unlisted codes are not evidence about the cluster
+func IsClusterUnavailable(err error) bool {
+	var e ErrorType
+	if !errors.As(err, &e) {
+		return false
+	}
+
+	switch e {
+	case ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound,
+		ErrNetworkError, ErrUnstableCluster, ErrTryAgain, ErrAsyncPipeFull, ErrNoMemoryRemote:
+		return true
+
+	default:
+		return false
+	}
+}

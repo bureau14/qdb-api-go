@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -431,4 +432,101 @@ func TestIsRetryable_IsFatal(t *testing.T) {
 	getterErr := fmt.Errorf("query_point_get_double (operation=query_point_get_double, wrong_type=expected_double): %w", ErrIncompatibleType)
 	assert.True(t, IsFatal(getterErr))
 	assert.True(t, errors.Is(getterErr, ErrIncompatibleType))
+}
+
+// ------------------------------------------------------------------
+// IsBadSession / IsClusterUnavailable tests
+// ------------------------------------------------------------------
+
+// predicateCase is one row of a predicate table: the error and the
+// answer the predicate must give for it.
+type predicateCase struct {
+	err  error
+	want bool
+}
+
+// checkPredicate runs pred over cases, failing on each mismatch with the
+// predicate's name and the input.
+func checkPredicate(t *testing.T, name string, pred func(error) bool, cases []predicateCase) {
+	t.Helper()
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, pred(tc.err), "%s(%v)", name, tc.err)
+	}
+}
+
+// yesCases builds one true row per code.
+func yesCases(codes ...ErrorType) []predicateCase {
+	cases := make([]predicateCase, 0, len(codes))
+	for _, c := range codes {
+		cases = append(cases, predicateCase{c, true})
+	}
+
+	return cases
+}
+
+// noCases builds one false row per code.
+func noCases(codes ...ErrorType) []predicateCase {
+	cases := make([]predicateCase, 0, len(codes))
+	for _, c := range codes {
+		cases = append(cases, predicateCase{c, false})
+	}
+
+	return cases
+}
+
+// foreignCases are the rows every predicate answers false to: nil, and
+// errors without an ErrorType in their chain.
+func foreignCases() []predicateCase {
+	return []predicateCase{
+		{nil, false},
+		{errors.New("something else"), false},
+		{context.DeadlineExceeded, false},
+		{fmt.Errorf("outer: %w", context.Canceled), false},
+	}
+}
+
+// TestIsBadSession validates the full bad-session list, one code from
+// every group that answers false, a wrapped code, nil and non-C errors.
+func TestIsBadSession(t *testing.T) {
+	cases := yesCases(
+		ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound, ErrNetworkError,
+		ErrUnstableCluster,
+		ErrInvalidProtocol, ErrInvalidVersion, ErrInvalidReply,
+		ErrSystemLocal, ErrInternalLocal, ErrNoMemoryLocal, ErrNetworkInbufTooSmall,
+		ErrSystemRemote, ErrInternalRemote, ErrNoMemoryRemote, ErrDataCorruption, ErrInterrupted,
+		ErrInvalidHandle, ErrUninitialized,
+	)
+	cases = append(cases, noCases(
+		Success, Created, ErrOkCreated, ErrIteratorEnd, // success and informational
+		ErrInvalidArgument, ErrInvalidQuery, // judged, input side
+		ErrAliasNotFound, ErrColumnNotFound, ErrAccessDenied, ErrResourceLocked, ErrConflict, // judged, operation side
+		ErrTryAgain, ErrAsyncPipeFull, ErrNotImplemented, ErrQuotaExceeded, // answered with a condition
+	)...)
+	cases = append(cases,
+		predicateCase{fmt.Errorf("outer: %w", ErrTimeout), true},
+		predicateCase{fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", ErrColumnNotFound)), false},
+	)
+	cases = append(cases, foreignCases()...)
+
+	checkPredicate(t, "IsBadSession", IsBadSession, cases)
+}
+
+// TestIsClusterUnavailable validates the full cluster-unavailable list,
+// codes that are retryable or bad-session without being evidence about
+// the cluster, a wrapped code, nil and non-C errors.
+func TestIsClusterUnavailable(t *testing.T) {
+	cases := yesCases(
+		ErrTimeout, ErrConnectionRefused, ErrConnectionReset, ErrNotConnected, ErrHostNotFound,
+		ErrNetworkError, ErrUnstableCluster, ErrTryAgain, ErrAsyncPipeFull, ErrNoMemoryRemote,
+	)
+	cases = append(cases, noCases(
+		Success, ErrIteratorEnd,
+		ErrResourceLocked, ErrConflict, ErrTransactionPartialFailure, ErrInterrupted, // retryable, not the cluster
+		ErrInvalidProtocol, ErrInvalidHandle, ErrSystemLocal, ErrInternalRemote, // bad session, not the cluster
+		ErrAccessDenied, ErrColumnNotFound, ErrInvalidQuery, ErrQuotaExceeded, ErrLoginFailed,
+	)...)
+	cases = append(cases, predicateCase{fmt.Errorf("outer: %w", ErrConnectionRefused), true})
+	cases = append(cases, foreignCases()...)
+
+	checkPredicate(t, "IsClusterUnavailable", IsClusterUnavailable, cases)
 }
