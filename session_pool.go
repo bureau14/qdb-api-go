@@ -608,11 +608,11 @@ func (l *Lease) Discard() {
 }
 
 // Done ends the lease according to err, the outcome of the calls made on
-// the session: Discard when IsRetryable holds, Release otherwise. An
-// error from outside this package, a context deadline included, counts
-// as retryable and discards.
+// the session: Discard when IsBadSession holds, Release otherwise. An
+// error that is not a C API error, a context deadline included, says
+// nothing about the session and releases.
 func (l *Lease) Done(err error) {
-	if IsRetryable(err) {
+	if IsBadSession(err) {
 		l.Discard()
 
 		return
