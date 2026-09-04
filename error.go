@@ -32,9 +32,11 @@ import (
 	"strings"
 )
 
-// Error handling patterns for qdb-api-go:
+// Error handling patterns for qdb-api-go. Three predicates each answer
+// one question about an error, independently; an error without a C API
+// code answers no to all of them.
 //
-// 1. Check retryability with exponential backoff:
+// 1. Retry loop, IsRetryable: may the same request succeed later?
 //
 //	err := handle.PutBlob(alias, data)
 //	for attempt := 0; err != nil && IsRetryable(err) && attempt < 3; attempt++ {
@@ -42,7 +44,13 @@ import (
 //	    err = handle.PutBlob(alias, data)
 //	}
 //
-// 2. Use errors.Is() for specific error checks:
+// 2. Session pool, IsBadSession: can the handle still be trusted?
+// Lease.Done asks it; a pool of its own discards the session when it holds.
+//
+// 3. Circuit breaker, IsClusterUnavailable: was the cluster unreachable or
+// overloaded? Count it as a failure; any other outcome counts as a success.
+//
+// 4. Use errors.Is() for specific error checks:
 //
 //	if errors.Is(err, qdb.ErrAliasNotFound) {
 //	    // Create new entry
@@ -50,7 +58,7 @@ import (
 //	    // Handle auth failure
 //	}
 //
-// 3. Extract ErrorType from wrapped errors:
+// 5. Extract ErrorType from wrapped errors:
 //
 //	var qdbErr qdb.ErrorType
 //	if errors.As(err, &qdbErr) {
