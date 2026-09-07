@@ -322,3 +322,51 @@ func appendRow(cols []QueryColumn, row *QueryPoint, i int) error {
 
 	return nil
 }
+
+// tableFromRows converts rows into a QueryTable in two passes over the
+// row-major C data, both row-first because a row's cells are contiguous.
+// It takes no QueryResult so a continuous-query callback can convert a
+// batch it does not own, and so unit tests need no hand-built
+// qdb_query_result_t. names has one entry per column of every row.
+func tableFromRows(names []string, rows QueryRows, scanned int64) (*QueryTable, error) {
+	// Pass one settles every column's kind from the type tags alone. From
+	// here on a column is either typed or null; mixed and array columns
+	// have already been rejected.
+	kinds, err := probeKinds(rows, names)
+	if err != nil {
+		return nil, err
+	}
+
+	// Still pass one: string and blob columns need their byte totals so the
+	// shared buffer is allocated exactly once per column.
+	sizes, err := varSizes(rows, kinds, names)
+	if err != nil {
+		return nil, err
+	}
+
+	// Every buffer is at its final length, so pass two only writes in place.
+	cols := allocColumns(names, kinds, len(rows), sizes)
+
+	// Pass two copies the payloads out of C memory. Only a timestamp
+	// outside the int64 nanosecond range can fail here.
+	for i, row := range rows {
+		err = appendRow(cols, row, i)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newQueryTable(cols, len(rows), scanned), nil
+}
+
+// ToTable copies the result into Go memory as a QueryTable that holds no C
+// pointers. A nil or closed receiver yields an empty table and no error.
+// The receiver stays open: the caller still closes it, and may do so as
+// soon as ToTable returns.
+func (r *QueryResult) ToTable() (*QueryTable, error) {
+	if r == nil || r.result == nil {
+		return newQueryTable(nil, 0, 0), nil
+	}
+
+	return tableFromRows(r.ColumnsNames(), r.rowsUnsafe(), r.ScannedPoints())
+}

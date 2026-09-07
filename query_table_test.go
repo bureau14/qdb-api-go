@@ -2,7 +2,10 @@ package qdb
 
 import (
 	"errors"
+	"fmt"
 	"math"
+	"runtime"
+	"runtime/debug"
 	"testing"
 	"time"
 	"unsafe"
@@ -436,4 +439,241 @@ func TestVarSizesRejectsColumnPastInt32(t *testing.T) {
 	sizes, err := varSizes(rows[:1], []columnKind{kindBlob}, []string{"big"})
 	require.NoError(t, err)
 	assert.Equal(t, []int{1}, sizes)
+}
+
+// Column positions of a select * over the all-columns fixture: the two
+// system columns come first, then the fixture's columns in creation order.
+const (
+	tblTimestampIndex = 0
+	tblTableIndex     = 1
+	tblBlobIndex      = 2
+	tblDoubleIndex    = 3
+	tblInt64Index     = 4
+	tblStringIndex    = 5
+	tblTsIndex        = 6
+	tblSymbolIndex    = 7
+)
+
+// toTable executes query, converts it, and closes the result.
+func toTable(t *testing.T, handle HandleType, query string) *QueryTable {
+	t.Helper()
+
+	result, err := handle.Query(query).Execute()
+	require.NoError(t, err)
+	defer result.Close()
+
+	tbl, err := result.ToTable()
+	require.NoError(t, err)
+
+	return tbl
+}
+
+// fixtureTable converts a select * over the fixture and returns the table
+// with the result's column names.
+func fixtureTable(t *testing.T, handle HandleType, td TestTimeseriesData) (tbl *QueryTable, names []string) {
+	t.Helper()
+
+	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Execute()
+	require.NoError(t, err)
+	defer result.Close()
+
+	tbl, err = result.ToTable()
+	require.NoError(t, err)
+
+	return tbl, result.ColumnsNames()
+}
+
+func requireTableMatchesFixture(t *testing.T, tbl *QueryTable, td TestTimeseriesData) {
+	t.Helper()
+
+	n := len(td.Int64Points)
+	require.Equal(t, n, tbl.RowCount())
+	require.Len(t, tbl.Columns(), 8)
+
+	idx, ok := tbl.Columns()[tblTimestampIndex].(*TimestampColumn)
+	require.True(t, ok)
+	table, ok := tbl.Columns()[tblTableIndex].(*StringColumn)
+	require.True(t, ok)
+	blob, ok := tbl.Columns()[tblBlobIndex].(*BlobColumn)
+	require.True(t, ok)
+	dbl, ok := tbl.Columns()[tblDoubleIndex].(*DoubleColumn)
+	require.True(t, ok)
+	i64, ok := tbl.Columns()[tblInt64Index].(*Int64Column)
+	require.True(t, ok)
+	str, ok := tbl.Columns()[tblStringIndex].(*StringColumn)
+	require.True(t, ok)
+	ts, ok := tbl.Columns()[tblTsIndex].(*TimestampColumn)
+	require.True(t, ok)
+	sym, ok := tbl.Columns()[tblSymbolIndex].(*StringColumn)
+	require.True(t, ok)
+
+	assert.True(t, idx.Valid().AllValid())
+	assert.True(t, table.Valid().AllValid())
+	assert.Equal(t, td.BlobValid, validBits(blob.Valid()))
+	assert.Equal(t, td.DoubleValid, validBits(dbl.Valid()))
+	assert.Equal(t, td.Int64Valid, validBits(i64.Valid()))
+	assert.Equal(t, td.StringValid, validBits(str.Valid()))
+	assert.Equal(t, td.TimestampValid, validBits(ts.Valid()))
+	assert.Equal(t, td.SymbolValid, validBits(sym.Valid()))
+
+	for i := range n {
+		assert.Equal(t, td.Int64Points[i].Timestamp().UnixNano(), idx.Nanos[i], "row %d", i)
+		assert.Equal(t, td.Alias, table.Value(i), "row %d", i)
+		requireCellMatches(t, td, i, blob, dbl, i64, str, ts, sym)
+	}
+}
+
+// requireCellMatches checks row i: the fixture value on a valid slot, the
+// null sentinel on a cleared one.
+func requireCellMatches(t *testing.T, td TestTimeseriesData, i int,
+	blob *BlobColumn, dbl *DoubleColumn, i64 *Int64Column, str *StringColumn, ts *TimestampColumn, sym *StringColumn,
+) {
+	t.Helper()
+
+	if td.BlobValid[i] {
+		assert.Equal(t, td.BlobPoints[i].Content(), blob.Value(i), "row %d", i)
+	} else {
+		assert.Empty(t, blob.Value(i), "row %d", i)
+	}
+	if td.DoubleValid[i] {
+		assert.InDelta(t, td.DoublePoints[i].Content(), dbl.Values[i], 0, "row %d", i)
+	} else {
+		assert.True(t, math.IsNaN(dbl.Values[i]), "row %d", i)
+	}
+	if td.Int64Valid[i] {
+		assert.Equal(t, td.Int64Points[i].Content(), i64.Values[i], "row %d", i)
+	} else {
+		assert.Equal(t, int64(math.MinInt64), i64.Values[i], "row %d", i)
+	}
+	if td.StringValid[i] {
+		assert.Equal(t, td.StringPoints[i].Content(), str.Value(i), "row %d", i)
+	} else {
+		assert.Equal(t, "", str.Value(i), "row %d", i)
+	}
+	if td.TimestampValid[i] {
+		assert.Equal(t, td.TimestampPoints[i].Content().UnixNano(), ts.Nanos[i], "row %d", i)
+		assert.True(t, td.TimestampPoints[i].Content().Equal(ts.Time(i)), "row %d", i)
+	} else {
+		assert.Equal(t, int64(math.MinInt64), ts.Nanos[i], "row %d", i)
+	}
+	if td.SymbolValid[i] {
+		assert.Equal(t, td.SymbolPoints[i].Content(), sym.Value(i), "row %d", i)
+	} else {
+		assert.Equal(t, "", sym.Value(i), "row %d", i)
+	}
+}
+
+func TestToTableDenseFixture(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumns(t, handle, 8)
+
+	tbl, names := fixtureTable(t, handle, td)
+	assert.Len(t, names, 8)
+	assert.Positive(t, tbl.ScannedPoints())
+	for i, c := range tbl.Columns() {
+		assert.Equal(t, names[i], c.Name())
+	}
+	requireTableMatchesFixture(t, tbl, td)
+}
+
+func TestToTableSparseFixture(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 64, 50)
+
+	tbl, _ := fixtureTable(t, handle, td)
+	requireTableMatchesFixture(t, tbl, td)
+}
+
+func TestToTableAllNullFixtureYieldsNullColumns(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 4, 0)
+
+	tbl, _ := fixtureTable(t, handle, td)
+	require.Equal(t, 4, tbl.RowCount())
+	require.Len(t, tbl.Columns(), 8)
+
+	_, ok := tbl.Columns()[tblTimestampIndex].(*TimestampColumn)
+	assert.True(t, ok, "$timestamp stays typed")
+	_, ok = tbl.Columns()[tblTableIndex].(*StringColumn)
+	assert.True(t, ok, "$table stays typed")
+	for _, c := range tbl.Columns()[tblBlobIndex:] {
+		null, ok := c.(*NullColumn)
+		require.True(t, ok, "column %s is %T", c.Name(), c)
+		assert.Equal(t, 4, null.Len())
+		assert.True(t, null.Valid().AllNull())
+	}
+}
+
+func TestToTableCountAggregateIsInt64Column(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
+	_, names := fixtureTable(t, handle, td)
+
+	tbl := toTable(t, handle, fmt.Sprintf("select count(%s) from %s in range(1970, +10d)", names[tblInt64Index], td.Alias))
+	require.Equal(t, 1, tbl.RowCount())
+	require.Len(t, tbl.Columns(), 1)
+
+	cnt, err := ColumnOf[*Int64Column](tbl, tbl.Columns()[0].Name())
+	require.NoError(t, err)
+	valid := 0
+	for _, ok := range td.Int64Valid {
+		if ok {
+			valid++
+		}
+	}
+	assert.Equal(t, []int64{int64(valid)}, cnt.Values)
+	assert.True(t, cnt.Valid().AllValid())
+}
+
+func TestToTableEmptyRangeHasNoRows(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumns(t, handle, 4)
+
+	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1971, +10d)", td.Alias)).Execute()
+	require.NoError(t, err)
+	defer result.Close()
+
+	tbl, err := result.ToTable()
+	require.NoError(t, err)
+	assert.Equal(t, 0, tbl.RowCount())
+	assert.Len(t, tbl.Columns(), int(result.ColumnsCount()))
+	for _, c := range tbl.Columns() {
+		assert.Equal(t, 0, c.Len())
+	}
+}
+
+func TestToTableOnClosedOrNilResultIsEmpty(t *testing.T) {
+	var nilResult *QueryResult
+	tbl, err := nilResult.ToTable()
+	require.NoError(t, err)
+	assert.Equal(t, 0, tbl.RowCount())
+	assert.Empty(t, tbl.Columns())
+
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumns(t, handle, 2)
+	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Execute()
+	require.NoError(t, err)
+	result.Close()
+
+	tbl, err = result.ToTable()
+	require.NoError(t, err)
+	assert.Equal(t, 0, tbl.RowCount())
+	assert.Empty(t, tbl.Columns())
+}
+
+// TestToTableOutlivesResult proves the table aliases no C memory: the
+// result is released and the heap scrubbed before the values are read.
+func TestToTableOutlivesResult(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 32, 50)
+
+	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Execute()
+	require.NoError(t, err)
+	tbl, err := result.ToTable()
+	require.NoError(t, err)
+	result.Close()
+
+	runtime.GC()
+	debug.FreeOSMemory()
+	requireTableMatchesFixture(t, tbl, td)
 }
