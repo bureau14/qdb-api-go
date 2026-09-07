@@ -254,27 +254,12 @@ func qdbStringArrayToSlice(strings *C.qdb_string_t, length int64) []C.qdb_string
 
 // Columns : create columns from a row
 func (r QueryResult) Columns(row *QueryPoint) QueryRow {
-	if r.result == nil {
-		return QueryRow{}
-	}
-
-	count := int64(r.result.column_count)
-
-	return queryPointArrayToSlice(row, count)
+	return r.columnsUnsafe(row)
 }
 
 // Rows : get rows of a query table result
 func (r QueryResult) Rows() QueryRows {
-	if r.result == nil {
-		return QueryRows{}
-	}
-
-	count := int64(r.result.row_count)
-	if count == 0 {
-		return []*QueryPoint{}
-	}
-
-	return qdbPointResultStarArrayToSlice(r.result.rows, count)
+	return r.rowsUnsafe()
 }
 
 // ColumnsNames : get the number of columns names of each row
@@ -318,6 +303,33 @@ func (r QueryResult) ErrorMessage() string {
 	}
 
 	return C.GoStringN(r.result.error_message.data, C.int(r.result.error_message.length))
+}
+
+// columnsUnsafe views the cells of row in place. The slice aliases the C
+// result and is valid only until Close.
+func (r QueryResult) columnsUnsafe(row *QueryPoint) QueryRow {
+	if r.result == nil {
+		return QueryRow{}
+	}
+
+	count := int64(r.result.column_count)
+
+	return queryPointArrayToSlice(row, count)
+}
+
+// rowsUnsafe views the row pointers in place. The slice aliases the C
+// result and is valid only until Close.
+func (r QueryResult) rowsUnsafe() QueryRows {
+	if r.result == nil {
+		return QueryRows{}
+	}
+
+	count := int64(r.result.row_count)
+	if count == 0 {
+		return []*QueryPoint{}
+	}
+
+	return qdbPointResultStarArrayToSlice(r.result.rows, count)
 }
 
 // Query : query object
