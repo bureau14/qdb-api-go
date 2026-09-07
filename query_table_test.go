@@ -5,6 +5,7 @@ import (
 	"math"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -270,4 +271,112 @@ func TestProbeKindsArrayTagsAreNotImplemented(t *testing.T) {
 		assert.True(t, errors.Is(err, ErrNotImplemented), err.Error())
 		assert.Contains(t, err.Error(), "arr")
 	}
+}
+
+// TestQueryTableCellLayout pins the offsets the payload loads depend on;
+// the sizes are pinned at compile time in query_table_convert.go.
+func TestQueryTableCellLayout(t *testing.T) {
+	var cell QueryPoint
+	var ts Timespec
+	assert.Equal(t, uintptr(24), unsafe.Sizeof(cell))
+	assert.Equal(t, uintptr(0), unsafe.Offsetof(cell._type))
+	assert.Equal(t, uintptr(8), unsafe.Offsetof(cell.payload))
+	assert.Equal(t, uintptr(16), unsafe.Sizeof(cell.payload))
+	assert.Equal(t, uintptr(0), unsafe.Offsetof(ts.tv_sec))
+	assert.Equal(t, uintptr(8), unsafe.Offsetof(ts.tv_nsec))
+}
+
+func TestCellNanosBounds(t *testing.T) {
+	cases := []struct {
+		sec, nsec int64
+		want      int64
+		ok        bool
+	}{
+		{0, 0, 0, true},
+		{1, 5, 1_000_000_005, true},
+		{-1, 0, -1_000_000_000, true},
+		{maxTimespecSec, 854_775_807, math.MaxInt64, true},
+		{maxTimespecSec, 854_775_808, 0, false},
+		{maxTimespecSec + 1, 0, 0, false},
+		{minTimespecSec, -854_775_808, math.MinInt64, true},
+		{minTimespecSec, -854_775_809, 0, false},
+		{minTimespecSec - 1, 0, 0, false},
+		{math.MinInt64, math.MinInt64, 0, false},
+	}
+	for _, c := range cases {
+		got, ok := cellNanos(c.sec, c.nsec)
+		assert.Equal(t, c.ok, ok, "sec=%d nsec=%d", c.sec, c.nsec)
+		if c.ok {
+			assert.Equal(t, c.want, got, "sec=%d nsec=%d", c.sec, c.nsec)
+		}
+	}
+}
+
+func TestAppendRowFillsFixedColumns(t *testing.T) {
+	handle := newTestHandle(t)
+	names := []string{"i", "d", "t", "c", "n"}
+	rows := newTestPointRows(t, handle, [][]testCellFunc{
+		{testCellInt64(7), testCellDouble(1.5), testCellTimestamp(10, 20), testCellCount(3), testCellNone()},
+		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone()},
+		{testCellInt64(-7), testCellDouble(-1.5), testCellTimestamp(-10, 20), testCellInt64(4), testCellNone()},
+	})
+	kinds, err := probeKinds(rows, names)
+	require.NoError(t, err)
+	cols := allocColumns(names, kinds, len(rows), nil)
+	for i, row := range rows {
+		require.NoError(t, appendRow(cols, row, i))
+	}
+
+	i64, err := ColumnOf[*Int64Column](newQueryTable(cols, 3, 0), "i")
+	require.NoError(t, err)
+	assert.Equal(t, []int64{7, math.MinInt64, -7}, i64.Values)
+	assert.Equal(t, []bool{true, false, true}, validBits(i64.Valid()))
+
+	dbl, err := ColumnOf[*DoubleColumn](newQueryTable(cols, 3, 0), "d")
+	require.NoError(t, err)
+	assert.InDelta(t, 1.5, dbl.Values[0], 0)
+	assert.True(t, math.IsNaN(dbl.Values[1]))
+	assert.InDelta(t, -1.5, dbl.Values[2], 0)
+	assert.Equal(t, []bool{true, false, true}, validBits(dbl.Valid()))
+
+	ts, err := ColumnOf[*TimestampColumn](newQueryTable(cols, 3, 0), "t")
+	require.NoError(t, err)
+	assert.Equal(t, []int64{10_000_000_020, math.MinInt64, -9_999_999_980}, ts.Nanos)
+	assert.Equal(t, time.Unix(10, 20).UTC(), ts.Time(0))
+	assert.Equal(t, []bool{true, false, true}, validBits(ts.Valid()))
+
+	cnt, err := ColumnOf[*Int64Column](newQueryTable(cols, 3, 0), "c")
+	require.NoError(t, err)
+	assert.Equal(t, []int64{3, math.MinInt64, 4}, cnt.Values)
+
+	null, err := ColumnOf[*NullColumn](newQueryTable(cols, 3, 0), "n")
+	require.NoError(t, err)
+	assert.Equal(t, 3, null.Len())
+	assert.True(t, null.Valid().AllNull())
+}
+
+func TestAppendRowTimestampOverflowIsOutOfBounds(t *testing.T) {
+	handle := newTestHandle(t)
+	rows := newTestPointRows(t, handle, [][]testCellFunc{
+		{testCellTimestamp(0, 0)},
+		{testCellTimestamp(maxTimespecSec+1, 0)},
+	})
+	cols := allocColumns([]string{"when"}, []columnKind{kindTimestamp}, 2, nil)
+
+	require.NoError(t, appendRow(cols, rows[0], 0))
+	err := appendRow(cols, rows[1], 1)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrOutOfBounds), err.Error())
+	assert.Contains(t, err.Error(), "when")
+	assert.Contains(t, err.Error(), "row=1")
+}
+
+// validBits expands a bitmap to a []bool for equality assertions.
+func validBits(b Bitmap) []bool {
+	out := make([]bool, b.Len())
+	for i := range out {
+		out[i] = b.IsValid(i)
+	}
+
+	return out
 }

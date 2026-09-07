@@ -10,7 +10,39 @@ package qdb
 import "C"
 
 import (
+	"math"
+	"time"
 	"unsafe"
+)
+
+// The payload loads below are plain Go loads over a C cell, so a table
+// conversion makes no cgo call after qdb_query returns. They depend on the
+// layout of qdb_point_result_t on every supported platform: a 24-byte
+// record with the 4-byte tag at offset 0 and the 16-byte union at offset 8,
+// which cgo exposes as [16]uint8; qdb_int_t, qdb_size_t and qdb_time_t are
+// 8 bytes; qdb_timespec_t is tv_sec then tv_nsec; loads are host-endian,
+// the same endianness the C library wrote with; double is IEEE-754
+// binary64. The sizes are pinned here at compile time (a mismatch is a
+// negative constant, which does not fit uint); the offsets are pinned by
+// TestQueryTableCellLayout.
+const (
+	_ = uint(unsafe.Sizeof(C.qdb_point_result_t{}) - 24)
+	_ = uint(24 - unsafe.Sizeof(C.qdb_point_result_t{}))
+	_ = uint(unsafe.Sizeof(C.qdb_timespec_t{}) - 16)
+	_ = uint(16 - unsafe.Sizeof(C.qdb_timespec_t{}))
+	_ = uint(unsafe.Sizeof(C.qdb_size_t(0)) - 8)
+	_ = uint(8 - unsafe.Sizeof(C.qdb_size_t(0)))
+	_ = uint(unsafe.Sizeof(C.qdb_int_t(0)) - 8)
+	_ = uint(8 - unsafe.Sizeof(C.qdb_int_t(0)))
+	_ = uint(unsafe.Sizeof(C.qdb_time_t(0)) - 8)
+	_ = uint(8 - unsafe.Sizeof(C.qdb_time_t(0)))
+)
+
+const (
+	nanosPerSecond = int64(time.Second)
+	// Bounds on tv_sec inside which tv_sec * nanosPerSecond fits int64.
+	maxTimespecSec = math.MaxInt64 / nanosPerSecond
+	minTimespecSec = math.MinInt64 / nanosPerSecond
 )
 
 // columnKind is the inferred type of a result column. The C API carries no
@@ -134,4 +166,108 @@ func probeKinds(rows QueryRows, names []string) ([]columnKind, error) {
 	}
 
 	return kinds, nil
+}
+
+// cellPayload is the address of the 16-byte union. Taken from the field,
+// not computed from the cell address, so it stays right if cgo ever
+// renders the union as a named type.
+func cellPayload(c *C.qdb_point_result_t) unsafe.Pointer {
+	return unsafe.Pointer(&c.payload)
+}
+
+// cellInt64 reads payload.int64_.value, or payload.count.value as the same
+// eight bytes.
+func cellInt64(c *C.qdb_point_result_t) int64 {
+	return *(*int64)(cellPayload(c))
+}
+
+// cellDouble reads payload.double_.value.
+func cellDouble(c *C.qdb_point_result_t) float64 {
+	return *(*float64)(cellPayload(c))
+}
+
+// cellTimespec reads payload.timestamp.value: tv_sec at union offset 0,
+// tv_nsec at 8.
+func cellTimespec(c *C.qdb_point_result_t) (sec, nsec int64) {
+	p := cellPayload(c)
+
+	return *(*int64)(p), *(*int64)(unsafe.Add(p, 8))
+}
+
+// cellNanos converts a timespec to nanoseconds since the Unix epoch and
+// reports false when the result does not fit int64, which is the years
+// 1678 to 2262, the same bound the server's Arrow conversion applies.
+// tv_nsec is not assumed normalised, so the add is checked as well.
+func cellNanos(sec, nsec int64) (int64, bool) {
+	// Bounding sec first makes the multiply provably safe: the bound times
+	// nanosPerSecond is inside int64 by construction.
+	if sec < minTimespecSec || sec > maxTimespecSec {
+		return 0, false
+	}
+
+	whole := sec * nanosPerSecond
+	total := whole + nsec
+	// A signed add overflowed exactly when the result's sign differs from
+	// the sign of both operands.
+	if (whole^total)&(nsec^total) < 0 {
+		return 0, false
+	}
+
+	return total, true
+}
+
+// allocColumns builds one concrete column per probed kind with every buffer
+// at its final length, so pass two writes cells in place and never grows a
+// slice. sizes holds the byte total of each string and blob column and is
+// ignored for the other kinds. Null slots are written by appendCell with
+// the QDB_IS_NULL_* sentinel of the kind; the bitmap is authoritative.
+func allocColumns(names []string, kinds []columnKind, n int, sizes []int) []QueryColumn {
+	cols := make([]QueryColumn, len(names))
+	for j, kind := range kinds {
+		switch kind {
+		case kindNone:
+			cols[j] = newNullColumn(names[j], n)
+		case kindInt64:
+			cols[j] = newInt64Column(names[j], n)
+		case kindDouble:
+			cols[j] = newDoubleColumn(names[j], n)
+		case kindTimestamp:
+			cols[j] = newTimestampColumn(names[j], n)
+		case kindString:
+			cols[j] = newStringColumn(names[j], n, sizes[j])
+		case kindBlob:
+			cols[j] = newBlobColumn(names[j], n, sizes[j])
+		}
+	}
+
+	return cols
+}
+
+// appendRow is pass two for one row: each cell goes to the column pass one
+// chose for it. A NullColumn takes no writes, because pass one made the
+// column null only when every one of its cells was none.
+func appendRow(cols []QueryColumn, row *QueryPoint, i int) error {
+	cells := cellsOf(row, len(cols))
+	for j := range cells {
+		cell := &cells[j]
+
+		var err error
+		switch c := cols[j].(type) {
+		case *Int64Column:
+			c.appendCell(i, cell)
+		case *DoubleColumn:
+			c.appendCell(i, cell)
+		case *TimestampColumn:
+			err = c.appendCell(i, cell)
+		case *StringColumn, *BlobColumn:
+			err = wrapError(C.qdb_e_not_implemented, "query_append_row", "column", cols[j].Name())
+		case *NullColumn:
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

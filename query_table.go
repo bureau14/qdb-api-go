@@ -6,10 +6,12 @@ package qdb
 
 /*
 	#include <qdb/client.h>
+	#include <qdb/query.h>
 */
 import "C"
 
 import (
+	"math"
 	"reflect"
 	"time"
 	"unsafe"
@@ -70,6 +72,22 @@ func (c *Int64Column) Valid() Bitmap {
 
 func (c *Int64Column) sealed() {}
 
+// appendCell writes row i from cell. A none cell leaves the bit clear and
+// stores the QDB_IS_NULL_INT64 sentinel: the bitmap is authoritative, the
+// sentinel only keeps Values usable by the writer.
+func (c *Int64Column) appendCell(i int, cell *C.qdb_point_result_t) {
+	if cell._type == C.qdb_query_result_none {
+		c.Values[i] = math.MinInt64
+
+		return
+	}
+
+	// int64 and count share this path: pass one accepted both tags for
+	// this column, and the count payload is read as the same eight bytes.
+	c.Values[i] = cellInt64(cell)
+	c.valid.set(i)
+}
+
 // DoubleColumn holds double cells in the Arrow Float64 layout. Null slots
 // hold NaN, the QDB_IS_NULL_DOUBLE sentinel, so Values round-trips through
 // NewColumnDataDouble as null. Values are IEEE-754 binary64, the C double
@@ -101,6 +119,19 @@ func (c *DoubleColumn) Valid() Bitmap {
 }
 
 func (c *DoubleColumn) sealed() {}
+
+// appendCell writes row i from cell. A none cell leaves the bit clear and
+// stores NaN, the QDB_IS_NULL_DOUBLE sentinel.
+func (c *DoubleColumn) appendCell(i int, cell *C.qdb_point_result_t) {
+	if cell._type == C.qdb_query_result_none {
+		c.Values[i] = math.NaN()
+
+		return
+	}
+
+	c.Values[i] = cellDouble(cell)
+	c.valid.set(i)
+}
 
 // TimestampColumn holds timestamp cells as int64 nanoseconds since the Unix
 // epoch, the Arrow Timestamp(ns, UTC) layout. The representable range is
@@ -143,6 +174,31 @@ func (c *TimestampColumn) Time(i int) time.Time {
 }
 
 func (c *TimestampColumn) sealed() {}
+
+// appendCell writes row i from cell. A none cell leaves the bit clear and
+// stores math.MinInt64. A typed cell outside the int64 nanosecond range is
+// ErrOutOfBounds naming the column and row.
+func (c *TimestampColumn) appendCell(i int, cell *C.qdb_point_result_t) error {
+	if cell._type == C.qdb_query_result_none {
+		// The null timespec (qdb_min_time in both fields) never reaches
+		// cellNanos: a none cell is written straight as the nanos sentinel.
+		c.Nanos[i] = math.MinInt64
+
+		return nil
+	}
+
+	sec, nsec := cellTimespec(cell)
+	nanos, ok := cellNanos(sec, nsec)
+	if !ok {
+		return wrapError(C.qdb_e_out_of_bounds, "query_table_timestamp",
+			"column", c.name, "row", i, "tv_sec", sec, "tv_nsec", nsec)
+	}
+
+	c.Nanos[i] = nanos
+	c.valid.set(i)
+
+	return nil
+}
 
 // varBytes is the shared body of StringColumn and BlobColumn: the Arrow
 // String and Binary layout. bytes holds every cell back to back and
