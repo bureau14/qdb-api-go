@@ -197,3 +197,77 @@ func TestPointRowsFixtureReadsBackThroughAccessors(t *testing.T) {
 	assert.Equal(t, time.Unix(-5, 0), ts)
 	assert.Equal(t, QueryResultValueType(tags[4]), second[7].Get().Type())
 }
+
+func TestMergeKindNoneIsIdentity(t *testing.T) {
+	all := []columnKind{kindNone, kindInt64, kindDouble, kindTimestamp, kindString, kindBlob}
+	for _, k := range all {
+		got, ok := mergeKind(kindNone, k)
+		require.True(t, ok)
+		assert.Equal(t, k, got)
+
+		got, ok = mergeKind(k, kindNone)
+		require.True(t, ok)
+		assert.Equal(t, k, got)
+
+		got, ok = mergeKind(k, k)
+		require.True(t, ok)
+		assert.Equal(t, k, got)
+	}
+
+	for _, a := range all[1:] {
+		for _, b := range all[1:] {
+			if a == b {
+				continue
+			}
+			_, ok := mergeKind(a, b)
+			assert.False(t, ok, "%v + %v", a, b)
+		}
+	}
+}
+
+func TestProbeKindsInfersEachColumn(t *testing.T) {
+	handle := newTestHandle(t)
+	names := []string{"i", "d", "t", "s", "b", "n", "c"}
+	rows := newTestPointRows(t, handle, [][]testCellFunc{
+		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellCount(1)},
+		{testCellInt64(1), testCellDouble(1), testCellTimestamp(1, 0), testCellString("x"), testCellBlob([]byte{1}), testCellNone(), testCellInt64(2)},
+		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone()},
+	})
+
+	kinds, err := probeKinds(rows, names)
+	require.NoError(t, err)
+	assert.Equal(t, []columnKind{kindInt64, kindDouble, kindTimestamp, kindString, kindBlob, kindNone, kindInt64}, kinds)
+}
+
+func TestProbeKindsNoRowsIsAllNone(t *testing.T) {
+	kinds, err := probeKinds(QueryRows{}, []string{"a", "b"})
+	require.NoError(t, err)
+	assert.Equal(t, []columnKind{kindNone, kindNone}, kinds)
+}
+
+func TestProbeKindsMixedTypesIsIncompatibleType(t *testing.T) {
+	handle := newTestHandle(t)
+	rows := newTestPointRows(t, handle, [][]testCellFunc{
+		{testCellInt64(1)},
+		{testCellDouble(1)},
+	})
+
+	_, err := probeKinds(rows, []string{"mixed"})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrIncompatibleType), err.Error())
+	assert.Contains(t, err.Error(), "mixed")
+	assert.Contains(t, err.Error(), "int64")
+	assert.Contains(t, err.Error(), "double")
+}
+
+func TestProbeKindsArrayTagsAreNotImplemented(t *testing.T) {
+	handle := newTestHandle(t)
+	for _, tag := range testArrayTags() {
+		rows := newTestPointRows(t, handle, [][]testCellFunc{{testCellTagged(tag)}})
+
+		_, err := probeKinds(rows, []string{"arr"})
+		require.Error(t, err, "tag %d", tag)
+		assert.True(t, errors.Is(err, ErrNotImplemented), err.Error())
+		assert.Contains(t, err.Error(), "arr")
+	}
+}
