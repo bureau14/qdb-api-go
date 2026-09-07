@@ -20,15 +20,13 @@ import (
 // QueryColumn is one materialised result column of a QueryTable. The
 // concrete types are closed: Int64Column, DoubleColumn, TimestampColumn,
 // StringColumn, BlobColumn and NullColumn. Consumers dispatch with a type
-// switch or ColumnOf. A generic Column[T] was rejected because Int64Column
-// and TimestampColumn would alias to one type and need a runtime tag to
-// tell apart what named types give for free.
+// switch or ColumnOf.
 //
 // Every column exposes its buffers directly (Values, Nanos, Offsets, Bytes)
-// so vectorised code and an external Arrow bridge can reach them without a
-// copy. The column treats those buffers as immutable and the caller must
-// too. Accessors never consult the validity bitmap: a null slot holds the
-// writer's null sentinel and Valid is the contract.
+// so vectorised code can run over them without a copy. The column treats
+// those buffers as immutable and the caller must too. Accessors never
+// consult the validity bitmap: a null slot holds the writer's null sentinel
+// and Valid is the contract.
 type QueryColumn interface {
 	// Name is the column name as reported by the query, duplicates included.
 	Name() string
@@ -39,8 +37,8 @@ type QueryColumn interface {
 	sealed()
 }
 
-// Int64Column holds int64 cells in the Arrow Int64 layout: a dense Values
-// slice plus a validity bitmap. A count(...) aggregate also lands here, its
+// Int64Column holds int64 cells as a dense Values slice plus a validity
+// bitmap. A count(...) aggregate also lands here, its
 // unsigned payload reinterpreted as int64. Null slots hold math.MinInt64,
 // the QDB_IS_NULL_INT64 sentinel, so Values can be handed to
 // NewColumnDataInt64 and written back as null.
@@ -88,10 +86,10 @@ func (c *Int64Column) appendCell(i int, cell *C.qdb_point_result_t) {
 	c.valid.set(i)
 }
 
-// DoubleColumn holds double cells in the Arrow Float64 layout. Null slots
-// hold NaN, the QDB_IS_NULL_DOUBLE sentinel, so Values round-trips through
-// NewColumnDataDouble as null. Values are IEEE-754 binary64, the C double
-// on every supported platform.
+// DoubleColumn holds double cells as a dense Values slice plus a validity
+// bitmap. Null slots hold NaN, the QDB_IS_NULL_DOUBLE sentinel, so Values
+// round-trips through NewColumnDataDouble as null. Values are IEEE-754
+// binary64, the C double on every supported platform.
 type DoubleColumn struct {
 	// Values is the dense cell buffer, indexed by row. Read-only.
 	Values []float64
@@ -134,12 +132,10 @@ func (c *DoubleColumn) appendCell(i int, cell *C.qdb_point_result_t) {
 }
 
 // TimestampColumn holds timestamp cells as int64 nanoseconds since the Unix
-// epoch, the Arrow Timestamp(ns, UTC) layout. The representable range is
-// the years 1678 to 2262; a cell outside it fails conversion with
-// ErrOutOfBounds. Null slots hold math.MinInt64. A []time.Time was
-// rejected: 24 bytes per value with a pointer, not vectorisable. A
-// []C.qdb_timespec_t was rejected: a C type in a public result, and two
-// loads per comparison.
+// epoch: one 8-byte value per row with no pointer, so the column compares
+// and sorts like any numeric slice. The representable range is the years
+// 1678 to 2262; a cell outside it fails conversion with ErrOutOfBounds.
+// Null slots hold math.MinInt64.
 type TimestampColumn struct {
 	// Nanos is the dense cell buffer, indexed by row. Read-only.
 	Nanos []int64
@@ -200,13 +196,11 @@ func (c *TimestampColumn) appendCell(i int, cell *C.qdb_point_result_t) error {
 	return nil
 }
 
-// varBytes is the shared body of StringColumn and BlobColumn: the Arrow
-// String and Binary layout. bytes holds every cell back to back and
-// offsets, of length n+1, bounds cell i as bytes[offsets[i]:offsets[i+1]].
-// Offsets are int32 as in Arrow String; a column whose bytes exceed
-// math.MaxInt32 is rejected at conversion, so the LargeString variant is
-// not needed. Null and empty cells both have zero length; only the bitmap
-// tells them apart.
+// varBytes is the shared body of StringColumn and BlobColumn. bytes holds
+// every cell back to back and offsets, of length n+1, bounds cell i as
+// bytes[offsets[i]:offsets[i+1]]. Offsets are int32, so a column whose
+// bytes exceed math.MaxInt32 is rejected at conversion. Null and empty
+// cells both have zero length; only the bitmap tells them apart.
 type varBytes struct {
 	name    string
 	offsets []int32
@@ -273,9 +267,9 @@ func (v *varBytes) appendCell(i int, cell *C.qdb_point_result_t) {
 	v.valid.set(i)
 }
 
-// StringColumn holds string and symbol cells in the Arrow String layout;
-// see varBytes for the buffers. Value returns each cell as a string that
-// aliases the shared buffer, so reading a column allocates nothing.
+// StringColumn holds string and symbol cells; see varBytes for the
+// buffers. Value returns each cell as a string that aliases the shared
+// buffer, so reading a column allocates nothing.
 type StringColumn struct{ varBytes }
 
 func newStringColumn(name string, n, nbytes int) *StringColumn {
@@ -299,8 +293,7 @@ func (c *StringColumn) Value(i int) string {
 	return unsafe.String(&c.bytes[a], b-a) //nolint:gosec // Justified: bytes is owned, never written after construction, and a < b <= len(bytes)
 }
 
-// BlobColumn holds blob cells in the Arrow Binary layout; see varBytes for
-// the buffers.
+// BlobColumn holds blob cells; see varBytes for the buffers.
 type BlobColumn struct{ varBytes }
 
 func newBlobColumn(name string, n, nbytes int) *BlobColumn {
@@ -319,10 +312,8 @@ func (c *BlobColumn) Value(i int) []byte {
 
 // NullColumn is a column whose every cell is null: the query produced only
 // none cells, so no type can be inferred. It mirrors the C API, which
-// carries no column types and encodes null only as a none cell, and matches
-// the Arrow Null type: a length and nothing else. Reporting it as a NaN
-// DoubleColumn, as the Python bindings do, was rejected as invented
-// information.
+// carries no column types and encodes null only as a none cell, so the
+// column carries a length and nothing else.
 type NullColumn struct {
 	name  string
 	valid Bitmap

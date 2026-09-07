@@ -7,14 +7,10 @@ package qdb
 import "math/bits"
 
 // Bitmap is a validity mask: bit i is 1 when slot i holds a value and 0
-// when it is null. Bits are packed LSB first into 64-bit words, bit i
-// living in word i/64 at position i%64, which is the Arrow validity buffer
-// order, so the words can back an Arrow array without a copy. A []bool was
-// rejected: it is eight times larger and counting nulls needs a byte loop
-// where a bitmap needs one popcount per word.
-//
-// A Bitmap is immutable once its column is built; only the converter
-// writes to it.
+// when it is null. Bits are packed LSB first into 64-bit words, bit i in
+// word i/64 at position i%64. The query converter builds one per result
+// column; it is the only writer, and a Bitmap is immutable once its column
+// is built.
 type Bitmap struct {
 	bits []uint64
 	n    int

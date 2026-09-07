@@ -15,29 +15,6 @@ import (
 	"unsafe"
 )
 
-// The payload loads below are plain Go loads over a C cell, so a table
-// conversion makes no cgo call after qdb_query returns. They depend on the
-// layout of qdb_point_result_t on every supported platform: a 24-byte
-// record with the 4-byte tag at offset 0 and the 16-byte union at offset 8,
-// which cgo exposes as [16]uint8; qdb_int_t, qdb_size_t and qdb_time_t are
-// 8 bytes; qdb_timespec_t is tv_sec then tv_nsec; loads are host-endian,
-// the same endianness the C library wrote with; double is IEEE-754
-// binary64. The sizes are pinned here at compile time (a mismatch is a
-// negative constant, which does not fit uint); the offsets are pinned by
-// TestQueryTableCellLayout.
-const (
-	_ = uint(unsafe.Sizeof(C.qdb_point_result_t{}) - 24)
-	_ = uint(24 - unsafe.Sizeof(C.qdb_point_result_t{}))
-	_ = uint(unsafe.Sizeof(C.qdb_timespec_t{}) - 16)
-	_ = uint(16 - unsafe.Sizeof(C.qdb_timespec_t{}))
-	_ = uint(unsafe.Sizeof(C.qdb_size_t(0)) - 8)
-	_ = uint(8 - unsafe.Sizeof(C.qdb_size_t(0)))
-	_ = uint(unsafe.Sizeof(C.qdb_int_t(0)) - 8)
-	_ = uint(8 - unsafe.Sizeof(C.qdb_int_t(0)))
-	_ = uint(unsafe.Sizeof(C.qdb_time_t(0)) - 8)
-	_ = uint(8 - unsafe.Sizeof(C.qdb_time_t(0)))
-)
-
 const (
 	nanosPerSecond = int64(time.Second)
 	// Bounds on tv_sec inside which tv_sec * nanosPerSecond fits int64.
@@ -134,9 +111,39 @@ func probeValueTypes(rows QueryRows, names []string) ([]TsValueType, error) {
 	return types, nil
 }
 
+// Compile-time layout assertions for the payload loads that follow
+// (cellPayload, cellInt64, cellDouble, cellTimespec, cellLength, cellBytes).
+// Those functions read a C cell with plain Go loads at fixed offsets rather
+// than calling into C, which saves one cgo transition per cell. That is only
+// correct while the C types have the sizes the loads assume, so each size is
+// pinned twice. unsafe.Sizeof of a fixed-size type is a compile-time
+// constant, and converting a negative constant to uint is a compile error
+// ("constant -N overflows uint"): if a future C API changes one of these
+// sizes, the build fails here instead of the loads silently reading the
+// wrong bytes. Field offsets need a variable to name a field, so they are
+// pinned by TestQueryTableCellLayout instead.
+const (
+	_ = uint(unsafe.Sizeof(C.qdb_point_result_t{}) - 24)
+	_ = uint(24 - unsafe.Sizeof(C.qdb_point_result_t{}))
+	_ = uint(unsafe.Sizeof(C.qdb_timespec_t{}) - 16)
+	_ = uint(16 - unsafe.Sizeof(C.qdb_timespec_t{}))
+	_ = uint(unsafe.Sizeof(C.qdb_size_t(0)) - 8)
+	_ = uint(8 - unsafe.Sizeof(C.qdb_size_t(0)))
+	_ = uint(unsafe.Sizeof(C.qdb_int_t(0)) - 8)
+	_ = uint(8 - unsafe.Sizeof(C.qdb_int_t(0)))
+	_ = uint(unsafe.Sizeof(C.qdb_time_t(0)) - 8)
+	_ = uint(8 - unsafe.Sizeof(C.qdb_time_t(0)))
+)
+
 // cellPayload is the address of the 16-byte union. Taken from the field,
 // not computed from the cell address, so it stays right if cgo ever
 // renders the union as a named type.
+//
+// Layout the loads depend on, on every supported platform: a cell is a
+// 24-byte record with the 4-byte tag at offset 0 and the union at offset
+// 8, which cgo exposes as [16]uint8; qdb_int_t, qdb_size_t and qdb_time_t
+// are 8 bytes; qdb_timespec_t is tv_sec then tv_nsec; loads are host-endian,
+// the same endianness the C library wrote with; double is IEEE-754 binary64.
 func cellPayload(c *C.qdb_point_result_t) unsafe.Pointer {
 	return unsafe.Pointer(&c.payload)
 }
@@ -181,8 +188,8 @@ func cellBytes(c *C.qdb_point_result_t) []byte {
 
 // cellNanos converts a timespec to nanoseconds since the Unix epoch and
 // reports false when the result does not fit int64, which is the years
-// 1678 to 2262, the same bound the server's Arrow conversion applies.
-// tv_nsec is not assumed normalised, so the add is checked as well.
+// 1678 to 2262. tv_nsec is not assumed normalised, so the add is checked
+// as well.
 func cellNanos(sec, nsec int64) (int64, bool) {
 	// Bounding sec first makes the multiply provably safe: the bound times
 	// nanosPerSecond is inside int64 by construction.
@@ -207,19 +214,29 @@ func cellNanos(sec, nsec int64) (int64, bool) {
 // lengths are read, never the content pointer, and only from typed cells:
 // a none cell's payload is unspecified.
 func varSizes(rows QueryRows, types []TsValueType, names []string) ([]int, error) {
+	// One running byte total per column; fixed-width columns stay at zero
+	// and are never read by allocColumns.
 	sizes := make([]int, len(types))
 	for _, row := range rows {
 		cells := cellsOf(row, len(types))
 		for j, vt := range types {
+			// Pass one already settled the column types, so the cells of a
+			// fixed-width column are skipped without looking at them.
 			if vt != TsValueString && vt != TsValueBlob {
 				continue
 			}
+			// A null cell contributes nothing, and its payload must not be
+			// read: the C API leaves it unspecified, so the length field
+			// could hold anything.
 			if cells[j]._type == C.qdb_query_result_none {
 				continue
 			}
 
-			// sizes[j] never exceeds math.MaxInt32, so the subtraction cannot
-			// go negative and a hostile length cannot wrap the comparison.
+			// Offsets are int32, so the running total is capped at
+			// math.MaxInt32. sizes[j] never exceeds that cap, so the
+			// subtraction cannot go negative, and comparing the new length
+			// against the remaining room means a hostile length cannot wrap
+			// the sum past the cap.
 			n := cellLength(&cells[j])
 			if n > math.MaxInt32-uint64(sizes[j]) {
 				return nil, wrapError(C.qdb_e_out_of_bounds, "query_var_sizes", "column", names[j], "bytes", n)
