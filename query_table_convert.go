@@ -194,6 +194,25 @@ func cellTimespec(c *C.qdb_point_result_t) (sec, nsec int64) {
 	return *(*int64)(p), *(*int64)(unsafe.Add(p, 8))
 }
 
+// cellLength reads the qdb_size_t at union offset 8, the content_length of
+// a string or blob cell. Only meaningful when the tag is string or blob.
+func cellLength(c *C.qdb_point_result_t) uint64 {
+	return *(*uint64)(unsafe.Add(cellPayload(c), 8))
+}
+
+// cellBytes views the content of a string or blob cell: the pointer sits at
+// union offset 0 and its length at 8. Nil for zero length, so unsafe.Slice
+// never sees a nil pointer. The view aliases the C result: the caller
+// copies it out at once and never stores it.
+func cellBytes(c *C.qdb_point_result_t) []byte {
+	n := cellLength(c)
+	if n == 0 {
+		return nil
+	}
+
+	return unsafe.Slice((*byte)(*(*unsafe.Pointer)(cellPayload(c))), n)
+}
+
 // cellNanos converts a timespec to nanoseconds since the Unix epoch and
 // reports false when the result does not fit int64, which is the years
 // 1678 to 2262, the same bound the server's Arrow conversion applies.
@@ -214,6 +233,36 @@ func cellNanos(sec, nsec int64) (int64, bool) {
 	}
 
 	return total, true
+}
+
+// varSizes is the sizing half of pass one for string and blob columns. It
+// sums every cell's length so each column's byte buffer is allocated once,
+// and rejects a column whose total does not fit the int32 offsets. Only
+// lengths are read, never the content pointer, and only from typed cells:
+// a none cell's payload is unspecified.
+func varSizes(rows QueryRows, kinds []columnKind, names []string) ([]int, error) {
+	sizes := make([]int, len(kinds))
+	for _, row := range rows {
+		cells := cellsOf(row, len(kinds))
+		for j, kind := range kinds {
+			if kind != kindString && kind != kindBlob {
+				continue
+			}
+			if cells[j]._type == C.qdb_query_result_none {
+				continue
+			}
+
+			// sizes[j] never exceeds math.MaxInt32, so the subtraction cannot
+			// go negative and a hostile length cannot wrap the comparison.
+			n := cellLength(&cells[j])
+			if n > math.MaxInt32-uint64(sizes[j]) {
+				return nil, wrapError(C.qdb_e_out_of_bounds, "query_var_sizes", "column", names[j], "bytes", n)
+			}
+			sizes[j] += int(n)
+		}
+	}
+
+	return sizes, nil
 }
 
 // allocColumns builds one concrete column per probed kind with every buffer
@@ -259,8 +308,10 @@ func appendRow(cols []QueryColumn, row *QueryPoint, i int) error {
 			c.appendCell(i, cell)
 		case *TimestampColumn:
 			err = c.appendCell(i, cell)
-		case *StringColumn, *BlobColumn:
-			err = wrapError(C.qdb_e_not_implemented, "query_append_row", "column", cols[j].Name())
+		case *StringColumn:
+			c.appendCell(i, cell)
+		case *BlobColumn:
+			c.appendCell(i, cell)
 		case *NullColumn:
 		}
 

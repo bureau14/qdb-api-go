@@ -252,6 +252,27 @@ func (v *varBytes) Bytes() []byte {
 
 func (v *varBytes) sealed() {}
 
+// appendCell copies cell i into the shared buffer at the running offset and
+// records where it ends. A none cell and an empty cell both advance by
+// zero; only the bitmap tells them apart, so the bit comes from the tag
+// alone. The tag is checked before the payload is touched because a none
+// cell's payload is unspecified and may hold a stale pointer and length.
+func (v *varBytes) appendCell(i int, cell *C.qdb_point_result_t) {
+	start := v.offsets[i]
+	if cell._type == C.qdb_query_result_none {
+		v.offsets[i+1] = start
+
+		return
+	}
+
+	// The buffer was sized by varSizes from these same lengths, so the
+	// copy always fits and the narrowed offset is below math.MaxInt32.
+	src := cellBytes(cell)
+	copy(v.bytes[start:], src)
+	v.offsets[i+1] = start + int32(len(src))
+	v.valid.set(i)
+}
+
 // StringColumn holds string and symbol cells in the Arrow String layout;
 // see varBytes for the buffers. Value returns each cell as a string that
 // aliases the shared buffer, so reading a column allocates nothing.

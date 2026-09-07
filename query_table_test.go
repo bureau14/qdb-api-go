@@ -380,3 +380,60 @@ func validBits(b Bitmap) []bool {
 
 	return out
 }
+
+func TestAppendRowFillsVarColumns(t *testing.T) {
+	handle := newTestHandle(t)
+	names := []string{"s", "b"}
+	rows := newTestPointRows(t, handle, [][]testCellFunc{
+		{testCellString("ab"), testCellBlob([]byte{1})},
+		{testCellNone(), testCellNone()},
+		{testCellString(""), testCellBlob(nil)},
+		{testCellSeq(testCellString("stale"), testCellNone()), testCellBlob([]byte{2, 3})},
+		{testCellString("cde"), testCellNone()},
+	})
+	kinds, err := probeKinds(rows, names)
+	require.NoError(t, err)
+	sizes, err := varSizes(rows, kinds, names)
+	require.NoError(t, err)
+	assert.Equal(t, []int{5, 3}, sizes, "stale payload under a none tag is not counted")
+
+	cols := allocColumns(names, kinds, len(rows), sizes)
+	for i, row := range rows {
+		require.NoError(t, appendRow(cols, row, i))
+	}
+	tbl := newQueryTable(cols, len(rows), 0)
+
+	str, err := ColumnOf[*StringColumn](tbl, "s")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ab", "", "", "", "cde"}, []string{str.Value(0), str.Value(1), str.Value(2), str.Value(3), str.Value(4)})
+	assert.Equal(t, []int32{0, 2, 2, 2, 2, 5}, str.Offsets())
+	assert.Equal(t, []byte("abcde"), str.Bytes())
+	assert.Equal(t, []bool{true, false, true, false, true}, validBits(str.Valid()))
+
+	blob, err := ColumnOf[*BlobColumn](tbl, "b")
+	require.NoError(t, err)
+	assert.Equal(t, []byte{1}, blob.Value(0))
+	assert.Empty(t, blob.Value(1))
+	assert.Empty(t, blob.Value(2))
+	assert.Equal(t, []byte{2, 3}, blob.Value(3))
+	assert.Empty(t, blob.Value(4))
+	assert.Equal(t, []int32{0, 1, 1, 1, 3, 3}, blob.Offsets())
+	assert.Equal(t, []bool{true, false, true, true, false}, validBits(blob.Valid()))
+}
+
+func TestVarSizesRejectsColumnPastInt32(t *testing.T) {
+	handle := newTestHandle(t)
+	rows := newTestPointRows(t, handle, [][]testCellFunc{
+		{testCellBlob([]byte{1})},
+		{testCellBlobUnbacked(math.MaxInt32)},
+	})
+
+	_, err := varSizes(rows, []columnKind{kindBlob}, []string{"big"})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrOutOfBounds), err.Error())
+	assert.Contains(t, err.Error(), "big")
+
+	sizes, err := varSizes(rows[:1], []columnKind{kindBlob}, []string{"big"})
+	require.NoError(t, err)
+	assert.Equal(t, []int{1}, sizes)
+}

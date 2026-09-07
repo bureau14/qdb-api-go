@@ -1532,6 +1532,26 @@ func testCellBlob(b []byte) testCellFunc {
 	}
 }
 
+// testCellBlobUnbacked yields a blob cell with a nil pointer and a declared
+// length of n bytes, for size-check tests only: the content must never be
+// read.
+func testCellBlobUnbacked(n uint64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_blob(p, nil, C.qdb_size_t(n))
+	}
+}
+
+// testCellSeq applies fills in order to the same cell, so a test can leave
+// a stale payload under a later tag (a none cell over blob content).
+func testCellSeq(fills ...testCellFunc) testCellFunc {
+	return func(t *testing.T, h HandleType, p *C.qdb_point_result_t) {
+		t.Helper()
+		for _, fill := range fills {
+			fill(t, h, p)
+		}
+	}
+}
+
 // newTestPointRows lays out rows in C memory in the shape qdb_query
 // produces: an array of row pointers, each row one contiguous buffer of
 // cells. Every buffer is released through t.Cleanup. The result is a
