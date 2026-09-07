@@ -27,25 +27,11 @@ const (
 	rsSymbolIndex    = 7
 )
 
-// fillVarBytes writes cells into a var-width column the way the converter
-// does, so accessor tests do not depend on the converter.
-func fillVarBytes(v *varBytes, cells [][]byte, valid []bool) {
-	off := int32(0)
-	for i, cell := range cells {
-		copy(v.bytes[off:], cell)
-		off += int32(len(cell)) //nolint:gosec // Justified: test cells are a few bytes
-		v.offsets[i+1] = off
-		if valid[i] {
-			v.valid.set(i)
-		}
-	}
-}
-
-// validBits expands a bitmap to a []bool for equality assertions.
-func validBits(b Bitmap) []bool {
-	out := make([]bool, b.Len())
+// validBits expands a mask to a []bool for equality assertions.
+func validBits(m Mask) []bool {
+	out := make([]bool, m.Len())
 	for i := range out {
-		out[i] = b.IsValid(i)
+		out[i] = m.IsValid(i)
 	}
 
 	return out
@@ -104,19 +90,19 @@ func requireResultSetMatchesFixture(t *testing.T, rs *QueryResultSet, td TestTim
 	require.True(t, ok)
 	table, ok := rs.Columns()[rsTableIndex].(*QueryColumnString)
 	require.True(t, ok)
-	assert.True(t, idx.Valid().AllValid())
-	assert.True(t, table.Valid().AllValid())
+	assert.True(t, idx.Mask.AllValid())
+	assert.True(t, table.Mask.AllValid())
 	for i := range n {
-		assert.Equal(t, td.Int64Points[i].Timestamp().UnixNano(), idx.Nanos[i], "row %d", i)
-		assert.Equal(t, td.Alias, table.Value(i), "row %d", i)
+		assert.Equal(t, td.Int64Points[i].Timestamp().UnixNano(), idx.Values[i], "row %d", i)
+		assert.Equal(t, td.Alias, table.Values[i], "row %d", i)
 	}
 
 	if blob, ok := fixtureColumn[*QueryColumnBlob](t, rs, rsBlobIndex, td.BlobValid); ok {
 		for i, valid := range td.BlobValid {
 			if valid {
-				assert.Equal(t, td.BlobPoints[i].Content(), blob.Value(i), "row %d", i)
+				assert.Equal(t, td.BlobPoints[i].Content(), blob.Values[i], "row %d", i)
 			} else {
-				assert.Empty(t, blob.Value(i), "row %d", i)
+				assert.Empty(t, blob.Values[i], "row %d", i)
 			}
 		}
 	}
@@ -141,28 +127,28 @@ func requireResultSetMatchesFixture(t *testing.T, rs *QueryResultSet, td TestTim
 	if str, ok := fixtureColumn[*QueryColumnString](t, rs, rsStringIndex, td.StringValid); ok {
 		for i, valid := range td.StringValid {
 			if valid {
-				assert.Equal(t, td.StringPoints[i].Content(), str.Value(i), "row %d", i)
+				assert.Equal(t, td.StringPoints[i].Content(), str.Values[i], "row %d", i)
 			} else {
-				assert.Equal(t, "", str.Value(i), "row %d", i)
+				assert.Equal(t, "", str.Values[i], "row %d", i)
 			}
 		}
 	}
 	if ts, ok := fixtureColumn[*QueryColumnTimestamp](t, rs, rsTsIndex, td.TimestampValid); ok {
 		for i, valid := range td.TimestampValid {
 			if valid {
-				assert.Equal(t, td.TimestampPoints[i].Content().UnixNano(), ts.Nanos[i], "row %d", i)
+				assert.Equal(t, td.TimestampPoints[i].Content().UnixNano(), ts.Values[i], "row %d", i)
 				assert.True(t, td.TimestampPoints[i].Content().Equal(ts.Time(i)), "row %d", i)
 			} else {
-				assert.Equal(t, int64(math.MinInt64), ts.Nanos[i], "row %d", i)
+				assert.Equal(t, int64(math.MinInt64), ts.Values[i], "row %d", i)
 			}
 		}
 	}
 	if sym, ok := fixtureColumn[*QueryColumnString](t, rs, rsSymbolIndex, td.SymbolValid); ok {
 		for i, valid := range td.SymbolValid {
 			if valid {
-				assert.Equal(t, td.SymbolPoints[i].Content(), sym.Value(i), "row %d", i)
+				assert.Equal(t, td.SymbolPoints[i].Content(), sym.Values[i], "row %d", i)
 			} else {
-				assert.Equal(t, "", sym.Value(i), "row %d", i)
+				assert.Equal(t, "", sym.Values[i], "row %d", i)
 			}
 		}
 	}
@@ -172,14 +158,14 @@ func requireResultSetMatchesFixture(t *testing.T, rs *QueryResultSet, td TestTim
 // Column accessors on hand-filled columns
 // ---------------------------------------------------------------------
 
-func TestQueryResultSetFixedColumnsExposeBuffers(t *testing.T) {
+func TestQueryResultSetColumnsExposeMaskedArrays(t *testing.T) {
 	i64 := newQueryColumnInt64("i", 3)
 	i64.Values[1] = 42
-	i64.valid.set(1)
+	i64.Mask.set(1)
 	assert.Equal(t, "i", i64.Name())
 	assert.Equal(t, 3, i64.Len())
 	assert.Equal(t, 2, i64.Valid().NullCount())
-	assert.True(t, i64.Valid().IsValid(1))
+	assert.True(t, i64.Mask.IsValid(1))
 
 	dbl := newQueryColumnDouble("d", 2)
 	dbl.Values[0] = 1.5
@@ -188,42 +174,26 @@ func TestQueryResultSetFixedColumnsExposeBuffers(t *testing.T) {
 	assert.True(t, dbl.Valid().AllNull())
 
 	ts := newQueryColumnTimestamp("t", 1)
-	ts.Nanos[0] = time.Date(2020, 1, 2, 3, 4, 5, 6, time.UTC).UnixNano()
+	ts.Values[0] = time.Date(2020, 1, 2, 3, 4, 5, 6, time.UTC).UnixNano()
 	assert.Equal(t, "t", ts.Name())
 	assert.Equal(t, 1, ts.Len())
 	assert.Equal(t, time.Date(2020, 1, 2, 3, 4, 5, 6, time.UTC), ts.Time(0))
 	assert.Equal(t, time.UTC, ts.Time(0).Location())
 
+	str := newQueryColumnString("s", 2, 0)
+	assert.Equal(t, "s", str.Name())
+	assert.Equal(t, 2, str.Len())
+	assert.Equal(t, []string{"", ""}, str.Values)
+
+	blob := newQueryColumnBlob("b", 2, 0)
+	assert.Equal(t, "b", blob.Name())
+	assert.Equal(t, 2, blob.Len())
+	assert.Equal(t, [][]byte{nil, nil}, blob.Values)
+
 	null := newQueryColumnNull("n", 5)
 	assert.Equal(t, "n", null.Name())
 	assert.Equal(t, 5, null.Len())
 	assert.True(t, null.Valid().AllNull())
-}
-
-func TestQueryResultSetVarColumnsExposeBuffers(t *testing.T) {
-	cells := [][]byte{[]byte("ab"), nil, []byte("cde"), nil}
-	valid := []bool{true, true, true, false}
-	str := newQueryColumnString("s", len(cells), 5)
-	fillVarBytes(&str.varBytes, cells, valid)
-
-	assert.Equal(t, "s", str.Name())
-	assert.Equal(t, 4, str.Len())
-	assert.Equal(t, []string{"ab", "", "cde", ""}, []string{str.Value(0), str.Value(1), str.Value(2), str.Value(3)},
-		"empty cell and null cell at the end of the buffer both read as empty")
-	assert.Equal(t, []int32{0, 2, 2, 5, 5}, str.Offsets())
-	assert.Equal(t, []byte("abcde"), str.Bytes())
-	assert.Equal(t, 1, str.Valid().NullCount())
-
-	blob := newQueryColumnBlob("b", 2, 4)
-	fillVarBytes(&blob.varBytes, [][]byte{[]byte("ab"), []byte("cd")}, []bool{true, true})
-	first := blob.Value(0)
-	require.Equal(t, []byte("ab"), first)
-	require.Equal(t, 2, cap(first))
-
-	// An append must reallocate rather than write into the next cell.
-	_ = append(first, 'x') //nolint:staticcheck // the side effect on the buffer is what is under test
-	assert.Equal(t, []byte("cd"), blob.Value(1))
-	assert.Equal(t, []byte("abcd"), blob.Bytes())
 }
 
 func TestQueryResultSetLookup(t *testing.T) {
@@ -468,9 +438,9 @@ func resultSetFromRowsCases() []resultSetFromRowsCase {
 			wantMsg: []string{"when", "row=1"},
 		},
 		{
-			name:    "blob column past int32 offsets",
+			name:    "blob column past addressable size",
 			names:   []string{"big"},
-			rows:    [][]testCellFunc{{testCellBlob([]byte{1})}, {testCellBlobUnbacked(math.MaxInt32)}},
+			rows:    [][]testCellFunc{{testCellBlob([]byte{1})}, {testCellBlobUnbacked(math.MaxUint64)}},
 			wantErr: ErrOutOfBounds,
 			wantMsg: []string{"big"},
 		},
@@ -506,7 +476,7 @@ func checkFixedColumns(t *testing.T, rs *QueryResultSet) {
 
 	ts, err := ColumnOf[*QueryColumnTimestamp](rs, "t")
 	require.NoError(t, err)
-	assert.Equal(t, []int64{10_000_000_020, math.MinInt64, -9_999_999_980}, ts.Nanos)
+	assert.Equal(t, []int64{10_000_000_020, math.MinInt64, -9_999_999_980}, ts.Values)
 	assert.Equal(t, time.Unix(10, 20).UTC(), ts.Time(0))
 	assert.Equal(t, []bool{true, false, true}, validBits(ts.Valid()))
 
@@ -526,20 +496,20 @@ func checkVarColumns(t *testing.T, rs *QueryResultSet) {
 
 	str, err := ColumnOf[*QueryColumnString](rs, "s")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ab", "", "", "", "cde"}, []string{str.Value(0), str.Value(1), str.Value(2), str.Value(3), str.Value(4)})
-	assert.Equal(t, []int32{0, 2, 2, 2, 2, 5}, str.Offsets(), "stale payload under a none tag is not copied")
-	assert.Equal(t, []byte("abcde"), str.Bytes())
-	assert.Equal(t, []bool{true, false, true, false, true}, validBits(str.Valid()))
+	assert.Equal(t, []string{"ab", "", "", "", "cde"}, str.Values, "stale payload under a none tag is not copied")
+	assert.Equal(t, []bool{true, false, true, false, true}, validBits(str.Mask))
+	assert.Equal(t, []byte("abcde"), str.buf.bytes, "one shared buffer holds every cell")
 
 	blob, err := ColumnOf[*QueryColumnBlob](rs, "b")
 	require.NoError(t, err)
-	assert.Equal(t, []byte{1}, blob.Value(0))
-	assert.Empty(t, blob.Value(1))
-	assert.Empty(t, blob.Value(2))
-	assert.Equal(t, []byte{2, 3}, blob.Value(3))
-	assert.Empty(t, blob.Value(4))
-	assert.Equal(t, []int32{0, 1, 1, 1, 3, 3}, blob.Offsets())
-	assert.Equal(t, []bool{true, false, true, true, false}, validBits(blob.Valid()))
+	assert.Equal(t, [][]byte{{1}, nil, nil, {2, 3}, nil}, blob.Values)
+	assert.Equal(t, []bool{true, false, true, true, false}, validBits(blob.Mask))
+
+	// A view's capacity ends at its cell, so an append by the caller
+	// reallocates rather than writing into the next cell.
+	require.Equal(t, 1, cap(blob.Values[0]))
+	_ = append(blob.Values[0], 9) //nolint:staticcheck // the side effect on the buffer is what is under test
+	assert.Equal(t, []byte{2, 3}, blob.Values[3])
 }
 
 func TestResultSetFromRows(t *testing.T) {

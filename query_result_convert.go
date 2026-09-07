@@ -209,10 +209,10 @@ func cellNanos(sec, nsec int64) (int64, bool) {
 }
 
 // varSizes is the sizing half of pass one for string and blob columns. It
-// sums every cell's length so each column's byte buffer is allocated once,
-// and rejects a column whose total does not fit the int32 offsets. Only
-// lengths are read, never the content pointer, and only from typed cells:
-// a none cell's payload is unspecified.
+// sums every cell's length so each column's shared buffer is allocated
+// once, and rejects a column whose total cannot be addressed. Only lengths
+// are read, never the content pointer, and only from typed cells: a none
+// cell's payload is unspecified.
 func varSizes(rows QueryRows, types []TsValueType, names []string) ([]int, error) {
 	// One running byte total per column; fixed-width columns stay at zero
 	// and are never read by allocColumns.
@@ -232,13 +232,13 @@ func varSizes(rows QueryRows, types []TsValueType, names []string) ([]int, error
 				continue
 			}
 
-			// Offsets are int32, so the running total is capped at
-			// math.MaxInt32. sizes[j] never exceeds that cap, so the
+			// The buffer is indexed by int, so the running total is capped
+			// at math.MaxInt. sizes[j] never exceeds that cap, so the
 			// subtraction cannot go negative, and comparing the new length
 			// against the remaining room means a hostile length cannot wrap
 			// the sum past the cap.
 			n := cellLength(&cells[j])
-			if n > math.MaxInt32-uint64(sizes[j]) {
+			if n > math.MaxInt-uint64(sizes[j]) {
 				return nil, wrapError(C.qdb_e_out_of_bounds, "query_var_sizes", "column", names[j], "bytes", n)
 			}
 			sizes[j] += int(n)
@@ -252,7 +252,7 @@ func varSizes(rows QueryRows, types []TsValueType, names []string) ([]int, error
 // buffer at its final length, so pass two writes cells in place and never
 // grows a slice. sizes holds the byte total of each string and blob column
 // and is ignored for the other types. Null slots are written by appendCell
-// with the QDB_IS_NULL_* sentinel of the type; the bitmap is authoritative.
+// with the QDB_IS_NULL_* sentinel of the type; the mask is authoritative.
 func allocColumns(names []string, types []TsValueType, n int, sizes []int) []QueryColumn {
 	cols := make([]QueryColumn, len(names))
 	for j, vt := range types {

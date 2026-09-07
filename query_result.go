@@ -17,6 +17,140 @@ import (
 	"unsafe"
 )
 
+// QueryResult holds the rows returned by Query.Execute. The underlying buffer
+// is API-allocated and lives until Close is called or the handle is closed;
+// callers must call Close. Accessors return zero values once closed.
+type QueryResult struct {
+	// Handle the query was executed on; qdb_release must use the same handle.
+	handle HandleType
+
+	// API-allocated result set. Nil once closed, or when the statement
+	// produced no result set (e.g. DDL).
+	result *C.qdb_query_result_t
+}
+
+// Close releases the API-allocated result buffer. Safe to call on a nil
+// receiver and more than once. Rows, columns and points obtained from this
+// result must not be used after Close.
+func (r *QueryResult) Close() {
+	if r == nil || r.result == nil {
+		return
+	}
+
+	qdbReleasePointer(r.handle, unsafe.Pointer(r.result))
+	// Barrier-free nil store; see setCPtr.
+	setCPtr(unsafe.Pointer(&r.result), nil)
+}
+
+// ScannedPoints : number of points scanned
+//
+//	The actual number of scanned points may be greater
+func (r QueryResult) ScannedPoints() int64 {
+	if r.result == nil {
+		return 0
+	}
+
+	return int64(r.result.scanned_point_count)
+}
+
+func queryPointArrayToSlice(row *QueryPoint, length int64) []QueryPoint {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(QueryPoint{})]QueryPoint)(unsafe.Pointer(row))[:length:length]
+}
+
+func qdbPointResultStarArrayToSlice(rows **C.qdb_point_result_t, length int64) []*QueryPoint {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.qdb_point_result_t)(nil))]*QueryPoint)(unsafe.Pointer(rows))[:length:length]
+}
+
+func qdbStringArrayToSlice(strings *C.qdb_string_t, length int64) []C.qdb_string_t {
+	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
+
+	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_string_t{})]C.qdb_string_t)(unsafe.Pointer(strings))[:length:length]
+}
+
+// Columns : create columns from a row
+func (r QueryResult) Columns(row *QueryPoint) QueryRow {
+	return r.columnsUnsafe(row)
+}
+
+// Rows : get rows of a query table result
+func (r QueryResult) Rows() QueryRows {
+	return r.rowsUnsafe()
+}
+
+// ColumnsNames : get the number of columns names of each row
+func (r QueryResult) ColumnsNames() []string {
+	if r.result == nil {
+		return []string{}
+	}
+
+	count := int64(r.result.column_count)
+	result := make([]string, count)
+	rawNames := qdbStringArrayToSlice(r.result.column_names, count)
+	for i := range rawNames {
+		result[i] = C.GoString(rawNames[i].data)
+	}
+
+	return result
+}
+
+// ColumnsCount : get the number of columns of each row
+func (r QueryResult) ColumnsCount() int64 {
+	if r.result == nil {
+		return 0
+	}
+
+	return int64(r.result.column_count)
+}
+
+// RowCount : the number of returned rows
+func (r QueryResult) RowCount() int64 {
+	if r.result == nil {
+		return 0
+	}
+
+	return int64(r.result.row_count)
+}
+
+// ErrorMessage : the error message in case of failure
+func (r QueryResult) ErrorMessage() string {
+	if r.result == nil {
+		return ""
+	}
+
+	return C.GoStringN(r.result.error_message.data, C.int(r.result.error_message.length))
+}
+
+// columnsUnsafe views the cells of row in place. The slice aliases the C
+// result and is valid only until Close.
+func (r QueryResult) columnsUnsafe(row *QueryPoint) QueryRow {
+	if r.result == nil {
+		return QueryRow{}
+	}
+
+	count := int64(r.result.column_count)
+
+	return queryPointArrayToSlice(row, count)
+}
+
+// rowsUnsafe views the row pointers in place. The slice aliases the C
+// result and is valid only until Close.
+func (r QueryResult) rowsUnsafe() QueryRows {
+	if r.result == nil {
+		return QueryRows{}
+	}
+
+	count := int64(r.result.row_count)
+	if count == 0 {
+		return []*QueryPoint{}
+	}
+
+	return qdbPointResultStarArrayToSlice(r.result.rows, count)
+}
+
 // QueryColumn is one column of a QueryResultSet: a named masked array whose
 // concrete types are closed to this package, dispatched with a type switch
 // or ColumnOf. Buffers are exposed directly and are read-only. Accessors
@@ -26,25 +160,45 @@ type QueryColumn interface {
 	Name() string
 	// Len is the number of rows.
 	Len() int
-	// Valid is the validity bitmap: bit i set means row i holds a value.
-	Valid() Bitmap
+	// Valid is the mask: bit i set means row i holds a value.
+	Valid() Mask
 	sealed()
 }
 
-// QueryColumnInt64 holds int64 cells as a dense Values slice plus a validity
-// bitmap. A count(...) aggregate also lands here, its
-// unsigned payload reinterpreted as int64. Null slots hold math.MinInt64,
-// the QDB_IS_NULL_INT64 sentinel, so Values can be handed to
-// NewColumnDataInt64 and written back as null.
+// MaskedArray is a dense value slice with a Mask: Mask bit i set means
+// Values[i] holds a value, clear means the slot is null and holds the null
+// sentinel of the column type, so Values can be handed to the batch writer
+// as it is and the nulls are written back as nulls.
+type MaskedArray[T any] struct {
+	Values []T
+	Mask   Mask
+}
+
+func newMaskedArray[T any](n int) MaskedArray[T] {
+	return MaskedArray[T]{Values: make([]T, n), Mask: newMask(n)}
+}
+
+// Len returns the number of rows.
+func (a *MaskedArray[T]) Len() int {
+	return len(a.Values)
+}
+
+// Valid returns the mask. It exists so the mask is reachable through the
+// QueryColumn interface; on a concrete column the Mask field is the same.
+func (a *MaskedArray[T]) Valid() Mask {
+	return a.Mask
+}
+
+// QueryColumnInt64 holds int64 cells. A count(...) aggregate also lands
+// here, its unsigned payload reinterpreted as int64. Null slots hold
+// math.MinInt64, the QDB_IS_NULL_INT64 sentinel.
 type QueryColumnInt64 struct {
-	// Values is the dense cell buffer, indexed by row. Read-only.
-	Values []int64
-	name   string
-	valid  Bitmap
+	MaskedArray[int64]
+	name string
 }
 
 func newQueryColumnInt64(name string, n int) *QueryColumnInt64 {
-	return &QueryColumnInt64{Values: make([]int64, n), name: name, valid: newBitmap(n)}
+	return &QueryColumnInt64{MaskedArray: newMaskedArray[int64](n), name: name}
 }
 
 // Name returns the column name.
@@ -52,21 +206,11 @@ func (c *QueryColumnInt64) Name() string {
 	return c.name
 }
 
-// Len returns the number of rows.
-func (c *QueryColumnInt64) Len() int {
-	return len(c.Values)
-}
-
-// Valid returns the validity bitmap.
-func (c *QueryColumnInt64) Valid() Bitmap {
-	return c.valid
-}
-
 func (c *QueryColumnInt64) sealed() {}
 
 // appendCell writes row i from cell. A none cell leaves the bit clear and
-// stores the QDB_IS_NULL_INT64 sentinel: the bitmap is authoritative, the
-// sentinel only keeps Values usable by the writer.
+// stores the sentinel: the mask is authoritative, the sentinel only keeps
+// Values usable by the writer.
 func (c *QueryColumnInt64) appendCell(i int, cell *C.qdb_point_result_t) {
 	if cell._type == C.qdb_query_result_none {
 		c.Values[i] = math.MinInt64
@@ -77,22 +221,19 @@ func (c *QueryColumnInt64) appendCell(i int, cell *C.qdb_point_result_t) {
 	// int64 and count share this path: pass one accepted both tags for
 	// this column, and the count payload is read as the same eight bytes.
 	c.Values[i] = cellInt64(cell)
-	c.valid.set(i)
+	c.Mask.set(i)
 }
 
-// QueryColumnDouble holds double cells as a dense Values slice plus a validity
-// bitmap. Null slots hold NaN, the QDB_IS_NULL_DOUBLE sentinel, so Values
-// round-trips through NewColumnDataDouble as null. Values are IEEE-754
-// binary64, the C double on every supported platform.
+// QueryColumnDouble holds double cells. Null slots hold NaN, the
+// QDB_IS_NULL_DOUBLE sentinel. Values are IEEE-754 binary64, the C double
+// on every supported platform.
 type QueryColumnDouble struct {
-	// Values is the dense cell buffer, indexed by row. Read-only.
-	Values []float64
-	name   string
-	valid  Bitmap
+	MaskedArray[float64]
+	name string
 }
 
 func newQueryColumnDouble(name string, n int) *QueryColumnDouble {
-	return &QueryColumnDouble{Values: make([]float64, n), name: name, valid: newBitmap(n)}
+	return &QueryColumnDouble{MaskedArray: newMaskedArray[float64](n), name: name}
 }
 
 // Name returns the column name.
@@ -100,20 +241,10 @@ func (c *QueryColumnDouble) Name() string {
 	return c.name
 }
 
-// Len returns the number of rows.
-func (c *QueryColumnDouble) Len() int {
-	return len(c.Values)
-}
-
-// Valid returns the validity bitmap.
-func (c *QueryColumnDouble) Valid() Bitmap {
-	return c.valid
-}
-
 func (c *QueryColumnDouble) sealed() {}
 
 // appendCell writes row i from cell. A none cell leaves the bit clear and
-// stores NaN, the QDB_IS_NULL_DOUBLE sentinel.
+// stores NaN.
 func (c *QueryColumnDouble) appendCell(i int, cell *C.qdb_point_result_t) {
 	if cell._type == C.qdb_query_result_none {
 		c.Values[i] = math.NaN()
@@ -122,23 +253,21 @@ func (c *QueryColumnDouble) appendCell(i int, cell *C.qdb_point_result_t) {
 	}
 
 	c.Values[i] = cellDouble(cell)
-	c.valid.set(i)
+	c.Mask.set(i)
 }
 
-// QueryColumnTimestamp holds timestamp cells as int64 nanoseconds since the Unix
-// epoch: one 8-byte value per row with no pointer, so the column compares
-// and sorts like any numeric slice. The representable range is the years
-// 1678 to 2262; a cell outside it fails conversion with ErrOutOfBounds.
-// Null slots hold math.MinInt64.
+// QueryColumnTimestamp holds timestamp cells as int64 nanoseconds since the
+// Unix epoch: one 8-byte value per row with no pointer, so the column
+// compares and sorts like any numeric slice. The representable range is
+// the years 1678 to 2262; a cell outside it fails conversion with
+// ErrOutOfBounds. Null slots hold math.MinInt64.
 type QueryColumnTimestamp struct {
-	// Nanos is the dense cell buffer, indexed by row. Read-only.
-	Nanos []int64
-	name  string
-	valid Bitmap
+	MaskedArray[int64]
+	name string
 }
 
 func newQueryColumnTimestamp(name string, n int) *QueryColumnTimestamp {
-	return &QueryColumnTimestamp{Nanos: make([]int64, n), name: name, valid: newBitmap(n)}
+	return &QueryColumnTimestamp{MaskedArray: newMaskedArray[int64](n), name: name}
 }
 
 // Name returns the column name.
@@ -146,21 +275,11 @@ func (c *QueryColumnTimestamp) Name() string {
 	return c.name
 }
 
-// Len returns the number of rows.
-func (c *QueryColumnTimestamp) Len() int {
-	return len(c.Nanos)
-}
-
-// Valid returns the validity bitmap.
-func (c *QueryColumnTimestamp) Valid() Bitmap {
-	return c.valid
-}
-
 // Time converts row i to a UTC time.Time. Unchecked: on a null slot it
-// returns the sentinel date in 1677; check Valid first. UTC matches the
+// returns the sentinel date in 1677; check the mask first. UTC matches the
 // bulk reader (QdbTimespecToTime), not the local-time legacy GetTimestamp.
 func (c *QueryColumnTimestamp) Time(i int) time.Time {
-	return time.Unix(0, c.Nanos[i]).UTC()
+	return time.Unix(0, c.Values[i]).UTC()
 }
 
 func (c *QueryColumnTimestamp) sealed() {}
@@ -172,7 +291,7 @@ func (c *QueryColumnTimestamp) appendCell(i int, cell *C.qdb_point_result_t) err
 	if cell._type == C.qdb_query_result_none {
 		// The null timespec (qdb_min_time in both fields) never reaches
 		// cellNanos: a none cell is written straight as the nanos sentinel.
-		c.Nanos[i] = math.MinInt64
+		c.Values[i] = math.MinInt64
 
 		return nil
 	}
@@ -184,137 +303,128 @@ func (c *QueryColumnTimestamp) appendCell(i int, cell *C.qdb_point_result_t) err
 			"column", c.name, "row", i, "tv_sec", sec, "tv_nsec", nsec)
 	}
 
-	c.Nanos[i] = nanos
-	c.valid.set(i)
+	c.Values[i] = nanos
+	c.Mask.set(i)
 
 	return nil
 }
 
-// varBytes is the shared body of QueryColumnString and QueryColumnBlob. bytes holds
-// every cell back to back and offsets, of length n+1, bounds cell i as
-// bytes[offsets[i]:offsets[i+1]]. Offsets are int32, so a column whose
-// bytes exceed math.MaxInt32 is rejected at conversion. Null and empty
-// cells both have zero length; only the bitmap tells them apart.
-type varBytes struct {
-	name    string
-	offsets []int32
-	bytes   []byte
-	valid   Bitmap
+// cellBuffer holds the content of every cell of a string or blob column
+// back to back, sized exactly by varSizes, so a column costs one
+// allocation and each Values[i] is a view into it rather than a copy.
+type cellBuffer struct {
+	bytes []byte
+	used  int
 }
 
-func newVarBytes(name string, n, nbytes int) varBytes {
-	return varBytes{
-		name:    name,
-		offsets: make([]int32, n+1),
-		bytes:   make([]byte, nbytes),
-		valid:   newBitmap(n),
+// push appends src and returns the view over its copy. The capacity of
+// the view ends at the cell, so an append by the caller reallocates instead
+// of overwriting the next cell.
+func (b *cellBuffer) push(src []byte) []byte {
+	start := b.used
+	b.used += copy(b.bytes[start:], src)
+
+	return b.bytes[start:b.used:b.used]
+}
+
+// QueryColumnString holds string and symbol cells. Every Values[i] aliases
+// one shared buffer, so reading a column allocates nothing per cell. Null
+// slots hold "", the QDB_IS_NULL_STRING sentinel; only the mask tells a
+// null from an empty string.
+type QueryColumnString struct {
+	MaskedArray[string]
+	buf  cellBuffer
+	name string
+}
+
+func newQueryColumnString(name string, n, nbytes int) *QueryColumnString {
+	return &QueryColumnString{
+		MaskedArray: newMaskedArray[string](n),
+		buf:         cellBuffer{bytes: make([]byte, nbytes)},
+		name:        name,
 	}
 }
 
 // Name returns the column name.
-func (v *varBytes) Name() string {
-	return v.name
+func (c *QueryColumnString) Name() string {
+	return c.name
 }
 
-// Len returns the number of rows.
-func (v *varBytes) Len() int {
-	return len(v.offsets) - 1
-}
+func (c *QueryColumnString) sealed() {}
 
-// Valid returns the validity bitmap.
-func (v *varBytes) Valid() Bitmap {
-	return v.valid
-}
-
-// Offsets returns the cell boundaries, length Len()+1, without copying:
-// cell i spans Bytes()[Offsets()[i]:Offsets()[i+1]]. Read-only; a write
-// through it corrupts every string the column has handed out.
-func (v *varBytes) Offsets() []int32 {
-	return v.offsets
-}
-
-// Bytes returns the concatenated cell bytes without copying. Read-only.
-func (v *varBytes) Bytes() []byte {
-	return v.bytes
-}
-
-func (v *varBytes) sealed() {}
-
-// appendCell copies cell i into the shared buffer at the running offset and
-// records where it ends. A none cell and an empty cell both advance by
-// zero; only the bitmap tells them apart, so the bit comes from the tag
-// alone. The tag is checked before the payload is touched because a none
-// cell's payload is unspecified and may hold a stale pointer and length.
-func (v *varBytes) appendCell(i int, cell *C.qdb_point_result_t) {
-	start := v.offsets[i]
+// appendCell writes row i from cell. The tag is checked before the payload
+// is touched because a none cell's payload is unspecified and may hold a
+// stale pointer and length.
+func (c *QueryColumnString) appendCell(i int, cell *C.qdb_point_result_t) {
 	if cell._type == C.qdb_query_result_none {
-		v.offsets[i+1] = start
+		c.Values[i] = ""
 
 		return
 	}
 
-	// The buffer was sized by varSizes from these same lengths, so the
-	// copy always fits and the narrowed offset is below math.MaxInt32.
-	src := cellBytes(cell)
-	copy(v.bytes[start:], src)
-	v.offsets[i+1] = start + int32(len(src))
-	v.valid.set(i)
-}
-
-// QueryColumnString holds string and symbol cells; see varBytes for the
-// buffers. Value returns each cell as a string that aliases the shared
-// buffer, so reading a column allocates nothing.
-type QueryColumnString struct{ varBytes }
-
-func newQueryColumnString(name string, n, nbytes int) *QueryColumnString {
-	return &QueryColumnString{varBytes: newVarBytes(name, n, nbytes)}
-}
-
-// Value returns row i without copying. Unchecked: a null slot yields ""
-// exactly as an empty cell does; check Valid first.
-//
-// The unsafe.String view is sound because the column owns bytes, never
-// writes to it after construction, and Bytes documents the buffer as
-// read-only, so the immutability Go assumes of a string holds.
-func (c *QueryColumnString) Value(i int) string {
-	a, b := c.offsets[i], c.offsets[i+1]
-	// An empty cell at the end of the column has a == len(bytes), where
-	// taking an element address would panic; "" needs no pointer anyway.
-	if a == b {
-		return ""
+	// An empty typed cell is valid and needs no bytes; unsafe.String must
+	// not be given the address one past the buffer, which is where an empty
+	// last cell would point.
+	view := c.buf.push(cellBytes(cell))
+	if len(view) > 0 {
+		// Sound because the buffer is owned by the column, written only
+		// here, and never exposed for writing.
+		c.Values[i] = unsafe.String(unsafe.SliceData(view), len(view)) //nolint:gosec // Justified: view is a private, write-once buffer
 	}
-
-	return unsafe.String(&c.bytes[a], b-a) //nolint:gosec // Justified: bytes is owned, never written after construction, and a < b <= len(bytes)
+	c.Mask.set(i)
 }
 
-// QueryColumnBlob holds blob cells; see varBytes for the buffers.
-type QueryColumnBlob struct{ varBytes }
+// QueryColumnBlob holds blob cells. Every Values[i] is a view into one
+// shared buffer with its capacity capped at the cell, so an append by the
+// caller reallocates instead of overwriting the next cell. Null slots hold
+// nil, the QDB_IS_NULL_BLOB sentinel; an empty typed cell is nil as well,
+// and only the mask tells them apart.
+type QueryColumnBlob struct {
+	MaskedArray[[]byte]
+	buf  cellBuffer
+	name string
+}
 
 func newQueryColumnBlob(name string, n, nbytes int) *QueryColumnBlob {
-	return &QueryColumnBlob{varBytes: newVarBytes(name, n, nbytes)}
+	return &QueryColumnBlob{
+		MaskedArray: newMaskedArray[[]byte](n),
+		buf:         cellBuffer{bytes: make([]byte, nbytes)},
+		name:        name,
+	}
 }
 
-// Value returns row i as a view over the shared buffer. Its capacity is
-// capped at the cell end, so an append by the caller reallocates instead of
-// overwriting the next cell. Unchecked: a null slot yields an empty slice;
-// check Valid first. The bytes are read-only.
-func (c *QueryColumnBlob) Value(i int) []byte {
-	a, b := c.offsets[i], c.offsets[i+1]
-
-	return c.bytes[a:b:b]
+// Name returns the column name.
+func (c *QueryColumnBlob) Name() string {
+	return c.name
 }
 
-// QueryColumnNull is a column whose every cell is null: the query produced only
-// none cells, so no type can be inferred. It mirrors the C API, which
+func (c *QueryColumnBlob) sealed() {}
+
+// appendCell writes row i from cell; see QueryColumnString.appendCell.
+func (c *QueryColumnBlob) appendCell(i int, cell *C.qdb_point_result_t) {
+	if cell._type == C.qdb_query_result_none {
+		c.Values[i] = nil
+
+		return
+	}
+
+	if view := c.buf.push(cellBytes(cell)); len(view) > 0 {
+		c.Values[i] = view
+	}
+	c.Mask.set(i)
+}
+
+// QueryColumnNull is a column whose every cell is null: the query produced
+// only none cells, so no type can be inferred. It mirrors the C API, which
 // carries no column types and encodes null only as a none cell, so the
 // column carries a length and nothing else.
 type QueryColumnNull struct {
-	name  string
-	valid Bitmap
+	name string
+	mask Mask
 }
 
 func newQueryColumnNull(name string, n int) *QueryColumnNull {
-	return &QueryColumnNull{name: name, valid: newBitmap(n)}
+	return &QueryColumnNull{name: name, mask: newMask(n)}
 }
 
 // Name returns the column name.
@@ -324,12 +434,12 @@ func (c *QueryColumnNull) Name() string {
 
 // Len returns the number of rows.
 func (c *QueryColumnNull) Len() int {
-	return c.valid.Len()
+	return c.mask.Len()
 }
 
-// Valid returns the validity bitmap, which has every bit clear.
-func (c *QueryColumnNull) Valid() Bitmap {
-	return c.valid
+// Valid returns the mask, which has every bit clear.
+func (c *QueryColumnNull) Valid() Mask {
+	return c.mask
 }
 
 func (c *QueryColumnNull) sealed() {}
