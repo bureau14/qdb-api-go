@@ -14,6 +14,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Column positions of a select * over the all-columns fixture: the two
+// system columns come first, then the fixture's columns in creation order.
+const (
+	tblTimestampIndex = 0
+	tblTableIndex     = 1
+	tblBlobIndex      = 2
+	tblDoubleIndex    = 3
+	tblInt64Index     = 4
+	tblStringIndex    = 5
+	tblTsIndex        = 6
+	tblSymbolIndex    = 7
+)
+
 // fillVarBytes writes cells into a var-width column the way the converter
 // does, so accessor tests do not depend on the converter.
 func fillVarBytes(v *varBytes, cells [][]byte, valid []bool) {
@@ -27,6 +40,137 @@ func fillVarBytes(v *varBytes, cells [][]byte, valid []bool) {
 		}
 	}
 }
+
+// validBits expands a bitmap to a []bool for equality assertions.
+func validBits(b Bitmap) []bool {
+	out := make([]bool, b.Len())
+	for i := range out {
+		out[i] = b.IsValid(i)
+	}
+
+	return out
+}
+
+func allFalse(mask []bool) bool {
+	for _, v := range mask {
+		if v {
+			return false
+		}
+	}
+
+	return true
+}
+
+func selectFixture(td TestTimeseriesData) string {
+	return fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)
+}
+
+// fixtureColumn asserts column j of tbl against the fixture mask: a
+// NullColumn when the fixture wrote no value in the column, the concrete
+// type T otherwise.
+func fixtureColumn[T QueryColumn](t *testing.T, tbl *QueryTable, j int, mask []bool) (T, bool) { //nolint:ireturn // Justified: T is the caller's concrete type
+	t.Helper()
+
+	col := tbl.Columns()[j]
+	if allFalse(mask) {
+		null, ok := col.(*NullColumn)
+		require.True(t, ok, "column %s is %T, want NullColumn", col.Name(), col)
+		assert.Equal(t, len(mask), null.Len())
+		assert.True(t, null.Valid().AllNull())
+
+		var zero T
+
+		return zero, false
+	}
+
+	typed, ok := col.(T)
+	require.True(t, ok, "column %s is %T", col.Name(), col)
+	assert.Equal(t, mask, validBits(typed.Valid()), "column %s", col.Name())
+
+	return typed, true
+}
+
+// requireTableMatchesFixture checks every column of a select * over the
+// fixture: the fixture value on a valid slot, the null sentinel on a
+// cleared one, and a NullColumn where the fixture wrote nothing.
+func requireTableMatchesFixture(t *testing.T, tbl *QueryTable, td TestTimeseriesData) {
+	t.Helper()
+
+	n := len(td.Int64Points)
+	require.Equal(t, n, tbl.RowCount())
+	require.Len(t, tbl.Columns(), 8)
+
+	idx, ok := tbl.Columns()[tblTimestampIndex].(*TimestampColumn)
+	require.True(t, ok)
+	table, ok := tbl.Columns()[tblTableIndex].(*StringColumn)
+	require.True(t, ok)
+	assert.True(t, idx.Valid().AllValid())
+	assert.True(t, table.Valid().AllValid())
+	for i := range n {
+		assert.Equal(t, td.Int64Points[i].Timestamp().UnixNano(), idx.Nanos[i], "row %d", i)
+		assert.Equal(t, td.Alias, table.Value(i), "row %d", i)
+	}
+
+	if blob, ok := fixtureColumn[*BlobColumn](t, tbl, tblBlobIndex, td.BlobValid); ok {
+		for i, valid := range td.BlobValid {
+			if valid {
+				assert.Equal(t, td.BlobPoints[i].Content(), blob.Value(i), "row %d", i)
+			} else {
+				assert.Empty(t, blob.Value(i), "row %d", i)
+			}
+		}
+	}
+	if dbl, ok := fixtureColumn[*DoubleColumn](t, tbl, tblDoubleIndex, td.DoubleValid); ok {
+		for i, valid := range td.DoubleValid {
+			if valid {
+				assert.InDelta(t, td.DoublePoints[i].Content(), dbl.Values[i], 0, "row %d", i)
+			} else {
+				assert.True(t, math.IsNaN(dbl.Values[i]), "row %d", i)
+			}
+		}
+	}
+	if i64, ok := fixtureColumn[*Int64Column](t, tbl, tblInt64Index, td.Int64Valid); ok {
+		for i, valid := range td.Int64Valid {
+			if valid {
+				assert.Equal(t, td.Int64Points[i].Content(), i64.Values[i], "row %d", i)
+			} else {
+				assert.Equal(t, int64(math.MinInt64), i64.Values[i], "row %d", i)
+			}
+		}
+	}
+	if str, ok := fixtureColumn[*StringColumn](t, tbl, tblStringIndex, td.StringValid); ok {
+		for i, valid := range td.StringValid {
+			if valid {
+				assert.Equal(t, td.StringPoints[i].Content(), str.Value(i), "row %d", i)
+			} else {
+				assert.Equal(t, "", str.Value(i), "row %d", i)
+			}
+		}
+	}
+	if ts, ok := fixtureColumn[*TimestampColumn](t, tbl, tblTsIndex, td.TimestampValid); ok {
+		for i, valid := range td.TimestampValid {
+			if valid {
+				assert.Equal(t, td.TimestampPoints[i].Content().UnixNano(), ts.Nanos[i], "row %d", i)
+				assert.True(t, td.TimestampPoints[i].Content().Equal(ts.Time(i)), "row %d", i)
+			} else {
+				assert.Equal(t, int64(math.MinInt64), ts.Nanos[i], "row %d", i)
+			}
+		}
+	}
+	if sym, ok := fixtureColumn[*StringColumn](t, tbl, tblSymbolIndex, td.SymbolValid); ok {
+		for i, valid := range td.SymbolValid {
+			if valid {
+				assert.Equal(t, td.SymbolPoints[i].Content(), sym.Value(i), "row %d", i)
+			} else {
+				assert.Equal(t, "", sym.Value(i), "row %d", i)
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------
+// Column accessors on hand-filled columns
+// ---------------------------------------------------------------------
 
 func TestQueryTableFixedColumnsExposeBuffers(t *testing.T) {
 	i64 := newInt64Column("i", 3)
@@ -49,49 +193,40 @@ func TestQueryTableFixedColumnsExposeBuffers(t *testing.T) {
 	assert.Equal(t, 1, ts.Len())
 	assert.Equal(t, time.Date(2020, 1, 2, 3, 4, 5, 6, time.UTC), ts.Time(0))
 	assert.Equal(t, time.UTC, ts.Time(0).Location())
+
+	null := newNullColumn("n", 5)
+	assert.Equal(t, "n", null.Name())
+	assert.Equal(t, 5, null.Len())
+	assert.True(t, null.Valid().AllNull())
 }
 
-func TestQueryTableStringColumnValueAliasesBuffer(t *testing.T) {
+func TestQueryTableVarColumnsExposeBuffers(t *testing.T) {
 	cells := [][]byte{[]byte("ab"), nil, []byte("cde"), nil}
 	valid := []bool{true, true, true, false}
-	col := newStringColumn("s", len(cells), 5)
-	fillVarBytes(&col.varBytes, cells, valid)
+	str := newStringColumn("s", len(cells), 5)
+	fillVarBytes(&str.varBytes, cells, valid)
 
-	assert.Equal(t, "s", col.Name())
-	assert.Equal(t, 4, col.Len())
-	assert.Equal(t, "ab", col.Value(0))
-	assert.Equal(t, "", col.Value(1), "empty cell")
-	assert.Equal(t, "cde", col.Value(2))
-	assert.Equal(t, "", col.Value(3), "null cell at the end of the buffer")
-	assert.Equal(t, []int32{0, 2, 2, 5, 5}, col.Offsets())
-	assert.Equal(t, []byte("abcde"), col.Bytes())
-	assert.Equal(t, 1, col.Valid().NullCount())
-}
+	assert.Equal(t, "s", str.Name())
+	assert.Equal(t, 4, str.Len())
+	assert.Equal(t, []string{"ab", "", "cde", ""}, []string{str.Value(0), str.Value(1), str.Value(2), str.Value(3)},
+		"empty cell and null cell at the end of the buffer both read as empty")
+	assert.Equal(t, []int32{0, 2, 2, 5, 5}, str.Offsets())
+	assert.Equal(t, []byte("abcde"), str.Bytes())
+	assert.Equal(t, 1, str.Valid().NullCount())
 
-func TestQueryTableBlobColumnValueCapsCapacity(t *testing.T) {
-	cells := [][]byte{[]byte("ab"), []byte("cd")}
-	col := newBlobColumn("b", len(cells), 4)
-	fillVarBytes(&col.varBytes, cells, []bool{true, true})
-
-	first := col.Value(0)
+	blob := newBlobColumn("b", 2, 4)
+	fillVarBytes(&blob.varBytes, [][]byte{[]byte("ab"), []byte("cd")}, []bool{true, true})
+	first := blob.Value(0)
 	require.Equal(t, []byte("ab"), first)
 	require.Equal(t, 2, cap(first))
 
 	// An append must reallocate rather than write into the next cell.
 	_ = append(first, 'x') //nolint:staticcheck // the side effect on the buffer is what is under test
-	assert.Equal(t, []byte("cd"), col.Value(1))
-	assert.Equal(t, []byte("abcd"), col.Bytes())
+	assert.Equal(t, []byte("cd"), blob.Value(1))
+	assert.Equal(t, []byte("abcd"), blob.Bytes())
 }
 
-func TestQueryTableNullColumn(t *testing.T) {
-	col := newNullColumn("n", 5)
-	assert.Equal(t, "n", col.Name())
-	assert.Equal(t, 5, col.Len())
-	assert.True(t, col.Valid().AllNull())
-	assert.Equal(t, 5, col.Valid().NullCount())
-}
-
-func TestQueryTableLookupReturnsFirstDuplicate(t *testing.T) {
+func TestQueryTableLookup(t *testing.T) {
 	first := newInt64Column("a", 1)
 	second := newDoubleColumn("a", 1)
 	other := newNullColumn("b", 1)
@@ -103,49 +238,61 @@ func TestQueryTableLookupReturnsFirstDuplicate(t *testing.T) {
 
 	col, ok := tbl.Column("a")
 	require.True(t, ok)
-	assert.Same(t, first, col)
-
+	assert.Same(t, first, col, "duplicate names resolve to the first column")
 	col, ok = tbl.Column("b")
 	require.True(t, ok)
 	assert.Same(t, other, col)
-
 	_, ok = tbl.Column("missing")
 	assert.False(t, ok)
+
+	cases := []struct {
+		name    string
+		lookup  func() (QueryColumn, error)
+		wantErr ErrorType
+		wantMsg []string
+	}{
+		{"found", func() (QueryColumn, error) { return ColumnOf[*Int64Column](tbl, "a") }, Success, nil},
+		{"unknown name", func() (QueryColumn, error) { return ColumnOf[*Int64Column](tbl, "missing") }, ErrElementNotFound, []string{"missing"}},
+		{"wrong type", func() (QueryColumn, error) { return ColumnOf[*StringColumn](tbl, "a") }, ErrIncompatibleType, []string{"*qdb.StringColumn", "*qdb.Int64Column"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := c.lookup()
+			if c.wantErr == Success {
+				require.NoError(t, err)
+				assert.Same(t, first, got)
+
+				return
+			}
+			require.Error(t, err)
+			assert.True(t, errors.Is(err, c.wantErr), err.Error())
+			for _, m := range c.wantMsg {
+				assert.Contains(t, err.Error(), m)
+			}
+		})
+	}
 }
 
-func TestColumnOfReturnsConcreteType(t *testing.T) {
-	price := newDoubleColumn("price", 2)
-	tbl := newQueryTable([]QueryColumn{newInt64Column("qty", 2), price}, 2, 0)
+// ---------------------------------------------------------------------
+// Layout, fixtures and pure helpers
+// ---------------------------------------------------------------------
 
-	col, err := ColumnOf[*DoubleColumn](tbl, "price")
-	require.NoError(t, err)
-	assert.Same(t, price, col)
+// TestQueryTableCellLayout pins the offsets the payload loads depend on;
+// the sizes are pinned at compile time in query_table_convert.go.
+func TestQueryTableCellLayout(t *testing.T) {
+	var cell QueryPoint
+	var ts Timespec
+	assert.Equal(t, uintptr(24), unsafe.Sizeof(cell))
+	assert.Equal(t, uintptr(0), unsafe.Offsetof(cell._type))
+	assert.Equal(t, uintptr(8), unsafe.Offsetof(cell.payload))
+	assert.Equal(t, uintptr(16), unsafe.Sizeof(cell.payload))
+	assert.Equal(t, uintptr(0), unsafe.Offsetof(ts.tv_sec))
+	assert.Equal(t, uintptr(8), unsafe.Offsetof(ts.tv_nsec))
 }
 
-func TestColumnOfUnknownNameIsElementNotFound(t *testing.T) {
-	tbl := newQueryTable([]QueryColumn{newInt64Column("qty", 1)}, 1, 0)
-
-	col, err := ColumnOf[*Int64Column](tbl, "missing")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrElementNotFound), err.Error())
-	assert.Nil(t, col)
-	assert.Contains(t, err.Error(), "missing")
-}
-
-func TestColumnOfWrongTypeIsIncompatibleType(t *testing.T) {
-	tbl := newQueryTable([]QueryColumn{newInt64Column("qty", 1)}, 1, 0)
-
-	col, err := ColumnOf[*StringColumn](tbl, "qty")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrIncompatibleType), err.Error())
-	assert.Nil(t, col)
-	assert.Contains(t, err.Error(), "*qdb.StringColumn")
-	assert.Contains(t, err.Error(), "*qdb.Int64Column")
-}
-
-// TestPointRowsFixtureReadsBackThroughAccessors checks the hand-built
-// rows through the legacy per-cell accessors, so the converter tests that
-// follow rest on a fixture whose layout is known good.
+// TestPointRowsFixtureReadsBackThroughAccessors checks the hand-built rows
+// through the legacy per-cell accessors, so the conversion tests rest on a
+// fixture whose layout is known good.
 func TestPointRowsFixtureReadsBackThroughAccessors(t *testing.T) {
 	handle := newTestHandle(t)
 	tags := testArrayTags()
@@ -202,6 +349,32 @@ func TestPointRowsFixtureReadsBackThroughAccessors(t *testing.T) {
 	assert.Equal(t, QueryResultValueType(tags[4]), second[7].Get().Type())
 }
 
+func TestCellNanosBounds(t *testing.T) {
+	cases := []struct {
+		sec, nsec int64
+		want      int64
+		ok        bool
+	}{
+		{0, 0, 0, true},
+		{1, 5, 1_000_000_005, true},
+		{-1, 0, -1_000_000_000, true},
+		{maxTimespecSec, 854_775_807, math.MaxInt64, true},
+		{maxTimespecSec, 854_775_808, 0, false},
+		{maxTimespecSec + 1, 0, 0, false},
+		{minTimespecSec, -854_775_808, math.MinInt64, true},
+		{minTimespecSec, -854_775_809, 0, false},
+		{minTimespecSec - 1, 0, 0, false},
+		{math.MinInt64, math.MinInt64, 0, false},
+	}
+	for _, c := range cases {
+		got, ok := cellNanos(c.sec, c.nsec)
+		assert.Equal(t, c.ok, ok, "sec=%d nsec=%d", c.sec, c.nsec)
+		if c.ok {
+			assert.Equal(t, c.want, got, "sec=%d nsec=%d", c.sec, c.nsec)
+		}
+	}
+}
+
 func TestMergeValueTypeNullIsIdentity(t *testing.T) {
 	all := []TsValueType{TsValueNull, TsValueInt64, TsValueDouble, TsValueTimestamp, TsValueString, TsValueBlob}
 	for _, k := range all {
@@ -229,187 +402,132 @@ func TestMergeValueTypeNullIsIdentity(t *testing.T) {
 	}
 }
 
-func TestProbeValueTypesInfersEachColumn(t *testing.T) {
-	handle := newTestHandle(t)
-	names := []string{"i", "d", "t", "s", "b", "n", "c"}
-	rows := newTestPointRows(t, handle, [][]testCellFunc{
-		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellCount(1)},
-		{testCellInt64(1), testCellDouble(1), testCellTimestamp(1, 0), testCellString("x"), testCellBlob([]byte{1}), testCellNone(), testCellInt64(2)},
-		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone()},
-	})
+// ---------------------------------------------------------------------
+// Conversion of hand-built rows
+// ---------------------------------------------------------------------
 
-	types, err := probeValueTypes(rows, names)
-	require.NoError(t, err)
-	assert.Equal(t, []TsValueType{TsValueInt64, TsValueDouble, TsValueTimestamp, TsValueString, TsValueBlob, TsValueNull, TsValueInt64}, types)
+type tableFromRowsCase struct {
+	name    string
+	names   []string
+	rows    [][]testCellFunc
+	wantErr ErrorType
+	wantMsg []string
+	check   func(t *testing.T, tbl *QueryTable)
 }
 
-func TestProbeValueTypesNoRowsIsAllNone(t *testing.T) {
-	types, err := probeValueTypes(QueryRows{}, []string{"a", "b"})
-	require.NoError(t, err)
-	assert.Equal(t, []TsValueType{TsValueNull, TsValueNull}, types)
-}
-
-func TestProbeValueTypesMixedTypesIsIncompatibleType(t *testing.T) {
-	handle := newTestHandle(t)
-	rows := newTestPointRows(t, handle, [][]testCellFunc{
-		{testCellInt64(1)},
-		{testCellDouble(1)},
-	})
-
-	_, err := probeValueTypes(rows, []string{"mixed"})
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrIncompatibleType), err.Error())
-	assert.Contains(t, err.Error(), "mixed")
-	assert.Contains(t, err.Error(), "int64")
-	assert.Contains(t, err.Error(), "double")
-}
-
-func TestProbeValueTypesArrayTagsAreNotImplemented(t *testing.T) {
-	handle := newTestHandle(t)
+func tableFromRowsCases() []tableFromRowsCase {
+	cases := []tableFromRowsCase{
+		{
+			name:  "fixed columns with nulls and count folded into int64",
+			names: []string{"i", "d", "t", "c", "n"},
+			rows: [][]testCellFunc{
+				{testCellInt64(7), testCellDouble(1.5), testCellTimestamp(10, 20), testCellCount(3), testCellNone()},
+				{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone()},
+				{testCellInt64(-7), testCellDouble(-1.5), testCellTimestamp(-10, 20), testCellInt64(4), testCellNone()},
+			},
+			check: checkFixedColumns,
+		},
+		{
+			name:  "var columns with nulls, empty cells and a stale payload under a none tag",
+			names: []string{"s", "b"},
+			rows: [][]testCellFunc{
+				{testCellString("ab"), testCellBlob([]byte{1})},
+				{testCellNone(), testCellNone()},
+				{testCellString(""), testCellBlob(nil)},
+				{testCellSeq(testCellString("stale"), testCellNone()), testCellBlob([]byte{2, 3})},
+				{testCellString("cde"), testCellNone()},
+			},
+			check: checkVarColumns,
+		},
+		{
+			name:  "no rows yields null columns of length zero",
+			names: []string{"a", "b"},
+			check: func(t *testing.T, tbl *QueryTable) {
+				t.Helper()
+				assert.Equal(t, 0, tbl.RowCount())
+				require.Len(t, tbl.Columns(), 2)
+				for _, c := range tbl.Columns() {
+					_, ok := c.(*NullColumn)
+					assert.True(t, ok, "%T", c)
+					assert.Equal(t, 0, c.Len())
+				}
+			},
+		},
+		{
+			name:    "two typed kinds in one column",
+			names:   []string{"mixed"},
+			rows:    [][]testCellFunc{{testCellInt64(1)}, {testCellDouble(1)}},
+			wantErr: ErrIncompatibleType,
+			wantMsg: []string{"mixed", "int64", "double"},
+		},
+		{
+			name:    "timestamp outside the int64 nanosecond range",
+			names:   []string{"when"},
+			rows:    [][]testCellFunc{{testCellTimestamp(0, 0)}, {testCellTimestamp(maxTimespecSec+1, 0)}},
+			wantErr: ErrOutOfBounds,
+			wantMsg: []string{"when", "row=1"},
+		},
+		{
+			name:    "blob column past int32 offsets",
+			names:   []string{"big"},
+			rows:    [][]testCellFunc{{testCellBlob([]byte{1})}, {testCellBlobUnbacked(math.MaxInt32)}},
+			wantErr: ErrOutOfBounds,
+			wantMsg: []string{"big"},
+		},
+	}
 	for _, tag := range testArrayTags() {
-		rows := newTestPointRows(t, handle, [][]testCellFunc{{testCellTagged(tag)}})
-
-		_, err := probeValueTypes(rows, []string{"arr"})
-		require.Error(t, err, "tag %d", tag)
-		assert.True(t, errors.Is(err, ErrNotImplemented), err.Error())
-		assert.Contains(t, err.Error(), "arr")
+		cases = append(cases, tableFromRowsCase{
+			name:    fmt.Sprintf("array tag %d", tag),
+			names:   []string{"arr"},
+			rows:    [][]testCellFunc{{testCellTagged(tag)}},
+			wantErr: ErrNotImplemented,
+			wantMsg: []string{"arr"},
+		})
 	}
+
+	return cases
 }
 
-// TestQueryTableCellLayout pins the offsets the payload loads depend on;
-// the sizes are pinned at compile time in query_table_convert.go.
-func TestQueryTableCellLayout(t *testing.T) {
-	var cell QueryPoint
-	var ts Timespec
-	assert.Equal(t, uintptr(24), unsafe.Sizeof(cell))
-	assert.Equal(t, uintptr(0), unsafe.Offsetof(cell._type))
-	assert.Equal(t, uintptr(8), unsafe.Offsetof(cell.payload))
-	assert.Equal(t, uintptr(16), unsafe.Sizeof(cell.payload))
-	assert.Equal(t, uintptr(0), unsafe.Offsetof(ts.tv_sec))
-	assert.Equal(t, uintptr(8), unsafe.Offsetof(ts.tv_nsec))
-}
+func checkFixedColumns(t *testing.T, tbl *QueryTable) {
+	t.Helper()
+	require.Equal(t, 3, tbl.RowCount())
 
-func TestCellNanosBounds(t *testing.T) {
-	cases := []struct {
-		sec, nsec int64
-		want      int64
-		ok        bool
-	}{
-		{0, 0, 0, true},
-		{1, 5, 1_000_000_005, true},
-		{-1, 0, -1_000_000_000, true},
-		{maxTimespecSec, 854_775_807, math.MaxInt64, true},
-		{maxTimespecSec, 854_775_808, 0, false},
-		{maxTimespecSec + 1, 0, 0, false},
-		{minTimespecSec, -854_775_808, math.MinInt64, true},
-		{minTimespecSec, -854_775_809, 0, false},
-		{minTimespecSec - 1, 0, 0, false},
-		{math.MinInt64, math.MinInt64, 0, false},
-	}
-	for _, c := range cases {
-		got, ok := cellNanos(c.sec, c.nsec)
-		assert.Equal(t, c.ok, ok, "sec=%d nsec=%d", c.sec, c.nsec)
-		if c.ok {
-			assert.Equal(t, c.want, got, "sec=%d nsec=%d", c.sec, c.nsec)
-		}
-	}
-}
-
-func TestAppendRowFillsFixedColumns(t *testing.T) {
-	handle := newTestHandle(t)
-	names := []string{"i", "d", "t", "c", "n"}
-	rows := newTestPointRows(t, handle, [][]testCellFunc{
-		{testCellInt64(7), testCellDouble(1.5), testCellTimestamp(10, 20), testCellCount(3), testCellNone()},
-		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone()},
-		{testCellInt64(-7), testCellDouble(-1.5), testCellTimestamp(-10, 20), testCellInt64(4), testCellNone()},
-	})
-	types, err := probeValueTypes(rows, names)
-	require.NoError(t, err)
-	cols := allocColumns(names, types, len(rows), nil)
-	for i, row := range rows {
-		require.NoError(t, appendRow(cols, row, i))
-	}
-
-	i64, err := ColumnOf[*Int64Column](newQueryTable(cols, 3, 0), "i")
+	i64, err := ColumnOf[*Int64Column](tbl, "i")
 	require.NoError(t, err)
 	assert.Equal(t, []int64{7, math.MinInt64, -7}, i64.Values)
 	assert.Equal(t, []bool{true, false, true}, validBits(i64.Valid()))
 
-	dbl, err := ColumnOf[*DoubleColumn](newQueryTable(cols, 3, 0), "d")
+	dbl, err := ColumnOf[*DoubleColumn](tbl, "d")
 	require.NoError(t, err)
 	assert.InDelta(t, 1.5, dbl.Values[0], 0)
 	assert.True(t, math.IsNaN(dbl.Values[1]))
 	assert.InDelta(t, -1.5, dbl.Values[2], 0)
 	assert.Equal(t, []bool{true, false, true}, validBits(dbl.Valid()))
 
-	ts, err := ColumnOf[*TimestampColumn](newQueryTable(cols, 3, 0), "t")
+	ts, err := ColumnOf[*TimestampColumn](tbl, "t")
 	require.NoError(t, err)
 	assert.Equal(t, []int64{10_000_000_020, math.MinInt64, -9_999_999_980}, ts.Nanos)
 	assert.Equal(t, time.Unix(10, 20).UTC(), ts.Time(0))
 	assert.Equal(t, []bool{true, false, true}, validBits(ts.Valid()))
 
-	cnt, err := ColumnOf[*Int64Column](newQueryTable(cols, 3, 0), "c")
+	cnt, err := ColumnOf[*Int64Column](tbl, "c")
 	require.NoError(t, err)
 	assert.Equal(t, []int64{3, math.MinInt64, 4}, cnt.Values)
 
-	null, err := ColumnOf[*NullColumn](newQueryTable(cols, 3, 0), "n")
+	null, err := ColumnOf[*NullColumn](tbl, "n")
 	require.NoError(t, err)
 	assert.Equal(t, 3, null.Len())
 	assert.True(t, null.Valid().AllNull())
 }
 
-func TestAppendRowTimestampOverflowIsOutOfBounds(t *testing.T) {
-	handle := newTestHandle(t)
-	rows := newTestPointRows(t, handle, [][]testCellFunc{
-		{testCellTimestamp(0, 0)},
-		{testCellTimestamp(maxTimespecSec+1, 0)},
-	})
-	cols := allocColumns([]string{"when"}, []TsValueType{TsValueTimestamp}, 2, nil)
-
-	require.NoError(t, appendRow(cols, rows[0], 0))
-	err := appendRow(cols, rows[1], 1)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrOutOfBounds), err.Error())
-	assert.Contains(t, err.Error(), "when")
-	assert.Contains(t, err.Error(), "row=1")
-}
-
-// validBits expands a bitmap to a []bool for equality assertions.
-func validBits(b Bitmap) []bool {
-	out := make([]bool, b.Len())
-	for i := range out {
-		out[i] = b.IsValid(i)
-	}
-
-	return out
-}
-
-func TestAppendRowFillsVarColumns(t *testing.T) {
-	handle := newTestHandle(t)
-	names := []string{"s", "b"}
-	rows := newTestPointRows(t, handle, [][]testCellFunc{
-		{testCellString("ab"), testCellBlob([]byte{1})},
-		{testCellNone(), testCellNone()},
-		{testCellString(""), testCellBlob(nil)},
-		{testCellSeq(testCellString("stale"), testCellNone()), testCellBlob([]byte{2, 3})},
-		{testCellString("cde"), testCellNone()},
-	})
-	types, err := probeValueTypes(rows, names)
-	require.NoError(t, err)
-	sizes, err := varSizes(rows, types, names)
-	require.NoError(t, err)
-	assert.Equal(t, []int{5, 3}, sizes, "stale payload under a none tag is not counted")
-
-	cols := allocColumns(names, types, len(rows), sizes)
-	for i, row := range rows {
-		require.NoError(t, appendRow(cols, row, i))
-	}
-	tbl := newQueryTable(cols, len(rows), 0)
+func checkVarColumns(t *testing.T, tbl *QueryTable) {
+	t.Helper()
+	require.Equal(t, 5, tbl.RowCount())
 
 	str, err := ColumnOf[*StringColumn](tbl, "s")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ab", "", "", "", "cde"}, []string{str.Value(0), str.Value(1), str.Value(2), str.Value(3), str.Value(4)})
-	assert.Equal(t, []int32{0, 2, 2, 2, 2, 5}, str.Offsets())
+	assert.Equal(t, []int32{0, 2, 2, 2, 2, 5}, str.Offsets(), "stale payload under a none tag is not copied")
 	assert.Equal(t, []byte("abcde"), str.Bytes())
 	assert.Equal(t, []bool{true, false, true, false, true}, validBits(str.Valid()))
 
@@ -424,287 +542,144 @@ func TestAppendRowFillsVarColumns(t *testing.T) {
 	assert.Equal(t, []bool{true, false, true, true, false}, validBits(blob.Valid()))
 }
 
-func TestVarSizesRejectsColumnPastInt32(t *testing.T) {
+func TestTableFromRows(t *testing.T) {
 	handle := newTestHandle(t)
-	rows := newTestPointRows(t, handle, [][]testCellFunc{
-		{testCellBlob([]byte{1})},
-		{testCellBlobUnbacked(math.MaxInt32)},
+	for _, c := range tableFromRowsCases() {
+		t.Run(c.name, func(t *testing.T) {
+			rows := newTestPointRows(t, handle, c.rows)
+			tbl, err := tableFromRows(c.names, rows, 7)
+			if c.wantErr != Success {
+				require.Error(t, err)
+				assert.True(t, errors.Is(err, c.wantErr), err.Error())
+				for _, m := range c.wantMsg {
+					assert.Contains(t, err.Error(), m)
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, int64(7), tbl.ScannedPoints())
+			for i, col := range tbl.Columns() {
+				assert.Equal(t, c.names[i], col.Name())
+			}
+			c.check(t, tbl)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------
+// Live cluster
+// ---------------------------------------------------------------------
+
+// TestFetchMatchesFixture runs the fixture at several sizes and sparsities
+// through both entry points. The table built from Execute is checked only
+// after the result is closed and the heap scrubbed, which proves it aliases
+// no C memory.
+func TestFetchMatchesFixture(t *testing.T) {
+	handle := newTestHandle(t)
+	cases := []struct{ count, sparsity int }{{1, 100}, {8, 100}, {64, 50}, {65, 50}, {4, 0}}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("count=%d sparsity=%d", c.count, c.sparsity), func(t *testing.T) {
+			td := newTestTimeseriesAllColumnsSparse(t, handle, int64(c.count), c.sparsity)
+
+			fetched, err := handle.Query(selectFixture(td)).Fetch()
+			require.NoError(t, err)
+			require.NotNil(t, fetched)
+			assert.Positive(t, fetched.ScannedPoints())
+			requireTableMatchesFixture(t, fetched, td)
+
+			result, err := handle.Query(selectFixture(td)).Execute()
+			require.NoError(t, err)
+			names := result.ColumnsNames()
+			converted, err := result.ToTable()
+			require.NoError(t, err)
+			result.Close()
+			runtime.GC()
+			debug.FreeOSMemory()
+
+			for i, col := range converted.Columns() {
+				assert.Equal(t, names[i], col.Name())
+			}
+			requireTableMatchesFixture(t, converted, td)
+		})
+	}
+}
+
+func TestFetchEdgeCases(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
+
+	t.Run("nil result converts to an empty table", func(t *testing.T) {
+		var nilResult *QueryResult
+		tbl, err := nilResult.ToTable()
+		require.NoError(t, err)
+		assert.Equal(t, 0, tbl.RowCount())
+		assert.Empty(t, tbl.Columns())
 	})
 
-	_, err := varSizes(rows, []TsValueType{TsValueBlob}, []string{"big"})
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrOutOfBounds), err.Error())
-	assert.Contains(t, err.Error(), "big")
+	t.Run("closed result converts to an empty table", func(t *testing.T) {
+		result, err := handle.Query(selectFixture(td)).Execute()
+		require.NoError(t, err)
+		result.Close()
 
-	sizes, err := varSizes(rows[:1], []TsValueType{TsValueBlob}, []string{"big"})
-	require.NoError(t, err)
-	assert.Equal(t, []int{1}, sizes)
-}
+		tbl, err := result.ToTable()
+		require.NoError(t, err)
+		assert.Equal(t, 0, tbl.RowCount())
+		assert.Empty(t, tbl.Columns())
+	})
 
-// Column positions of a select * over the all-columns fixture: the two
-// system columns come first, then the fixture's columns in creation order.
-const (
-	tblTimestampIndex = 0
-	tblTableIndex     = 1
-	tblBlobIndex      = 2
-	tblDoubleIndex    = 3
-	tblInt64Index     = 4
-	tblStringIndex    = 5
-	tblTsIndex        = 6
-	tblSymbolIndex    = 7
-)
+	t.Run("empty range keeps the column set with no rows", func(t *testing.T) {
+		result, err := handle.Query(fmt.Sprintf("select * from %s in range(1971, +10d)", td.Alias)).Execute()
+		require.NoError(t, err)
+		defer result.Close()
 
-// toTable executes query, converts it, and closes the result.
-func toTable(t *testing.T, handle HandleType, query string) *QueryTable {
-	t.Helper()
-
-	result, err := handle.Query(query).Execute()
-	require.NoError(t, err)
-	defer result.Close()
-
-	tbl, err := result.ToTable()
-	require.NoError(t, err)
-
-	return tbl
-}
-
-// fixtureTable converts a select * over the fixture and returns the table
-// with the result's column names.
-func fixtureTable(t *testing.T, handle HandleType, td TestTimeseriesData) (tbl *QueryTable, names []string) {
-	t.Helper()
-
-	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Execute()
-	require.NoError(t, err)
-	defer result.Close()
-
-	tbl, err = result.ToTable()
-	require.NoError(t, err)
-
-	return tbl, result.ColumnsNames()
-}
-
-func requireTableMatchesFixture(t *testing.T, tbl *QueryTable, td TestTimeseriesData) {
-	t.Helper()
-
-	n := len(td.Int64Points)
-	require.Equal(t, n, tbl.RowCount())
-	require.Len(t, tbl.Columns(), 8)
-
-	idx, ok := tbl.Columns()[tblTimestampIndex].(*TimestampColumn)
-	require.True(t, ok)
-	table, ok := tbl.Columns()[tblTableIndex].(*StringColumn)
-	require.True(t, ok)
-	blob, ok := tbl.Columns()[tblBlobIndex].(*BlobColumn)
-	require.True(t, ok)
-	dbl, ok := tbl.Columns()[tblDoubleIndex].(*DoubleColumn)
-	require.True(t, ok)
-	i64, ok := tbl.Columns()[tblInt64Index].(*Int64Column)
-	require.True(t, ok)
-	str, ok := tbl.Columns()[tblStringIndex].(*StringColumn)
-	require.True(t, ok)
-	ts, ok := tbl.Columns()[tblTsIndex].(*TimestampColumn)
-	require.True(t, ok)
-	sym, ok := tbl.Columns()[tblSymbolIndex].(*StringColumn)
-	require.True(t, ok)
-
-	assert.True(t, idx.Valid().AllValid())
-	assert.True(t, table.Valid().AllValid())
-	assert.Equal(t, td.BlobValid, validBits(blob.Valid()))
-	assert.Equal(t, td.DoubleValid, validBits(dbl.Valid()))
-	assert.Equal(t, td.Int64Valid, validBits(i64.Valid()))
-	assert.Equal(t, td.StringValid, validBits(str.Valid()))
-	assert.Equal(t, td.TimestampValid, validBits(ts.Valid()))
-	assert.Equal(t, td.SymbolValid, validBits(sym.Valid()))
-
-	for i := range n {
-		assert.Equal(t, td.Int64Points[i].Timestamp().UnixNano(), idx.Nanos[i], "row %d", i)
-		assert.Equal(t, td.Alias, table.Value(i), "row %d", i)
-		requireCellMatches(t, td, i, blob, dbl, i64, str, ts, sym)
-	}
-}
-
-// requireCellMatches checks row i: the fixture value on a valid slot, the
-// null sentinel on a cleared one.
-func requireCellMatches(t *testing.T, td TestTimeseriesData, i int,
-	blob *BlobColumn, dbl *DoubleColumn, i64 *Int64Column, str *StringColumn, ts *TimestampColumn, sym *StringColumn,
-) {
-	t.Helper()
-
-	if td.BlobValid[i] {
-		assert.Equal(t, td.BlobPoints[i].Content(), blob.Value(i), "row %d", i)
-	} else {
-		assert.Empty(t, blob.Value(i), "row %d", i)
-	}
-	if td.DoubleValid[i] {
-		assert.InDelta(t, td.DoublePoints[i].Content(), dbl.Values[i], 0, "row %d", i)
-	} else {
-		assert.True(t, math.IsNaN(dbl.Values[i]), "row %d", i)
-	}
-	if td.Int64Valid[i] {
-		assert.Equal(t, td.Int64Points[i].Content(), i64.Values[i], "row %d", i)
-	} else {
-		assert.Equal(t, int64(math.MinInt64), i64.Values[i], "row %d", i)
-	}
-	if td.StringValid[i] {
-		assert.Equal(t, td.StringPoints[i].Content(), str.Value(i), "row %d", i)
-	} else {
-		assert.Equal(t, "", str.Value(i), "row %d", i)
-	}
-	if td.TimestampValid[i] {
-		assert.Equal(t, td.TimestampPoints[i].Content().UnixNano(), ts.Nanos[i], "row %d", i)
-		assert.True(t, td.TimestampPoints[i].Content().Equal(ts.Time(i)), "row %d", i)
-	} else {
-		assert.Equal(t, int64(math.MinInt64), ts.Nanos[i], "row %d", i)
-	}
-	if td.SymbolValid[i] {
-		assert.Equal(t, td.SymbolPoints[i].Content(), sym.Value(i), "row %d", i)
-	} else {
-		assert.Equal(t, "", sym.Value(i), "row %d", i)
-	}
-}
-
-func TestToTableDenseFixture(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumns(t, handle, 8)
-
-	tbl, names := fixtureTable(t, handle, td)
-	assert.Len(t, names, 8)
-	assert.Positive(t, tbl.ScannedPoints())
-	for i, c := range tbl.Columns() {
-		assert.Equal(t, names[i], c.Name())
-	}
-	requireTableMatchesFixture(t, tbl, td)
-}
-
-func TestToTableSparseFixture(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumnsSparse(t, handle, 64, 50)
-
-	tbl, _ := fixtureTable(t, handle, td)
-	requireTableMatchesFixture(t, tbl, td)
-}
-
-func TestToTableAllNullFixtureYieldsNullColumns(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumnsSparse(t, handle, 4, 0)
-
-	tbl, _ := fixtureTable(t, handle, td)
-	require.Equal(t, 4, tbl.RowCount())
-	require.Len(t, tbl.Columns(), 8)
-
-	_, ok := tbl.Columns()[tblTimestampIndex].(*TimestampColumn)
-	assert.True(t, ok, "$timestamp stays typed")
-	_, ok = tbl.Columns()[tblTableIndex].(*StringColumn)
-	assert.True(t, ok, "$table stays typed")
-	for _, c := range tbl.Columns()[tblBlobIndex:] {
-		null, ok := c.(*NullColumn)
-		require.True(t, ok, "column %s is %T", c.Name(), c)
-		assert.Equal(t, 4, null.Len())
-		assert.True(t, null.Valid().AllNull())
-	}
-}
-
-func TestToTableCountAggregateIsInt64Column(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
-	_, names := fixtureTable(t, handle, td)
-
-	tbl := toTable(t, handle, fmt.Sprintf("select count(%s) from %s in range(1970, +10d)", names[tblInt64Index], td.Alias))
-	require.Equal(t, 1, tbl.RowCount())
-	require.Len(t, tbl.Columns(), 1)
-
-	cnt, err := ColumnOf[*Int64Column](tbl, tbl.Columns()[0].Name())
-	require.NoError(t, err)
-	valid := 0
-	for _, ok := range td.Int64Valid {
-		if ok {
-			valid++
+		tbl, err := result.ToTable()
+		require.NoError(t, err)
+		assert.Equal(t, 0, tbl.RowCount())
+		assert.Len(t, tbl.Columns(), int(result.ColumnsCount()))
+		for _, c := range tbl.Columns() {
+			assert.Equal(t, 0, c.Len())
 		}
-	}
-	assert.Equal(t, []int64{int64(valid)}, cnt.Values)
-	assert.True(t, cnt.Valid().AllValid())
-}
+	})
 
-func TestToTableEmptyRangeHasNoRows(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumns(t, handle, 4)
+	t.Run("count aggregate is an int64 column", func(t *testing.T) {
+		result, err := handle.Query(selectFixture(td)).Execute()
+		require.NoError(t, err)
+		names := result.ColumnsNames()
+		result.Close()
 
-	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1971, +10d)", td.Alias)).Execute()
-	require.NoError(t, err)
-	defer result.Close()
+		tbl, err := handle.Query(fmt.Sprintf("select count(%s) from %s in range(1970, +10d)", names[tblInt64Index], td.Alias)).Fetch()
+		require.NoError(t, err)
+		require.Equal(t, 1, tbl.RowCount())
+		require.Len(t, tbl.Columns(), 1)
 
-	tbl, err := result.ToTable()
-	require.NoError(t, err)
-	assert.Equal(t, 0, tbl.RowCount())
-	assert.Len(t, tbl.Columns(), int(result.ColumnsCount()))
-	for _, c := range tbl.Columns() {
-		assert.Equal(t, 0, c.Len())
-	}
-}
+		cnt, err := ColumnOf[*Int64Column](tbl, tbl.Columns()[0].Name())
+		require.NoError(t, err)
+		valid := 0
+		for _, ok := range td.Int64Valid {
+			if ok {
+				valid++
+			}
+		}
+		assert.Equal(t, []int64{int64(valid)}, cnt.Values)
+		assert.True(t, cnt.Valid().AllValid())
+	})
 
-func TestToTableOnClosedOrNilResultIsEmpty(t *testing.T) {
-	var nilResult *QueryResult
-	tbl, err := nilResult.ToTable()
-	require.NoError(t, err)
-	assert.Equal(t, 0, tbl.RowCount())
-	assert.Empty(t, tbl.Columns())
+	t.Run("ddl yields a nil table", func(t *testing.T) {
+		alias := generateAlias(16)
+		tbl, err := handle.Query(fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64)", alias)).Fetch()
+		require.NoError(t, err)
+		assert.Nil(t, tbl)
 
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumns(t, handle, 2)
-	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Execute()
-	require.NoError(t, err)
-	result.Close()
+		tbl, err = handle.Query(fmt.Sprintf("drop table %s", alias)).Fetch()
+		require.NoError(t, err)
+		assert.Nil(t, tbl)
+	})
 
-	tbl, err = result.ToTable()
-	require.NoError(t, err)
-	assert.Equal(t, 0, tbl.RowCount())
-	assert.Empty(t, tbl.Columns())
-}
-
-// TestToTableOutlivesResult proves the table aliases no C memory: the
-// result is released and the heap scrubbed before the values are read.
-func TestToTableOutlivesResult(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumnsSparse(t, handle, 32, 50)
-
-	result, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Execute()
-	require.NoError(t, err)
-	tbl, err := result.ToTable()
-	require.NoError(t, err)
-	result.Close()
-
-	runtime.GC()
-	debug.FreeOSMemory()
-	requireTableMatchesFixture(t, tbl, td)
-}
-
-func TestFetchReturnsTable(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
-
-	tbl, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Fetch()
-	require.NoError(t, err)
-	require.NotNil(t, tbl)
-	requireTableMatchesFixture(t, tbl, td)
-}
-
-func TestFetchDDLReturnsNilTable(t *testing.T) {
-	handle := newTestHandle(t)
-	alias := generateAlias(16)
-
-	tbl, err := handle.Query(fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64)", alias)).Fetch()
-	require.NoError(t, err)
-	assert.Nil(t, tbl)
-
-	tbl, err = handle.Query(fmt.Sprintf("drop table %s", alias)).Fetch()
-	require.NoError(t, err)
-	assert.Nil(t, tbl)
-}
-
-func TestFetchInvalidQueryReturnsError(t *testing.T) {
-	handle := newTestHandle(t)
-
-	tbl, err := handle.Query("select").Fetch()
-	require.Error(t, err)
-	assert.Nil(t, tbl)
+	t.Run("invalid query is an error", func(t *testing.T) {
+		tbl, err := handle.Query("select").Fetch()
+		require.Error(t, err)
+		assert.Nil(t, tbl)
+	})
 }
