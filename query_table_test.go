@@ -2,6 +2,7 @@ package qdb
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -136,4 +137,63 @@ func TestColumnOfWrongTypeIsIncompatibleType(t *testing.T) {
 	assert.Nil(t, col)
 	assert.Contains(t, err.Error(), "*qdb.StringColumn")
 	assert.Contains(t, err.Error(), "*qdb.Int64Column")
+}
+
+// TestPointRowsFixtureReadsBackThroughAccessors checks the hand-built
+// rows through the legacy per-cell accessors, so the converter tests that
+// follow rest on a fixture whose layout is known good.
+func TestPointRowsFixtureReadsBackThroughAccessors(t *testing.T) {
+	handle := newTestHandle(t)
+	tags := testArrayTags()
+	rows := newTestPointRows(t, handle, [][]testCellFunc{
+		{
+			testCellInt64(7), testCellDouble(1.5), testCellString("abc"), testCellBlob([]byte{1, 2}),
+			testCellTimestamp(10, 20), testCellCount(3), testCellNone(), testCellTagged(tags[0]),
+		},
+		{
+			testCellInt64(-1), testCellDouble(math.NaN()), testCellString(""), testCellBlob(nil),
+			testCellTimestamp(-5, 0), testCellCount(0), testCellNone(), testCellTagged(tags[4]),
+		},
+	})
+	require.Len(t, rows, 2)
+
+	first := queryPointArrayToSlice(rows[0], 8)
+	v, err := first[0].GetInt64()
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), v)
+	d, err := first[1].GetDouble()
+	require.NoError(t, err)
+	assert.InDelta(t, 1.5, d, 0)
+	s, err := first[2].GetString()
+	require.NoError(t, err)
+	assert.Equal(t, "abc", s)
+	b, err := first[3].GetBlob()
+	require.NoError(t, err)
+	assert.Equal(t, []byte{1, 2}, b)
+	ts, err := first[4].GetTimestamp()
+	require.NoError(t, err)
+	assert.Equal(t, time.Unix(10, 20), ts)
+	n, err := first[5].GetCount()
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), n)
+	assert.Equal(t, QueryResultNone, first[6].Get().Type())
+	assert.Equal(t, QueryResultValueType(tags[0]), first[7].Get().Type())
+
+	second := queryPointArrayToSlice(rows[1], 8)
+	v, err = second[0].GetInt64()
+	require.NoError(t, err)
+	assert.Equal(t, int64(-1), v)
+	d, err = second[1].GetDouble()
+	require.NoError(t, err)
+	assert.True(t, math.IsNaN(d))
+	s, err = second[2].GetString()
+	require.NoError(t, err)
+	assert.Equal(t, "", s)
+	b, err = second[3].GetBlob()
+	require.NoError(t, err)
+	assert.Empty(t, b)
+	ts, err = second[4].GetTimestamp()
+	require.NoError(t, err)
+	assert.Equal(t, time.Unix(-5, 0), ts)
+	assert.Equal(t, QueryResultValueType(tags[4]), second[7].Get().Type())
 }

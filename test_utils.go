@@ -2,6 +2,55 @@ package qdb
 
 /*
 #include <qdb/client.h>
+#include <qdb/query.h>
+
+// Cell setters for hand-built query results. The fixture writes the payload
+// union through the C compiler and the converter reads it back through Go
+// unsafe loads, so every converter test also checks the union layout that
+// Go cannot see (cgo flattens the union to a byte array).
+static inline void set_point_type(qdb_point_result_t * p, qdb_query_result_value_type_t t)
+{
+	p->type = t;
+}
+
+static inline void set_point_int64(qdb_point_result_t * p, qdb_int_t v)
+{
+	p->type = qdb_query_result_int64;
+	p->payload.int64_.value = v;
+}
+
+static inline void set_point_double(qdb_point_result_t * p, double v)
+{
+	p->type = qdb_query_result_double;
+	p->payload.double_.value = v;
+}
+
+static inline void set_point_count(qdb_point_result_t * p, qdb_size_t v)
+{
+	p->type = qdb_query_result_count;
+	p->payload.count.value = v;
+}
+
+static inline void set_point_timestamp(qdb_point_result_t * p, qdb_time_t sec, qdb_time_t nsec)
+{
+	p->type = qdb_query_result_timestamp;
+	p->payload.timestamp.value.tv_sec = sec;
+	p->payload.timestamp.value.tv_nsec = nsec;
+}
+
+static inline void set_point_string(qdb_point_result_t * p, const char * c, qdb_size_t n)
+{
+	p->type = qdb_query_result_string;
+	p->payload.string.content = c;
+	p->payload.string.content_length = n;
+}
+
+static inline void set_point_blob(qdb_point_result_t * p, const void * c, qdb_size_t n)
+{
+	p->type = qdb_query_result_blob;
+	p->payload.blob.content = c;
+	p->payload.blob.content_length = n;
+}
 */
 import "C"
 
@@ -15,6 +64,7 @@ import (
 	"sort"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1388,4 +1438,130 @@ func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc 
 		testDuration,
 		postGCDuration,
 		preGCDuration+postGCDuration)
+}
+
+// -----------------------------------------------------------------
+// Hand-built query result rows for converter unit tests
+// -----------------------------------------------------------------
+
+// testCellFunc fills one zeroed cell that already lives in C memory.
+type testCellFunc func(t *testing.T, h HandleType, p *C.qdb_point_result_t)
+
+// testCellNone yields a null cell: the only null encoding qdb_query emits.
+func testCellNone() testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_type(p, C.qdb_query_result_none)
+	}
+}
+
+// testCellTagged yields a cell with the given raw tag and a zero payload,
+// for the array tags that have no Go constant.
+func testCellTagged(tag int64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_type(p, C.qdb_query_result_value_type_t(tag))
+	}
+}
+
+// testArrayTags returns the raw enum values of the array result types.
+func testArrayTags() []int64 {
+	return []int64{
+		C.qdb_query_result_array_double,
+		C.qdb_query_result_array_int64,
+		C.qdb_query_result_array_blob,
+		C.qdb_query_result_array_timestamp,
+		C.qdb_query_result_array_string,
+	}
+}
+
+func testCellInt64(v int64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_int64(p, C.qdb_int_t(v))
+	}
+}
+
+func testCellDouble(v float64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_double(p, C.double(v))
+	}
+}
+
+func testCellCount(v uint64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_count(p, C.qdb_size_t(v))
+	}
+}
+
+func testCellTimestamp(sec, nsec int64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_timestamp(p, C.qdb_time_t(sec), C.qdb_time_t(nsec))
+	}
+}
+
+// testCellString yields a string cell whose content is a separate C
+// allocation, as in a real result. An empty string is a nil pointer with
+// length zero: qdbAllocAndCopyBytes rejects an empty slice, and the C API
+// reports an empty cell the same way.
+func testCellString(s string) testCellFunc {
+	return func(t *testing.T, h HandleType, p *C.qdb_point_result_t) {
+		t.Helper()
+		if s == "" {
+			C.set_point_string(p, nil, 0)
+
+			return
+		}
+
+		content := qdbAllocAndCopyBytes(h, []byte(s))
+		t.Cleanup(releaseCPtr(h, content))
+		C.set_point_string(p, (*C.char)(content), C.qdb_size_t(len(s)))
+	}
+}
+
+// testCellBlob is testCellString for blob cells.
+func testCellBlob(b []byte) testCellFunc {
+	return func(t *testing.T, h HandleType, p *C.qdb_point_result_t) {
+		t.Helper()
+		if len(b) == 0 {
+			C.set_point_blob(p, nil, 0)
+
+			return
+		}
+
+		content := qdbAllocAndCopyBytes(h, b)
+		t.Cleanup(releaseCPtr(h, content))
+		C.set_point_blob(p, content, C.qdb_size_t(len(b)))
+	}
+}
+
+// newTestPointRows lays out rows in C memory in the shape qdb_query
+// produces: an array of row pointers, each row one contiguous buffer of
+// cells. Every buffer is released through t.Cleanup. The result is a
+// QueryRows view, the same type rowsUnsafe returns.
+func newTestPointRows(t *testing.T, h HandleType, rows [][]testCellFunc) QueryRows {
+	t.Helper()
+	if len(rows) == 0 {
+		return QueryRows{}
+	}
+
+	rowPtrs := qdbAllocBufferZeroed[*C.qdb_point_result_t](h, len(rows))
+	t.Cleanup(releaseCPtr(h, unsafe.Pointer(rowPtrs)))
+	ptrs := unsafe.Slice(rowPtrs, len(rows))
+
+	for i, row := range rows {
+		require.NotEmpty(t, row, "row %d has no cells", i)
+
+		// Each row is its own allocation so its cells are contiguous, which
+		// is what the converter relies on when it slices a row.
+		base := qdbAllocBufferZeroed[C.qdb_point_result_t](h, len(row))
+		t.Cleanup(releaseCPtr(h, unsafe.Pointer(base)))
+		cells := unsafe.Slice(base, len(row))
+		for j, fill := range row {
+			fill(t, h, &cells[j])
+		}
+
+		// ptrs backs onto C memory: a plain assignment would emit a Go
+		// write barrier over it, so the store goes through setCPtr.
+		setCPtr(unsafe.Pointer(&ptrs[i]), unsafe.Pointer(base))
+	}
+
+	return qdbPointResultStarArrayToSlice(rowPtrs, int64(len(rows)))
 }
