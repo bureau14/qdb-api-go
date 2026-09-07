@@ -353,6 +353,11 @@ type Query struct {
 // including when an error is returned alongside it. Close is nil-safe, so it
 // can be deferred before checking the error.
 //
+// The result is a view over C memory: every cell is decoded on access and
+// nothing obtained from it may outlive Close. Callers who want Go-owned,
+// column-oriented data with no Close obligation use Fetch instead, which
+// copies the result into a QueryTable and releases it before returning.
+//
 // Example:
 //
 //	result, err := h.Query("SELECT * FROM measurements").Execute()
