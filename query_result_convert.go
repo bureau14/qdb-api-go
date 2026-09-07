@@ -29,19 +29,12 @@ func cellsOf(row *QueryPoint, n int) []C.qdb_point_result_t {
 	return unsafe.Slice((*C.qdb_point_result_t)(unsafe.Pointer(row)), n)
 }
 
-// cellValueType maps a cell tag to the value type of its column; column
-// names the column for error context. The C API carries no column types: a
-// result is a grid of tagged cells, and a column's type is whatever its
-// non-null cells agree on.
-//
-// count folds into int64. Its payload is a qdb_size_t that pass two reads
-// as the same eight bytes, so a count of 2^63 lands on the null sentinel
-// and larger counts wrap negative; counts that large do not occur.
-//
-// Array tags are rejected by value before the switch: they are unsupported
-// server-side, and keeping them out of QueryResultValueType keeps the
-// public enum and Get untouched until the server supports them.
+// cellValueType maps a cell tag to the TsValueType of its column; column
+// names the column for error context.
 func cellValueType(tag C.qdb_query_result_value_type_t, column string) (TsValueType, error) {
+	// Array results are unsupported server-side and have no Go constant.
+	// Rejecting them by value here keeps QueryResultValueType and Get as
+	// they are until the server supports arrays.
 	if tag >= C.qdb_query_result_array_double {
 		return TsValueNull, wrapError(C.qdb_e_not_implemented, "query_cell_value_type", "column", column, "tag", int64(tag))
 	}
@@ -50,6 +43,8 @@ func cellValueType(tag C.qdb_query_result_value_type_t, column string) (TsValueT
 	case QueryResultNone:
 		return TsValueNull, nil
 	case QueryResultInt64, QueryResultCount:
+		// A count(...) aggregate cell folds into the int64 column: its
+		// qdb_size_t payload is read as the same eight bytes.
 		return TsValueInt64, nil
 	case QueryResultDouble:
 		return TsValueDouble, nil
