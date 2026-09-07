@@ -677,3 +677,34 @@ func TestToTableOutlivesResult(t *testing.T) {
 	debug.FreeOSMemory()
 	requireTableMatchesFixture(t, tbl, td)
 }
+
+func TestFetchReturnsTable(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
+
+	tbl, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +10d)", td.Alias)).Fetch()
+	require.NoError(t, err)
+	require.NotNil(t, tbl)
+	requireTableMatchesFixture(t, tbl, td)
+}
+
+func TestFetchDDLReturnsNilTable(t *testing.T) {
+	handle := newTestHandle(t)
+	alias := generateAlias(16)
+
+	tbl, err := handle.Query(fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64)", alias)).Fetch()
+	require.NoError(t, err)
+	assert.Nil(t, tbl)
+
+	tbl, err = handle.Query(fmt.Sprintf("drop table %s", alias)).Fetch()
+	require.NoError(t, err)
+	assert.Nil(t, tbl)
+}
+
+func TestFetchInvalidQueryReturnsError(t *testing.T) {
+	handle := newTestHandle(t)
+
+	tbl, err := handle.Query("select").Fetch()
+	require.Error(t, err)
+	assert.Nil(t, tbl)
+}

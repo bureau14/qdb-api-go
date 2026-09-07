@@ -370,3 +370,33 @@ func (r *QueryResult) ToTable() (*QueryTable, error) {
 
 	return tableFromRows(r.ColumnsNames(), r.rowsUnsafe(), r.ScannedPoints())
 }
+
+// Fetch executes the query and returns its rows as a QueryTable. The C
+// result is released before Fetch returns, so the table needs no Close and
+// holds no C pointers. A statement that produces no result set (DDL)
+// yields a nil table and a nil error.
+//
+// Example:
+//
+//	tbl, err := h.Query("select $timestamp, price from trades in range(today)").Fetch()
+//	if err != nil {
+//	    return err
+//	}
+//	price, err := qdb.ColumnOf[*qdb.DoubleColumn](tbl, "price")
+func (q Query) Fetch() (*QueryTable, error) {
+	r, err := q.Execute()
+	if err != nil {
+		// Execute may hand back a result together with its error; Close is
+		// nil-safe, so releasing unconditionally covers both cases.
+		r.Close()
+
+		return nil, err
+	}
+	if r == nil {
+		return nil, nil
+	}
+	// Deferred so the C result is released even when ToTable fails.
+	defer r.Close()
+
+	return r.ToTable()
+}
