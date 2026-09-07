@@ -17,16 +17,10 @@ import (
 	"unsafe"
 )
 
-// QueryColumn is one materialised result column of a QueryTable. The
-// concrete types are closed: QueryColumnInt64, QueryColumnDouble, QueryColumnTimestamp,
-// QueryColumnString, QueryColumnBlob and QueryColumnNull. Consumers dispatch with a type
-// switch or ColumnOf.
-//
-// Every column exposes its buffers directly (Values, Nanos, Offsets, Bytes)
-// so vectorised code can run over them without a copy. The column treats
-// those buffers as immutable and the caller must too. Accessors never
-// consult the validity bitmap: a null slot holds the writer's null sentinel
-// and Valid is the contract.
+// QueryColumn is one column of a QueryResultSet: a named masked array whose
+// concrete types are closed to this package, dispatched with a type switch
+// or ColumnOf. Buffers are exposed directly and are read-only. Accessors
+// never consult the mask; a null slot holds the null sentinel of its type.
 type QueryColumn interface {
 	// Name is the column name as reported by the query, duplicates included.
 	Name() string
@@ -186,7 +180,7 @@ func (c *QueryColumnTimestamp) appendCell(i int, cell *C.qdb_point_result_t) err
 	sec, nsec := cellTimespec(cell)
 	nanos, ok := cellNanos(sec, nsec)
 	if !ok {
-		return wrapError(C.qdb_e_out_of_bounds, "query_table_timestamp",
+		return wrapError(C.qdb_e_out_of_bounds, "query_result_set_timestamp",
 			"column", c.name, "row", i, "tv_sec", sec, "tv_nsec", nsec)
 	}
 
@@ -340,18 +334,18 @@ func (c *QueryColumnNull) Valid() Bitmap {
 
 func (c *QueryColumnNull) sealed() {}
 
-// QueryTable is a query result copied into Go memory: one QueryColumn per
+// QueryResultSet is a query result copied into Go memory: one QueryColumn per
 // result column, all of equal length, plus the scanned point count. It
 // holds no C pointers and needs no Close; the QueryResult it was built from
-// may be closed as soon as the table exists.
-type QueryTable struct {
+// may be closed as soon as the result set exists.
+type QueryResultSet struct {
 	columns       []QueryColumn
 	byName        map[string]int
 	rowCount      int
 	scannedPoints int64
 }
 
-func newQueryTable(cols []QueryColumn, rowCount int, scanned int64) *QueryTable {
+func newQueryResultSet(cols []QueryColumn, rowCount int, scanned int64) *QueryResultSet {
 	byName := make(map[string]int, len(cols))
 	for i, c := range cols {
 		// SQL allows duplicate output names (select a, a). Lookup by name
@@ -361,29 +355,29 @@ func newQueryTable(cols []QueryColumn, rowCount int, scanned int64) *QueryTable 
 		}
 	}
 
-	return &QueryTable{columns: cols, byName: byName, rowCount: rowCount, scannedPoints: scanned}
+	return &QueryResultSet{columns: cols, byName: byName, rowCount: rowCount, scannedPoints: scanned}
 }
 
 // RowCount returns the number of rows, the length of every column.
-func (t *QueryTable) RowCount() int {
+func (t *QueryResultSet) RowCount() int {
 	return t.rowCount
 }
 
 // ScannedPoints returns the number of points the server scanned to produce
 // the result; the actual number may be greater.
-func (t *QueryTable) ScannedPoints() int64 {
+func (t *QueryResultSet) ScannedPoints() int64 {
 	return t.scannedPoints
 }
 
 // Columns returns every column in result order, duplicates included,
 // without copying. Read-only.
-func (t *QueryTable) Columns() []QueryColumn {
+func (t *QueryResultSet) Columns() []QueryColumn {
 	return t.columns
 }
 
 // Column returns the column called name, or false when none has that name.
 // With duplicate names the first occurrence is returned.
-func (t *QueryTable) Column(name string) (QueryColumn, bool) { //nolint:ireturn // Justified: the concrete type is the caller's to discover
+func (t *QueryResultSet) Column(name string) (QueryColumn, bool) { //nolint:ireturn // Justified: the concrete type is the caller's to discover
 	i, ok := t.byName[name]
 	if !ok {
 		return nil, false
@@ -393,22 +387,22 @@ func (t *QueryTable) Column(name string) (QueryColumn, bool) { //nolint:ireturn 
 }
 
 // ColumnOf returns the column called name as the concrete type T, for
-// example ColumnOf[*QueryColumnDouble](tbl, "price"). A missing column is
+// example ColumnOf[*QueryColumnDouble](rs, "price"). A missing column is
 // ErrElementNotFound; a column of another type is ErrIncompatibleType with
 // both type names in the message.
-func ColumnOf[T QueryColumn](tbl *QueryTable, name string) (T, error) { //nolint:ireturn // Justified: T is the caller's concrete type, only the constraint is an interface
+func ColumnOf[T QueryColumn](rs *QueryResultSet, name string) (T, error) { //nolint:ireturn // Justified: T is the caller's concrete type, only the constraint is an interface
 	var zero T
 	// A missing column and a wrong type are different caller mistakes and
 	// get different codes, so the lookup runs before the assertion.
-	col, ok := tbl.Column(name)
+	col, ok := rs.Column(name)
 	if !ok {
-		return zero, wrapError(C.qdb_e_element_not_found, "query_table_column_of", "column", name)
+		return zero, wrapError(C.qdb_e_element_not_found, "query_result_set_column_of", "column", name)
 	}
 
 	typed, ok := col.(T)
 	if !ok {
 		// zero is a typed nil pointer, so reflect still names the type.
-		return zero, wrapError(C.qdb_e_incompatible_type, "query_table_column_of",
+		return zero, wrapError(C.qdb_e_incompatible_type, "query_result_set_column_of",
 			"column", name, "requested", reflect.TypeOf(zero).String(), "actual", reflect.TypeOf(col).String())
 	}
 

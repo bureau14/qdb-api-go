@@ -356,7 +356,7 @@ type Query struct {
 // The result is a view over C memory: every cell is decoded on access and
 // nothing obtained from it may outlive Close. Callers who want Go-owned,
 // column-oriented data with no Close obligation use Fetch instead, which
-// copies the result into a QueryTable and releases it before returning.
+// copies the result into a QueryResultSet and releases it before returning.
 //
 // Example:
 //

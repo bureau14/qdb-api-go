@@ -121,7 +121,7 @@ func probeValueTypes(rows QueryRows, names []string) ([]TsValueType, error) {
 // ("constant -N overflows uint"): if a future C API changes one of these
 // sizes, the build fails here instead of the loads silently reading the
 // wrong bytes. Field offsets need a variable to name a field, so they are
-// pinned by TestQueryTableCellLayout instead.
+// pinned by TestQueryResultSetCellLayout instead.
 const (
 	_ = uint(unsafe.Sizeof(C.qdb_point_result_t{}) - 24)
 	_ = uint(24 - unsafe.Sizeof(C.qdb_point_result_t{}))
@@ -306,12 +306,12 @@ func appendRow(cols []QueryColumn, row *QueryPoint, i int) error {
 	return nil
 }
 
-// tableFromRows converts rows into a QueryTable in two passes over the
+// resultSetFromRows converts rows into a QueryResultSet in two passes over the
 // row-major C data, both row-first because a row's cells are contiguous.
 // It takes no QueryResult so a continuous-query callback can convert a
 // batch it does not own, and so unit tests need no hand-built
 // qdb_query_result_t. names has one entry per column of every row.
-func tableFromRows(names []string, rows QueryRows, scanned int64) (*QueryTable, error) {
+func resultSetFromRows(names []string, rows QueryRows, scanned int64) (*QueryResultSet, error) {
 	// Pass one settles every column's value type from the tags alone. From
 	// here on a column is either typed or null; mixed and array columns
 	// have already been rejected.
@@ -339,34 +339,34 @@ func tableFromRows(names []string, rows QueryRows, scanned int64) (*QueryTable, 
 		}
 	}
 
-	return newQueryTable(cols, len(rows), scanned), nil
+	return newQueryResultSet(cols, len(rows), scanned), nil
 }
 
-// ToTable copies the result into Go memory as a QueryTable that holds no C
-// pointers. A nil or closed receiver yields an empty table and no error.
+// ToResultSet copies the result into Go memory as a QueryResultSet that holds no C
+// pointers. A nil or closed receiver yields an empty result set and no error.
 // The receiver stays open: the caller still closes it, and may do so as
-// soon as ToTable returns.
-func (r *QueryResult) ToTable() (*QueryTable, error) {
+// soon as ToResultSet returns.
+func (r *QueryResult) ToResultSet() (*QueryResultSet, error) {
 	if r == nil || r.result == nil {
-		return newQueryTable(nil, 0, 0), nil
+		return newQueryResultSet(nil, 0, 0), nil
 	}
 
-	return tableFromRows(r.ColumnsNames(), r.rowsUnsafe(), r.ScannedPoints())
+	return resultSetFromRows(r.ColumnsNames(), r.rowsUnsafe(), r.ScannedPoints())
 }
 
-// Fetch executes the query and returns its rows as a QueryTable. The C
-// result is released before Fetch returns, so the table needs no Close and
+// Fetch executes the query and returns its rows as a QueryResultSet. The C
+// result is released before Fetch returns, so the result set needs no Close and
 // holds no C pointers. A statement that produces no result set (DDL)
-// yields a nil table and a nil error.
+// yields a nil result set and a nil error.
 //
 // Example:
 //
-//	tbl, err := h.Query("select $timestamp, price from trades in range(today)").Fetch()
+//	rs, err := h.Query("select $timestamp, price from trades in range(today)").Fetch()
 //	if err != nil {
 //	    return err
 //	}
-//	price, err := qdb.ColumnOf[*qdb.QueryColumnDouble](tbl, "price")
-func (q Query) Fetch() (*QueryTable, error) {
+//	price, err := qdb.ColumnOf[*qdb.QueryColumnDouble](rs, "price")
+func (q Query) Fetch() (*QueryResultSet, error) {
 	r, err := q.Execute()
 	if err != nil {
 		// Execute may hand back a result together with its error; Close is
@@ -378,8 +378,8 @@ func (q Query) Fetch() (*QueryTable, error) {
 	if r == nil {
 		return nil, nil
 	}
-	// Deferred so the C result is released even when ToTable fails.
+	// Deferred so the C result is released even when ToResultSet fails.
 	defer r.Close()
 
-	return r.ToTable()
+	return r.ToResultSet()
 }
