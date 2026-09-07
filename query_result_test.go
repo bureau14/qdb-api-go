@@ -278,7 +278,7 @@ func TestQueryResultSetLookup(t *testing.T) {
 // ---------------------------------------------------------------------
 
 // TestQueryResultSetCellLayout pins the offsets the payload loads depend on;
-// the sizes are pinned at compile time in query_result_set_convert.go.
+// the sizes are pinned at compile time in query_result_convert.go.
 func TestQueryResultSetCellLayout(t *testing.T) {
 	var cell QueryPoint
 	var ts Timespec
