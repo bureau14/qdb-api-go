@@ -45,41 +45,6 @@ const (
 	minTimespecSec = math.MinInt64 / nanosPerSecond
 )
 
-// columnKind is the inferred type of a result column. The C API carries no
-// column types: a result is a grid of tagged cells, and a column's type is
-// whatever its non-null cells agree on. The C API's own Arrow conversion
-// and the Python bindings infer it the same way.
-type columnKind int8
-
-const (
-	kindNone columnKind = iota
-	kindInt64
-	kindDouble
-	kindTimestamp
-	kindString
-	kindBlob
-)
-
-// String names the kind for error context.
-func (k columnKind) String() string {
-	switch k {
-	case kindNone:
-		return "none"
-	case kindInt64:
-		return "int64"
-	case kindDouble:
-		return "double"
-	case kindTimestamp:
-		return "timestamp"
-	case kindString:
-		return "string"
-	case kindBlob:
-		return "blob"
-	default:
-		return "unknown"
-	}
-}
-
 // cellsOf views the contiguous cells of one row. The slice aliases the C
 // result and is valid until it is closed; the converter copies everything
 // out before it returns.
@@ -87,85 +52,86 @@ func cellsOf(row *QueryPoint, n int) []C.qdb_point_result_t {
 	return unsafe.Slice((*C.qdb_point_result_t)(unsafe.Pointer(row)), n)
 }
 
-// cellKind maps a cell tag to a column kind; column names the column for
-// error context.
+// cellValueType maps a cell tag to the value type of its column; column
+// names the column for error context. The C API carries no column types: a
+// result is a grid of tagged cells, and a column's type is whatever its
+// non-null cells agree on.
 //
 // count folds into int64. Its payload is a qdb_size_t that pass two reads
 // as the same eight bytes, so a count of 2^63 lands on the null sentinel
-// and larger counts wrap negative. Count results do not occur in practice
-// and both precedents (qdb-api-python probe_column_type, the C API Arrow
-// path) fold the same way.
+// and larger counts wrap negative; counts that large do not occur.
 //
 // Array tags are rejected by value before the switch: they are unsupported
 // server-side, and keeping them out of QueryResultValueType keeps the
 // public enum and Get untouched until the server supports them.
-func cellKind(tag C.qdb_query_result_value_type_t, column string) (columnKind, error) {
+func cellValueType(tag C.qdb_query_result_value_type_t, column string) (TsValueType, error) {
 	if tag >= C.qdb_query_result_array_double {
-		return kindNone, wrapError(C.qdb_e_not_implemented, "query_cell_kind", "column", column, "tag", int64(tag))
+		return TsValueNull, wrapError(C.qdb_e_not_implemented, "query_cell_value_type", "column", column, "tag", int64(tag))
 	}
 
 	switch QueryResultValueType(tag) {
 	case QueryResultNone:
-		return kindNone, nil
+		return TsValueNull, nil
 	case QueryResultInt64, QueryResultCount:
-		return kindInt64, nil
+		return TsValueInt64, nil
 	case QueryResultDouble:
-		return kindDouble, nil
+		return TsValueDouble, nil
 	case QueryResultTimestamp:
-		return kindTimestamp, nil
+		return TsValueTimestamp, nil
 	case QueryResultString:
-		return kindString, nil
+		return TsValueString, nil
 	case QueryResultBlob:
-		return kindBlob, nil
+		return TsValueBlob, nil
 	default:
-		return kindNone, wrapError(C.qdb_e_incompatible_type, "query_cell_kind", "column", column, "tag", int64(tag))
+		return TsValueNull, wrapError(C.qdb_e_incompatible_type, "query_cell_value_type", "column", column, "tag", int64(tag))
 	}
 }
 
-// mergeKind folds one cell kind into a column's running kind and reports
-// false when the two conflict. none is the identity on both sides: a null
-// cell says nothing about the column, and a column that has only seen
-// nulls takes the first typed cell it meets.
-func mergeKind(have, got columnKind) (columnKind, bool) {
-	if have == kindNone {
+// mergeValueType folds one cell's value type into a column's running type
+// and reports false when the two conflict. Null is the identity on both
+// sides: a null cell says nothing about the column, and a column that has
+// only seen nulls takes the first typed cell it meets.
+func mergeValueType(have, got TsValueType) (TsValueType, bool) {
+	if have == TsValueNull {
 		return got, true
 	}
-	if got == kindNone || got == have {
+	if got == TsValueNull || got == have {
 		return have, true
 	}
 
-	return kindNone, false
+	return TsValueNull, false
 }
 
-// probeKinds is pass one over the result. It reads the type tag of every
-// cell and nothing else, settling each column's kind before any payload is
-// touched so that pass two can allocate every column at its final size.
+// probeValueTypes is pass one over the result. It reads the type tag of
+// every cell and nothing else, settling each column's value type before
+// any payload is touched so that pass two can allocate every column at its
+// final size.
 //
 // The walk is row-first: a row's cells are contiguous 24-byte records, and
 // a column-first walk would stride by 24 * len(names) bytes per cell.
-func probeKinds(rows QueryRows, names []string) ([]columnKind, error) {
-	// Every column starts as none, which is also its final kind when the
+func probeValueTypes(rows QueryRows, names []string) ([]TsValueType, error) {
+	// Every column starts as null, which is also its final type when the
 	// result has no rows or the column holds only nulls.
-	kinds := make([]columnKind, len(names))
+	types := make([]TsValueType, len(names))
 
 	for _, row := range rows {
 		cells := cellsOf(row, len(names))
 		for j := range cells {
-			got, err := cellKind(cells[j]._type, names[j])
+			got, err := cellValueType(cells[j]._type, names[j])
 			if err != nil {
 				return nil, err
 			}
 
-			merged, ok := mergeKind(kinds[j], got)
+			merged, ok := mergeValueType(types[j], got)
 			if !ok {
-				return nil, wrapError(C.qdb_e_incompatible_type, "query_probe_kinds",
-					"column", names[j], "have", kinds[j], "got", got)
+				return nil, wrapError(C.qdb_e_incompatible_type, "query_probe_value_types",
+					"column", names[j], "have", types[j], "got", got)
 			}
-			kinds[j] = merged
+			types[j] = merged
 		}
 	}
 
-	return kinds, nil
+	return types, nil
 }
 
 // cellPayload is the address of the 16-byte union. Taken from the field,
@@ -240,12 +206,12 @@ func cellNanos(sec, nsec int64) (int64, bool) {
 // and rejects a column whose total does not fit the int32 offsets. Only
 // lengths are read, never the content pointer, and only from typed cells:
 // a none cell's payload is unspecified.
-func varSizes(rows QueryRows, kinds []columnKind, names []string) ([]int, error) {
-	sizes := make([]int, len(kinds))
+func varSizes(rows QueryRows, types []TsValueType, names []string) ([]int, error) {
+	sizes := make([]int, len(types))
 	for _, row := range rows {
-		cells := cellsOf(row, len(kinds))
-		for j, kind := range kinds {
-			if kind != kindString && kind != kindBlob {
+		cells := cellsOf(row, len(types))
+		for j, vt := range types {
+			if vt != TsValueString && vt != TsValueBlob {
 				continue
 			}
 			if cells[j]._type == C.qdb_query_result_none {
@@ -265,26 +231,26 @@ func varSizes(rows QueryRows, kinds []columnKind, names []string) ([]int, error)
 	return sizes, nil
 }
 
-// allocColumns builds one concrete column per probed kind with every buffer
-// at its final length, so pass two writes cells in place and never grows a
-// slice. sizes holds the byte total of each string and blob column and is
-// ignored for the other kinds. Null slots are written by appendCell with
-// the QDB_IS_NULL_* sentinel of the kind; the bitmap is authoritative.
-func allocColumns(names []string, kinds []columnKind, n int, sizes []int) []QueryColumn {
+// allocColumns builds one concrete column per probed value type with every
+// buffer at its final length, so pass two writes cells in place and never
+// grows a slice. sizes holds the byte total of each string and blob column
+// and is ignored for the other types. Null slots are written by appendCell
+// with the QDB_IS_NULL_* sentinel of the type; the bitmap is authoritative.
+func allocColumns(names []string, types []TsValueType, n int, sizes []int) []QueryColumn {
 	cols := make([]QueryColumn, len(names))
-	for j, kind := range kinds {
-		switch kind {
-		case kindNone:
+	for j, vt := range types {
+		switch vt {
+		case TsValueNull:
 			cols[j] = newNullColumn(names[j], n)
-		case kindInt64:
+		case TsValueInt64:
 			cols[j] = newInt64Column(names[j], n)
-		case kindDouble:
+		case TsValueDouble:
 			cols[j] = newDoubleColumn(names[j], n)
-		case kindTimestamp:
+		case TsValueTimestamp:
 			cols[j] = newTimestampColumn(names[j], n)
-		case kindString:
+		case TsValueString:
 			cols[j] = newStringColumn(names[j], n, sizes[j])
-		case kindBlob:
+		case TsValueBlob:
 			cols[j] = newBlobColumn(names[j], n, sizes[j])
 		}
 	}
@@ -329,23 +295,23 @@ func appendRow(cols []QueryColumn, row *QueryPoint, i int) error {
 // batch it does not own, and so unit tests need no hand-built
 // qdb_query_result_t. names has one entry per column of every row.
 func tableFromRows(names []string, rows QueryRows, scanned int64) (*QueryTable, error) {
-	// Pass one settles every column's kind from the type tags alone. From
+	// Pass one settles every column's value type from the tags alone. From
 	// here on a column is either typed or null; mixed and array columns
 	// have already been rejected.
-	kinds, err := probeKinds(rows, names)
+	types, err := probeValueTypes(rows, names)
 	if err != nil {
 		return nil, err
 	}
 
 	// Still pass one: string and blob columns need their byte totals so the
 	// shared buffer is allocated exactly once per column.
-	sizes, err := varSizes(rows, kinds, names)
+	sizes, err := varSizes(rows, types, names)
 	if err != nil {
 		return nil, err
 	}
 
 	// Every buffer is at its final length, so pass two only writes in place.
-	cols := allocColumns(names, kinds, len(rows), sizes)
+	cols := allocColumns(names, types, len(rows), sizes)
 
 	// Pass two copies the payloads out of C memory. Only a timestamp
 	// outside the int64 nanosecond range can fail here.

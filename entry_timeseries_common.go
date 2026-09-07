@@ -60,6 +60,26 @@ const (
 	TsValueString
 )
 
+// String names the value type, for error context and logs.
+func (v TsValueType) String() string {
+	switch v {
+	case TsValueNull:
+		return "null"
+	case TsValueDouble:
+		return "double"
+	case TsValueInt64:
+		return "int64"
+	case TsValueTimestamp:
+		return "timestamp"
+	case TsValueBlob:
+		return "blob"
+	case TsValueString:
+		return "string"
+	default:
+		return "unknown"
+	}
+}
+
 func (v TsValueType) AsColumnType() TsColumnType {
 	switch v {
 	case TsValueBlob:

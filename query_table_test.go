@@ -202,18 +202,18 @@ func TestPointRowsFixtureReadsBackThroughAccessors(t *testing.T) {
 	assert.Equal(t, QueryResultValueType(tags[4]), second[7].Get().Type())
 }
 
-func TestMergeKindNoneIsIdentity(t *testing.T) {
-	all := []columnKind{kindNone, kindInt64, kindDouble, kindTimestamp, kindString, kindBlob}
+func TestMergeValueTypeNullIsIdentity(t *testing.T) {
+	all := []TsValueType{TsValueNull, TsValueInt64, TsValueDouble, TsValueTimestamp, TsValueString, TsValueBlob}
 	for _, k := range all {
-		got, ok := mergeKind(kindNone, k)
+		got, ok := mergeValueType(TsValueNull, k)
 		require.True(t, ok)
 		assert.Equal(t, k, got)
 
-		got, ok = mergeKind(k, kindNone)
+		got, ok = mergeValueType(k, TsValueNull)
 		require.True(t, ok)
 		assert.Equal(t, k, got)
 
-		got, ok = mergeKind(k, k)
+		got, ok = mergeValueType(k, k)
 		require.True(t, ok)
 		assert.Equal(t, k, got)
 	}
@@ -223,13 +223,13 @@ func TestMergeKindNoneIsIdentity(t *testing.T) {
 			if a == b {
 				continue
 			}
-			_, ok := mergeKind(a, b)
+			_, ok := mergeValueType(a, b)
 			assert.False(t, ok, "%v + %v", a, b)
 		}
 	}
 }
 
-func TestProbeKindsInfersEachColumn(t *testing.T) {
+func TestProbeValueTypesInfersEachColumn(t *testing.T) {
 	handle := newTestHandle(t)
 	names := []string{"i", "d", "t", "s", "b", "n", "c"}
 	rows := newTestPointRows(t, handle, [][]testCellFunc{
@@ -238,25 +238,25 @@ func TestProbeKindsInfersEachColumn(t *testing.T) {
 		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone()},
 	})
 
-	kinds, err := probeKinds(rows, names)
+	types, err := probeValueTypes(rows, names)
 	require.NoError(t, err)
-	assert.Equal(t, []columnKind{kindInt64, kindDouble, kindTimestamp, kindString, kindBlob, kindNone, kindInt64}, kinds)
+	assert.Equal(t, []TsValueType{TsValueInt64, TsValueDouble, TsValueTimestamp, TsValueString, TsValueBlob, TsValueNull, TsValueInt64}, types)
 }
 
-func TestProbeKindsNoRowsIsAllNone(t *testing.T) {
-	kinds, err := probeKinds(QueryRows{}, []string{"a", "b"})
+func TestProbeValueTypesNoRowsIsAllNone(t *testing.T) {
+	types, err := probeValueTypes(QueryRows{}, []string{"a", "b"})
 	require.NoError(t, err)
-	assert.Equal(t, []columnKind{kindNone, kindNone}, kinds)
+	assert.Equal(t, []TsValueType{TsValueNull, TsValueNull}, types)
 }
 
-func TestProbeKindsMixedTypesIsIncompatibleType(t *testing.T) {
+func TestProbeValueTypesMixedTypesIsIncompatibleType(t *testing.T) {
 	handle := newTestHandle(t)
 	rows := newTestPointRows(t, handle, [][]testCellFunc{
 		{testCellInt64(1)},
 		{testCellDouble(1)},
 	})
 
-	_, err := probeKinds(rows, []string{"mixed"})
+	_, err := probeValueTypes(rows, []string{"mixed"})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrIncompatibleType), err.Error())
 	assert.Contains(t, err.Error(), "mixed")
@@ -264,12 +264,12 @@ func TestProbeKindsMixedTypesIsIncompatibleType(t *testing.T) {
 	assert.Contains(t, err.Error(), "double")
 }
 
-func TestProbeKindsArrayTagsAreNotImplemented(t *testing.T) {
+func TestProbeValueTypesArrayTagsAreNotImplemented(t *testing.T) {
 	handle := newTestHandle(t)
 	for _, tag := range testArrayTags() {
 		rows := newTestPointRows(t, handle, [][]testCellFunc{{testCellTagged(tag)}})
 
-		_, err := probeKinds(rows, []string{"arr"})
+		_, err := probeValueTypes(rows, []string{"arr"})
 		require.Error(t, err, "tag %d", tag)
 		assert.True(t, errors.Is(err, ErrNotImplemented), err.Error())
 		assert.Contains(t, err.Error(), "arr")
@@ -323,9 +323,9 @@ func TestAppendRowFillsFixedColumns(t *testing.T) {
 		{testCellNone(), testCellNone(), testCellNone(), testCellNone(), testCellNone()},
 		{testCellInt64(-7), testCellDouble(-1.5), testCellTimestamp(-10, 20), testCellInt64(4), testCellNone()},
 	})
-	kinds, err := probeKinds(rows, names)
+	types, err := probeValueTypes(rows, names)
 	require.NoError(t, err)
-	cols := allocColumns(names, kinds, len(rows), nil)
+	cols := allocColumns(names, types, len(rows), nil)
 	for i, row := range rows {
 		require.NoError(t, appendRow(cols, row, i))
 	}
@@ -364,7 +364,7 @@ func TestAppendRowTimestampOverflowIsOutOfBounds(t *testing.T) {
 		{testCellTimestamp(0, 0)},
 		{testCellTimestamp(maxTimespecSec+1, 0)},
 	})
-	cols := allocColumns([]string{"when"}, []columnKind{kindTimestamp}, 2, nil)
+	cols := allocColumns([]string{"when"}, []TsValueType{TsValueTimestamp}, 2, nil)
 
 	require.NoError(t, appendRow(cols, rows[0], 0))
 	err := appendRow(cols, rows[1], 1)
@@ -394,13 +394,13 @@ func TestAppendRowFillsVarColumns(t *testing.T) {
 		{testCellSeq(testCellString("stale"), testCellNone()), testCellBlob([]byte{2, 3})},
 		{testCellString("cde"), testCellNone()},
 	})
-	kinds, err := probeKinds(rows, names)
+	types, err := probeValueTypes(rows, names)
 	require.NoError(t, err)
-	sizes, err := varSizes(rows, kinds, names)
+	sizes, err := varSizes(rows, types, names)
 	require.NoError(t, err)
 	assert.Equal(t, []int{5, 3}, sizes, "stale payload under a none tag is not counted")
 
-	cols := allocColumns(names, kinds, len(rows), sizes)
+	cols := allocColumns(names, types, len(rows), sizes)
 	for i, row := range rows {
 		require.NoError(t, appendRow(cols, row, i))
 	}
@@ -431,12 +431,12 @@ func TestVarSizesRejectsColumnPastInt32(t *testing.T) {
 		{testCellBlobUnbacked(math.MaxInt32)},
 	})
 
-	_, err := varSizes(rows, []columnKind{kindBlob}, []string{"big"})
+	_, err := varSizes(rows, []TsValueType{TsValueBlob}, []string{"big"})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrOutOfBounds), err.Error())
 	assert.Contains(t, err.Error(), "big")
 
-	sizes, err := varSizes(rows[:1], []columnKind{kindBlob}, []string{"big"})
+	sizes, err := varSizes(rows[:1], []TsValueType{TsValueBlob}, []string{"big"})
 	require.NoError(t, err)
 	assert.Equal(t, []int{1}, sizes)
 }
