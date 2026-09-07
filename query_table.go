@@ -18,8 +18,8 @@ import (
 )
 
 // QueryColumn is one materialised result column of a QueryTable. The
-// concrete types are closed: Int64Column, DoubleColumn, TimestampColumn,
-// StringColumn, BlobColumn and NullColumn. Consumers dispatch with a type
+// concrete types are closed: QueryColumnInt64, QueryColumnDouble, QueryColumnTimestamp,
+// QueryColumnString, QueryColumnBlob and QueryColumnNull. Consumers dispatch with a type
 // switch or ColumnOf.
 //
 // Every column exposes its buffers directly (Values, Nanos, Offsets, Bytes)
@@ -37,43 +37,43 @@ type QueryColumn interface {
 	sealed()
 }
 
-// Int64Column holds int64 cells as a dense Values slice plus a validity
+// QueryColumnInt64 holds int64 cells as a dense Values slice plus a validity
 // bitmap. A count(...) aggregate also lands here, its
 // unsigned payload reinterpreted as int64. Null slots hold math.MinInt64,
 // the QDB_IS_NULL_INT64 sentinel, so Values can be handed to
 // NewColumnDataInt64 and written back as null.
-type Int64Column struct {
+type QueryColumnInt64 struct {
 	// Values is the dense cell buffer, indexed by row. Read-only.
 	Values []int64
 	name   string
 	valid  Bitmap
 }
 
-func newInt64Column(name string, n int) *Int64Column {
-	return &Int64Column{Values: make([]int64, n), name: name, valid: newBitmap(n)}
+func newQueryColumnInt64(name string, n int) *QueryColumnInt64 {
+	return &QueryColumnInt64{Values: make([]int64, n), name: name, valid: newBitmap(n)}
 }
 
 // Name returns the column name.
-func (c *Int64Column) Name() string {
+func (c *QueryColumnInt64) Name() string {
 	return c.name
 }
 
 // Len returns the number of rows.
-func (c *Int64Column) Len() int {
+func (c *QueryColumnInt64) Len() int {
 	return len(c.Values)
 }
 
 // Valid returns the validity bitmap.
-func (c *Int64Column) Valid() Bitmap {
+func (c *QueryColumnInt64) Valid() Bitmap {
 	return c.valid
 }
 
-func (c *Int64Column) sealed() {}
+func (c *QueryColumnInt64) sealed() {}
 
 // appendCell writes row i from cell. A none cell leaves the bit clear and
 // stores the QDB_IS_NULL_INT64 sentinel: the bitmap is authoritative, the
 // sentinel only keeps Values usable by the writer.
-func (c *Int64Column) appendCell(i int, cell *C.qdb_point_result_t) {
+func (c *QueryColumnInt64) appendCell(i int, cell *C.qdb_point_result_t) {
 	if cell._type == C.qdb_query_result_none {
 		c.Values[i] = math.MinInt64
 
@@ -86,41 +86,41 @@ func (c *Int64Column) appendCell(i int, cell *C.qdb_point_result_t) {
 	c.valid.set(i)
 }
 
-// DoubleColumn holds double cells as a dense Values slice plus a validity
+// QueryColumnDouble holds double cells as a dense Values slice plus a validity
 // bitmap. Null slots hold NaN, the QDB_IS_NULL_DOUBLE sentinel, so Values
 // round-trips through NewColumnDataDouble as null. Values are IEEE-754
 // binary64, the C double on every supported platform.
-type DoubleColumn struct {
+type QueryColumnDouble struct {
 	// Values is the dense cell buffer, indexed by row. Read-only.
 	Values []float64
 	name   string
 	valid  Bitmap
 }
 
-func newDoubleColumn(name string, n int) *DoubleColumn {
-	return &DoubleColumn{Values: make([]float64, n), name: name, valid: newBitmap(n)}
+func newQueryColumnDouble(name string, n int) *QueryColumnDouble {
+	return &QueryColumnDouble{Values: make([]float64, n), name: name, valid: newBitmap(n)}
 }
 
 // Name returns the column name.
-func (c *DoubleColumn) Name() string {
+func (c *QueryColumnDouble) Name() string {
 	return c.name
 }
 
 // Len returns the number of rows.
-func (c *DoubleColumn) Len() int {
+func (c *QueryColumnDouble) Len() int {
 	return len(c.Values)
 }
 
 // Valid returns the validity bitmap.
-func (c *DoubleColumn) Valid() Bitmap {
+func (c *QueryColumnDouble) Valid() Bitmap {
 	return c.valid
 }
 
-func (c *DoubleColumn) sealed() {}
+func (c *QueryColumnDouble) sealed() {}
 
 // appendCell writes row i from cell. A none cell leaves the bit clear and
 // stores NaN, the QDB_IS_NULL_DOUBLE sentinel.
-func (c *DoubleColumn) appendCell(i int, cell *C.qdb_point_result_t) {
+func (c *QueryColumnDouble) appendCell(i int, cell *C.qdb_point_result_t) {
 	if cell._type == C.qdb_query_result_none {
 		c.Values[i] = math.NaN()
 
@@ -131,50 +131,50 @@ func (c *DoubleColumn) appendCell(i int, cell *C.qdb_point_result_t) {
 	c.valid.set(i)
 }
 
-// TimestampColumn holds timestamp cells as int64 nanoseconds since the Unix
+// QueryColumnTimestamp holds timestamp cells as int64 nanoseconds since the Unix
 // epoch: one 8-byte value per row with no pointer, so the column compares
 // and sorts like any numeric slice. The representable range is the years
 // 1678 to 2262; a cell outside it fails conversion with ErrOutOfBounds.
 // Null slots hold math.MinInt64.
-type TimestampColumn struct {
+type QueryColumnTimestamp struct {
 	// Nanos is the dense cell buffer, indexed by row. Read-only.
 	Nanos []int64
 	name  string
 	valid Bitmap
 }
 
-func newTimestampColumn(name string, n int) *TimestampColumn {
-	return &TimestampColumn{Nanos: make([]int64, n), name: name, valid: newBitmap(n)}
+func newQueryColumnTimestamp(name string, n int) *QueryColumnTimestamp {
+	return &QueryColumnTimestamp{Nanos: make([]int64, n), name: name, valid: newBitmap(n)}
 }
 
 // Name returns the column name.
-func (c *TimestampColumn) Name() string {
+func (c *QueryColumnTimestamp) Name() string {
 	return c.name
 }
 
 // Len returns the number of rows.
-func (c *TimestampColumn) Len() int {
+func (c *QueryColumnTimestamp) Len() int {
 	return len(c.Nanos)
 }
 
 // Valid returns the validity bitmap.
-func (c *TimestampColumn) Valid() Bitmap {
+func (c *QueryColumnTimestamp) Valid() Bitmap {
 	return c.valid
 }
 
 // Time converts row i to a UTC time.Time. Unchecked: on a null slot it
 // returns the sentinel date in 1677; check Valid first. UTC matches the
 // bulk reader (QdbTimespecToTime), not the local-time legacy GetTimestamp.
-func (c *TimestampColumn) Time(i int) time.Time {
+func (c *QueryColumnTimestamp) Time(i int) time.Time {
 	return time.Unix(0, c.Nanos[i]).UTC()
 }
 
-func (c *TimestampColumn) sealed() {}
+func (c *QueryColumnTimestamp) sealed() {}
 
 // appendCell writes row i from cell. A none cell leaves the bit clear and
 // stores math.MinInt64. A typed cell outside the int64 nanosecond range is
 // ErrOutOfBounds naming the column and row.
-func (c *TimestampColumn) appendCell(i int, cell *C.qdb_point_result_t) error {
+func (c *QueryColumnTimestamp) appendCell(i int, cell *C.qdb_point_result_t) error {
 	if cell._type == C.qdb_query_result_none {
 		// The null timespec (qdb_min_time in both fields) never reaches
 		// cellNanos: a none cell is written straight as the nanos sentinel.
@@ -196,7 +196,7 @@ func (c *TimestampColumn) appendCell(i int, cell *C.qdb_point_result_t) error {
 	return nil
 }
 
-// varBytes is the shared body of StringColumn and BlobColumn. bytes holds
+// varBytes is the shared body of QueryColumnString and QueryColumnBlob. bytes holds
 // every cell back to back and offsets, of length n+1, bounds cell i as
 // bytes[offsets[i]:offsets[i+1]]. Offsets are int32, so a column whose
 // bytes exceed math.MaxInt32 is rejected at conversion. Null and empty
@@ -267,13 +267,13 @@ func (v *varBytes) appendCell(i int, cell *C.qdb_point_result_t) {
 	v.valid.set(i)
 }
 
-// StringColumn holds string and symbol cells; see varBytes for the
+// QueryColumnString holds string and symbol cells; see varBytes for the
 // buffers. Value returns each cell as a string that aliases the shared
 // buffer, so reading a column allocates nothing.
-type StringColumn struct{ varBytes }
+type QueryColumnString struct{ varBytes }
 
-func newStringColumn(name string, n, nbytes int) *StringColumn {
-	return &StringColumn{varBytes: newVarBytes(name, n, nbytes)}
+func newQueryColumnString(name string, n, nbytes int) *QueryColumnString {
+	return &QueryColumnString{varBytes: newVarBytes(name, n, nbytes)}
 }
 
 // Value returns row i without copying. Unchecked: a null slot yields ""
@@ -282,7 +282,7 @@ func newStringColumn(name string, n, nbytes int) *StringColumn {
 // The unsafe.String view is sound because the column owns bytes, never
 // writes to it after construction, and Bytes documents the buffer as
 // read-only, so the immutability Go assumes of a string holds.
-func (c *StringColumn) Value(i int) string {
+func (c *QueryColumnString) Value(i int) string {
 	a, b := c.offsets[i], c.offsets[i+1]
 	// An empty cell at the end of the column has a == len(bytes), where
 	// taking an element address would panic; "" needs no pointer anyway.
@@ -293,52 +293,52 @@ func (c *StringColumn) Value(i int) string {
 	return unsafe.String(&c.bytes[a], b-a) //nolint:gosec // Justified: bytes is owned, never written after construction, and a < b <= len(bytes)
 }
 
-// BlobColumn holds blob cells; see varBytes for the buffers.
-type BlobColumn struct{ varBytes }
+// QueryColumnBlob holds blob cells; see varBytes for the buffers.
+type QueryColumnBlob struct{ varBytes }
 
-func newBlobColumn(name string, n, nbytes int) *BlobColumn {
-	return &BlobColumn{varBytes: newVarBytes(name, n, nbytes)}
+func newQueryColumnBlob(name string, n, nbytes int) *QueryColumnBlob {
+	return &QueryColumnBlob{varBytes: newVarBytes(name, n, nbytes)}
 }
 
 // Value returns row i as a view over the shared buffer. Its capacity is
 // capped at the cell end, so an append by the caller reallocates instead of
 // overwriting the next cell. Unchecked: a null slot yields an empty slice;
 // check Valid first. The bytes are read-only.
-func (c *BlobColumn) Value(i int) []byte {
+func (c *QueryColumnBlob) Value(i int) []byte {
 	a, b := c.offsets[i], c.offsets[i+1]
 
 	return c.bytes[a:b:b]
 }
 
-// NullColumn is a column whose every cell is null: the query produced only
+// QueryColumnNull is a column whose every cell is null: the query produced only
 // none cells, so no type can be inferred. It mirrors the C API, which
 // carries no column types and encodes null only as a none cell, so the
 // column carries a length and nothing else.
-type NullColumn struct {
+type QueryColumnNull struct {
 	name  string
 	valid Bitmap
 }
 
-func newNullColumn(name string, n int) *NullColumn {
-	return &NullColumn{name: name, valid: newBitmap(n)}
+func newQueryColumnNull(name string, n int) *QueryColumnNull {
+	return &QueryColumnNull{name: name, valid: newBitmap(n)}
 }
 
 // Name returns the column name.
-func (c *NullColumn) Name() string {
+func (c *QueryColumnNull) Name() string {
 	return c.name
 }
 
 // Len returns the number of rows.
-func (c *NullColumn) Len() int {
+func (c *QueryColumnNull) Len() int {
 	return c.valid.Len()
 }
 
 // Valid returns the validity bitmap, which has every bit clear.
-func (c *NullColumn) Valid() Bitmap {
+func (c *QueryColumnNull) Valid() Bitmap {
 	return c.valid
 }
 
-func (c *NullColumn) sealed() {}
+func (c *QueryColumnNull) sealed() {}
 
 // QueryTable is a query result copied into Go memory: one QueryColumn per
 // result column, all of equal length, plus the scanned point count. It
@@ -393,7 +393,7 @@ func (t *QueryTable) Column(name string) (QueryColumn, bool) { //nolint:ireturn 
 }
 
 // ColumnOf returns the column called name as the concrete type T, for
-// example ColumnOf[*DoubleColumn](tbl, "price"). A missing column is
+// example ColumnOf[*QueryColumnDouble](tbl, "price"). A missing column is
 // ErrElementNotFound; a column of another type is ErrIncompatibleType with
 // both type names in the message.
 func ColumnOf[T QueryColumn](tbl *QueryTable, name string) (T, error) { //nolint:ireturn // Justified: T is the caller's concrete type, only the constraint is an interface

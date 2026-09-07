@@ -258,17 +258,17 @@ func allocColumns(names []string, types []TsValueType, n int, sizes []int) []Que
 	for j, vt := range types {
 		switch vt {
 		case TsValueNull:
-			cols[j] = newNullColumn(names[j], n)
+			cols[j] = newQueryColumnNull(names[j], n)
 		case TsValueInt64:
-			cols[j] = newInt64Column(names[j], n)
+			cols[j] = newQueryColumnInt64(names[j], n)
 		case TsValueDouble:
-			cols[j] = newDoubleColumn(names[j], n)
+			cols[j] = newQueryColumnDouble(names[j], n)
 		case TsValueTimestamp:
-			cols[j] = newTimestampColumn(names[j], n)
+			cols[j] = newQueryColumnTimestamp(names[j], n)
 		case TsValueString:
-			cols[j] = newStringColumn(names[j], n, sizes[j])
+			cols[j] = newQueryColumnString(names[j], n, sizes[j])
 		case TsValueBlob:
-			cols[j] = newBlobColumn(names[j], n, sizes[j])
+			cols[j] = newQueryColumnBlob(names[j], n, sizes[j])
 		}
 	}
 
@@ -276,7 +276,7 @@ func allocColumns(names []string, types []TsValueType, n int, sizes []int) []Que
 }
 
 // appendRow is pass two for one row: each cell goes to the column pass one
-// chose for it. A NullColumn takes no writes, because pass one made the
+// chose for it. A QueryColumnNull takes no writes, because pass one made the
 // column null only when every one of its cells was none.
 func appendRow(cols []QueryColumn, row *QueryPoint, i int) error {
 	cells := cellsOf(row, len(cols))
@@ -285,17 +285,17 @@ func appendRow(cols []QueryColumn, row *QueryPoint, i int) error {
 
 		var err error
 		switch c := cols[j].(type) {
-		case *Int64Column:
+		case *QueryColumnInt64:
 			c.appendCell(i, cell)
-		case *DoubleColumn:
+		case *QueryColumnDouble:
 			c.appendCell(i, cell)
-		case *TimestampColumn:
+		case *QueryColumnTimestamp:
 			err = c.appendCell(i, cell)
-		case *StringColumn:
+		case *QueryColumnString:
 			c.appendCell(i, cell)
-		case *BlobColumn:
+		case *QueryColumnBlob:
 			c.appendCell(i, cell)
-		case *NullColumn:
+		case *QueryColumnNull:
 		}
 
 		if err != nil {
@@ -365,7 +365,7 @@ func (r *QueryResult) ToTable() (*QueryTable, error) {
 //	if err != nil {
 //	    return err
 //	}
-//	price, err := qdb.ColumnOf[*qdb.DoubleColumn](tbl, "price")
+//	price, err := qdb.ColumnOf[*qdb.QueryColumnDouble](tbl, "price")
 func (q Query) Fetch() (*QueryTable, error) {
 	r, err := q.Execute()
 	if err != nil {
