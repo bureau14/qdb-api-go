@@ -4,7 +4,13 @@
 // Package qdb provides an API to a QuasarDB server.
 package qdb
 
+/*
+	#include <qdb/client.h>
+*/
+import "C"
+
 import (
+	"reflect"
 	"time"
 	"unsafe"
 )
@@ -316,4 +322,27 @@ func (t *QueryTable) Column(name string) (QueryColumn, bool) { //nolint:ireturn 
 	}
 
 	return t.columns[i], true
+}
+
+// ColumnOf returns the column called name as the concrete type T, for
+// example ColumnOf[*DoubleColumn](tbl, "price"). A missing column is
+// ErrElementNotFound; a column of another type is ErrIncompatibleType with
+// both type names in the message.
+func ColumnOf[T QueryColumn](tbl *QueryTable, name string) (T, error) { //nolint:ireturn // Justified: T is the caller's concrete type, only the constraint is an interface
+	var zero T
+	// A missing column and a wrong type are different caller mistakes and
+	// get different codes, so the lookup runs before the assertion.
+	col, ok := tbl.Column(name)
+	if !ok {
+		return zero, wrapError(C.qdb_e_element_not_found, "query_table_column_of", "column", name)
+	}
+
+	typed, ok := col.(T)
+	if !ok {
+		// zero is a typed nil pointer, so reflect still names the type.
+		return zero, wrapError(C.qdb_e_incompatible_type, "query_table_column_of",
+			"column", name, "requested", reflect.TypeOf(zero).String(), "actual", reflect.TypeOf(col).String())
+	}
+
+	return typed, nil
 }

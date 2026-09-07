@@ -1,6 +1,7 @@
 package qdb
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -105,4 +106,34 @@ func TestQueryTableLookupReturnsFirstDuplicate(t *testing.T) {
 
 	_, ok = tbl.Column("missing")
 	assert.False(t, ok)
+}
+
+func TestColumnOfReturnsConcreteType(t *testing.T) {
+	price := newDoubleColumn("price", 2)
+	tbl := newQueryTable([]QueryColumn{newInt64Column("qty", 2), price}, 2, 0)
+
+	col, err := ColumnOf[*DoubleColumn](tbl, "price")
+	require.NoError(t, err)
+	assert.Same(t, price, col)
+}
+
+func TestColumnOfUnknownNameIsElementNotFound(t *testing.T) {
+	tbl := newQueryTable([]QueryColumn{newInt64Column("qty", 1)}, 1, 0)
+
+	col, err := ColumnOf[*Int64Column](tbl, "missing")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrElementNotFound), err.Error())
+	assert.Nil(t, col)
+	assert.Contains(t, err.Error(), "missing")
+}
+
+func TestColumnOfWrongTypeIsIncompatibleType(t *testing.T) {
+	tbl := newQueryTable([]QueryColumn{newInt64Column("qty", 1)}, 1, 0)
+
+	col, err := ColumnOf[*StringColumn](tbl, "qty")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrIncompatibleType), err.Error())
+	assert.Nil(t, col)
+	assert.Contains(t, err.Error(), "*qdb.StringColumn")
+	assert.Contains(t, err.Error(), "*qdb.Int64Column")
 }
