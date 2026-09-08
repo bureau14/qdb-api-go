@@ -53,22 +53,22 @@ func (r QueryResult) ScannedPoints() int64 {
 	return int64(r.result.scanned_point_count)
 }
 
+// queryPointArrayToSlice views length contiguous cells starting at row as a
+// slice, without copying. The view is valid until the result is closed.
 func queryPointArrayToSlice(row *QueryPoint, length int64) []QueryPoint {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(QueryPoint{})]QueryPoint)(unsafe.Pointer(row))[:length:length]
+	return unsafe.Slice(row, length)
 }
 
+// qdbPointResultStarArrayToSlice views the array of length row pointers as
+// a slice, without copying. The view is valid until the result is closed.
 func qdbPointResultStarArrayToSlice(rows **C.qdb_point_result_t, length int64) []*QueryPoint {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.qdb_point_result_t)(nil))]*QueryPoint)(unsafe.Pointer(rows))[:length:length]
+	return unsafe.Slice((**QueryPoint)(unsafe.Pointer(rows)), length)
 }
 
+// qdbStringArrayToSlice views the array of length column names as a slice,
+// without copying. The view is valid until the result is closed.
 func qdbStringArrayToSlice(strings *C.qdb_string_t, length int64) []C.qdb_string_t {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_string_t{})]C.qdb_string_t)(unsafe.Pointer(strings))[:length:length]
+	return unsafe.Slice(strings, length)
 }
 
 // Columns : create columns from a row
