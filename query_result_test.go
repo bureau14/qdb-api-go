@@ -6,6 +6,7 @@ import (
 	"math"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -524,6 +525,9 @@ func TestResultSetFromRows(t *testing.T) {
 			if c.wantErr != Success {
 				require.Error(t, err)
 				assert.True(t, errors.Is(err, c.wantErr), err.Error())
+				var qe *Error
+				require.ErrorAs(t, err, &qe)
+				assert.Empty(t, qe.Detail, "no server is involved, so no detail")
 				for _, m := range c.wantMsg {
 					assert.Contains(t, err.Error(), m)
 				}
@@ -650,9 +654,26 @@ func TestFetchEdgeCases(t *testing.T) {
 		assert.Nil(t, rs)
 	})
 
-	t.Run("invalid query is an error", func(t *testing.T) {
-		rs, err := handle.Query("select").Fetch()
-		require.Error(t, err)
+	t.Run("invalid query carries the server detail", func(t *testing.T) {
+		rs, err := handle.Query("SELECT FROM").Fetch()
+		require.ErrorIs(t, err, ErrInvalidQuery)
 		assert.Nil(t, rs)
+
+		var qe *Error
+		require.ErrorAs(t, err, &qe)
+		assert.Equal(t, "expected FROM", qe.Detail)
+		assert.Equal(t, []any{"query", "SELECT FROM"}, qe.Context, "detail is not context")
+		assert.Equal(t, "query_execute (operation=query_execute, query=SELECT FROM): The provided query is invalid. expected FROM", err.Error())
+	})
+
+	t.Run("missing table names the table in the detail", func(t *testing.T) {
+		alias := generateAlias(16)
+		_, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +1d)", alias)).Fetch()
+		require.ErrorIs(t, err, ErrAliasNotFound)
+
+		var qe *Error
+		require.ErrorAs(t, err, &qe)
+		assert.Contains(t, qe.Detail, alias)
+		assert.True(t, strings.HasSuffix(err.Error(), ErrAliasNotFound.Error()+" "+qe.Detail), err.Error())
 	})
 }

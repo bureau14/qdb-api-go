@@ -239,5 +239,7 @@ func (q Query) Execute() (*QueryResult, error) {
 		return nil, wrapError(err, "query_execute", "query", q.query)
 	}
 
-	return &r, wrapError(err, "query_execute", "query", q.query)
+	// The result carries the server's description of a rejected query, the
+	// parser's message for an invalid one, and it belongs in the error.
+	return &r, wrapError(err, "query_execute", "query", q.query, errorDetailKey, r.ErrorMessage())
 }
