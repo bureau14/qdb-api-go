@@ -43,7 +43,6 @@ package qdb
 import "C"
 
 import (
-	"math"
 	"time"
 	"unsafe"
 )
@@ -198,128 +197,6 @@ func (r *QueryPoint) GetCount() (int64, error) {
 	return 0, wrapError(C.qdb_e_incompatible_type, "query_point_get_count", "wrong_type", "expected_count")
 }
 
-// QueryResult holds the rows returned by Query.Execute. The underlying buffer
-// is API-allocated and lives until Close is called or the handle is closed;
-// callers must call Close. Accessors return zero values once closed.
-type QueryResult struct {
-	// Handle the query was executed on; qdb_release must use the same handle.
-	handle HandleType
-
-	// API-allocated result set. Nil once closed, or when the statement
-	// produced no result set (e.g. DDL).
-	result *C.qdb_query_result_t
-}
-
-// Close releases the API-allocated result buffer. Safe to call on a nil
-// receiver and more than once. Rows, columns and points obtained from this
-// result must not be used after Close.
-func (r *QueryResult) Close() {
-	if r == nil || r.result == nil {
-		return
-	}
-
-	qdbReleasePointer(r.handle, unsafe.Pointer(r.result))
-	// Barrier-free nil store; see setCPtr.
-	setCPtr(unsafe.Pointer(&r.result), nil)
-}
-
-// ScannedPoints : number of points scanned
-//
-//	The actual number of scanned points may be greater
-func (r QueryResult) ScannedPoints() int64 {
-	if r.result == nil {
-		return 0
-	}
-
-	return int64(r.result.scanned_point_count)
-}
-
-func queryPointArrayToSlice(row *QueryPoint, length int64) []QueryPoint {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(QueryPoint{})]QueryPoint)(unsafe.Pointer(row))[:length:length]
-}
-
-func qdbPointResultStarArrayToSlice(rows **C.qdb_point_result_t, length int64) []*QueryPoint {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof((*C.qdb_point_result_t)(nil))]*QueryPoint)(unsafe.Pointer(rows))[:length:length]
-}
-
-func qdbStringArrayToSlice(strings *C.qdb_string_t, length int64) []C.qdb_string_t {
-	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
-
-	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_string_t{})]C.qdb_string_t)(unsafe.Pointer(strings))[:length:length]
-}
-
-// Columns : create columns from a row
-func (r QueryResult) Columns(row *QueryPoint) QueryRow {
-	if r.result == nil {
-		return QueryRow{}
-	}
-
-	count := int64(r.result.column_count)
-
-	return queryPointArrayToSlice(row, count)
-}
-
-// Rows : get rows of a query table result
-func (r QueryResult) Rows() QueryRows {
-	if r.result == nil {
-		return QueryRows{}
-	}
-
-	count := int64(r.result.row_count)
-	if count == 0 {
-		return []*QueryPoint{}
-	}
-
-	return qdbPointResultStarArrayToSlice(r.result.rows, count)
-}
-
-// ColumnsNames : get the number of columns names of each row
-func (r QueryResult) ColumnsNames() []string {
-	if r.result == nil {
-		return []string{}
-	}
-
-	count := int64(r.result.column_count)
-	result := make([]string, count)
-	rawNames := qdbStringArrayToSlice(r.result.column_names, count)
-	for i := range rawNames {
-		result[i] = C.GoString(rawNames[i].data)
-	}
-
-	return result
-}
-
-// ColumnsCount : get the number of columns of each row
-func (r QueryResult) ColumnsCount() int64 {
-	if r.result == nil {
-		return 0
-	}
-
-	return int64(r.result.column_count)
-}
-
-// RowCount : the number of returned rows
-func (r QueryResult) RowCount() int64 {
-	if r.result == nil {
-		return 0
-	}
-
-	return int64(r.result.row_count)
-}
-
-// ErrorMessage : the error message in case of failure
-func (r QueryResult) ErrorMessage() string {
-	if r.result == nil {
-		return ""
-	}
-
-	return C.GoStringN(r.result.error_message.data, C.int(r.result.error_message.length))
-}
-
 // Query : query object
 type Query struct {
 	HandleType
@@ -341,6 +218,11 @@ type Query struct {
 // including when an error is returned alongside it. Close is nil-safe, so it
 // can be deferred before checking the error.
 //
+// The result is a view over C memory: every cell is decoded on access and
+// nothing obtained from it may outlive Close. Callers who want Go-owned,
+// column-oriented data with no Close obligation use Fetch instead, which
+// copies the result into a QueryResultSet and releases it before returning.
+//
 // Example:
 //
 //	result, err := h.Query("SELECT * FROM measurements").Execute()
@@ -357,5 +239,7 @@ func (q Query) Execute() (*QueryResult, error) {
 		return nil, wrapError(err, "query_execute", "query", q.query)
 	}
 
-	return &r, wrapError(err, "query_execute", "query", q.query)
+	// The result carries the server's description of a rejected query, the
+	// parser's message for an invalid one, and it belongs in the error.
+	return &r, wrapError(err, "query_execute", "query", q.query, errorDetailKey, r.ErrorMessage())
 }

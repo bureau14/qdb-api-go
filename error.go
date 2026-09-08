@@ -204,10 +204,71 @@ func makeErrorOrNil(err C.qdb_error_t) error {
 	return nil
 }
 
+// Error is what every failed operation in this package returns: the code,
+// the operation and its context as passed to wrapError, and the server's
+// own description of the failure when it supplied one. Unwrap yields the
+// code, so errors.Is against an ErrorType constant and the three
+// predicates work on it unchanged.
+type Error struct {
+	Code      ErrorType
+	Operation string
+	// Context holds the key-value pairs given to wrapError, in order.
+	Context []any
+	// Detail is the server's description of this particular failure, such as
+	// the parser's message for an invalid query. Empty when the server gave
+	// nothing beyond the code.
+	Detail string
+}
+
+// Error renders the operation, its context, the code's text and, when
+// present, the detail: "op (operation=op, k=v): <code text> <detail>". The
+// detail follows a single space so a caller that showed the code text and
+// the query message side by side sees the same string as before.
+func (e *Error) Error() string {
+	var sb strings.Builder
+	sb.Grow(len(e.Operation) + len(e.Context)*20 + len(e.Detail) + 10)
+
+	sb.WriteString(e.Operation)
+
+	if len(e.Context) > 0 {
+		sb.WriteString(" (operation=")
+		sb.WriteString(e.Operation)
+
+		for i := 0; i < len(e.Context); i += 2 {
+			fmt.Fprint(&sb, ", ", e.Context[i], "=", e.Context[i+1])
+		}
+
+		sb.WriteString(")")
+	}
+
+	sb.WriteString(": ")
+	sb.WriteString(e.Code.Error())
+
+	if e.Detail != "" {
+		sb.WriteString(" ")
+		sb.WriteString(e.Detail)
+	}
+
+	return sb.String()
+}
+
+// Unwrap returns the code, so errors.Is and errors.As reach the ErrorType.
+func (e *Error) Unwrap() error {
+	return e.Code
+}
+
+// errorDetailKey is the context key wrapError lifts into Error.Detail
+// instead of the context: the server's message is part of the error, not a
+// label on it, and a caller must be able to reach it without parsing text.
+const errorDetailKey = "detail"
+
 // wrapError wraps C error with context
 // In: err C.qdb_error_t, op string, kv pairs
 // Out: error with context, nil if success
-// Ex: wrapError(err, "connect", "uri", uri) → "connect (operation=connect, uri=qdb://host): timeout"
+// Ex: wrapError(err, "connect", "uri", uri) -> "connect (operation=connect, uri=qdb://host): timeout"
+//
+// A pair keyed "detail" is not context: its value becomes Error.Detail and
+// is dropped from Context, and an empty value is dropped altogether.
 func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
 	if err == 0 || err == C.qdb_e_ok_created {
 		return nil
@@ -218,33 +279,23 @@ func wrapError(err C.qdb_error_t, operation string, keyValues ...any) error {
 		panic(fmt.Sprintf("wrapError: odd number of key-value arguments provided (%d). Keys and values must be provided in pairs.", len(keyValues)))
 	}
 
-	baseErr := ErrorType(err)
+	e := &Error{Code: ErrorType(err), Operation: operation}
 
-	// Pre-allocate builder capacity to avoid reallocation
-	// because error formatting is on hot path for failures
-	var sb strings.Builder
-	sb.Grow(len(operation) + len(keyValues)*20 + 10)
-
-	sb.WriteString(operation)
-
-	if len(keyValues) > 0 {
-		sb.WriteString(" (operation=")
-		sb.WriteString(operation)
-
-		// Format context pairs - allows debugging failures with full context
-		for i := 0; i < len(keyValues); i += 2 {
-			sb.WriteString(", ")
-			sb.WriteString(fmt.Sprintf("%v", keyValues[i]))
-			sb.WriteString("=")
-			sb.WriteString(fmt.Sprintf("%v", keyValues[i+1]))
+	// Every pair goes into the context except the detail, which has its
+	// own field. The common case has no detail, so the pairs are kept as
+	// they are unless one has to be removed.
+	for i := 0; i < len(keyValues); i += 2 {
+		if keyValues[i] != errorDetailKey {
+			continue
 		}
+		e.Detail = fmt.Sprint(keyValues[i+1])
+		keyValues = append(keyValues[:i:i], keyValues[i+2:]...)
 
-		sb.WriteString(")")
+		break
 	}
+	e.Context = keyValues
 
-	sb.WriteString(": ")
-
-	return fmt.Errorf("%s%w", sb.String(), baseErr)
+	return e
 }
 
 // IsRetryable reports whether the same request may succeed on a later
