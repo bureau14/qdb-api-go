@@ -1362,7 +1362,7 @@ func pushAllColumns(t *testing.T, handle HandleType, schema allColumnsSchema, td
 	symbolData := NewColumnDataString(pointValues(td.SymbolPoints, td.SymbolValid, TsStringPoint.Content, ""))
 	for i, ok := range td.TimestampValid {
 		if !ok {
-			timestampData.xs[i] = C.qdb_timespec_t{tv_sec: C.qdb_time_t(math.MinInt64), tv_nsec: C.qdb_time_t(math.MinInt64)}
+			timestampData.xs[i] = C.qdb_timespec_t{tv_sec: C.qdb_min_time, tv_nsec: C.qdb_min_time}
 		}
 	}
 	require.NoError(t, writerTable.SetDatas([]ColumnData{&blobData, &doubleData, &int64Data, &stringData, &timestampData, &symbolData}))

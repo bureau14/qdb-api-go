@@ -167,8 +167,11 @@ type QueryColumn interface {
 
 // MaskedArray is a dense value slice with a Mask: Mask bit i set means
 // Values[i] holds a value, clear means the slot is null and holds the null
-// sentinel of the column type, so Values can be handed to the batch writer
-// as it is and the nulls are written back as nulls.
+// sentinel of the column type. For int64, double, string and blob columns
+// that is the writer's own sentinel, so Values can be handed to the batch
+// writer as it is and the nulls are written back as nulls. A timestamp
+// column holds nanoseconds, which the writer does not take directly; its
+// Time method converts one slot.
 type MaskedArray[T any] struct {
 	Values []T
 	Mask   Mask
