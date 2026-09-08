@@ -16,10 +16,12 @@ func maskLengths() []int {
 // requireMaskMatches asserts every accessor against a []bool oracle.
 func requireMaskMatches(t require.TestingT, m Mask, oracle []bool) {
 	require.Equal(t, len(oracle), m.Len())
+	require.Len(t, m.Bytes(), (len(oracle)+7)/8)
 
 	nulls := 0
 	for i, v := range oracle {
 		require.Equal(t, v, m.IsValid(i), "slot %d", i)
+		require.Equal(t, v, m.Bytes()[i>>3]>>(i&7)&1 == 1, "packed bit %d", i)
 		if !v {
 			nulls++
 		}

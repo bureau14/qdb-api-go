@@ -438,9 +438,9 @@ func resultSetFromRowsCases() []resultSetFromRowsCase {
 			wantMsg: []string{"when", "row=1"},
 		},
 		{
-			name:    "blob column past addressable size",
+			name:    "blob column past int32 offsets",
 			names:   []string{"big"},
-			rows:    [][]testCellFunc{{testCellBlob([]byte{1})}, {testCellBlobUnbacked(math.MaxUint64)}},
+			rows:    [][]testCellFunc{{testCellBlob([]byte{1})}, {testCellBlobUnbacked(math.MaxInt32)}},
 			wantErr: ErrOutOfBounds,
 			wantMsg: []string{"big"},
 		},
@@ -498,12 +498,15 @@ func checkVarColumns(t *testing.T, rs *QueryResultSet) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ab", "", "", "", "cde"}, str.Values, "stale payload under a none tag is not copied")
 	assert.Equal(t, []bool{true, false, true, false, true}, validBits(str.Mask))
-	assert.Equal(t, []byte("abcde"), str.buf.bytes, "one shared buffer holds every cell")
+	assert.Equal(t, []byte("abcde"), str.Bytes(), "one shared buffer holds every cell")
+	assert.Equal(t, []int32{0, 2, 2, 2, 2, 5}, str.Offsets(), "null and empty cells repeat the offset")
 
 	blob, err := ColumnOf[*QueryColumnBlob](rs, "b")
 	require.NoError(t, err)
 	assert.Equal(t, [][]byte{{1}, nil, nil, {2, 3}, nil}, blob.Values)
 	assert.Equal(t, []bool{true, false, true, true, false}, validBits(blob.Mask))
+	assert.Equal(t, []byte{1, 2, 3}, blob.Bytes())
+	assert.Equal(t, []int32{0, 1, 1, 1, 3, 3}, blob.Offsets())
 
 	// A view's capacity ends at its cell, so an append by the caller
 	// reallocates rather than writing into the next cell.

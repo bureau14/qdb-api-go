@@ -205,7 +205,7 @@ func cellNanos(sec, nsec int64) (int64, bool) {
 
 // varSizes is the sizing half of pass one for string and blob columns. It
 // sums every cell's length so each column's shared buffer is allocated
-// once, and rejects a column whose total cannot be addressed. Only lengths
+// once, and rejects a column whose total exceeds int32 offsets. Only lengths
 // are read, never the content pointer, and only from typed cells: a none
 // cell's payload is unspecified.
 func varSizes(rows QueryRows, types []TsValueType, names []string) ([]int, error) {
@@ -227,13 +227,13 @@ func varSizes(rows QueryRows, types []TsValueType, names []string) ([]int, error
 				continue
 			}
 
-			// The buffer is indexed by int, so the running total is capped
-			// at math.MaxInt. sizes[j] never exceeds that cap, so the
-			// subtraction cannot go negative, and comparing the new length
-			// against the remaining room means a hostile length cannot wrap
-			// the sum past the cap.
+			// Cell boundaries are int32 offsets into the buffer, so the
+			// running total is capped at math.MaxInt32. sizes[j] never
+			// exceeds that cap, so the subtraction cannot go negative, and
+			// comparing the new length against the remaining room means a
+			// hostile length cannot wrap the sum past the cap.
 			n := cellLength(&cells[j])
-			if n > math.MaxInt-uint64(sizes[j]) {
+			if n > math.MaxInt32-uint64(sizes[j]) {
 				return nil, wrapError(C.qdb_e_out_of_bounds, "query_var_sizes", "column", names[j], "bytes", n)
 			}
 			sizes[j] += int(n)

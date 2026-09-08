@@ -310,21 +310,35 @@ func (c *QueryColumnTimestamp) appendCell(i int, cell *C.qdb_point_result_t) err
 }
 
 // cellBuffer holds the content of every cell of a string or blob column
-// back to back, sized exactly by varSizes, so a column costs one
-// allocation and each Values[i] is a view into it rather than a copy.
+// back to back in row order, sized exactly by varSizes, and the offset at
+// which each cell starts: cell i is bytes[offsets[i]:offsets[i+1]], so
+// offsets has one entry more than the column has rows and offsets[0] is 0.
+// A column costs two allocations, and each Values[i] is a view into bytes
+// rather than a copy. Offsets are int32 rather than int: half the footprint
+// of int64 offsets, and the width that lets the pair be handed on to other
+// columnar consumers without a conversion pass. varSizes enforces the
+// resulting cap on the buffer size.
 type cellBuffer struct {
-	bytes []byte
-	used  int
+	bytes   []byte
+	offsets []int32
 }
 
-// push appends src and returns the view over its copy. The capacity of
-// the view ends at the cell, so an append by the caller reallocates instead
-// of overwriting the next cell.
-func (b *cellBuffer) push(src []byte) []byte {
-	start := b.used
-	b.used += copy(b.bytes[start:], src)
+func newCellBuffer(n, nbytes int) cellBuffer {
+	return cellBuffer{bytes: make([]byte, nbytes), offsets: make([]int32, n+1)}
+}
 
-	return b.bytes[start:b.used:b.used]
+// push copies src in as cell i and returns the view over the copy. Cells
+// arrive in row order, so offsets[i] is already the end of cell i-1, and
+// the end of this cell becomes offsets[i+1]. A null cell pushes nil so its
+// two offsets coincide and the sequence has no gaps. The capacity of the
+// view ends at the cell, so an append by the caller reallocates instead of
+// overwriting the next cell.
+func (b *cellBuffer) push(i int, src []byte) []byte {
+	start := int(b.offsets[i])
+	end := start + copy(b.bytes[start:], src)
+	b.offsets[i+1] = int32(end)
+
+	return b.bytes[start:end:end]
 }
 
 // QueryColumnString holds string and symbol cells. Every Values[i] aliases
@@ -340,7 +354,7 @@ type QueryColumnString struct {
 func newQueryColumnString(name string, n, nbytes int) *QueryColumnString {
 	return &QueryColumnString{
 		MaskedArray: newMaskedArray[string](n),
-		buf:         cellBuffer{bytes: make([]byte, nbytes)},
+		buf:         newCellBuffer(n, nbytes),
 		name:        name,
 	}
 }
@@ -350,6 +364,20 @@ func (c *QueryColumnString) Name() string {
 	return c.name
 }
 
+// Bytes returns the shared buffer holding every cell back to back in row
+// order, read-only. Cell i is Bytes()[Offsets()[i]:Offsets()[i+1]]; a null
+// or empty cell occupies no bytes.
+func (c *QueryColumnString) Bytes() []byte {
+	return c.buf.bytes
+}
+
+// Offsets returns Len()+1 cell boundaries into Bytes, read-only, starting
+// at 0 and ending at len(Bytes()). Consecutive equal offsets mark a null
+// or empty cell; only the mask tells them apart.
+func (c *QueryColumnString) Offsets() []int32 {
+	return c.buf.offsets
+}
+
 func (c *QueryColumnString) sealed() {}
 
 // appendCell writes row i from cell. The tag is checked before the payload
@@ -357,6 +385,9 @@ func (c *QueryColumnString) sealed() {}
 // stale pointer and length.
 func (c *QueryColumnString) appendCell(i int, cell *C.qdb_point_result_t) {
 	if cell._type == C.qdb_query_result_none {
+		// The null cell still takes its turn in the buffer so the offsets
+		// stay one per row.
+		c.buf.push(i, nil)
 		c.Values[i] = ""
 
 		return
@@ -365,7 +396,7 @@ func (c *QueryColumnString) appendCell(i int, cell *C.qdb_point_result_t) {
 	// An empty typed cell is valid and needs no bytes; unsafe.String must
 	// not be given the address one past the buffer, which is where an empty
 	// last cell would point.
-	view := c.buf.push(cellBytes(cell))
+	view := c.buf.push(i, cellBytes(cell))
 	if len(view) > 0 {
 		// Sound because the buffer is owned by the column, written only
 		// here, and never exposed for writing.
@@ -388,7 +419,7 @@ type QueryColumnBlob struct {
 func newQueryColumnBlob(name string, n, nbytes int) *QueryColumnBlob {
 	return &QueryColumnBlob{
 		MaskedArray: newMaskedArray[[]byte](n),
-		buf:         cellBuffer{bytes: make([]byte, nbytes)},
+		buf:         newCellBuffer(n, nbytes),
 		name:        name,
 	}
 }
@@ -398,17 +429,32 @@ func (c *QueryColumnBlob) Name() string {
 	return c.name
 }
 
+// Bytes returns the shared buffer holding every cell back to back in row
+// order, read-only. Cell i is Bytes()[Offsets()[i]:Offsets()[i+1]]; a null
+// or empty cell occupies no bytes.
+func (c *QueryColumnBlob) Bytes() []byte {
+	return c.buf.bytes
+}
+
+// Offsets returns Len()+1 cell boundaries into Bytes, read-only, starting
+// at 0 and ending at len(Bytes()). Consecutive equal offsets mark a null
+// or empty cell; only the mask tells them apart.
+func (c *QueryColumnBlob) Offsets() []int32 {
+	return c.buf.offsets
+}
+
 func (c *QueryColumnBlob) sealed() {}
 
 // appendCell writes row i from cell; see QueryColumnString.appendCell.
 func (c *QueryColumnBlob) appendCell(i int, cell *C.qdb_point_result_t) {
 	if cell._type == C.qdb_query_result_none {
+		c.buf.push(i, nil)
 		c.Values[i] = nil
 
 		return
 	}
 
-	if view := c.buf.push(cellBytes(cell)); len(view) > 0 {
+	if view := c.buf.push(i, cellBytes(cell)); len(view) > 0 {
 		c.Values[i] = view
 	}
 	c.Mask.set(i)
