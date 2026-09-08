@@ -2,12 +2,63 @@ package qdb
 
 /*
 #include <qdb/client.h>
+#include <qdb/query.h>
+
+// Cell setters for hand-built query results. The fixture writes the payload
+// union through the C compiler and the converter reads it back through Go
+// unsafe loads, so every converter test also checks the union layout that
+// Go cannot see (cgo flattens the union to a byte array).
+static inline void set_point_type(qdb_point_result_t * p, qdb_query_result_value_type_t t)
+{
+	p->type = t;
+}
+
+static inline void set_point_int64(qdb_point_result_t * p, qdb_int_t v)
+{
+	p->type = qdb_query_result_int64;
+	p->payload.int64_.value = v;
+}
+
+static inline void set_point_double(qdb_point_result_t * p, double v)
+{
+	p->type = qdb_query_result_double;
+	p->payload.double_.value = v;
+}
+
+static inline void set_point_count(qdb_point_result_t * p, qdb_size_t v)
+{
+	p->type = qdb_query_result_count;
+	p->payload.count.value = v;
+}
+
+static inline void set_point_timestamp(qdb_point_result_t * p, qdb_time_t sec, qdb_time_t nsec)
+{
+	p->type = qdb_query_result_timestamp;
+	p->payload.timestamp.value.tv_sec = sec;
+	p->payload.timestamp.value.tv_nsec = nsec;
+}
+
+static inline void set_point_string(qdb_point_result_t * p, const char * c, qdb_size_t n)
+{
+	p->type = qdb_query_result_string;
+	p->payload.string.content = c;
+	p->payload.string.content_length = n;
+}
+
+static inline void set_point_blob(qdb_point_result_t * p, const void * c, qdb_size_t n)
+{
+	p->type = qdb_query_result_blob;
+	p->payload.blob.content = c;
+	p->payload.blob.content_length = n;
+}
 */
 import "C"
 
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -15,6 +66,7 @@ import (
 	"sort"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1161,8 +1213,10 @@ func assertWriterTablesEqualReaderChunks(t testHelper, expected []WriterTable, n
 // Timeseries fixture used by query_test.go
 // -----------------------------------------------------------------
 
-// TestTimeseriesData bundles the alias and the sample points that
-// newTestTimeseriesAllColumns inserts.
+// TestTimeseriesData bundles the alias, the sample points that the
+// all-columns fixture inserts, and one validity mask per column. Point
+// slices always hold dense values; a cleared mask bit means the cell was
+// pushed as the QDB_IS_NULL_* sentinel and the query returns it as none.
 type TestTimeseriesData struct {
 	Alias           string
 	BlobPoints      []TsBlobPoint
@@ -1171,114 +1225,179 @@ type TestTimeseriesData struct {
 	StringPoints    []TsStringPoint
 	TimestampPoints []TsTimestampPoint
 	SymbolPoints    []TsStringPoint
+	BlobValid       []bool
+	DoubleValid     []bool
+	Int64Valid      []bool
+	StringValid     []bool
+	TimestampValid  []bool
+	SymbolValid     []bool
 }
 
-// newTestTimeseriesAllColumns creates a time-series that contains one
-// column of every supported type, populates it with <count> rows of
-// deterministic data, and registers automatic cleanup.
-//
-// Returned structure can be used by tests to verify query results.
-func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) TestTimeseriesData {
+// allColumnsSchema is the column set of the all-columns fixture: one
+// column of every type, with random names so parallel tests never collide.
+type allColumnsSchema struct {
+	blob, double, int64, str, timestamp, symbol string
+}
+
+// newAllColumnsSchema creates the table and registers its removal.
+func newAllColumnsSchema(t *testing.T, handle HandleType, alias string) allColumnsSchema {
 	t.Helper()
 
-	alias := generateAlias(16)
-
-	// Random (collision-free) column & symbol table names
-	blobCol := generateColumnName()
-	doubleCol := generateColumnName()
-	int64Col := generateColumnName()
-	stringCol := generateColumnName()
-	timestampCol := generateColumnName()
-	symbolCol := generateColumnName()
-	symTable := generateAlias(16)
-
+	s := allColumnsSchema{
+		blob:      generateColumnName(),
+		double:    generateColumnName(),
+		int64:     generateColumnName(),
+		str:       generateColumnName(),
+		timestamp: generateColumnName(),
+		symbol:    generateColumnName(),
+	}
 	cols := []TsColumnInfo{
-		NewTsColumnInfo(blobCol, TsColumnBlob),
-		NewTsColumnInfo(doubleCol, TsColumnDouble),
-		NewTsColumnInfo(int64Col, TsColumnInt64),
-		NewTsColumnInfo(stringCol, TsColumnString),
-		NewTsColumnInfo(timestampCol, TsColumnTimestamp),
-		NewSymbolColumnInfo(symbolCol, symTable),
+		NewTsColumnInfo(s.blob, TsColumnBlob),
+		NewTsColumnInfo(s.double, TsColumnDouble),
+		NewTsColumnInfo(s.int64, TsColumnInt64),
+		NewTsColumnInfo(s.str, TsColumnString),
+		NewTsColumnInfo(s.timestamp, TsColumnTimestamp),
+		NewSymbolColumnInfo(s.symbol, generateAlias(16)),
 	}
 
 	ts := handle.Timeseries(alias)
 	require.NoError(t, ts.Create(24*time.Hour, cols...))
+	t.Cleanup(func() { _ = ts.Remove() })
 
-	// Build sample data
-	timestamps := make([]time.Time, count)
-	blobPoints := make([]TsBlobPoint, count)
-	doublePoints := make([]TsDoublePoint, count)
-	int64Points := make([]TsInt64Point, count)
-	stringPoints := make([]TsStringPoint, count)
-	timestampPoints := make([]TsTimestampPoint, count)
-	symbolPoints := make([]TsStringPoint, count)
+	return s
+}
+
+// writerColumns lists the columns in the order the point slices use.
+func (s allColumnsSchema) writerColumns() []WriterColumn {
+	return []WriterColumn{
+		{ColumnName: s.blob, ColumnType: TsColumnBlob},
+		{ColumnName: s.double, ColumnType: TsColumnDouble},
+		{ColumnName: s.int64, ColumnType: TsColumnInt64},
+		{ColumnName: s.str, ColumnType: TsColumnString},
+		{ColumnName: s.timestamp, ColumnType: TsColumnTimestamp},
+		{ColumnName: s.symbol, ColumnType: TsColumnSymbol},
+	}
+}
+
+// genValidMask draws one bit per row, set with probability sparsity/100, so
+// 100 writes every cell and 0 writes none, as sparsify does in the Python
+// bindings' test suite.
+func genValidMask(rng *rand.Rand, count int64, sparsity int) []bool {
+	mask := make([]bool, count)
+	for i := range mask {
+		mask[i] = rng.Intn(100) < sparsity
+	}
+
+	return mask
+}
+
+// genAllColumnsData produces count rows of deterministic values ten seconds
+// apart, starting at 1970-01-01T00:00:10Z, plus a validity mask per column.
+func genAllColumnsData(rng *rand.Rand, count int64, sparsity int) TestTimeseriesData {
+	td := TestTimeseriesData{
+		BlobPoints:      make([]TsBlobPoint, count),
+		DoublePoints:    make([]TsDoublePoint, count),
+		Int64Points:     make([]TsInt64Point, count),
+		StringPoints:    make([]TsStringPoint, count),
+		TimestampPoints: make([]TsTimestampPoint, count),
+		SymbolPoints:    make([]TsStringPoint, count),
+		BlobValid:       genValidMask(rng, count, sparsity),
+		DoubleValid:     genValidMask(rng, count, sparsity),
+		Int64Valid:      genValidMask(rng, count, sparsity),
+		StringValid:     genValidMask(rng, count, sparsity),
+		TimestampValid:  genValidMask(rng, count, sparsity),
+		SymbolValid:     genValidMask(rng, count, sparsity),
+	}
 
 	for i := range count {
-		// Check for potential overflow before arithmetic
-		if i >= int64(^uint(0)>>1)/10-1 {
-			panic(fmt.Sprintf("integer overflow in timestamp calculation: i=%d", i))
-		}
-		tsVal := time.Unix((int64(i)+1)*10, 0)
-		timestamps[i] = tsVal
-		blobPoints[i] = NewTsBlobPoint(tsVal, []byte(fmt.Sprintf("content_%d", i)))
-		doublePoints[i] = NewTsDoublePoint(tsVal, float64(i))
-		int64Points[i] = NewTsInt64Point(tsVal, int64(i))
-		stringPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
-		timestampPoints[i] = NewTsTimestampPoint(tsVal, tsVal)
-		symbolPoints[i] = NewTsStringPoint(tsVal, fmt.Sprintf("content_%d", i))
+		tsVal := time.Unix((i+1)*10, 0)
+		content := fmt.Sprintf("content_%d", i)
+		td.BlobPoints[i] = NewTsBlobPoint(tsVal, []byte(content))
+		td.DoublePoints[i] = NewTsDoublePoint(tsVal, float64(i))
+		td.Int64Points[i] = NewTsInt64Point(tsVal, i)
+		td.StringPoints[i] = NewTsStringPoint(tsVal, content)
+		td.TimestampPoints[i] = NewTsTimestampPoint(tsVal, tsVal)
+		td.SymbolPoints[i] = NewTsStringPoint(tsVal, content)
 	}
 
-	writerColumns := []WriterColumn{
-		{ColumnName: blobCol, ColumnType: TsColumnBlob},
-		{ColumnName: doubleCol, ColumnType: TsColumnDouble},
-		{ColumnName: int64Col, ColumnType: TsColumnInt64},
-		{ColumnName: stringCol, ColumnType: TsColumnString},
-		{ColumnName: timestampCol, ColumnType: TsColumnTimestamp},
-		{ColumnName: symbolCol, ColumnType: TsColumnSymbol},
+	return td
+}
+
+// pointValues extracts the value of each point, substituting null where the
+// mask is clear. The writer has no separate null mask: writing the
+// QDB_IS_NULL_* sentinel is how a null is written.
+func pointValues[P, V any](points []P, valid []bool, get func(P) V, null V) []V {
+	out := make([]V, len(points))
+	for i, p := range points {
+		if valid[i] {
+			out[i] = get(p)
+		} else {
+			out[i] = null
+		}
 	}
-	writerTable, err := NewWriterTable(alias, writerColumns)
+
+	return out
+}
+
+// pushAllColumns writes td through the batch writer. Null timestamps are
+// set on the raw timespec slice: the sentinel is qdb_min_time in both
+// fields, and time.Time normalises such a nanosecond value into seconds, so
+// NewColumnDataTimestamp cannot express it.
+func pushAllColumns(t *testing.T, handle HandleType, schema allColumnsSchema, td TestTimeseriesData) {
+	t.Helper()
+
+	writerTable, err := NewWriterTable(td.Alias, schema.writerColumns())
 	require.NoError(t, err)
+	timestamps := make([]time.Time, len(td.Int64Points))
+	for i := range td.Int64Points {
+		timestamps[i] = td.Int64Points[i].Timestamp()
+	}
 	writerTable.SetIndex(timestamps)
 
-	blobValues := make([][]byte, count)
-	doubleValues := make([]float64, count)
-	int64Values := make([]int64, count)
-	stringValues := make([]string, count)
-	timestampValues := make([]time.Time, count)
-	symbolValues := make([]string, count)
-
-	for i := range count {
-		blobValues[i] = blobPoints[i].Content()
-		doubleValues[i] = doublePoints[i].Content()
-		int64Values[i] = int64Points[i].Content()
-		stringValues[i] = stringPoints[i].Content()
-		timestampValues[i] = timestampPoints[i].Content()
-		symbolValues[i] = symbolPoints[i].Content()
+	blobData := NewColumnDataBlob(pointValues(td.BlobPoints, td.BlobValid, TsBlobPoint.Content, nil))
+	doubleData := NewColumnDataDouble(pointValues(td.DoublePoints, td.DoubleValid, TsDoublePoint.Content, math.NaN()))
+	int64Data := NewColumnDataInt64(pointValues(td.Int64Points, td.Int64Valid, TsInt64Point.Content, math.MinInt64))
+	stringData := NewColumnDataString(pointValues(td.StringPoints, td.StringValid, TsStringPoint.Content, ""))
+	timestampData := NewColumnDataTimestamp(pointValues(td.TimestampPoints, td.TimestampValid, TsTimestampPoint.Content, time.Time{}))
+	symbolData := NewColumnDataString(pointValues(td.SymbolPoints, td.SymbolValid, TsStringPoint.Content, ""))
+	for i, ok := range td.TimestampValid {
+		if !ok {
+			timestampData.xs[i] = C.qdb_timespec_t{tv_sec: C.qdb_min_time, tv_nsec: C.qdb_min_time}
+		}
 	}
-
-	blobData := NewColumnDataBlob(blobValues)
-	doubleData := NewColumnDataDouble(doubleValues)
-	int64Data := NewColumnDataInt64(int64Values)
-	stringData := NewColumnDataString(stringValues)
-	timestampData := NewColumnDataTimestamp(timestampValues)
-	symbolData := NewColumnDataString(symbolValues)
 	require.NoError(t, writerTable.SetDatas([]ColumnData{&blobData, &doubleData, &int64Data, &stringData, &timestampData, &symbolData}))
 
 	writer := NewWriterWithDefaultOptions()
 	require.NoError(t, writer.SetTable(writerTable))
 	require.NoError(t, writer.Push(handle))
+}
 
-	t.Cleanup(func() { _ = ts.Remove() })
+// newTestTimeseriesAllColumnsSparse creates a time series with one column
+// of every supported type, populates it with count rows of deterministic
+// data of which each cell is written with probability sparsity/100 and as
+// null otherwise, and registers automatic cleanup. The random source is
+// seeded from count and sparsity so a failure reproduces.
+//
+// Verified against the cluster: a row whose value columns are all null is
+// still returned by a query, every value cell as none; and an empty string
+// pushed to a symbol column comes back as none, like a string column.
+func newTestTimeseriesAllColumnsSparse(t *testing.T, handle HandleType, count int64, sparsity int) TestTimeseriesData {
+	t.Helper()
 
-	return TestTimeseriesData{
-		Alias:           alias,
-		BlobPoints:      blobPoints,
-		DoublePoints:    doublePoints,
-		Int64Points:     int64Points,
-		StringPoints:    stringPoints,
-		TimestampPoints: timestampPoints,
-		SymbolPoints:    symbolPoints,
-	}
+	alias := generateAlias(16)
+	schema := newAllColumnsSchema(t, handle, alias)
+	td := genAllColumnsData(rand.New(rand.NewSource(count*1000+int64(sparsity))), count, sparsity)
+	td.Alias = alias
+	pushAllColumns(t, handle, schema, td)
+
+	return td
+}
+
+// newTestTimeseriesAllColumns is the dense fixture: every cell written.
+func newTestTimeseriesAllColumns(t *testing.T, handle HandleType, count int64) TestTimeseriesData {
+	t.Helper()
+
+	return newTestTimeseriesAllColumnsSparse(t, handle, count, 100)
 }
 
 // WithGC provides memory isolation for tests by invoking garbage collection
@@ -1388,4 +1507,150 @@ func WithGCAndHandle(t testHelper, handle HandleType, testName string, testFunc 
 		testDuration,
 		postGCDuration,
 		preGCDuration+postGCDuration)
+}
+
+// -----------------------------------------------------------------
+// Hand-built query result rows for converter unit tests
+// -----------------------------------------------------------------
+
+// testCellFunc fills one zeroed cell that already lives in C memory.
+type testCellFunc func(t *testing.T, h HandleType, p *C.qdb_point_result_t)
+
+// testCellNone yields a null cell: the only null encoding qdb_query emits.
+func testCellNone() testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_type(p, C.qdb_query_result_none)
+	}
+}
+
+// testCellTagged yields a cell with the given raw tag and a zero payload,
+// for the array tags that have no Go constant.
+func testCellTagged(tag int64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_type(p, C.qdb_query_result_value_type_t(tag))
+	}
+}
+
+// testArrayTags returns the raw enum values of the array result types.
+func testArrayTags() []int64 {
+	return []int64{
+		C.qdb_query_result_array_double,
+		C.qdb_query_result_array_int64,
+		C.qdb_query_result_array_blob,
+		C.qdb_query_result_array_timestamp,
+		C.qdb_query_result_array_string,
+	}
+}
+
+func testCellInt64(v int64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_int64(p, C.qdb_int_t(v))
+	}
+}
+
+func testCellDouble(v float64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_double(p, C.double(v))
+	}
+}
+
+func testCellCount(v uint64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_count(p, C.qdb_size_t(v))
+	}
+}
+
+func testCellTimestamp(sec, nsec int64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_timestamp(p, C.qdb_time_t(sec), C.qdb_time_t(nsec))
+	}
+}
+
+// testCellString yields a string cell whose content is a separate C
+// allocation, as in a real result. An empty string is a nil pointer with
+// length zero: qdbAllocAndCopyBytes rejects an empty slice, and the C API
+// reports an empty cell the same way.
+func testCellString(s string) testCellFunc {
+	return func(t *testing.T, h HandleType, p *C.qdb_point_result_t) {
+		t.Helper()
+		if s == "" {
+			C.set_point_string(p, nil, 0)
+
+			return
+		}
+
+		content := qdbAllocAndCopyBytes(h, []byte(s))
+		t.Cleanup(releaseCPtr(h, content))
+		C.set_point_string(p, (*C.char)(content), C.qdb_size_t(len(s)))
+	}
+}
+
+// testCellBlob is testCellString for blob cells.
+func testCellBlob(b []byte) testCellFunc {
+	return func(t *testing.T, h HandleType, p *C.qdb_point_result_t) {
+		t.Helper()
+		if len(b) == 0 {
+			C.set_point_blob(p, nil, 0)
+
+			return
+		}
+
+		content := qdbAllocAndCopyBytes(h, b)
+		t.Cleanup(releaseCPtr(h, content))
+		C.set_point_blob(p, content, C.qdb_size_t(len(b)))
+	}
+}
+
+// testCellBlobUnbacked yields a blob cell with a nil pointer and a declared
+// length of n bytes, for size-check tests only: the content must never be
+// read.
+func testCellBlobUnbacked(n uint64) testCellFunc {
+	return func(_ *testing.T, _ HandleType, p *C.qdb_point_result_t) {
+		C.set_point_blob(p, nil, C.qdb_size_t(n))
+	}
+}
+
+// testCellSeq applies fills in order to the same cell, so a test can leave
+// a stale payload under a later tag (a none cell over blob content).
+func testCellSeq(fills ...testCellFunc) testCellFunc {
+	return func(t *testing.T, h HandleType, p *C.qdb_point_result_t) {
+		t.Helper()
+		for _, fill := range fills {
+			fill(t, h, p)
+		}
+	}
+}
+
+// newTestPointRows lays out rows in C memory in the shape qdb_query
+// produces: an array of row pointers, each row one contiguous buffer of
+// cells. Every buffer is released through t.Cleanup. The result is a
+// QueryRows view, the same type rowsUnsafe returns.
+func newTestPointRows(t *testing.T, h HandleType, rows [][]testCellFunc) QueryRows {
+	t.Helper()
+	if len(rows) == 0 {
+		return QueryRows{}
+	}
+
+	rowPtrs := qdbAllocBufferZeroed[*C.qdb_point_result_t](h, len(rows))
+	t.Cleanup(releaseCPtr(h, unsafe.Pointer(rowPtrs)))
+	ptrs := unsafe.Slice(rowPtrs, len(rows))
+
+	for i, row := range rows {
+		require.NotEmpty(t, row, "row %d has no cells", i)
+
+		// Each row is its own allocation so its cells are contiguous, which
+		// is what the converter relies on when it slices a row.
+		base := qdbAllocBufferZeroed[C.qdb_point_result_t](h, len(row))
+		t.Cleanup(releaseCPtr(h, unsafe.Pointer(base)))
+		cells := unsafe.Slice(base, len(row))
+		for j, fill := range row {
+			fill(t, h, &cells[j])
+		}
+
+		// ptrs backs onto C memory: a plain assignment would emit a Go
+		// write barrier over it, so the store goes through setCPtr.
+		setCPtr(unsafe.Pointer(&ptrs[i]), unsafe.Pointer(base))
+	}
+
+	return qdbPointResultStarArrayToSlice(rowPtrs, int64(len(rows)))
 }
