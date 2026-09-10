@@ -4,9 +4,73 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
+	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// requireArrowColumnMatches asserts that an imported Arrow array carries the
+// same name, validity and values as the QueryResultSet column produced by
+// Fetch for the same query. The row-major path is the reference: it is
+// exercised by the fixture tests in query_result_test.go.
+func requireArrowColumnMatches(t *testing.T, field arrow.Field, arr arrow.Array, col QueryColumn) {
+	t.Helper()
+
+	assert.Equal(t, col.Name(), field.Name)
+	assert.True(t, field.Nullable, "every field is nullable")
+	switch c := col.(type) {
+	case *QueryColumnInt64:
+		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Int64, i int) int64 { return a.Value(i) })
+	case *QueryColumnDouble:
+		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Float64, i int) float64 { return a.Value(i) })
+	case *QueryColumnTimestamp:
+		assert.Equal(t, arrow.Nanosecond, field.Type.(*arrow.TimestampType).Unit)
+		assert.Empty(t, field.Type.(*arrow.TimestampType).TimeZone, "timestamps pass through naive")
+		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Timestamp, i int) int64 { return int64(a.Value(i)) })
+	case *QueryColumnString:
+		assertArrowMaxWidth(t, field)
+		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.String, i int) string { return a.Value(i) })
+	case *QueryColumnBlob:
+		assertArrowMaxWidth(t, field)
+		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Binary, i int) []byte { return a.Value(i) })
+	case *QueryColumnNull:
+		// The row-major path has no type for an all-null column; the Arrow
+		// path has the table type when the column comes from a table.
+		assert.Equal(t, c.Len(), arr.Len())
+		assert.Equal(t, arr.Len(), arr.NullN(), "every slot is null")
+	default:
+		t.Fatalf("unexpected column type %T", col)
+	}
+}
+
+// requireArrowValuesMatch compares the Arrow array against a masked value
+// slice slot by slot: validity first, then the value for valid slots only,
+// since null slots hold a sentinel on the Go side and garbage on the Arrow
+// side.
+func requireArrowValuesMatch[A arrow.Array, V any](t *testing.T, arr arrow.Array, valid Mask, values []V, get func(A, int) V) {
+	t.Helper()
+
+	typed, ok := arr.(A)
+	require.True(t, ok, "array type %T", arr)
+	require.Equal(t, len(values), typed.Len())
+	for i, v := range values {
+		require.Equal(t, valid.IsValid(i), typed.IsValid(i), "validity of row %d", i)
+		if valid.IsValid(i) {
+			assert.Equal(t, v, get(typed, i), "row %d", i)
+		}
+	}
+}
+
+// assertArrowMaxWidth asserts the C side attached its max_width metadata to a
+// variable-width field.
+func assertArrowMaxWidth(t *testing.T, field arrow.Field) {
+	t.Helper()
+
+	_, ok := field.Metadata.GetValue("max_width")
+	assert.True(t, ok, "field %q carries max_width metadata: %v", field.Name, field.Metadata)
+}
 
 // ---------------------------------------------------------------------
 // qdb_query_arrow binding
@@ -61,4 +125,47 @@ func TestExecuteArrowBinding(t *testing.T) {
 		r.Close()
 		assert.Nil(t, r.columns())
 	})
+}
+
+// ---------------------------------------------------------------------
+// Column import
+// ---------------------------------------------------------------------
+
+func TestImportArrowColumn(t *testing.T) {
+	handle := newTestHandle(t)
+	cases := []struct{ count, sparsity int }{{1, 100}, {8, 100}, {64, 50}, {4, 0}}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("count=%d sparsity=%d", c.count, c.sparsity), func(t *testing.T) {
+			td := newTestTimeseriesAllColumnsSparse(t, handle, int64(c.count), c.sparsity)
+			rs, err := handle.Query(selectFixture(td)).Fetch()
+			require.NoError(t, err)
+
+			r, err := handle.Query(selectFixture(td)).executeArrow()
+			require.NoError(t, err)
+			defer r.Close()
+
+			cols := r.columns()
+			require.Len(t, cols, len(rs.Columns()))
+			arrays := make([]arrow.Array, len(cols))
+			defer releaseArrowArrays(arrays)
+			for j := range cols {
+				field, arr, err := importArrowColumn(&cols[j])
+				require.NoError(t, err)
+				arrays[j] = arr
+				assert.True(t, arrowColumnMoved(&cols[j]), "column %d is marked released after import", j)
+				requireArrowColumnMatches(t, field, arr, rs.Columns()[j])
+			}
+		})
+	}
+}
+
+func TestReleaseArrowArrays(t *testing.T) {
+	b := array.NewInt64Builder(memory.DefaultAllocator)
+	b.AppendValues([]int64{1, 2, 3}, nil)
+	arr := b.NewArray()
+	b.Release()
+	arr.Retain()
+	releaseArrowArrays([]arrow.Array{arr, nil})
+	assert.Equal(t, 3, arr.Len(), "still alive after one release of two references")
+	arr.Release()
 }

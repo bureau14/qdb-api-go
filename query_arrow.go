@@ -15,6 +15,9 @@ import "C"
 
 import (
 	"unsafe"
+
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/cdata"
 )
 
 // queryArrowResult holds the Arrow columns returned by qdb_query_arrow. The
@@ -89,3 +92,41 @@ func arrowColumnMoved(col *C.qdb_arrow_column_t) bool {
 	return col.schema.release == nil && col.data.release == nil
 }
 
+// importArrowColumn moves one C column into a Go arrow.Field and arrow.Array.
+// The caller owns the returned array and must Release it.
+//
+// The two cgo struct types are distinct Go types over the same C layout
+// (struct ArrowSchema, struct ArrowArray), so the casts are the whole
+// handoff. The schema is copied and released by cdata. The array is moved:
+// cdata memcpy's the struct into its own allocation and sets the source
+// release callback to NULL, after which the Go array owns the buffers and
+// calls the producer's release from its own Release path. The C destructor
+// skips a column whose release is NULL, so qdb_release on the wrapper no
+// longer touches these buffers and the array outlives the handle. On an
+// import error cdata has already released whatever it moved, so the caller
+// has nothing to undo for this column.
+func importArrowColumn(col *C.qdb_arrow_column_t) (arrow.Field, arrow.Array, error) { //nolint:ireturn // Justified: arrow.Array is arrow-go's array interface
+	name := arrowColumnName(col)
+	field, err := cdata.ImportCArrowField((*cdata.CArrowSchema)(unsafe.Pointer(&col.schema)))
+	if err != nil {
+		return field, nil, wrapError(C.qdb_e_incompatible_type, "query_arrow_import", "column", name, errorDetailKey, err.Error())
+	}
+
+	arr, err := cdata.ImportCArrayWithType((*cdata.CArrowArray)(unsafe.Pointer(&col.data)), field.Type)
+	if err != nil {
+		return field, nil, wrapError(C.qdb_e_incompatible_type, "query_arrow_import", "column", name, errorDetailKey, err.Error())
+	}
+
+	return field, arr, nil
+}
+
+// releaseArrowArrays releases every non-nil array. Used to drop the
+// importer's references once a record batch holds its own, and to unwind
+// the columns imported before a failure.
+func releaseArrowArrays(xs []arrow.Array) {
+	for _, x := range xs {
+		if x != nil {
+			x.Release()
+		}
+	}
+}
