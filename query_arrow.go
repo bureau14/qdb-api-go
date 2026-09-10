@@ -80,13 +80,6 @@ func arrowColumnName(col *C.qdb_arrow_column_t) string {
 	return C.GoString(col.schema.name)
 }
 
-// arrowColumnMoved reports whether both C Data Interface structs of the
-// column have been released or moved out: the Arrow convention marks a
-// consumed struct by setting its release callback to NULL.
-func arrowColumnMoved(col *C.qdb_arrow_column_t) bool {
-	return col.schema.release == nil && col.data.release == nil
-}
-
 // importArrowColumn moves one C column into a Go arrow.Field and arrow.Array.
 // The caller owns the returned array and must Release it.
 //
