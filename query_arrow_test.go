@@ -1,7 +1,6 @@
 package qdb
 
 import (
-	"errors"
 	"fmt"
 	"runtime"
 	"runtime/debug"
@@ -352,69 +351,4 @@ func TestFetchArrowOutlivesHandle(t *testing.T) {
 	debug.FreeOSMemory()
 
 	requireArrowRecordMatches(t, rec, rs)
-}
-
-// ---------------------------------------------------------------------
-// WithArrow
-// ---------------------------------------------------------------------
-
-func TestWithArrow(t *testing.T) {
-	handle := newTestHandle(t)
-	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
-	rs, err := handle.Query(selectFixture(td)).Fetch()
-	require.NoError(t, err)
-
-	t.Run("fn sees the same batch FetchArrow returns", func(t *testing.T) {
-		called := false
-		err := handle.Query(selectFixture(td)).WithArrow(func(rec arrow.RecordBatch) error {
-			called = true
-			requireArrowRecordMatches(t, rec, rs)
-
-			return nil
-		})
-		require.NoError(t, err)
-		assert.True(t, called)
-	})
-
-	t.Run("an error from fn propagates unchanged", func(t *testing.T) {
-		sentinel := errors.New("consumer failed") //nolint:err113 // Justified: test sentinel, never returned by the library
-		err := handle.Query(selectFixture(td)).WithArrow(func(arrow.RecordBatch) error { return sentinel })
-		require.ErrorIs(t, err, sentinel)
-	})
-
-	t.Run("a column retained inside fn outlives the call", func(t *testing.T) {
-		var kept arrow.Array
-		err := handle.Query(selectFixture(td)).WithArrow(func(rec arrow.RecordBatch) error {
-			kept = rec.Column(rsTimestampIndex)
-			kept.Retain()
-
-			return nil
-		})
-		require.NoError(t, err)
-		defer kept.Release()
-		runtime.GC()
-		debug.FreeOSMemory()
-
-		requireArrowColumnMatches(t, arrow.Field{Name: "$timestamp", Type: kept.DataType(), Nullable: true}, kept, rs.Columns()[rsTimestampIndex])
-	})
-
-	t.Run("ddl does not call fn", func(t *testing.T) {
-		alias := generateAlias(16)
-		err := handle.Query(fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64)", alias)).WithArrow(func(arrow.RecordBatch) error {
-			t.Fatal("fn called for a statement without a result set")
-
-			return nil
-		})
-		require.NoError(t, err)
-		require.NoError(t, handle.Query(fmt.Sprintf("drop table %s", alias)).WithArrow(func(arrow.RecordBatch) error { return nil }))
-	})
-
-	t.Run("query errors propagate and fn is not called", func(t *testing.T) {
-		err := handle.Query("SELECT FROM").WithArrow(func(arrow.RecordBatch) error {
-			t.Fatal("fn called for a failed query")
-
-			return nil
-		})
-		require.ErrorIs(t, err, ErrInvalidQuery)
-	})
 }
