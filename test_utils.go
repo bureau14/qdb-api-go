@@ -1112,6 +1112,7 @@ type testHelper interface {
 	require.TestingT
 	Helper()
 	Logf(format string, args ...interface{})
+	Cleanup(func())
 }
 
 // assertReaderChunksEqualChunk verifies that merging lhs chunks produces rhs.
@@ -1240,7 +1241,7 @@ type allColumnsSchema struct {
 }
 
 // newAllColumnsSchema creates the table and registers its removal.
-func newAllColumnsSchema(t *testing.T, handle HandleType, alias string) allColumnsSchema {
+func newAllColumnsSchema(t testHelper, handle HandleType, alias string) allColumnsSchema {
 	t.Helper()
 
 	s := allColumnsSchema{
@@ -1343,7 +1344,7 @@ func pointValues[P, V any](points []P, valid []bool, get func(P) V, null V) []V 
 // set on the raw timespec slice: the sentinel is qdb_min_time in both
 // fields, and time.Time normalises such a nanosecond value into seconds, so
 // NewColumnDataTimestamp cannot express it.
-func pushAllColumns(t *testing.T, handle HandleType, schema allColumnsSchema, td TestTimeseriesData) {
+func pushAllColumns(t testHelper, handle HandleType, schema allColumnsSchema, td TestTimeseriesData) {
 	t.Helper()
 
 	writerTable, err := NewWriterTable(td.Alias, schema.writerColumns())
@@ -1381,7 +1382,7 @@ func pushAllColumns(t *testing.T, handle HandleType, schema allColumnsSchema, td
 // Verified against the cluster: a row whose value columns are all null is
 // still returned by a query, every value cell as none; and an empty string
 // pushed to a symbol column comes back as none, like a string column.
-func newTestTimeseriesAllColumnsSparse(t *testing.T, handle HandleType, count int64, sparsity int) TestTimeseriesData {
+func newTestTimeseriesAllColumnsSparse(t testHelper, handle HandleType, count int64, sparsity int) TestTimeseriesData {
 	t.Helper()
 
 	alias := generateAlias(16)
