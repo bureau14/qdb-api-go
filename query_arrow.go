@@ -46,14 +46,14 @@ func (q Query) executeArrow() (*queryArrowResult, error) {
 }
 
 // Close releases the API-allocated result. Safe to call on a nil receiver
-// and more than once. The C destructor calls each column's release callback
-// only when it is still set, so columns whose buffers were moved out by an
-// Arrow import are skipped and their buffers stay alive.
+// and more than once.
 func (r *queryArrowResult) Close() {
 	if r == nil || r.result == nil {
 		return
 	}
 
+	// The C destructor skips columns whose release callback is NULL, so
+	// columns moved out by an Arrow import survive this call.
 	qdbReleasePointer(r.handle, unsafe.Pointer(r.result))
 	// Barrier-free nil store; see setCPtr.
 	setCPtr(unsafe.Pointer(&r.result), nil)
@@ -82,24 +82,18 @@ func arrowColumnName(col *C.qdb_arrow_column_t) string {
 
 // importArrowColumn moves one C column into a Go arrow.Field and arrow.Array.
 // The caller owns the returned array and must Release it.
-//
-// The two cgo struct types are distinct Go types over the same C layout
-// (struct ArrowSchema, struct ArrowArray), so the casts are the whole
-// handoff. The schema is copied and released by cdata. The array is moved:
-// cdata memcpy's the struct into its own allocation and sets the source
-// release callback to NULL, after which the Go array owns the buffers and
-// calls the producer's release from its own Release path. The C destructor
-// skips a column whose release is NULL, so qdb_release on the wrapper no
-// longer touches these buffers and the array outlives the handle. On an
-// import error cdata has already released whatever it moved, so the caller
-// has nothing to undo for this column.
 func importArrowColumn(col *C.qdb_arrow_column_t) (arrow.Field, arrow.Array, error) { //nolint:ireturn // Justified: arrow.Array is arrow-go's array interface
 	name := arrowColumnName(col)
+	// cdata's struct types share the C layout of struct ArrowSchema and
+	// struct ArrowArray, so the casts are the handoff. The schema is copied
+	// and released here.
 	field, err := cdata.ImportCArrowField((*cdata.CArrowSchema)(unsafe.Pointer(&col.schema)))
 	if err != nil {
 		return field, nil, wrapError(C.qdb_e_incompatible_type, "query_arrow_import", "column", name, errorDetailKey, err.Error())
 	}
 
+	// The array is moved: the source release callback becomes NULL and the
+	// Go array owns the buffers. On error cdata has already released them.
 	arr, err := cdata.ImportCArrayWithType((*cdata.CArrowArray)(unsafe.Pointer(&col.data)), field.Type)
 	if err != nil {
 		return field, nil, wrapError(C.qdb_e_incompatible_type, "query_arrow_import", "column", name, errorDetailKey, err.Error())
@@ -108,9 +102,7 @@ func importArrowColumn(col *C.qdb_arrow_column_t) (arrow.Field, arrow.Array, err
 	return field, arr, nil
 }
 
-// releaseArrowArrays releases every non-nil array. Used to drop the
-// importer's references once a record batch holds its own, and to unwind
-// the columns imported before a failure.
+// releaseArrowArrays releases every array, skipping nil entries.
 func releaseArrowArrays(xs []arrow.Array) {
 	for _, x := range xs {
 		if x != nil {
@@ -122,13 +114,9 @@ func releaseArrowArrays(xs []arrow.Array) {
 // arrowRecordFromColumns assembles imported columns into one record batch.
 // The batch retains its own reference to every array; the caller keeps, and
 // later releases, the references it holds.
-//
-// Every array must have the same length. The C side guarantees this: one
-// projection loop fills every column from the same row set, so a mismatch
-// would be a C-side bug. It is still checked here because NewRecordBatch
-// panics on inconsistent columns and this package returns errors instead.
 func arrowRecordFromColumns(fields []arrow.Field, arrays []arrow.Array) (arrow.RecordBatch, error) { //nolint:ireturn // Justified: arrow.RecordBatch is arrow-go's batch interface
 	n := int64(arrays[0].Len())
+	// NewRecordBatch panics on a length mismatch; this package returns errors.
 	for i, a := range arrays {
 		if int64(a.Len()) != n {
 			return nil, wrapError(C.qdb_e_invalid_argument, "query_arrow_record", "column", fields[i].Name, "length", a.Len(), "expected", n)
@@ -138,16 +126,16 @@ func arrowRecordFromColumns(fields []arrow.Field, arrays []arrow.Array) (arrow.R
 	return array.NewRecordBatch(arrow.NewSchema(fields, nil), arrays, n), nil
 }
 
-// importArrowColumns imports every column in order. On failure the columns
-// imported so far are released and the error returned; the columns not yet
-// imported keep their release callbacks and are freed by the C destructor.
-// On success the caller owns one reference per array.
+// importArrowColumns imports every column in order. On success the caller
+// owns one reference per array.
 func importArrowColumns(cols []C.qdb_arrow_column_t) ([]arrow.Field, []arrow.Array, error) {
 	fields := make([]arrow.Field, len(cols))
 	arrays := make([]arrow.Array, len(cols))
 	for i := range cols {
 		field, arr, err := importArrowColumn(&cols[i])
 		if err != nil {
+			// Unwind what was imported; the rest is still owned by the C
+			// result and freed with it.
 			releaseArrowArrays(arrays[:i])
 
 			return nil, nil, err
