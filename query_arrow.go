@@ -249,3 +249,42 @@ func (q Query) FetchArrow() (arrow.RecordBatch, error) { //nolint:ireturn // Jus
 
 	return rec, execErr
 }
+
+// WithArrow executes the query and runs fn on the resulting record batch,
+// releasing the batch when fn returns, whether or not fn failed. Use it when
+// the batch is consumed in one place, such as writing it to an IPC stream;
+// use FetchArrow to keep the batch.
+//
+// Args:
+//
+//	fn: Consumer of the batch; its error is returned unchanged
+//
+// Returns:
+//
+//	error: fn's error, or the query error
+//
+// A statement with no result set (DDL) returns nil without calling fn. On a
+// partial failure fn runs with the rows that did succeed and the query error
+// is returned afterwards, unless fn itself failed, in which case fn's error
+// wins. A column retained inside fn stays valid after WithArrow returns, since
+// the buffers are reference counted per column.
+//
+// Example:
+//
+//	err := h.Query(q).WithArrow(func(rec arrow.RecordBatch) error {
+//	    return ipc.NewWriter(w, ipc.WithSchema(rec.Schema())).Write(rec)
+//	})
+func (q Query) WithArrow(fn func(arrow.RecordBatch) error) error {
+	rec, queryErr := q.FetchArrow()
+	if rec == nil {
+		return queryErr
+	}
+	defer rec.Release()
+
+	err := fn(rec)
+	if err != nil {
+		return err
+	}
+
+	return queryErr
+}
