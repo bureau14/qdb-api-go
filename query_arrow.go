@@ -17,6 +17,7 @@ import (
 	"unsafe"
 
 	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/cdata"
 )
 
@@ -129,4 +130,23 @@ func releaseArrowArrays(xs []arrow.Array) {
 			x.Release()
 		}
 	}
+}
+
+// arrowRecordFromColumns assembles imported columns into one record batch.
+// The batch retains its own reference to every array; the caller keeps, and
+// later releases, the references it holds.
+//
+// Every array must have the same length. The C side guarantees this: one
+// projection loop fills every column from the same row set, so a mismatch
+// would be a C-side bug. It is still checked here because NewRecordBatch
+// panics on inconsistent columns and this package returns errors instead.
+func arrowRecordFromColumns(fields []arrow.Field, arrays []arrow.Array) (arrow.RecordBatch, error) { //nolint:ireturn // Justified: arrow.RecordBatch is arrow-go's batch interface
+	n := int64(arrays[0].Len())
+	for i, a := range arrays {
+		if int64(a.Len()) != n {
+			return nil, wrapError(C.qdb_e_invalid_argument, "query_arrow_record", "column", fields[i].Name, "length", a.Len(), "expected", n)
+		}
+	}
+
+	return array.NewRecordBatch(arrow.NewSchema(fields, nil), arrays, n), nil
 }

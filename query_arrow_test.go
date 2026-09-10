@@ -169,3 +169,58 @@ func TestReleaseArrowArrays(t *testing.T) {
 	assert.Equal(t, 3, arr.Len(), "still alive after one release of two references")
 	arr.Release()
 }
+
+// ---------------------------------------------------------------------
+// Record batch assembly
+// ---------------------------------------------------------------------
+
+// newTestInt64Array builds a Go-owned Int64 array; the caller releases it.
+func newTestInt64Array(vs []int64) arrow.Array { //nolint:ireturn // Justified: arrow.Array is arrow-go's array interface
+	b := array.NewInt64Builder(memory.DefaultAllocator)
+	defer b.Release()
+	b.AppendValues(vs, nil)
+
+	return b.NewArray()
+}
+
+func TestArrowRecordFromColumns(t *testing.T) {
+	fields := []arrow.Field{
+		{Name: "a", Type: arrow.PrimitiveTypes.Int64, Nullable: true},
+		{Name: "b", Type: arrow.PrimitiveTypes.Int64, Nullable: true},
+	}
+
+	t.Run("equal lengths give a batch over the same arrays", func(t *testing.T) {
+		arrays := []arrow.Array{newTestInt64Array([]int64{1, 2, 3}), newTestInt64Array([]int64{4, 5, 6})}
+		defer releaseArrowArrays(arrays)
+
+		rec, err := arrowRecordFromColumns(fields, arrays)
+		require.NoError(t, err)
+		defer rec.Release()
+
+		assert.Equal(t, int64(3), rec.NumRows())
+		assert.Equal(t, int64(2), rec.NumCols())
+		assert.Equal(t, []string{"a", "b"}, []string{rec.Schema().Field(0).Name, rec.Schema().Field(1).Name})
+		assert.Equal(t, int64(6), rec.Column(1).(*array.Int64).Value(2))
+	})
+
+	t.Run("zero rows give an empty batch with the full schema", func(t *testing.T) {
+		arrays := []arrow.Array{newTestInt64Array(nil), newTestInt64Array(nil)}
+		defer releaseArrowArrays(arrays)
+
+		rec, err := arrowRecordFromColumns(fields, arrays)
+		require.NoError(t, err)
+		defer rec.Release()
+
+		assert.Equal(t, int64(0), rec.NumRows())
+		assert.Equal(t, 2, rec.Schema().NumFields())
+	})
+
+	t.Run("length mismatch is an error, not a panic", func(t *testing.T) {
+		arrays := []arrow.Array{newTestInt64Array([]int64{1, 2, 3}), newTestInt64Array([]int64{4})}
+		defer releaseArrowArrays(arrays)
+
+		rec, err := arrowRecordFromColumns(fields, arrays)
+		require.ErrorIs(t, err, ErrInvalidArgument)
+		assert.Nil(t, rec)
+	})
+}
