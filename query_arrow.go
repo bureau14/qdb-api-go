@@ -21,11 +21,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/cdata"
 )
 
-// queryArrowResult holds the Arrow columns returned by qdb_query_arrow. The
-// wrapper is API-allocated and tracked by the handle; it lives until Close is
-// called or the handle is closed. Each column is an Arrow C Data Interface
-// pair (ArrowSchema, ArrowArray) whose buffers belong to the Arrow exporter
-// inside libqdb_api, not to the qdb allocator.
+// queryArrowResult owns a qdb_query_arrow result until Close.
 type queryArrowResult struct {
 	// Handle the query was executed on; qdb_release must use the same handle.
 	handle HandleType
@@ -35,10 +31,8 @@ type queryArrowResult struct {
 	result *C.qdb_query_arrow_result_t
 }
 
-// executeArrow runs the query through qdb_query_arrow. A nil result with a
-// nil error means the statement produced no result set. A non-nil result may
-// come back together with an error (partial failure); the caller owns it
-// either way and must Close it.
+// executeArrow runs the query through qdb_query_arrow. A non-nil result must
+// be closed by the caller, also when it comes with an error.
 func (q Query) executeArrow() (*queryArrowResult, error) {
 	query := convertToCharStar(q.query)
 	defer releaseCharStar(query)
@@ -172,9 +166,7 @@ func importArrowColumns(cols []C.qdb_arrow_column_t) ([]arrow.Field, []arrow.Arr
 }
 
 // FetchArrow executes the query and returns its result as an Arrow record
-// batch: one schema, one array per column, one row count. The batch is
-// zero-copy over the C-allocated Arrow buffers; nothing is copied on the Go
-// side.
+// batch, zero-copy over the buffers the C API allocated.
 //
 // Args:
 //
@@ -186,26 +178,13 @@ func importArrowColumns(cols []C.qdb_arrow_column_t) ([]arrow.Field, []arrow.Arr
 //	error: Query error, if any
 //
 // The caller owns the batch and must call Release on it. The batch holds no
-// reference to the handle: the C result is released before FetchArrow
-// returns, and the column buffers are owned by the batch alone, so it may
-// outlive the handle, a pool lease, or a session. A non-nil batch may be
-// returned together with an error when the query partially failed, in which
-// case the batch holds the rows that did succeed; release it either way.
+// reference to the handle and may outlive it. A batch may be returned
+// together with an error when the query partially failed; release it either
+// way.
 //
-// Column types pass through as the C API emits them: int64 and count columns
-// are Int64, double is Float64, string is String, blob is Binary, timestamp
-// is Timestamp in nanoseconds. String and Binary fields carry a max_width
-// metadata entry. Every field is nullable. A column that is null in every
-// row keeps its table type when the query selects from a table, and is an
-// Arrow Null column when no type is known.
-//
-// Timestamps are naive: the field carries no time zone even though the C API
-// shifts the values into the handle's time zone when that zone is not UTC.
-// Attaching the zone is to be done once the handle time zone is available to
-// the Go side; until then the values are passed through as received.
-//
-// A statement with no result set (DDL) yields a nil batch and a nil error. A
-// select that matches no rows yields a zero-row batch with the full schema.
+// Timestamp fields carry no time zone: the C API shifts the values into the
+// handle's zone and exports them naive. Attaching the zone is to be done once
+// the handle time zone is available on the Go side.
 //
 // Example:
 //
@@ -216,13 +195,9 @@ func importArrowColumns(cols []C.qdb_arrow_column_t) ([]arrow.Field, []arrow.Arr
 //	defer rec.Release()
 //	price := rec.Column(rec.Schema().FieldIndices("price")[0]).(*array.Float64)
 func (q Query) FetchArrow() (arrow.RecordBatch, error) { //nolint:ireturn // Justified: arrow.RecordBatch is arrow-go's batch interface
-	// Plan: run the query; no result means no result set and the outcome is
-	// whatever the execution returned. Otherwise release the C wrapper on
-	// every path, move every column into Go arrays, build the batch over
-	// them, drop the importer's references (the batch retained its own) and
-	// hand the batch back with the execution error, which is non-nil only on
-	// partial failure. Releasing the wrapper after the import is what frees
-	// the batch from the handle: the C destructor skips the moved columns.
+	// Every column is moved out of the C result before the deferred Close
+	// releases it; the C destructor skips moved columns, which is what
+	// detaches the batch from the handle.
 	r, execErr := q.executeArrow()
 	if r == nil {
 		return nil, execErr
@@ -231,8 +206,6 @@ func (q Query) FetchArrow() (arrow.RecordBatch, error) { //nolint:ireturn // Jus
 
 	cols := r.columns()
 	if len(cols) == 0 {
-		// Not produced by the C API today (no result set is a nil result),
-		// but a wrapper without columns has no batch to offer.
 		return nil, execErr
 	}
 
@@ -240,6 +213,7 @@ func (q Query) FetchArrow() (arrow.RecordBatch, error) { //nolint:ireturn // Jus
 	if err != nil {
 		return nil, err
 	}
+	// The batch retains its own references; these are the importer's.
 	defer releaseArrowArrays(arrays)
 
 	rec, err := arrowRecordFromColumns(fields, arrays)
@@ -247,5 +221,7 @@ func (q Query) FetchArrow() (arrow.RecordBatch, error) { //nolint:ireturn // Jus
 		return nil, err
 	}
 
+	// execErr is non-nil only on partial failure, where the batch still
+	// holds the rows that succeeded.
 	return rec, execErr
 }
