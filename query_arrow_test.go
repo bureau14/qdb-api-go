@@ -2,7 +2,10 @@ package qdb
 
 import (
 	"fmt"
+	"runtime"
+	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
@@ -223,4 +226,129 @@ func TestArrowRecordFromColumns(t *testing.T) {
 		require.ErrorIs(t, err, ErrInvalidArgument)
 		assert.Nil(t, rec)
 	})
+}
+
+// ---------------------------------------------------------------------
+// FetchArrow
+// ---------------------------------------------------------------------
+
+// requireArrowRecordMatches asserts the batch carries the same columns as the
+// result set Fetch produced for the same query.
+func requireArrowRecordMatches(t *testing.T, rec arrow.RecordBatch, rs *QueryResultSet) {
+	t.Helper()
+
+	require.NotNil(t, rec)
+	require.Equal(t, int64(rs.RowCount()), rec.NumRows())
+	require.Equal(t, len(rs.Columns()), rec.Schema().NumFields())
+	for j, col := range rs.Columns() {
+		requireArrowColumnMatches(t, rec.Schema().Field(j), rec.Column(j), col)
+	}
+}
+
+func TestFetchArrowMatchesFixture(t *testing.T) {
+	handle := newTestHandle(t)
+	cases := []struct{ count, sparsity int }{{1, 100}, {8, 100}, {64, 50}, {65, 50}, {4, 0}}
+	for _, c := range cases {
+		t.Run(fmt.Sprintf("count=%d sparsity=%d", c.count, c.sparsity), func(t *testing.T) {
+			td := newTestTimeseriesAllColumnsSparse(t, handle, int64(c.count), c.sparsity)
+			rs, err := handle.Query(selectFixture(td)).Fetch()
+			require.NoError(t, err)
+
+			rec, err := handle.Query(selectFixture(td)).FetchArrow()
+			require.NoError(t, err)
+			defer rec.Release()
+			requireArrowRecordMatches(t, rec, rs)
+		})
+	}
+}
+
+func TestFetchArrowEdgeCases(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
+
+	t.Run("ddl yields a nil batch", func(t *testing.T) {
+		alias := generateAlias(16)
+		rec, err := handle.Query(fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64)", alias)).FetchArrow()
+		require.NoError(t, err)
+		assert.Nil(t, rec)
+
+		rec, err = handle.Query(fmt.Sprintf("drop table %s", alias)).FetchArrow()
+		require.NoError(t, err)
+		assert.Nil(t, rec)
+	})
+
+	t.Run("zero rows yield a zero-row batch with every column", func(t *testing.T) {
+		rec, err := handle.Query(fmt.Sprintf("select * from %s in range(2000, +1d)", td.Alias)).FetchArrow()
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		defer rec.Release()
+
+		assert.Equal(t, int64(0), rec.NumRows())
+		assert.Equal(t, 8, rec.Schema().NumFields())
+	})
+
+	t.Run("count aggregate is an int64 column", func(t *testing.T) {
+		rs, err := handle.Query(selectFixture(td)).Fetch()
+		require.NoError(t, err)
+		name := rs.Columns()[rsInt64Index].Name()
+
+		rec, err := handle.Query(fmt.Sprintf("select count(%s) from %s in range(1970, +10d)", name, td.Alias)).FetchArrow()
+		require.NoError(t, err)
+		defer rec.Release()
+
+		require.Equal(t, int64(1), rec.NumRows())
+		cnt, ok := rec.Column(0).(*array.Int64)
+		require.True(t, ok, "column type %T", rec.Column(0))
+		valid := 0
+		for _, ok := range td.Int64Valid {
+			if ok {
+				valid++
+			}
+		}
+		assert.Equal(t, int64(valid), cnt.Value(0))
+	})
+
+	t.Run("all-null column keeps the table type", func(t *testing.T) {
+		empty := newTestTimeseriesAllColumnsSparse(t, handle, 4, 0)
+		rec, err := handle.Query(selectFixture(empty)).FetchArrow()
+		require.NoError(t, err)
+		defer rec.Release()
+
+		assert.Equal(t, arrow.PrimitiveTypes.Float64, rec.Schema().Field(rsDoubleIndex).Type)
+		assert.Equal(t, arrow.PrimitiveTypes.Int64, rec.Schema().Field(rsInt64Index).Type)
+		assert.Equal(t, rec.Column(rsDoubleIndex).Len(), rec.Column(rsDoubleIndex).NullN())
+	})
+
+	t.Run("missing table yields an error and no batch", func(t *testing.T) {
+		rec, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +1d)", generateAlias(16))).FetchArrow()
+		require.ErrorIs(t, err, ErrAliasNotFound)
+		assert.Nil(t, rec)
+	})
+
+	t.Run("invalid query yields an error and no batch", func(t *testing.T) {
+		rec, err := handle.Query("SELECT FROM").FetchArrow()
+		require.ErrorIs(t, err, ErrInvalidQuery)
+		assert.Nil(t, rec)
+	})
+}
+
+// TestFetchArrowOutlivesHandle closes the handle the batch came from, scrubs
+// the heap, and reads the batch afterwards: the buffers belong to the batch,
+// not to the handle.
+func TestFetchArrowOutlivesHandle(t *testing.T) {
+	handle := newTestHandle(t)
+	td := newTestTimeseriesAllColumnsSparse(t, handle, 32, 50)
+	rs, err := handle.Query(selectFixture(td)).Fetch()
+	require.NoError(t, err)
+
+	other, err := SetupHandle(insecureURI, 120*time.Second)
+	require.NoError(t, err)
+	rec, err := other.Query(selectFixture(td)).FetchArrow()
+	require.NoError(t, err)
+	defer rec.Release()
+	require.NoError(t, other.Close())
+	runtime.GC()
+	debug.FreeOSMemory()
+
+	requireArrowRecordMatches(t, rec, rs)
 }

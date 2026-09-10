@@ -150,3 +150,102 @@ func arrowRecordFromColumns(fields []arrow.Field, arrays []arrow.Array) (arrow.R
 
 	return array.NewRecordBatch(arrow.NewSchema(fields, nil), arrays, n), nil
 }
+
+// importArrowColumns imports every column in order. On failure the columns
+// imported so far are released and the error returned; the columns not yet
+// imported keep their release callbacks and are freed by the C destructor.
+// On success the caller owns one reference per array.
+func importArrowColumns(cols []C.qdb_arrow_column_t) ([]arrow.Field, []arrow.Array, error) {
+	fields := make([]arrow.Field, len(cols))
+	arrays := make([]arrow.Array, len(cols))
+	for i := range cols {
+		field, arr, err := importArrowColumn(&cols[i])
+		if err != nil {
+			releaseArrowArrays(arrays[:i])
+
+			return nil, nil, err
+		}
+		fields[i], arrays[i] = field, arr
+	}
+
+	return fields, arrays, nil
+}
+
+// FetchArrow executes the query and returns its result as an Arrow record
+// batch: one schema, one array per column, one row count. The batch is
+// zero-copy over the C-allocated Arrow buffers; nothing is copied on the Go
+// side.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	arrow.RecordBatch: The result, or nil when the statement produces none (e.g. DDL)
+//	error: Query error, if any
+//
+// The caller owns the batch and must call Release on it. The batch holds no
+// reference to the handle: the C result is released before FetchArrow
+// returns, and the column buffers are owned by the batch alone, so it may
+// outlive the handle, a pool lease, or a session. A non-nil batch may be
+// returned together with an error when the query partially failed, in which
+// case the batch holds the rows that did succeed; release it either way.
+//
+// Column types pass through as the C API emits them: int64 and count columns
+// are Int64, double is Float64, string is String, blob is Binary, timestamp
+// is Timestamp in nanoseconds. String and Binary fields carry a max_width
+// metadata entry. Every field is nullable. A column that is null in every
+// row keeps its table type when the query selects from a table, and is an
+// Arrow Null column when no type is known.
+//
+// Timestamps are naive: the field carries no time zone even though the C API
+// shifts the values into the handle's time zone when that zone is not UTC.
+// Attaching the zone is to be done once the handle time zone is available to
+// the Go side; until then the values are passed through as received.
+//
+// A statement with no result set (DDL) yields a nil batch and a nil error. A
+// select that matches no rows yields a zero-row batch with the full schema.
+//
+// Example:
+//
+//	rec, err := h.Query("select $timestamp, price from trades in range(today)").FetchArrow()
+//	if err != nil {
+//	    return err
+//	}
+//	defer rec.Release()
+//	price := rec.Column(rec.Schema().FieldIndices("price")[0]).(*array.Float64)
+func (q Query) FetchArrow() (arrow.RecordBatch, error) { //nolint:ireturn // Justified: arrow.RecordBatch is arrow-go's batch interface
+	// Plan: run the query; no result means no result set and the outcome is
+	// whatever the execution returned. Otherwise release the C wrapper on
+	// every path, move every column into Go arrays, build the batch over
+	// them, drop the importer's references (the batch retained its own) and
+	// hand the batch back with the execution error, which is non-nil only on
+	// partial failure. Releasing the wrapper after the import is what frees
+	// the batch from the handle: the C destructor skips the moved columns.
+	r, execErr := q.executeArrow()
+	if r == nil {
+		return nil, execErr
+	}
+	defer r.Close()
+
+	cols := r.columns()
+	if len(cols) == 0 {
+		// Not produced by the C API today (no result set is a nil result),
+		// but a wrapper without columns has no batch to offer.
+		return nil, execErr
+	}
+
+	fields, arrays, err := importArrowColumns(cols)
+	if err != nil {
+		return nil, err
+	}
+	defer releaseArrowArrays(arrays)
+
+	rec, err := arrowRecordFromColumns(fields, arrays)
+	if err != nil {
+		return nil, err
+	}
+
+	return rec, execErr
+}
