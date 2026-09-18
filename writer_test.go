@@ -820,3 +820,70 @@ func TestWriterEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// A timestamp value column accepts NullTime and the bulk reader hands it back:
+// only the index is barred from holding a null.
+func TestWriterTimestampColumnRoundTripsNull(t *testing.T) {
+	require := require.New(t)
+
+	h := newTestHandle(t)
+	cols := []WriterColumn{{ColumnName: "timestamp_col", ColumnType: TsColumnTimestamp}}
+
+	tsTable, err := createTableOfWriterColumnsAndDefaultShardSize(h, cols)
+	require.NoError(err)
+
+	table, err := NewWriterTable(tsTable.alias, cols)
+	require.NoError(err)
+
+	idx := generateDefaultIndex(3)
+	values := []time.Time{idx[0], NullTime(), idx[2]}
+	require.NoError(table.SetIndex(idx))
+
+	cd := NewColumnDataTimestamp(values)
+	require.NoError(table.SetData(0, &cd))
+
+	pushWriterTables(t, h, []WriterTable{table})
+
+	opts := NewReaderOptions().WithTables([]string{tsTable.alias}).WithColumns([]string{"timestamp_col"})
+	reader, err := NewReader(h, opts)
+	require.NoError(err)
+	defer reader.Close()
+
+	data, err := reader.FetchAll()
+	require.NoError(err)
+	require.Equal(3, data.RowCount())
+
+	got, err := GetColumnDataTimestamp(data.data[0])
+	require.NoError(err)
+	require.Equal(values, got)
+	require.True(IsNullTime(got[1]))
+}
+
+// The index can not be null: SetIndex refuses NullTime, and a null timespec
+// set through SetIndexFromNative is refused on push.
+func TestWriterTableIndexRejectsNull(t *testing.T) {
+	require := require.New(t)
+
+	h := newTestHandle(t)
+	cols := []WriterColumn{{ColumnName: "int_col", ColumnType: TsColumnInt64}}
+
+	tsTable, err := createTableOfWriterColumnsAndDefaultShardSize(h, cols)
+	require.NoError(err)
+
+	table, err := NewWriterTable(tsTable.alias, cols)
+	require.NoError(err)
+
+	idx := []time.Time{time.Now(), NullTime()}
+
+	err = table.SetIndex(idx)
+	require.ErrorIs(err, ErrInvalidArgument)
+	require.Nil(table.GetIndexAsNative())
+
+	table.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
+	cd := NewColumnDataInt64([]int64{1, 2})
+	require.NoError(table.SetData(0, &cd))
+
+	w := NewWriterWithDefaultOptions()
+	require.NoError(w.SetTable(table))
+	require.ErrorIs(w.Push(h), ErrInvalidArgument)
+}
