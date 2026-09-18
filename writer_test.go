@@ -29,7 +29,7 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	writerTable.SetIndex(idx)
+	require.NoError(writerTable.SetIndex(idx))
 	assert.Equal(writerTable.GetIndex(), idx)
 }
 
@@ -49,7 +49,7 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	writerTable.SetIndex(idx)
+	require.NoError(writerTable.SetIndex(idx))
 
 	datas, err := generateWriterDatas(len(idx), columns)
 	require.NoError(err)
@@ -166,7 +166,7 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	writer := NewWriter(opts)
 
 	tbl := newTestWriterTable(t)
-	tbl.SetIndex(generateDefaultIndex(1024))
+	require.NoError(tbl.SetIndex(generateDefaultIndex(1024)))
 	datas, err := generateWriterDatas(1024, tbl.columnInfoByOffset)
 
 	require.NoError(err)
@@ -456,7 +456,7 @@ func TestWriterCGOSafety(t *testing.T) {
 
 	// Set index with a single timestamp
 	now := time.Now()
-	table.SetIndex([]time.Time{now})
+	require.NoError(table.SetIndex([]time.Time{now}))
 
 	// Set data for each column type
 	_ = table.SetData(0, &ColumnDataInt64{xs: []int64{42}})
@@ -553,7 +553,7 @@ func TestWriterLargeData(t *testing.T) {
 		table, err := NewWriterTable(tsTable.alias, cols)
 		require.NoError(err)
 
-		table.SetIndex(timestamps)
+		require.NoError(table.SetIndex(timestamps))
 		_ = table.SetData(0, &ColumnDataDouble{xs: values})
 
 		err = w.SetTable(table)
@@ -616,7 +616,7 @@ func TestWriterMixedStringLengths(t *testing.T) {
 	table, err := NewWriterTable(tsTable.alias, cols)
 	require.NoError(err)
 
-	table.SetIndex(timestamps)
+	require.NoError(table.SetIndex(timestamps))
 	_ = table.SetData(0, &ColumnDataString{xs: strings})
 
 	err = w.SetTable(table)
@@ -685,7 +685,7 @@ func TestWriterMixedBlobSizes(t *testing.T) {
 	table, err := NewWriterTable(tsTable.alias, cols)
 	require.NoError(err)
 
-	table.SetIndex(timestamps)
+	require.NoError(table.SetIndex(timestamps))
 	_ = table.SetData(0, &ColumnDataBlob{xs: blobs})
 
 	err = w.SetTable(table)
@@ -805,7 +805,7 @@ func TestWriterEdgeCases(t *testing.T) {
 			require.NoError(err)
 
 			// Set some data and index
-			table.SetIndex([]time.Time{time.Now()})
+			require.NoError(table.SetIndex([]time.Time{time.Now()}))
 			err = table.SetData(0, tc.createSample())
 			require.NoError(err)
 

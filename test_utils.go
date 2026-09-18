@@ -577,7 +577,7 @@ func genPopulatedTablesOfType(t *rapid.T, handle HandleType, ctype TsColumnType)
 
 		wt, err := NewWriterTable(tbl.alias, columns)
 		require.NoError(t, err)
-		wt.SetIndex(idx)
+		require.NoError(t, wt.SetIndex(idx))
 		require.NoError(t, wt.SetDatas(datas))
 
 		tables[i] = wt
@@ -1351,7 +1351,7 @@ func pushAllColumns(t testHelper, handle HandleType, schema allColumnsSchema, td
 	for i := range td.Int64Points {
 		timestamps[i] = td.Int64Points[i].Timestamp()
 	}
-	writerTable.SetIndex(timestamps)
+	require.NoError(t, writerTable.SetIndex(timestamps))
 
 	blobData := NewColumnDataBlob(pointValues(td.BlobPoints, td.BlobValid, TsBlobPoint.Content, nil))
 	doubleData := NewColumnDataDouble(pointValues(td.DoublePoints, td.DoubleValid, TsDoublePoint.Content, math.NaN()))

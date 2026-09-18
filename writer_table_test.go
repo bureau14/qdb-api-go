@@ -375,7 +375,7 @@ func createTestWriterTableWithColumns(t *testing.T, name string, rowCount int, c
 	for i := range rowCount {
 		timestamps[i] = time.Unix(int64(i), 0)
 	}
-	table.SetIndex(timestamps)
+	require.NoError(t, table.SetIndex(timestamps))
 
 	// Create column data
 	for i, col := range cols {
@@ -446,7 +446,7 @@ func createTestWriterTableWithData(t *testing.T, name string, intData []int64) W
 	for i := range rowCount {
 		timestamps[i] = time.Unix(int64(i), 0)
 	}
-	table.SetIndex(timestamps)
+	require.NoError(t, table.SetIndex(timestamps))
 
 	// Set the integer data
 	columnData := NewColumnDataInt64(intData)
@@ -465,7 +465,7 @@ func createTestWriterTableWithAllTypes(t *testing.T, name string, rowCount int, 
 	for i := range rowCount {
 		timestamps[i] = time.Unix(int64(i*1000), 0)
 	}
-	table.SetIndex(timestamps)
+	require.NoError(t, table.SetIndex(timestamps))
 
 	// Create column data for all types
 	for i, col := range cols {
@@ -535,7 +535,7 @@ func createTestWriterTableWithEmptyData(t *testing.T, name string, expectedRowCo
 
 	// Create empty timestamps
 	timestamps := make([]time.Time, 0)
-	table.SetIndex(timestamps)
+	require.NoError(t, table.SetIndex(timestamps))
 
 	// Always create empty column data structures, even for zero rows
 	for i, col := range cols {
@@ -577,7 +577,7 @@ func createTestWriterTableWithTimestamps(t *testing.T, name string, timestamps [
 	table, err := NewWriterTable(name, cols)
 	require.NoError(t, err)
 
-	table.SetIndex(timestamps)
+	require.NoError(t, table.SetIndex(timestamps))
 
 	// Create corresponding integer data
 	rowCount := len(timestamps)
@@ -621,7 +621,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 
 		// Test that we can safely access all initialized columns
 		timestamps := []time.Time{time.Unix(1000, 0)}
-		table.SetIndex(timestamps)
+		require.NoError(t, table.SetIndex(timestamps))
 
 		// Should not crash when accessing unset columns during merge
 		result, err := MergeSingleTableWriters([]WriterTable{table})
@@ -642,7 +642,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 
 		// Set index/timestamps
 		timestamps := []time.Time{time.Unix(1000, 0), time.Unix(2000, 0)}
-		table.SetIndex(timestamps)
+		require.NoError(t, table.SetIndex(timestamps))
 
 		// Only set data for 2 out of 3 columns
 		intData := NewColumnDataInt64([]int64{100, 200})
@@ -695,10 +695,10 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 
 		// Set indexes but no column data
 		timestamps1 := []time.Time{time.Unix(1000, 0)}
-		table1.SetIndex(timestamps1)
+		require.NoError(t, table1.SetIndex(timestamps1))
 
 		timestamps2 := []time.Time{time.Unix(2000, 0)}
-		table2.SetIndex(timestamps2)
+		require.NoError(t, table2.SetIndex(timestamps2))
 
 		// Attempt merge operations - this should not crash due to safety checks
 		result, err := MergeSingleTableWriters([]WriterTable{table1, table2})
@@ -731,7 +731,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 
 		// Set minimum required data
 		timestamps := []time.Time{time.Unix(1000, 0)}
-		table.SetIndex(timestamps)
+		require.NoError(t, table.SetIndex(timestamps))
 
 		// Test all column types can be accessed without crashing
 		for i, col := range cols {
@@ -771,7 +771,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 		require.NoError(t, err)
 
 		timestamps1 := []time.Time{time.Unix(1000, 0), time.Unix(2000, 0)}
-		table1.SetIndex(timestamps1)
+		require.NoError(t, table1.SetIndex(timestamps1))
 
 		intData1 := NewColumnDataInt64([]int64{100, 200})
 		err = table1.SetData(0, &intData1)
@@ -790,7 +790,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 		require.NoError(t, err)
 
 		timestamps2 := []time.Time{time.Unix(3000, 0)}
-		table2.SetIndex(timestamps2)
+		require.NoError(t, table2.SetIndex(timestamps2))
 
 		intData2 := NewColumnDataInt64([]int64{300})
 		err = table2.SetData(0, &intData2)
@@ -803,7 +803,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 		require.NoError(t, err)
 
 		timestamps3 := []time.Time{time.Unix(4000, 0)}
-		table3.SetIndex(timestamps3)
+		require.NoError(t, table3.SetIndex(timestamps3))
 
 		// No column data set - all should remain in their initialized empty state
 
@@ -845,7 +845,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 
 		// Test with minimal data
 		timestamps := []time.Time{time.Unix(1000, 0)}
-		table.SetIndex(timestamps)
+		require.NoError(t, table.SetIndex(timestamps))
 
 		// Set only one column
 		intData := NewColumnDataInt64([]int64{100})
@@ -886,7 +886,7 @@ func TestWriterTableSegfaultPrevention(t *testing.T) {
 		require.NoError(t, err)
 
 		timestamps := []time.Time{time.Unix(1000, 0)}
-		table.SetIndex(timestamps)
+		require.NoError(t, table.SetIndex(timestamps))
 
 		// Set data for only every other column
 		for i := 0; i < len(cols); i += 2 {

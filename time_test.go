@@ -35,7 +35,7 @@ func TestTimeCanConvertToQdbTimespec(t *testing.T) {
 func TestNullTimeConvertsToNullTimespec(t *testing.T) {
 	assert := assert.New(t)
 
-	input := []time.Time{time.Unix(1, 2).UTC(), NullTime(), time.Time{}}
+	input := []time.Time{time.Unix(1, 2).UTC(), NullTime(), {}}
 	native := TimeSliceToQdbTimespec(input)
 
 	assert.False(isNullTimespec(native[0]))
