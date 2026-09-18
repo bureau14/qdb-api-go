@@ -211,6 +211,10 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "columns", len(t.data), "reason", "no columns")
 	}
 
+	if i := slices.IndexFunc(t.idx, isNullTimespec); i >= 0 {
+		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "row", i, "reason", "null timestamp in index")
+	}
+
 	// Collect PinnableBuilders for centralized pinning
 	var pinnableBuilders []PinnableBuilder
 
