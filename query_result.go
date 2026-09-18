@@ -171,7 +171,7 @@ type QueryColumn interface {
 // that is the writer's own sentinel, so Values can be handed to the batch
 // writer as it is and the nulls are written back as nulls. A timestamp
 // column holds nanoseconds, which the writer does not take directly; its
-// Time method converts one slot.
+// Time method converts one slot, a null slot to NullTime.
 type MaskedArray[T any] struct {
 	Values []T
 	Mask   Mask
@@ -279,7 +279,7 @@ func (c *QueryColumnTimestamp) Name() string {
 }
 
 // Time converts row i to a UTC time.Time. Unchecked: on a null slot it
-// returns the sentinel date in 1677; check the mask first. UTC matches the
+// returns NullTime, which the batch writer writes back as a null. UTC matches the
 // bulk reader (QdbTimespecToTime), not the local-time legacy GetTimestamp.
 func (c *QueryColumnTimestamp) Time(i int) time.Time {
 	return time.Unix(0, c.Values[i]).UTC()

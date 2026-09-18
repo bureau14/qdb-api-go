@@ -121,10 +121,13 @@ func batchInsert(handle *qdb.HandleType) error {
 		return err
 	}
 
-	table.SetIndex([]time.Time{
+	err = table.SetIndex([]time.Time{
 		time.Unix(1548979200, 0),
 		time.Unix(1549065600, 0),
 	})
+	if err != nil {
+		return err
+	}
 
 	open := qdb.NewColumnDataDouble([]float64{3.40, 3.50})
 	close := qdb.NewColumnDataDouble([]float64{3.50, 3.55})

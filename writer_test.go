@@ -29,7 +29,7 @@ func TestWriterTableCanSetIndex(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	writerTable.SetIndex(idx)
+	require.NoError(writerTable.SetIndex(idx))
 	assert.Equal(writerTable.GetIndex(), idx)
 }
 
@@ -49,7 +49,7 @@ func TestWriterTableCanSetDataAllColumnNames(t *testing.T) {
 	require.NotNil(writerTable)
 
 	idx := generateDefaultIndex(1024)
-	writerTable.SetIndex(idx)
+	require.NoError(writerTable.SetIndex(idx))
 
 	datas, err := generateWriterDatas(len(idx), columns)
 	require.NoError(err)
@@ -166,7 +166,7 @@ func TestWriterOptionsUpsertRequiresColumns(t *testing.T) {
 	writer := NewWriter(opts)
 
 	tbl := newTestWriterTable(t)
-	tbl.SetIndex(generateDefaultIndex(1024))
+	require.NoError(tbl.SetIndex(generateDefaultIndex(1024)))
 	datas, err := generateWriterDatas(1024, tbl.columnInfoByOffset)
 
 	require.NoError(err)
@@ -456,7 +456,7 @@ func TestWriterCGOSafety(t *testing.T) {
 
 	// Set index with a single timestamp
 	now := time.Now()
-	table.SetIndex([]time.Time{now})
+	require.NoError(table.SetIndex([]time.Time{now}))
 
 	// Set data for each column type
 	_ = table.SetData(0, &ColumnDataInt64{xs: []int64{42}})
@@ -553,7 +553,7 @@ func TestWriterLargeData(t *testing.T) {
 		table, err := NewWriterTable(tsTable.alias, cols)
 		require.NoError(err)
 
-		table.SetIndex(timestamps)
+		require.NoError(table.SetIndex(timestamps))
 		_ = table.SetData(0, &ColumnDataDouble{xs: values})
 
 		err = w.SetTable(table)
@@ -616,7 +616,7 @@ func TestWriterMixedStringLengths(t *testing.T) {
 	table, err := NewWriterTable(tsTable.alias, cols)
 	require.NoError(err)
 
-	table.SetIndex(timestamps)
+	require.NoError(table.SetIndex(timestamps))
 	_ = table.SetData(0, &ColumnDataString{xs: strings})
 
 	err = w.SetTable(table)
@@ -685,7 +685,7 @@ func TestWriterMixedBlobSizes(t *testing.T) {
 	table, err := NewWriterTable(tsTable.alias, cols)
 	require.NoError(err)
 
-	table.SetIndex(timestamps)
+	require.NoError(table.SetIndex(timestamps))
 	_ = table.SetData(0, &ColumnDataBlob{xs: blobs})
 
 	err = w.SetTable(table)
@@ -805,7 +805,7 @@ func TestWriterEdgeCases(t *testing.T) {
 			require.NoError(err)
 
 			// Set some data and index
-			table.SetIndex([]time.Time{time.Now()})
+			require.NoError(table.SetIndex([]time.Time{time.Now()}))
 			err = table.SetData(0, tc.createSample())
 			require.NoError(err)
 
@@ -819,4 +819,71 @@ func TestWriterEdgeCases(t *testing.T) {
 			}, "Should panic when pushing with nil handle for "+tc.name)
 		})
 	}
+}
+
+// A timestamp value column accepts NullTime and the bulk reader hands it back:
+// only the index is barred from holding a null.
+func TestWriterTimestampColumnRoundTripsNull(t *testing.T) {
+	require := require.New(t)
+
+	h := newTestHandle(t)
+	cols := []WriterColumn{{ColumnName: "timestamp_col", ColumnType: TsColumnTimestamp}}
+
+	tsTable, err := createTableOfWriterColumnsAndDefaultShardSize(h, cols)
+	require.NoError(err)
+
+	table, err := NewWriterTable(tsTable.alias, cols)
+	require.NoError(err)
+
+	idx := generateDefaultIndex(3)
+	values := []time.Time{idx[0], NullTime(), idx[2]}
+	require.NoError(table.SetIndex(idx))
+
+	cd := NewColumnDataTimestamp(values)
+	require.NoError(table.SetData(0, &cd))
+
+	pushWriterTables(t, h, []WriterTable{table})
+
+	opts := NewReaderOptions().WithTables([]string{tsTable.alias}).WithColumns([]string{"timestamp_col"})
+	reader, err := NewReader(h, opts)
+	require.NoError(err)
+	defer reader.Close()
+
+	data, err := reader.FetchAll()
+	require.NoError(err)
+	require.Equal(3, data.RowCount())
+
+	got, err := GetColumnDataTimestamp(data.data[0])
+	require.NoError(err)
+	require.Equal(values, got)
+	require.True(IsNullTime(got[1]))
+}
+
+// The index can not be null: SetIndex refuses NullTime, and a null timespec
+// set through SetIndexFromNative is refused on push.
+func TestWriterTableIndexRejectsNull(t *testing.T) {
+	require := require.New(t)
+
+	h := newTestHandle(t)
+	cols := []WriterColumn{{ColumnName: "int_col", ColumnType: TsColumnInt64}}
+
+	tsTable, err := createTableOfWriterColumnsAndDefaultShardSize(h, cols)
+	require.NoError(err)
+
+	table, err := NewWriterTable(tsTable.alias, cols)
+	require.NoError(err)
+
+	idx := []time.Time{time.Now(), NullTime()}
+
+	err = table.SetIndex(idx)
+	require.ErrorIs(err, ErrInvalidArgument)
+	require.Nil(table.GetIndexAsNative())
+
+	table.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
+	cd := NewColumnDataInt64([]int64{1, 2})
+	require.NoError(table.SetData(0, &cd))
+
+	w := NewWriterWithDefaultOptions()
+	require.NoError(w.SetTable(table))
+	require.ErrorIs(w.Push(h), ErrInvalidArgument)
 }
