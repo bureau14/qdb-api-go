@@ -12,6 +12,7 @@ import "C"
 
 import (
 	"fmt"
+	"slices"
 	"time"
 	"unsafe"
 )
@@ -95,9 +96,21 @@ func (t *WriterTable) SetIndexFromNative(idx []C.qdb_timespec_t) {
 	t.rowCount = len(idx)
 }
 
+// indexOfNullTime returns the offset of the first NullTime in ts, or -1.
+func indexOfNullTime(ts []time.Time) int {
+	return slices.IndexFunc(ts, IsNullTime)
+}
+
 // SetIndex sets the table's timestamp index.
-func (t *WriterTable) SetIndex(idx []time.Time) {
+// Returns an error when idx contains NullTime: the index can not be null.
+func (t *WriterTable) SetIndex(idx []time.Time) error {
+	if i := indexOfNullTime(idx); i >= 0 {
+		return wrapError(C.qdb_e_invalid_argument, "writer_table_set_index", "row", i, "reason", "null timestamp in index")
+	}
+
 	t.SetIndexFromNative(TimeSliceToQdbTimespec(idx))
+
+	return nil
 }
 
 // GetIndexAsNative returns the timestamp index as C timespecs.
@@ -196,6 +209,10 @@ func (t *WriterTable) toNativeTableData(h HandleType, out *C.qdb_exp_batch_push_
 
 	if len(t.data) == 0 {
 		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "columns", len(t.data), "reason", "no columns")
+	}
+
+	if i := slices.IndexFunc(t.idx, isNullTimespec); i >= 0 {
+		return nil, func() {}, wrapError(C.qdb_e_invalid_argument, "writer_table_to_native", "row", i, "reason", "null timestamp in index")
 	}
 
 	// Collect PinnableBuilders for centralized pinning

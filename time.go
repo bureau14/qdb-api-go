@@ -44,14 +44,32 @@ func TimespecToStructG(tp C.qdb_timespec_t) time.Time {
 	return time.Unix(int64(tp.tv_sec), int64(tp.tv_nsec))
 }
 
+// isNullTimespec reports whether t is the null timestamp, qdb_min_time in both fields.
+func isNullTimespec(t C.qdb_timespec_t) bool {
+	return t.tv_sec == C.qdb_min_time && t.tv_nsec == C.qdb_min_time
+}
+
 // TimeToQdbTimespec writes t into out using the qdb_timespec_t format.
+// NullTime is written as the null timestamp.
 func TimeToQdbTimespec(t time.Time, out *C.qdb_timespec_t) {
+	if IsNullTime(t) {
+		out.tv_nsec = C.qdb_min_time
+		out.tv_sec = C.qdb_min_time
+
+		return
+	}
+
 	out.tv_nsec = C.qdb_time_t(t.Nanosecond())
 	out.tv_sec = C.qdb_time_t(t.Unix())
 }
 
 // QdbTimespecToTime converts qdb_timespec_t to a UTC time.Time.
+// The null timestamp is returned as NullTime.
 func QdbTimespecToTime(t C.qdb_timespec_t) time.Time {
+	if isNullTimespec(t) {
+		return NullTime()
+	}
+
 	return time.Unix(int64(t.tv_sec), int64(t.tv_nsec)).UTC()
 }
 

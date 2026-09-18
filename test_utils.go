@@ -577,7 +577,7 @@ func genPopulatedTablesOfType(t *rapid.T, handle HandleType, ctype TsColumnType)
 
 		wt, err := NewWriterTable(tbl.alias, columns)
 		require.NoError(t, err)
-		wt.SetIndex(idx)
+		require.NoError(t, wt.SetIndex(idx))
 		require.NoError(t, wt.SetDatas(datas))
 
 		tables[i] = wt
@@ -1340,10 +1340,8 @@ func pointValues[P, V any](points []P, valid []bool, get func(P) V, null V) []V 
 	return out
 }
 
-// pushAllColumns writes td through the batch writer. Null timestamps are
-// set on the raw timespec slice: the sentinel is qdb_min_time in both
-// fields, and time.Time normalises such a nanosecond value into seconds, so
-// NewColumnDataTimestamp cannot express it.
+// pushAllColumns writes td through the batch writer. Null slots hold the
+// writer's null value of the column type.
 func pushAllColumns(t testHelper, handle HandleType, schema allColumnsSchema, td TestTimeseriesData) {
 	t.Helper()
 
@@ -1353,19 +1351,14 @@ func pushAllColumns(t testHelper, handle HandleType, schema allColumnsSchema, td
 	for i := range td.Int64Points {
 		timestamps[i] = td.Int64Points[i].Timestamp()
 	}
-	writerTable.SetIndex(timestamps)
+	require.NoError(t, writerTable.SetIndex(timestamps))
 
 	blobData := NewColumnDataBlob(pointValues(td.BlobPoints, td.BlobValid, TsBlobPoint.Content, nil))
 	doubleData := NewColumnDataDouble(pointValues(td.DoublePoints, td.DoubleValid, TsDoublePoint.Content, math.NaN()))
 	int64Data := NewColumnDataInt64(pointValues(td.Int64Points, td.Int64Valid, TsInt64Point.Content, math.MinInt64))
 	stringData := NewColumnDataString(pointValues(td.StringPoints, td.StringValid, TsStringPoint.Content, ""))
-	timestampData := NewColumnDataTimestamp(pointValues(td.TimestampPoints, td.TimestampValid, TsTimestampPoint.Content, time.Time{}))
+	timestampData := NewColumnDataTimestamp(pointValues(td.TimestampPoints, td.TimestampValid, TsTimestampPoint.Content, NullTime()))
 	symbolData := NewColumnDataString(pointValues(td.SymbolPoints, td.SymbolValid, TsStringPoint.Content, ""))
-	for i, ok := range td.TimestampValid {
-		if !ok {
-			timestampData.xs[i] = C.qdb_timespec_t{tv_sec: C.qdb_min_time, tv_nsec: C.qdb_min_time}
-		}
-	}
 	require.NoError(t, writerTable.SetDatas([]ColumnData{&blobData, &doubleData, &int64Data, &stringData, &timestampData, &symbolData}))
 
 	writer := NewWriterWithDefaultOptions()
