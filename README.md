@@ -140,3 +140,36 @@ This could prove useful if you need to manage the flow of creation of your handl
     // connect
     err = handle.Connect("qdb://127.0.0.1:2836)
 ```
+
+## Bulk reads
+
+`NewReader` opens a single-pass cursor over one or more tables. Two iterators
+walk it; pick one per reader.
+
+```go
+    rd, err := qdb.NewReader(handle, qdb.NewReaderOptions().WithTables([]string{"trades"}))
+    if err != nil {
+        return err
+    }
+    defer rd.Close()
+
+    // Go-owned column batches
+    for chunk, err := range rd.Chunks() {
+        if err != nil {
+            return err
+        }
+        // chunk.RowCount() rows
+    }
+
+    // Arrow record batches; the caller owns each batch and releases it once
+    for rec, err := range rd.Arrow() {
+        if err != nil {
+            return err
+        }
+        // rec.Schema(): "$table", "$timestamp", then the table columns
+        rec.Release()
+    }
+```
+
+`WithColumns` selects columns and their order; `"$table"` and `"$timestamp"`
+appear only when named. `WithBatchSize` bounds the rows per step.
