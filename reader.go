@@ -9,12 +9,18 @@ package qdb
    #include <string.h> // for memcpy
    #include <qdb/client.h>
    #include <qdb/ts.h>
+
+   #cgo noescape qdb_bulk_reader_fetch
+   #cgo nocallback qdb_bulk_reader_fetch
+   #cgo noescape qdb_bulk_reader_get_data
+   #cgo nocallback qdb_bulk_reader_get_data
 */
 import "C"
 
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"time"
 	"unsafe"
 )
@@ -110,6 +116,34 @@ func (rc *ReaderChunk) RowCount() int {
 	return len(rc.idx)
 }
 
+// emptyColumnDataLike returns a new, empty column of c's concrete type.
+func emptyColumnDataLike(c ColumnData) (ColumnData, error) { //nolint:ireturn // Justified: mirrors the ColumnData input
+	switch c.(type) {
+	case *ColumnDataInt64:
+		v := NewColumnDataInt64(nil)
+
+		return &v, nil
+	case *ColumnDataDouble:
+		v := NewColumnDataDouble(nil)
+
+		return &v, nil
+	case *ColumnDataTimestamp:
+		v := NewColumnDataTimestamp(nil)
+
+		return &v, nil
+	case *ColumnDataBlob:
+		v := NewColumnDataBlob(nil)
+
+		return &v, nil
+	case *ColumnDataString:
+		v := NewColumnDataString(nil)
+
+		return &v, nil
+	default:
+		return nil, wrapError(C.qdb_e_incompatible_type, "reader_merge_chunks", "column_type", c.ValueType())
+	}
+}
+
 // mergeReaderChunks combines multiple chunks into one.
 func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	if len(xs) == 0 {
@@ -117,7 +151,7 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	}
 
 	var base ReaderChunk = xs[0]
-	var totalRows int = 0
+	var totalRows int = len(base.idx)
 
 	// Short-circuit in case there is just a single chunk, which is actuallyu a common case
 	if len(xs) == 1 {
@@ -145,24 +179,14 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	mergedIdx := make([]time.Time, 0, totalRows)
 	mergedData := make([]ColumnData, len(base.data))
 
-	// Pre-allocate all data, useful when merging many smaller chunks into a larger chunk
+	// Fresh columns: chunk columns are pointers, so reusing base.data[idx]
+	// would clear the first chunk before it is appended.
 	for idx, col := range base.data {
-		// Rather than a lot of boilerplate, we just reuse the input object of the
-		// base object, and reset that object's content to 0.
-		//
-		// This keeps the code small.
-		//
-		// We do need to make sure that we actually get "rid" of the references of
-		// the old column, as slices are typically passed by reference, so all cols
-		// would be pointing to the same slice reference
-		var newCol ColumnData = col
-
-		// Resets the actual held data, but not the column data / name
-		newCol.Clear()
-
-		// Ensure that the slice backing array can hold the final merged size
+		newCol, err := emptyColumnDataLike(col)
+		if err != nil {
+			return ReaderChunk{}, err
+		}
 		newCol.EnsureCapacity(totalRows)
-
 		mergedData[idx] = newCol
 	}
 
@@ -340,35 +364,68 @@ type Reader struct {
 
 	// Iterator pattern: current batch we're pointing at
 	currentBatch ReaderChunk
+
+	// Which API family consumes the C cursor. The cursor is single-pass, so
+	// Next and the sequence methods exclude each other.
+	cursorUse readerCursorUse
 }
 
-// NewReader creates a reader for bulk data retrieval.
-func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
-	var ret Reader
-	ret.handle = h
-	ret.options = options
+// readerCursorUse records which API family started consuming the cursor.
+type readerCursorUse uint8
 
-	// Step 1: validations
+const (
+	cursorUnused     readerCursorUse = iota // nothing fetched yet
+	cursorByNext                            // Next/Batch/Err in use
+	cursorBySequence                        // Chunks or Arrow in use
+)
+
+// validateReaderOptions checks tables, range and batch size.
+func validateReaderOptions(options ReaderOptions) error {
 	if len(options.tables) == 0 {
-		return ret, fmt.Errorf("no tables provided")
+		return fmt.Errorf("no tables provided")
 	}
 
 	// Either both rangeStart and rangeEnd must be zero (meaning no range
 	// filtering) or both must be non-zero.  Having only one of them set is
 	// invalid.
 	if options.rangeStart.IsZero() != options.rangeEnd.IsZero() {
-		return ret, fmt.Errorf("invalid time range")
+		return fmt.Errorf("invalid time range")
 	}
 
 	if !options.rangeEnd.IsZero() && !options.rangeEnd.After(options.rangeStart) {
-		return ret, fmt.Errorf("invalid time range")
+		return fmt.Errorf("invalid time range")
 	}
 
-	// Step 1: validate that our batchSize makes sense -- that it's not exceptionally large
 	if options.batchSize <= 0 || options.batchSize > (1<<24) {
-		return ret, fmt.Errorf("invalid batch size: %d", options.batchSize)
+		return fmt.Errorf("invalid batch size: %d", options.batchSize)
 	}
 
+	return nil
+}
+
+// NewReader creates a reader for bulk data retrieval.
+func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
+	ret := Reader{handle: h, options: options}
+
+	err := validateReaderOptions(options)
+	if err != nil {
+		return ret, err
+	}
+
+	state, err := openBulkReader(h, options)
+	if err != nil {
+		return ret, err
+	}
+
+	ret.state = state
+
+	return ret, nil
+}
+
+// openBulkReader marshals options and calls qdb_bulk_reader_fetch. Every
+// temporary C allocation is released before returning; the C API keeps its
+// own copy. The returned cursor is released by Reader.Close.
+func openBulkReader(h HandleType, options ReaderOptions) (C.qdb_reader_handle_t, error) {
 	// Only ever a single range, so we can stack-allocate it and share directly with
 	// the C API invocation.
 	var cRanges [1]C.qdb_ts_range_t
@@ -440,7 +497,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var readerHandle C.qdb_reader_handle_t
 
 	errCode := C.qdb_bulk_reader_fetch(
-		ret.handle.handle,
+		h.handle,
 		cColumns,
 		C.qdb_size_t(columnCount),
 		cTables,
@@ -450,23 +507,26 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 
 	err := wrapError(errCode, "reader_init", "tables", tableCount)
 	if err != nil {
-		return ret, err
+		return nil, err
 	}
 
-	ret.state = readerHandle
-
-	// Done, return state.
-
-	return ret, nil
+	return readerHandle, nil
 }
 
 // Next advances to the next batch, returns false when done.
 func (r *Reader) Next() bool {
+	err := r.claimCursor(cursorByNext)
+	if err != nil {
+		r.err = err
+		r.done = true
+
+		return false
+	}
+
 	if r.done {
 		return false
 	}
 
-	var err error
 	r.currentBatch, err = r.fetchBatch()
 
 	if errors.Is(err, ErrIteratorEnd) {
@@ -525,6 +585,41 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 	return ret, nil
 }
 
+// Chunks returns the remaining rows as batches of at most batchSize rows.
+//
+// Returns:
+//
+//	iter.Seq2[ReaderChunk, error]: one chunk per step; the last step
+//	carries a non-nil error when the read failed
+//
+// One sequence per Reader. A second Chunks, Arrow or Next call after the
+// first step yields ErrInvalidIterator. Breaking out of the loop is safe;
+// the reader is still closed by Close.
+func (r *Reader) Chunks() iter.Seq2[ReaderChunk, error] {
+	return func(yield func(ReaderChunk, error) bool) {
+		err := r.claimCursor(cursorBySequence)
+		if err != nil {
+			yield(ReaderChunk{}, err)
+
+			return
+		}
+		defer func() { r.done = true }()
+
+		for {
+			chunk, err := r.fetchBatch()
+			if err != nil {
+				yield(ReaderChunk{}, err)
+
+				return
+			}
+			// fetchBatch maps qdb_e_iterator_end to an empty chunk.
+			if chunk.Empty() || !yield(chunk, nil) {
+				return
+			}
+		}
+	}
+}
+
 // Close releases reader resources.
 func (r *Reader) Close() {
 	// if state is non-nil, invoke qdbRelease() on state
@@ -534,6 +629,22 @@ func (r *Reader) Close() {
 
 		r.state = nil
 	}
+}
+
+// claimCursor marks the cursor as consumed by `use`. Repeated Next calls
+// are allowed; a sequence may start once, and only on an unused cursor.
+func (r *Reader) claimCursor(use readerCursorUse) error {
+	if r.cursorUse == cursorUnused {
+		r.cursorUse = use
+
+		return nil
+	}
+
+	if r.cursorUse == cursorByNext && use == cursorByNext {
+		return nil
+	}
+
+	return wrapError(C.qdb_e_invalid_iterator, "reader_iterate", "requested", use, "current", r.cursorUse)
 }
 
 // fetchBatch retrieves the next batch of rows.
