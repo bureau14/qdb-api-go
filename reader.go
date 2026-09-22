@@ -20,6 +20,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"time"
 	"unsafe"
 )
@@ -363,7 +364,20 @@ type Reader struct {
 
 	// Iterator pattern: current batch we're pointing at
 	currentBatch ReaderChunk
+
+	// Which API family consumes the C cursor. The cursor is single-pass, so
+	// Next and the sequence methods exclude each other.
+	cursorUse readerCursorUse
 }
+
+// readerCursorUse records which API family started consuming the cursor.
+type readerCursorUse uint8
+
+const (
+	cursorUnused     readerCursorUse = iota // nothing fetched yet
+	cursorByNext                            // Next/Batch/Err in use
+	cursorBySequence                        // Chunks or Arrow in use
+)
 
 // validateReaderOptions checks tables, range and batch size.
 func validateReaderOptions(options ReaderOptions) error {
@@ -501,11 +515,18 @@ func openBulkReader(h HandleType, options ReaderOptions) (C.qdb_reader_handle_t,
 
 // Next advances to the next batch, returns false when done.
 func (r *Reader) Next() bool {
+	err := r.claimCursor(cursorByNext)
+	if err != nil {
+		r.err = err
+		r.done = true
+
+		return false
+	}
+
 	if r.done {
 		return false
 	}
 
-	var err error
 	r.currentBatch, err = r.fetchBatch()
 
 	if errors.Is(err, ErrIteratorEnd) {
@@ -564,6 +585,41 @@ func (r *Reader) FetchAll() (ReaderChunk, error) {
 	return ret, nil
 }
 
+// Chunks returns the remaining rows as batches of at most batchSize rows.
+//
+// Returns:
+//
+//	iter.Seq2[ReaderChunk, error]: one chunk per step; the last step
+//	carries a non-nil error when the read failed
+//
+// One sequence per Reader. A second Chunks, Arrow or Next call after the
+// first step yields ErrInvalidIterator. Breaking out of the loop is safe;
+// the reader is still closed by Close.
+func (r *Reader) Chunks() iter.Seq2[ReaderChunk, error] {
+	return func(yield func(ReaderChunk, error) bool) {
+		err := r.claimCursor(cursorBySequence)
+		if err != nil {
+			yield(ReaderChunk{}, err)
+
+			return
+		}
+		defer func() { r.done = true }()
+
+		for {
+			chunk, err := r.fetchBatch()
+			if err != nil {
+				yield(ReaderChunk{}, err)
+
+				return
+			}
+			// fetchBatch maps qdb_e_iterator_end to an empty chunk.
+			if chunk.Empty() || !yield(chunk, nil) {
+				return
+			}
+		}
+	}
+}
+
 // Close releases reader resources.
 func (r *Reader) Close() {
 	// if state is non-nil, invoke qdbRelease() on state
@@ -573,6 +629,22 @@ func (r *Reader) Close() {
 
 		r.state = nil
 	}
+}
+
+// claimCursor marks the cursor as consumed by `use`. Repeated Next calls
+// are allowed; a sequence may start once, and only on an unused cursor.
+func (r *Reader) claimCursor(use readerCursorUse) error {
+	if r.cursorUse == cursorUnused {
+		r.cursorUse = use
+
+		return nil
+	}
+
+	if r.cursorUse == cursorByNext && use == cursorByNext {
+		return nil
+	}
+
+	return wrapError(C.qdb_e_invalid_iterator, "reader_iterate", "requested", use, "current", r.cursorUse)
 }
 
 // fetchBatch retrieves the next batch of rows.
