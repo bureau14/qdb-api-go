@@ -13,6 +13,8 @@ package qdb
 import "C"
 
 import (
+	"errors"
+	"iter"
 	"unsafe"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -97,4 +99,61 @@ func (s arrowStream) drain(yield func(arrow.RecordBatch, error) bool) bool {
 	}
 
 	return true
+}
+
+// Arrow returns the remaining rows as Arrow record batches.
+//
+// Returns:
+//
+//	iter.Seq2[arrow.RecordBatch, error]: one batch per step; the last step
+//	carries a non-nil error when the read or the Arrow import failed
+//
+// The caller owns every yielded batch and must Release it exactly once. A
+// batch holds no reference to the reader or the handle and stays valid
+// after the next step, after Close and after the handle is closed. On an
+// error step the batch is nil.
+//
+// Schema: without WithColumns the fields are "$table" (utf8), "$timestamp"
+// (timestamp[ns], no zone) and then every data column; with WithColumns
+// the requested order, specials only when named. Data columns are
+// nullable. Timestamps carry no zone, as in Query.FetchArrow.
+//
+// One sequence per Reader. A second Chunks, Arrow or Next call after the
+// first step yields ErrInvalidIterator. Breaking out of the loop is safe;
+// the reader is still closed by Close.
+//
+// Example:
+//
+//	for rec, err := range rd.Arrow() {
+//	    if err != nil {
+//	        return err
+//	    }
+//	    process(rec)
+//	    rec.Release()
+//	}
+func (r *Reader) Arrow() iter.Seq2[arrow.RecordBatch, error] {
+	return func(yield func(arrow.RecordBatch, error) bool) {
+		err := r.claimCursor(cursorBySequence)
+		if err != nil {
+			yield(nil, err)
+
+			return
+		}
+		defer func() { r.done = true }()
+
+		for {
+			stream, err := r.fetchArrowStream()
+			if errors.Is(err, ErrIteratorEnd) {
+				return
+			}
+			if err != nil {
+				yield(nil, err)
+
+				return
+			}
+			if !stream.drain(yield) {
+				return
+			}
+		}
+	}
 }
