@@ -9,6 +9,11 @@ package qdb
    #include <string.h> // for memcpy
    #include <qdb/client.h>
    #include <qdb/ts.h>
+
+   #cgo noescape qdb_bulk_reader_fetch
+   #cgo nocallback qdb_bulk_reader_fetch
+   #cgo noescape qdb_bulk_reader_get_data
+   #cgo nocallback qdb_bulk_reader_get_data
 */
 import "C"
 
@@ -342,33 +347,53 @@ type Reader struct {
 	currentBatch ReaderChunk
 }
 
-// NewReader creates a reader for bulk data retrieval.
-func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
-	var ret Reader
-	ret.handle = h
-	ret.options = options
-
-	// Step 1: validations
+// validateReaderOptions checks tables, range and batch size.
+func validateReaderOptions(options ReaderOptions) error {
 	if len(options.tables) == 0 {
-		return ret, fmt.Errorf("no tables provided")
+		return fmt.Errorf("no tables provided")
 	}
 
 	// Either both rangeStart and rangeEnd must be zero (meaning no range
 	// filtering) or both must be non-zero.  Having only one of them set is
 	// invalid.
 	if options.rangeStart.IsZero() != options.rangeEnd.IsZero() {
-		return ret, fmt.Errorf("invalid time range")
+		return fmt.Errorf("invalid time range")
 	}
 
 	if !options.rangeEnd.IsZero() && !options.rangeEnd.After(options.rangeStart) {
-		return ret, fmt.Errorf("invalid time range")
+		return fmt.Errorf("invalid time range")
 	}
 
-	// Step 1: validate that our batchSize makes sense -- that it's not exceptionally large
 	if options.batchSize <= 0 || options.batchSize > (1<<24) {
-		return ret, fmt.Errorf("invalid batch size: %d", options.batchSize)
+		return fmt.Errorf("invalid batch size: %d", options.batchSize)
 	}
 
+	return nil
+}
+
+// NewReader creates a reader for bulk data retrieval.
+func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
+	ret := Reader{handle: h, options: options}
+
+	err := validateReaderOptions(options)
+	if err != nil {
+		return ret, err
+	}
+
+	state, err := openBulkReader(h, options)
+	if err != nil {
+		return ret, err
+	}
+
+	ret.state = state
+
+	return ret, nil
+}
+
+// openBulkReader marshals options and calls qdb_bulk_reader_fetch. Every
+// temporary C allocation is released before returning; the C API keeps its
+// own copy. The returned cursor is released by Reader.Close.
+func openBulkReader(h HandleType, options ReaderOptions) (C.qdb_reader_handle_t, error) {
 	// Only ever a single range, so we can stack-allocate it and share directly with
 	// the C API invocation.
 	var cRanges [1]C.qdb_ts_range_t
@@ -440,7 +465,7 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 	var readerHandle C.qdb_reader_handle_t
 
 	errCode := C.qdb_bulk_reader_fetch(
-		ret.handle.handle,
+		h.handle,
 		cColumns,
 		C.qdb_size_t(columnCount),
 		cTables,
@@ -450,14 +475,10 @@ func NewReader(h HandleType, options ReaderOptions) (Reader, error) {
 
 	err := wrapError(errCode, "reader_init", "tables", tableCount)
 	if err != nil {
-		return ret, err
+		return nil, err
 	}
 
-	ret.state = readerHandle
-
-	// Done, return state.
-
-	return ret, nil
+	return readerHandle, nil
 }
 
 // Next advances to the next batch, returns false when done.
