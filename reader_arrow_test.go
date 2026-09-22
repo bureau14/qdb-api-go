@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -455,4 +456,54 @@ func TestReaderMissingTableIsAliasNotFound(t *testing.T) {
 
 	_, err := NewReader(handle, NewReaderDefaultOptions([]string{generateDefaultAlias()}))
 	assert.ErrorIs(t, err, ErrAliasNotFound)
+}
+
+// TestReaderArrowLargeBatchesSurviveClose reads buffers far above any
+// small-buffer path in the C stream and uses them only after the reader,
+// the handle and a GC cycle are gone.
+func TestReaderArrowLargeBatchesSurviveClose(t *testing.T) {
+	const rows, batchSize = 20000, 4096
+	handle := newTestHandle(t)
+	cols := []WriterColumn{{ColumnName: "s", ColumnType: TsColumnString}, {ColumnName: "b", ColumnType: TsColumnBlob}}
+	tbl, err := createTableOfWriterColumnsAndDefaultShardSize(handle, cols)
+	require.NoError(t, err)
+	wt, err := NewWriterTable(tbl.alias, cols)
+	require.NoError(t, err)
+
+	idx := make([]time.Time, rows)
+	strs := make([]string, rows)
+	blobs := make([][]byte, rows)
+	for i := range rows {
+		idx[i] = time.Unix(int64(i), 0).UTC()
+		strs[i] = strings.Repeat(fmt.Sprintf("%05d", i), 40)
+		blobs[i] = []byte(strings.Repeat(fmt.Sprintf("%06d", i), 50))
+	}
+	s, b := NewColumnDataString(strs), NewColumnDataBlob(blobs)
+	require.NoError(t, wt.SetIndex(idx))
+	require.NoError(t, wt.SetData(0, &s))
+	require.NoError(t, wt.SetData(1, &b))
+	pushWriterTables(t, handle, []WriterTable{wt})
+
+	reader, err := NewReader(handle, NewReaderOptions().WithTables([]string{tbl.alias}).WithBatchSize(batchSize))
+	require.NoError(t, err)
+	recs := collectArrow(t, &reader)
+	reader.Close()
+	require.NoError(t, handle.Close())
+	runtime.GC()
+	debug.FreeOSMemory()
+
+	require.Equal(t, int64(rows), totalRows(recs))
+	seen := 0
+	for _, rec := range recs {
+		sa, ok := rec.Column(2).(*array.String)
+		require.True(t, ok)
+		ba, ok := rec.Column(3).(*array.Binary)
+		require.True(t, ok)
+		for i := range int(rec.NumRows()) {
+			assert.Equal(t, strs[seen], sa.Value(i))
+			assert.Equal(t, blobs[seen], ba.Value(i))
+			seen++
+		}
+	}
+	releaseRecords(recs)
 }
