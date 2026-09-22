@@ -133,3 +133,34 @@ func TestReaderMergeReaderChunks(t *testing.T) {
 		})
 	})
 }
+
+func TestReaderMergeReaderChunksKeepsFirstChunk(t *testing.T) {
+	cols := []ReaderColumn{{columnName: "a", columnType: TsColumnInt64}, {columnName: "b", columnType: TsColumnString}}
+	idx := []time.Time{time.Unix(1, 0), time.Unix(2, 0)}
+
+	first, err := NewReaderChunk(cols, idx, []ColumnData{ptrInt64(1, 2), ptrString("x", "y")})
+	require.NoError(t, err)
+	second, err := NewReaderChunk(cols, idx, []ColumnData{ptrInt64(3, 4), ptrString("z", "w")})
+	require.NoError(t, err)
+
+	merged, err := mergeReaderChunks([]ReaderChunk{first, second})
+	require.NoError(t, err)
+
+	assert.Equal(t, 4, merged.RowCount())
+	for i, col := range merged.data {
+		assert.Equal(t, 4, col.Length(), "column %d", i)
+	}
+	assert.Equal(t, 2, first.data[0].Length(), "first chunk is left intact")
+}
+
+func ptrInt64(xs ...int64) *ColumnDataInt64 {
+	v := NewColumnDataInt64(xs)
+
+	return &v
+}
+
+func ptrString(xs ...string) *ColumnDataString {
+	v := NewColumnDataString(xs)
+
+	return &v
+}

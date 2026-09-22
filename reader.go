@@ -115,6 +115,34 @@ func (rc *ReaderChunk) RowCount() int {
 	return len(rc.idx)
 }
 
+// emptyColumnDataLike returns a new, empty column of c's concrete type.
+func emptyColumnDataLike(c ColumnData) (ColumnData, error) { //nolint:ireturn // Justified: mirrors the ColumnData input
+	switch c.(type) {
+	case *ColumnDataInt64:
+		v := NewColumnDataInt64(nil)
+
+		return &v, nil
+	case *ColumnDataDouble:
+		v := NewColumnDataDouble(nil)
+
+		return &v, nil
+	case *ColumnDataTimestamp:
+		v := NewColumnDataTimestamp(nil)
+
+		return &v, nil
+	case *ColumnDataBlob:
+		v := NewColumnDataBlob(nil)
+
+		return &v, nil
+	case *ColumnDataString:
+		v := NewColumnDataString(nil)
+
+		return &v, nil
+	default:
+		return nil, wrapError(C.qdb_e_incompatible_type, "reader_merge_chunks", "column_type", c.ValueType())
+	}
+}
+
 // mergeReaderChunks combines multiple chunks into one.
 func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	if len(xs) == 0 {
@@ -122,7 +150,7 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	}
 
 	var base ReaderChunk = xs[0]
-	var totalRows int = 0
+	var totalRows int = len(base.idx)
 
 	// Short-circuit in case there is just a single chunk, which is actuallyu a common case
 	if len(xs) == 1 {
@@ -150,24 +178,14 @@ func mergeReaderChunks(xs []ReaderChunk) (ReaderChunk, error) {
 	mergedIdx := make([]time.Time, 0, totalRows)
 	mergedData := make([]ColumnData, len(base.data))
 
-	// Pre-allocate all data, useful when merging many smaller chunks into a larger chunk
+	// Fresh columns: chunk columns are pointers, so reusing base.data[idx]
+	// would clear the first chunk before it is appended.
 	for idx, col := range base.data {
-		// Rather than a lot of boilerplate, we just reuse the input object of the
-		// base object, and reset that object's content to 0.
-		//
-		// This keeps the code small.
-		//
-		// We do need to make sure that we actually get "rid" of the references of
-		// the old column, as slices are typically passed by reference, so all cols
-		// would be pointing to the same slice reference
-		var newCol ColumnData = col
-
-		// Resets the actual held data, but not the column data / name
-		newCol.Clear()
-
-		// Ensure that the slice backing array can hold the final merged size
+		newCol, err := emptyColumnDataLike(col)
+		if err != nil {
+			return ReaderChunk{}, err
+		}
 		newCol.EnsureCapacity(totalRows)
-
 		mergedData[idx] = newCol
 	}
 
