@@ -102,7 +102,10 @@ struct ArrowArrayStream **data, qdb_size_t rows_to_get)`. Same
 
 - `cdata.ImportCRecordReader(stream, nil)` moves the C stream into a
   malloc'd copy owned by the returned reader (`ArrowArrayStreamMove`). The
-  qdb struct is left released and can be `qdb_release`d immediately.
+  qdb struct is left released but must stay allocated until the reader is
+  released: the tracked tuple owns the Arrow table, and `TableBatchReader`
+  reads it by reference. Freeing early yields zero rows (verified
+  2026-09-22 with a probe).
 - The returned reader's `Next` releases the previous record before reading
   the next one (`cdata.go:1264`). A record handed to the caller must be
   `Retain`ed first.
@@ -205,28 +208,36 @@ Semantics:
 ### Internal functions (unexported, `reader_arrow.go`)
 
 ```go
+// arrowStream is one C result: the record reader owning the moved stream
+// and the release of the C allocation it came from.
+type arrowStream struct {
+    reader array.RecordReader
+    free   func()
+}
+
 // fetchArrowStream runs one qdb_bulk_reader_get_data_arrow call and moves
 // the result into an arrow-go record reader. Returns ErrIteratorEnd at end
-// of data. The C stream struct is released before returning; the reader
-// owns the moved stream and must be Released by the caller.
-func (r *Reader) fetchArrowStream() (array.RecordReader, error)
+// of data. The caller drains the stream with drain, which releases it.
+func (r *Reader) fetchArrowStream() (arrowStream, error)
 
-// yieldArrowStream drains one record reader into yield, retaining every
-// record before handing it out. Returns false when yield asked to stop.
-func yieldArrowStream(rr array.RecordReader, yield func(arrow.RecordBatch, error) bool) bool
+// drain yields every record, retaining each before handing it out.
+// Returns false when yield asked to stop or an error step was yielded.
+// Releases the reader, then frees the C allocation, before returning.
+func (s arrowStream) drain(yield func(arrow.RecordBatch, error) bool) bool
 ```
 
 Ownership at the CGO boundary, documented in code as in `query_arrow.go`:
 
 1. `qdb_bulk_reader_get_data_arrow` allocates the stream struct on the
-   client heap.
-2. `cdata.ImportCRecordReader` moves it; the source is now released.
-3. `qdbReleasePointer(handle, stream)` frees the struct and the tracked
-   tuple. The moved stream keeps its own references.
-4. Each record from the arrow-go reader is `Retain`ed, then yielded. The
+   client heap, tracked together with the Arrow table it reads.
+2. `cdata.ImportCRecordReader` moves it; the source is now released but
+   still allocated.
+3. Each record from the arrow-go reader is `Retain`ed, then yielded. The
    caller's `Release` is the one that frees the buffers.
-5. The arrow-go reader is `Release`d when the stream is drained or the
-   loop stops.
+4. When the stream is drained or the loop stops: the arrow-go reader is
+   `Release`d, then `qdbReleasePointer(handle, stream)` frees the struct
+   and the tracked tuple. Records already yielded own their buffers and
+   are unaffected.
 
 ### Errors
 
