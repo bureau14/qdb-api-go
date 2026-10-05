@@ -62,16 +62,20 @@ func validateArrowSchema(table string, schema *arrow.Schema) error {
 	//  1. "$timestamp" present and of a timestamp type;
 	//  2. no "$table": the reader emits it, the C side would send it as data;
 	//  3. every other field of a type the C side can hold.
+
+	// 1. index column present and typed as a timestamp
 	if ts := findTimestampField(schema); ts < 0 {
 		return wrapError(C.qdb_e_invalid_argument, "arrow_writer_set_table", "table", table, "reason", "missing $timestamp column")
 	} else if !arrowTimestampTypeSupported(schema.Field(ts).Type) {
 		return wrapError(C.qdb_e_incompatible_type, "arrow_writer_set_table", "table", table, "column", tsTimestampColumnName, "type", schema.Field(ts).Type.String())
 	}
 
+	// 2. no "$table"
 	if len(schema.FieldIndices(arrowTableColumnName)) > 0 {
 		return wrapError(C.qdb_e_invalid_argument, "arrow_writer_set_table", "table", table, "reason", "$table column not allowed")
 	}
 
+	// 3. data columns of a supported type
 	for _, f := range schema.Fields() {
 		if f.Name == tsTimestampColumnName || arrowTypeSupported(f.Type) {
 			continue
@@ -87,10 +91,17 @@ func validateArrowSchema(table string, schema *arrow.Schema) error {
 // that no "$timestamp" slot is null. A null index slot becomes qdb_min_time
 // on the C side and is refused there; refusing it here names the table.
 func validateArrowBatches(table string, batches []arrow.RecordBatch) error {
+	// The C side concatenates the batches into one table, so they must agree
+	// on one schema, and that schema is checked once:
+	//  1. the first batch's schema passes validateArrowSchema;
+	//  2. every batch has an equal schema, so the index position found in
+	//     step 1 holds for all of them;
+	//  3. no batch has a null index slot.
 	if len(batches) == 0 {
 		return wrapError(C.qdb_e_invalid_argument, "arrow_writer_set_table", "table", table, "reason", "no batches")
 	}
 
+	// 1. first schema
 	schema := batches[0].Schema()
 	err := validateArrowSchema(table, schema)
 	if err != nil {
@@ -99,9 +110,11 @@ func validateArrowBatches(table string, batches []arrow.RecordBatch) error {
 	ts := findTimestampField(schema)
 
 	for i, rec := range batches {
+		// 2. same schema
 		if !rec.Schema().Equal(schema) {
 			return wrapError(C.qdb_e_invalid_argument, "arrow_writer_set_table", "table", table, "batch", i, "reason", "schema differs from first batch")
 		}
+		// 3. no null index
 		if rec.Column(ts).NullN() > 0 {
 			return wrapError(C.qdb_e_invalid_argument, "arrow_writer_set_table", "table", table, "batch", i, "reason", "null $timestamp")
 		}
@@ -352,6 +365,14 @@ func (w *ArrowWriter) liveTables() []arrowWriterTable {
 // fillArrowTableOptions sets name and dedup fields on one C table entry.
 // The returned closure frees the strings it allocated.
 func (w *ArrowWriter) fillArrowTableOptions(h HandleType, name string, out *C.qdb_exp_batch_push_arrow_t) (func(), error) {
+	// out lives in C memory, so every pointer goes in through setCPtr (no Go
+	// write barrier) and every string is a qdb allocation freed by the
+	// returned closure. The fields mirror WriterTable.toNative:
+	//  1. table name;
+	//  2. truncate ranges off, the writer has no truncate mode;
+	//  3. dedup mode, where upsert without columns is refused up front
+	//     because the server would reject it with a less specific error;
+	//  4. where_duplicate as a C array of C strings, or NULL when unused.
 	var releases []func()
 	release := func() {
 		for _, f := range releases {
@@ -359,19 +380,22 @@ func (w *ArrowWriter) fillArrowTableOptions(h HandleType, name string, out *C.qd
 		}
 	}
 
+	// 1. table name
 	cName := qdbCopyString(h, name)
 	releases = append(releases, releaseCPtr(h, unsafe.Pointer(cName)))
 	setCPtr(unsafe.Pointer(&out.name), unsafe.Pointer(cName))
 
-	// Truncate is not supported, as in WriterTable.toNative.
+	// 2. truncate off
 	setCPtr(unsafe.Pointer(&out.truncate_ranges), nil)
 	out.truncate_range_count = 0
 
+	// 3. dedup mode
 	out.deduplication_mode = C.qdb_exp_batch_deduplication_mode_t(w.options.dedupMode)
 	if w.options.dedupMode == WriterDeduplicationModeUpsert && len(w.options.dropDuplicateColumns) == 0 {
 		return release, wrapError(C.qdb_e_invalid_argument, "arrow_writer_push", "dedup_mode", "upsert", "reason", "missing drop duplicate columns")
 	}
 
+	// 4. dedup columns
 	count := len(w.options.dropDuplicateColumns)
 	if count == 0 {
 		setCPtr(unsafe.Pointer(&out.where_duplicate), nil)
