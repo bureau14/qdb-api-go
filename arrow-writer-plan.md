@@ -208,8 +208,15 @@ inherits whichever behaviour is current.
 ### Public surface (new file `writer_arrow.go`)
 
 ```go
-// ArrowWriter stages arrow.RecordBatch tables and pushes them in one
-// qdb_exp_batch_push_arrow_with_options call.
+// ArrowWriter stages arrow.RecordBatch tables and pushes them to the
+// server in one qdb_exp_batch_push_arrow_with_options call.
+//
+// Batches are borrowed: the caller keeps ownership, must not Release a
+// batch while Push is running, and releases it afterwards as usual.
+//
+// Nulls follow the Arrow validity bitmap. Unlike Writer, which encodes
+// null as a per-type sentinel, an empty string or empty blob with the
+// validity bit set is a value.
 type ArrowWriter struct {
     options WriterOptions
     tables  []arrowWriterTable   // insertion order, names unique
@@ -225,20 +232,54 @@ func NewArrowWriterWithDefaultOptions() ArrowWriter
 func (w *ArrowWriter) GetOptions() WriterOptions
 func (w *ArrowWriter) Length() int
 
-// SetTable stages one table. All batches must share one schema. Batches
-// are borrowed: the caller keeps ownership and must not Release them
-// until Push returns. Zero-row batches are accepted.
+// SetTable stages one table from one or more batches sharing a schema.
+//
+// The schema needs a "$timestamp" field of Arrow type timestamp (any
+// unit) or date64 without nulls, no "$table" field, and data fields of
+// type int64, float64, timestamp, date64, utf8 or binary. Zero-row
+// batches are accepted.
+//
+// Returns qdb_e_invalid_argument for a bad name, batch set or
+// "$timestamp" column and qdb_e_incompatible_type for an unsupported
+// field type. Nothing is staged when an error is returned.
 func (w *ArrowWriter) SetTable(name string, batches ...arrow.RecordBatch) error
 
-// Push writes every staged table in one C call. Tables with zero rows
-// in total are skipped; when nothing remains Push returns nil without
-// calling C.
+// Push writes every staged table in one C call.
+//
+// Tables with zero rows in total are skipped; when nothing remains Push
+// returns nil without calling the C API. On return, successful or not,
+// the caller still owns every batch it passed to SetTable.
 func (w *ArrowWriter) Push(h HandleType) error
 ```
 
 A separate type rather than new methods on `Writer`: one push is one C
 call and the two column formats cannot share a transaction, and keeping
 `writer.go` untouched keeps backwards compatibility trivial.
+
+### Documentation shape
+
+Follow the documentation discipline used in qdb-api-rest
+(`.claude/skills/doc-discipline`): the doc comment above a function is
+the contract only; a function that encodes a rule, an algorithm or an
+invariant gets an overview comment at the top of its body and short
+step comments carrying the overview's numbers; everything else stays
+bare. Applied to this file:
+
+| function                                                                         | shape    | the body documents                                                                                                                |
+| -------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ArrowWriter` type                                                               | contract | borrow rule, one-C-call guarantee, validity-null difference from `Writer` (above)                                                 |
+| `NewArrowWriter*`, `GetOptions`, `Length`, `liveTables`, `fillArrowTableOptions` | bare     | nothing; name and body say everything                                                                                             |
+| `SetTable`                                                                       | narrated | validation order as a numbered overview, since the order decides which error a caller sees                                        |
+| `validateArrowSchema`, `findTimestampField`, `arrowTypeSupported`                | narrated | the `$timestamp` and `$table` rules and the accepted type set, each pointing at the C-side source (`arrow_data_holder.hpp:316`)   |
+| `Push`                                                                           | narrated | the full process overview below, then one-line step labels                                                                        |
+| `pinRecordBuffers`                                                               | narrated | why pinning makes arrow-go's store legal (`runtime/cgocheck.go` `cgoCheckPtrWrite`, `isPinned`), why `Pin` on C memory is a no-op |
+| `exportArrowTable`                                                               | narrated | the zeroed-memory requirement of `cdata`, who owns the stream after export, why `rr.Release()` directly after export is safe      |
+| `releaseIfLive`                                                                  | narrated | which C error paths leave a stream unconsumed and why `release` must then run on the Go side                                      |
+| cgo preamble                                                                     | comment  | why `nocallback` is absent: the stream callbacks run during the call                                                              |
+
+Every "why" in those comments has its evidence in this plan (the C
+source lines and the cgocheck2 experiment under "Context"); the comment
+states the reason, not the evidence.
 
 ### Validation in `SetTable` (before any C call)
 
@@ -263,7 +304,28 @@ without a server.
 
 ```go
 func (w *ArrowWriter) Push(h HandleType) error {
-    live := w.liveTables()            // drop zero-row tables
+    // The C API drains every Arrow stream inside the call and reads our
+    // buffers until it returns, so the body is one pin-export-call-unpin
+    // sequence. Tables with zero rows are dropped first; when none remain
+    // there is nothing to push and the C API is not called.
+    //
+    //  1. Retain and pin every buffer of every column of every batch.
+    //     arrow-go's export stores the buffer addresses in C memory, which
+    //     the cgo rules allow only for pinned memory; pinning also keeps
+    //     the buffers alive even if the caller releases a batch early.
+    //     Pin is a no-op for buffers already in C memory.
+    //  2. Allocate the zeroed C table array and fill name and dedup fields
+    //     with qdb-allocated strings, as WriterTable.toNative does.
+    //  3. Export one ArrowArrayStream per table into the zeroed stream
+    //     slot, which cdata requires. The stream holds its own reference
+    //     to the record reader, so ours is released at once.
+    //  4. Convert options and make the single C call. arrow-go's stream
+    //     callbacks run as C-to-Go callbacks during this call, which is
+    //     why the function has no nocallback directive.
+    //  5. Release any stream the C side left unconsumed (an error before
+    //     ImportRecordBatchReader leaves it intact), then keep the Go
+    //     side alive until here so step 1's pins cover the whole call.
+    live := w.liveTables()
     if len(live) == 0 { return nil }
 
     var pinner runtime.Pinner
@@ -271,25 +333,24 @@ func (w *ArrowWriter) Push(h HandleType) error {
     var releases []func()
     defer runReleases(&releases)
 
-    // 1. Retain and pin: every buffer of every column of every batch.
+    // 1. retain and pin buffers
     for _, t := range live { retainAndPin(&pinner, &releases, t.batches) }
 
-    // 2. Allocate the C table array (zeroed) and fill name, dedup fields.
+    // 2. C table array
     tbl := qdbAllocBufferZeroed[C.qdb_exp_batch_push_arrow_t](h, len(live))
     releases = append(releases, releaseCPtr(h, unsafe.Pointer(tbl)))
     ...
 
-    // 3. Export one stream per table into tbl[i].stream (zeroed C memory,
-    //    as cdata requires).
-    rr, _ := array.NewRecordReader(schema, t.batches)   // retains batches
+    // 3. export streams
+    rr, _ := array.NewRecordReader(schema, t.batches)
     cdata.ExportRecordReader(rr, (*cdata.CArrowArrayStream)(unsafe.Pointer(&tbl[i].stream)))
-    rr.Release()                                        // stream holds its own ref
+    rr.Release()
 
-    // 4. Options and the single C call.
+    // 4. the C call
     opts := w.options.setNative(C.qdb_exp_batch_options_t{})
     errCode := C.qdb_exp_batch_push_arrow_with_options(h.handle, &opts, &tbl[0], nil, C.qdb_size_t(len(live)))
 
-    // 5. Release any stream the C side did not consume, then KeepAlive.
+    // 5. release leftovers, keep alive
     for i := range tbl { releaseIfLive(&tbl[i].stream) }
     runtime.KeepAlive(live)
     return wrapError(errCode, "arrow_writer_push", "tables", len(live))
@@ -333,34 +394,40 @@ behave as for `Writer`.
 
 Follow `reader_arrow_test.go` structure: `rapid.Check` with
 `newTestHandle`, `WithGCAndHandle` around the body, cleanup via
-`t.Cleanup`. Helpers: `newArrowBatch(schema, rows)` builders per type,
-`readBackArrow(t, h, table)` using `Reader.Arrow()`.
+`t.Cleanup`. Generators: `genArrowSchema(rt)` draws a column set over the
+six types, `genArrowBatches(rt, schema, rows, parts)` draws values and
+validity and splits them into batches, `readBackArrow(t, h, table)`
+drains `Reader.Arrow()`. Three tests, the first two generative.
 
-1. Round trip per column type (int64, double, timestamp ns, string,
-   symbol, blob): push via `ArrowWriter`, read back via `Reader.Arrow()`
-   and via `FetchArrow`, compare values and validity cell by cell with
-   the existing `assertArrowCellEqualsWriterCell` style helpers.
-2. Nulls: every data column with mixed validity, including empty string
-   and empty blob with the validity bit set, read back as values.
-3. Timestamp units: s, ms, us, and DATE64 round trip to the same instants
-   as ns.
-4. Multiple batches per table concatenate; multiple tables per push with
-   different column sets both land.
-5. Zero rows: a zero-row batch in `SetTable` is accepted; `Push` with only
-   zero-row tables returns nil and makes no C call; a zero-row table next
-   to a live table is skipped.
-6. Push modes transactional, fast, async; dedup drop and upsert with
-   explicit columns, checked by pushing twice and counting rows.
-7. Rejections without a server: missing `$timestamp`, wrong `$timestamp`
-   type, `$table` present, large_utf8, dictionary, nested, mixed schemas
-   across batches, duplicate table name, empty name.
-8. Null `$timestamp` rejected in `SetTable` with `qdb_e_invalid_argument`.
-9. Unknown table from the server satisfies `errors.Is(err, ErrAliasNotFound)`.
-10. Ownership: caller releases batches after `Push`, then reads back; a
-    batch from `Reader.Arrow()` (C-allocated buffers) can be pushed to a
-    second table unchanged.
-11. Whole file under `direnv exec . env GOEXPERIMENT=cgocheck2 go test
--run Arrow ./...` and under `GODEBUG=invalidptr=1,cgocheck=1`.
+1. `TestArrowWriterRoundTrip`. Per run draw: number of tables (1-3), a
+   column set per table (sets may differ across tables), a row count per
+   table including zero, a batch count (1-4) the rows are split into,
+   per-cell validity including empty strings and empty blobs with the
+   bit set, a `$timestamp` unit from {s, ms, us, ns, date64}, a push mode
+   from {transactional, fast, async}, and a dedup setting from {off, drop,
+   upsert} with explicit columns. Push, release the batches, read back
+   through `Reader.Arrow()` and through `FetchArrow`, and compare cell by
+   cell against the drawn data with the `assertArrowCellEquals...`
+   helpers. Properties checked in the same run: zero-row tables are
+   absent from the read-back and do not fail the push; a push with only
+   zero-row tables returns nil; multiple batches concatenate; pushing the
+   same data a second time under drop or upsert leaves the drawn row
+   count. Finally re-push a batch obtained from `Reader.Arrow()`
+   (C-allocated buffers) into a fresh table and read it back, which
+   covers the no-op `Pin` path.
+2. `TestArrowWriterRejectsInvalidInput`, no server. Draw a valid schema
+   and batch, then one mutation from: drop `$timestamp`, retype it, inject
+   a null into it, add `$table`, retype a data column to large_utf8,
+   dictionary or list, make two batches' schemas differ, reuse a staged
+   table name, use an empty name. Assert `SetTable` returns the expected
+   `ErrorType` and that `Length()` is unchanged.
+3. `TestArrowWriterUnknownTableIsAliasNotFound`: one fixed case,
+   `errors.Is(err, ErrAliasNotFound)`.
+
+The `Arrow` tests additionally run under `direnv exec . env
+GOEXPERIMENT=cgocheck2 go test -run Arrow ./...` and under
+`GODEBUG=invalidptr=1,cgocheck=1`; that is a build step (step 6 below),
+not a test.
 
 ## Steps
 
