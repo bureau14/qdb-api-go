@@ -190,9 +190,12 @@ the table array.
 ### Null semantics compared with `Writer`
 
 The columnar writer encodes null as a sentinel (`MinInt64`, `NaN`, empty
-string, nil blob, `NullTime`). The Arrow path uses the validity bitmap,
-so an empty string or empty blob with the validity bit set is a value,
-not a null. State this in the `ArrowWriter` doc comment.
+string, nil blob, `NullTime`). The Arrow path uses the validity bitmap and
+needs no sentinel. The server stores a zero-length string or blob as null
+regardless of the writer (`qdb/timeseries/none_value.hpp:108,131`:
+`matches` is true for a null pointer or zero length), so an empty string
+or blob with the validity bit set reads back as null. Verified 2026-10-05
+by the round-trip test. State this in the `ArrowWriter` doc comment.
 
 ### Pre-existing gap, out of scope
 
