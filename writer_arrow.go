@@ -18,7 +18,6 @@ import "C"
 
 import (
 	"runtime"
-	"slices"
 	"time"
 	"unsafe"
 
@@ -28,16 +27,6 @@ import (
 )
 
 const arrowTableColumnName = "$table"
-
-// arrowSupportedTypes are the Arrow types the C API accepts as data columns.
-var arrowSupportedTypes = []arrow.Type{arrow.INT64, arrow.FLOAT64, arrow.TIMESTAMP, arrow.DATE64, arrow.STRING, arrow.BINARY}
-
-// arrowTypeSupported reports whether the C API accepts this Arrow type as a
-// data column. The set mirrors make_arrow_holder in the C client: anything
-// else is refused there with qdb_e_not_implemented.
-func arrowTypeSupported(dt arrow.DataType) bool {
-	return slices.Contains(arrowSupportedTypes, dt.ID())
-}
 
 // arrowTimestampTypeSupported reports whether the C API accepts this Arrow
 // type as the "$timestamp" index: TIMESTAMP in any unit, or DATE64.
@@ -61,7 +50,7 @@ func validateArrowSchema(table string, schema *arrow.Schema) error {
 	// data column, so the checks are on names and types only:
 	//  1. "$timestamp" present and of a timestamp type;
 	//  2. no "$table": the reader emits it, the C side would send it as data;
-	//  3. every other field of a type the C side can hold.
+	//  3. every other field of a type ColumnTypeOfArrow accepts.
 
 	// 1. index column present and typed as a timestamp
 	if ts := findTimestampField(schema); ts < 0 {
@@ -75,13 +64,17 @@ func validateArrowSchema(table string, schema *arrow.Schema) error {
 		return wrapError(C.qdb_e_invalid_argument, "arrow_writer_set_table", "table", table, "reason", "$table column not allowed")
 	}
 
-	// 3. data columns of a supported type
+	// 3. data columns of a type ColumnTypeOfArrow accepts, which is the set
+	//    make_arrow_holder in the C client takes; anything else is refused
+	//    there with qdb_e_not_implemented, so refuse it here by name instead.
 	for _, f := range schema.Fields() {
-		if f.Name == tsTimestampColumnName || arrowTypeSupported(f.Type) {
+		if f.Name == tsTimestampColumnName {
 			continue
 		}
-
-		return wrapError(C.qdb_e_incompatible_type, "arrow_writer_set_table", "table", table, "column", f.Name, "type", f.Type.String())
+		_, err := ColumnTypeOfArrow(f.Type)
+		if err != nil {
+			return wrapError(C.qdb_e_incompatible_type, "arrow_writer_set_table", "table", table, "column", f.Name, "type", f.Type.String())
+		}
 	}
 
 	return nil
@@ -254,8 +247,9 @@ func (w *ArrowWriter) Length() int {
 // SetTable stages one table from one or more batches sharing a schema.
 //
 // The schema needs a "$timestamp" field of Arrow type timestamp (any unit)
-// or date64 without nulls, no "$table" field, and data fields of type int64,
-// float64, timestamp, date64, utf8 or binary. Zero-row batches are accepted.
+// or date64 without nulls, no "$table" field, and data fields of a type
+// ColumnTypeOfArrow accepts: int64, float64, timestamp, date64, utf8 or
+// binary. Zero-row batches are accepted.
 //
 // Returns qdb_e_invalid_argument for a bad name, batch set or "$timestamp"
 // column and qdb_e_incompatible_type for an unsupported field type. Nothing
