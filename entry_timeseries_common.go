@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"time"
 	"unsafe"
+
+	"github.com/apache/arrow-go/v18/arrow"
 )
 
 // TsColumnType : Timeseries column types
@@ -144,6 +146,93 @@ func (v TsColumnType) AsValueType() TsValueType {
 	}
 
 	panic(fmt.Sprintf("Unrecognized column type: %v", v))
+}
+
+// arrowTimestampNs is the Arrow type of every QuasarDB timestamp: nanosecond
+// unit, no zone. The C side shifts values to UTC and leaves the zone empty,
+// so this is not arrow.FixedWidthTypes.Timestamp_ns, whose zone is "UTC".
+var arrowTimestampNs = &arrow.TimestampType{Unit: arrow.Nanosecond}
+
+// ArrowType returns the Arrow type a column of this type is read as by
+// Reader.Arrow and Query.FetchArrow. Nil for an invalid column type.
+//
+// Mapping:
+//
+//	TsColumnInt64      int64
+//	TsColumnDouble     float64
+//	TsColumnTimestamp  timestamp[ns], no zone
+//	TsColumnBlob       binary
+//	TsColumnString     utf8
+//	TsColumnSymbol     utf8, plain, not dictionary-encoded
+//
+// The reader fixes nullability on top of this: "$table" (utf8) and
+// "$timestamp" are non-nullable, data columns are nullable. Utf8 and binary
+// fields also carry a "max_width" metadata key set by the C side, which
+// ArrowType does not reproduce.
+//
+// Example:
+//
+//	f := arrow.Field{Name: col.Name(), Type: col.Type().ArrowType(), Nullable: true}
+func (v TsColumnType) ArrowType() arrow.DataType { //nolint:ireturn // Justified: arrow.DataType is arrow-go's type interface
+	switch v {
+	case TsColumnInt64:
+		return arrow.PrimitiveTypes.Int64
+	case TsColumnDouble:
+		return arrow.PrimitiveTypes.Float64
+	case TsColumnTimestamp:
+		return arrowTimestampNs
+	case TsColumnBlob:
+		return arrow.BinaryTypes.Binary
+	case TsColumnString, TsColumnSymbol:
+		return arrow.BinaryTypes.String
+	case TsColumnUninitialized:
+		return nil
+	}
+
+	return nil
+}
+
+// ColumnTypeOfArrow returns the column type ArrowWriter stores a field of
+// Arrow type dt in. The accepted set is what the C API takes:
+//
+//	int64                TsColumnInt64
+//	float64              TsColumnDouble
+//	timestamp, any unit  TsColumnTimestamp
+//	date64               TsColumnTimestamp
+//	utf8                 TsColumnString
+//	binary               TsColumnBlob
+//
+// A timestamp zone is dropped; the value is stored as-is. Utf8 is always
+// TsColumnString, since a symbol column cannot be told from an Arrow type.
+// Every other type, including int32, float32, date32, large_utf8,
+// large_binary and dictionary, is ErrIncompatibleType; nothing is widened.
+//
+// Example:
+//
+//	ct, err := qdb.ColumnTypeOfArrow(field.Type)
+//	if err != nil {
+//	    return err
+//	}
+//	cols = append(cols, qdb.NewTsColumnInfo(field.Name, ct))
+func ColumnTypeOfArrow(dt arrow.DataType) (TsColumnType, error) {
+	if dt == nil {
+		return TsColumnUninitialized, wrapError(C.qdb_e_incompatible_type, "column_type_of_arrow", "type", "nil")
+	}
+
+	switch dt.ID() { //nolint:exhaustive // every Arrow type not named is refused by default
+	case arrow.INT64:
+		return TsColumnInt64, nil
+	case arrow.FLOAT64:
+		return TsColumnDouble, nil
+	case arrow.TIMESTAMP, arrow.DATE64:
+		return TsColumnTimestamp, nil
+	case arrow.STRING:
+		return TsColumnString, nil
+	case arrow.BINARY:
+		return TsColumnBlob, nil
+	default:
+		return TsColumnUninitialized, wrapError(C.qdb_e_incompatible_type, "column_type_of_arrow", "type", dt.String())
+	}
 }
 
 // asWriterDataType returns the column type describing how batch push data is
@@ -556,4 +645,3 @@ func (t *TsBulk) NextRow() (time.Time, error) {
 func (t *TsBulk) Release() {
 	t.h.Release(unsafe.Pointer(t.table))
 }
-

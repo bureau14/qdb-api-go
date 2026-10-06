@@ -52,24 +52,14 @@ func arrowUnitDuration(dt arrow.DataType) time.Duration {
 	return time.Millisecond // date64
 }
 
-// arrowDataType maps a table column type to the Arrow type pushed for it.
+// arrowDataType maps a table column type to the Arrow type pushed for it:
+// the drawn unit for the timestamp column, ArrowType for every other.
 func arrowDataType(ctype TsColumnType, unit arrow.DataType) arrow.DataType { //nolint:ireturn // Justified: arrow.DataType is arrow-go's type interface
-	switch ctype {
-	case TsColumnInt64:
-		return arrow.PrimitiveTypes.Int64
-	case TsColumnDouble:
-		return arrow.PrimitiveTypes.Float64
-	case TsColumnTimestamp:
+	if ctype == TsColumnTimestamp {
 		return unit
-	case TsColumnBlob:
-		return arrow.BinaryTypes.Binary
-	case TsColumnString, TsColumnSymbol:
-		return arrow.BinaryTypes.String
-	case TsColumnUninitialized:
-		return arrow.Null
 	}
 
-	return arrow.Null
+	return ctype.ArrowType()
 }
 
 // genArrowColumns draws 1-4 columns with unique names over all six types.

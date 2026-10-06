@@ -38,17 +38,22 @@ func requireArrowColumnMatches(t testHelper, field arrow.Field, arr arrow.Array,
 	assert.True(t, field.Nullable, "every field is nullable")
 	switch c := col.(type) {
 	case *QueryColumnInt64:
+		assertArrowTypeOf(t, field, TsColumnInt64)
 		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Int64, i int) int64 { return a.Value(i) })
 	case *QueryColumnDouble:
+		assertArrowTypeOf(t, field, TsColumnDouble)
 		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Float64, i int) float64 { return a.Value(i) })
 	case *QueryColumnTimestamp:
+		assertArrowTypeOf(t, field, TsColumnTimestamp)
 		assert.Equal(t, arrow.Nanosecond, field.Type.(*arrow.TimestampType).Unit)
 		assert.Empty(t, field.Type.(*arrow.TimestampType).TimeZone, "timestamps pass through naive")
 		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Timestamp, i int) int64 { return int64(a.Value(i)) })
 	case *QueryColumnString:
+		assertArrowTypeOf(t, field, TsColumnString)
 		assertArrowMaxWidth(t, field)
 		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.String, i int) string { return a.Value(i) })
 	case *QueryColumnBlob:
+		assertArrowTypeOf(t, field, TsColumnBlob)
 		assertArrowMaxWidth(t, field)
 		requireArrowValuesMatch(t, arr, c.Valid(), c.Values, func(a *array.Binary, i int) []byte { return a.Value(i) })
 	case *QueryColumnNull:
@@ -77,6 +82,14 @@ func requireArrowValuesMatch[A arrow.Array, V any](t testHelper, arr arrow.Array
 			assert.Equal(t, v, get(typed, i), "row %d", i)
 		}
 	}
+}
+
+// assertArrowTypeOf asserts the field carries the Arrow type ArrowType
+// promises for the column type, pinning the mapping to what C emits.
+func assertArrowTypeOf(t testHelper, field arrow.Field, ctype TsColumnType) {
+	t.Helper()
+
+	assert.True(t, arrow.TypeEqual(ctype.ArrowType(), field.Type), "field %q: want %v, got %v", field.Name, ctype.ArrowType(), field.Type)
 }
 
 // assertArrowMaxWidth asserts the C side attached max_width metadata to a

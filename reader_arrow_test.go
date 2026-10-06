@@ -149,28 +149,8 @@ func assertLegacyArrowSchema(t testHelper, schema *arrow.Schema, cols []WriterCo
 		field := schema.Field(2 + j)
 		assert.Equal(t, col.ColumnName, field.Name)
 		assert.True(t, field.Nullable, "data column %q is nullable", field.Name)
-		assert.Equal(t, arrowTypeIDOf(col.ColumnType), field.Type.ID(), "column %q", field.Name)
+		assert.True(t, arrow.TypeEqual(col.ColumnType.ArrowType(), field.Type), "column %q: want %v, got %v", field.Name, col.ColumnType.ArrowType(), field.Type)
 	}
-}
-
-// arrowTypeIDOf maps a table column type to the Arrow type the reader emits.
-func arrowTypeIDOf(ctype TsColumnType) arrow.Type {
-	switch ctype {
-	case TsColumnInt64:
-		return arrow.INT64
-	case TsColumnDouble:
-		return arrow.FLOAT64
-	case TsColumnTimestamp:
-		return arrow.TIMESTAMP
-	case TsColumnBlob:
-		return arrow.BINARY
-	case TsColumnString, TsColumnSymbol:
-		return arrow.STRING
-	case TsColumnUninitialized:
-		return arrow.NULL
-	}
-
-	return arrow.NULL
 }
 
 // assertArrowRecordsEqualWriterTables checks every row of every batch
