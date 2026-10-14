@@ -261,6 +261,38 @@ func TestHandleGetLastErrorOnSuccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAPIVersionNotEmpty(t *testing.T) {
+	assert.NotEmpty(t, APIVersion())
+}
+
+func TestAPIBuildNotEmpty(t *testing.T) {
+	assert.NotEmpty(t, APIBuild())
+}
+
+func TestAPIVersionStableAcrossCalls(t *testing.T) {
+	first := APIVersion()
+	for range 100 {
+		assert.Equal(t, first, APIVersion())
+	}
+}
+
+func TestAPIBuildStableAcrossCalls(t *testing.T) {
+	first := APIBuild()
+	for range 100 {
+		assert.Equal(t, first, APIBuild())
+	}
+}
+
+func TestHandleAPIVersionZeroHandle(t *testing.T) {
+	var h HandleType
+	assert.Equal(t, APIVersion(), h.APIVersion())
+}
+
+func TestHandleAPIBuildZeroHandle(t *testing.T) {
+	var h HandleType
+	assert.Equal(t, APIBuild(), h.APIBuild())
+}
+
 func TestHandleAPIVersionNotEmpty(t *testing.T) {
 	h := newTestHandle(t)
 	// Cleanup handled automatically by newTestHandle()
