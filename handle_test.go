@@ -261,6 +261,24 @@ func TestHandleGetLastErrorOnSuccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAPIVersionBuildNoHandle(t *testing.T) {
+	var zero HandleType
+	cases := []struct {
+		name string
+		fn   func() string
+	}{
+		{"APIVersion", APIVersion},
+		{"APIBuild", APIBuild},
+		{"HandleType.APIVersion", zero.APIVersion},
+		{"HandleType.APIBuild", zero.APIBuild},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.NotEmpty(t, c.fn())
+		})
+	}
+}
+
 func TestHandleAPIVersionNotEmpty(t *testing.T) {
 	h := newTestHandle(t)
 	// Cleanup handled automatically by newTestHandle()

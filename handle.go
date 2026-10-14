@@ -10,6 +10,11 @@ package qdb
 	#include <qdb/tag.h>
 	#include <qdb/ts.h>
 	#include <qdb/prefix.h>
+
+	#cgo noescape qdb_version
+	#cgo nocallback qdb_version
+	#cgo noescape qdb_build
+	#cgo nocallback qdb_build
 */
 import "C"
 
@@ -283,9 +288,8 @@ func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile
 
 // APIVersion returns the QuasarDB API version string.
 //
-// Args:
-//
-//	None
+// The C API returns a static buffer that must not be released. No handle is
+// required.
 //
 // Returns:
 //
@@ -293,19 +297,15 @@ func MustSetupSecuredHandle(clusterURI, clusterPublicKeyFile, userCredentialFile
 //
 // Example:
 //
-//	version := h.APIVersion() // → "3.14.0"
-func (h HandleType) APIVersion() string {
-	version := C.qdb_version()
-	defer h.Release(unsafe.Pointer(version))
-
-	return C.GoString(version)
+//	version := qdb.APIVersion() // → "3.14.0"
+func APIVersion() string {
+	return C.GoString(C.qdb_version())
 }
 
 // APIBuild returns the QuasarDB API build information.
 //
-// Args:
-//
-//	None
+// The C API returns a static buffer that must not be released. No handle is
+// required.
 //
 // Returns:
 //
@@ -313,12 +313,21 @@ func (h HandleType) APIVersion() string {
 //
 // Example:
 //
-//	build := h.APIBuild() // → "3.14.0-gcc-11.2.0-linux-x86_64"
-func (h HandleType) APIBuild() string {
-	build := C.qdb_build()
-	defer h.Release(unsafe.Pointer(build))
+//	build := qdb.APIBuild() // → "3.14.0-gcc-11.2.0-linux-x86_64"
+func APIBuild() string {
+	return C.GoString(C.qdb_build())
+}
 
-	return C.GoString(build)
+// APIVersion returns the QuasarDB API version string. See the package-level
+// APIVersion; the handle is unused.
+func (HandleType) APIVersion() string {
+	return APIVersion()
+}
+
+// APIBuild returns the QuasarDB API build information. See the package-level
+// APIBuild; the handle is unused.
+func (HandleType) APIBuild() string {
+	return APIBuild()
 }
 
 // Open initializes a handle with the specified protocol.
