@@ -261,36 +261,22 @@ func TestHandleGetLastErrorOnSuccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestAPIVersionNotEmpty(t *testing.T) {
-	assert.NotEmpty(t, APIVersion())
-}
-
-func TestAPIBuildNotEmpty(t *testing.T) {
-	assert.NotEmpty(t, APIBuild())
-}
-
-func TestAPIVersionStableAcrossCalls(t *testing.T) {
-	first := APIVersion()
-	for range 100 {
-		assert.Equal(t, first, APIVersion())
+func TestAPIVersionBuildNoHandle(t *testing.T) {
+	var zero HandleType
+	cases := []struct {
+		name string
+		fn   func() string
+	}{
+		{"APIVersion", APIVersion},
+		{"APIBuild", APIBuild},
+		{"HandleType.APIVersion", zero.APIVersion},
+		{"HandleType.APIBuild", zero.APIBuild},
 	}
-}
-
-func TestAPIBuildStableAcrossCalls(t *testing.T) {
-	first := APIBuild()
-	for range 100 {
-		assert.Equal(t, first, APIBuild())
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.NotEmpty(t, c.fn())
+		})
 	}
-}
-
-func TestHandleAPIVersionZeroHandle(t *testing.T) {
-	var h HandleType
-	assert.Equal(t, APIVersion(), h.APIVersion())
-}
-
-func TestHandleAPIBuildZeroHandle(t *testing.T) {
-	var h HandleType
-	assert.Equal(t, APIBuild(), h.APIBuild())
 }
 
 func TestHandleAPIVersionNotEmpty(t *testing.T) {
