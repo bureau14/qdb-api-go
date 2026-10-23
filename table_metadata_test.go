@@ -102,6 +102,13 @@ func TestHandleTableCacheTTL(t *testing.T) {
 	_, set = base.GetTableCacheTTL()
 	assert.False(t, set, "WithTableCacheTTL must not mutate the receiver")
 
+	for _, o := range []*HandleOptions{base, opts, base.WithTableCacheTTL(5 * time.Second)} {
+		want, wantSet := o.GetTableCacheTTL()
+		got, gotSet := FromHandleOptionsProvider(o).GetTableCacheTTL()
+		assert.Equal(t, wantSet, gotSet, "FromHandleOptionsProvider must keep the set flag")
+		assert.Equal(t, want, got, "FromHandleOptionsProvider must keep the TTL")
+	}
+
 	handle, err := NewHandleFromOptions(opts.WithClusterUri(insecureURI))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = handle.Close() })

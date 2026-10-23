@@ -324,7 +324,7 @@ func FromHandleOptionsProvider(provider HandleOptionsProvider) *HandleOptions {
 		return nil
 	}
 
-	return &HandleOptions{
+	opts := &HandleOptions{
 		clusterURI:           provider.GetClusterURI(),
 		clusterPublicKeyFile: provider.GetClusterPublicKeyFile(),
 		clusterPublicKey:     provider.GetClusterPublicKey(),
@@ -338,4 +338,11 @@ func FromHandleOptionsProvider(provider HandleOptionsProvider) *HandleOptions {
 		connectionsPerAddress: provider.GetConnectionsPerAddress(),
 		timeout:               provider.GetTimeout(),
 	}
+	// Optional on the provider so implementations predating the setting
+	// keep compiling; without it the C API default stays in effect.
+	if p, ok := provider.(interface{ GetTableCacheTTL() (time.Duration, bool) }); ok {
+		opts.tableCacheTTL, opts.tableCacheTTLSet = p.GetTableCacheTTL()
+	}
+
+	return opts
 }
