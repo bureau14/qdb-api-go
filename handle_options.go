@@ -31,6 +31,11 @@ type HandleOptions struct {
 	clientMaxInBufSize    uint
 	connectionsPerAddress int
 	timeout               time.Duration
+
+	// Table metadata cache TTL; applied only when set, zero disables the
+	// cache.
+	tableCacheTTL    time.Duration
+	tableCacheTTLSet bool
 }
 
 // NewHandleOptions creates a new HandleOptions builder.
@@ -202,6 +207,16 @@ func (o *HandleOptions) WithTimeout(timeout time.Duration) *HandleOptions {
 	return &opts
 }
 
+// WithTableCacheTTL sets how long the handle's table metadata cache keeps an
+// entry. Zero disables the cache. Unset leaves the C API default of 60s.
+func (o *HandleOptions) WithTableCacheTTL(ttl time.Duration) *HandleOptions {
+	opts := *o
+	opts.tableCacheTTL = ttl
+	opts.tableCacheTTLSet = true
+
+	return &opts
+}
+
 // GetClusterURI returns the current cluster URI value.
 func (o *HandleOptions) GetClusterURI() string {
 	return o.clusterURI
@@ -263,6 +278,12 @@ func (o *HandleOptions) GetTimeout() time.Duration {
 	return o.timeout
 }
 
+// GetTableCacheTTL returns the table metadata cache TTL and whether it was
+// set.
+func (o *HandleOptions) GetTableCacheTTL() (time.Duration, bool) {
+	return o.tableCacheTTL, o.tableCacheTTLSet
+}
+
 // HandleOptionsProvider provides methods to retrieve handle configuration values.
 // Note: User secrets are not exposed through this interface for security reasons.
 type HandleOptionsProvider interface {
@@ -303,7 +324,7 @@ func FromHandleOptionsProvider(provider HandleOptionsProvider) *HandleOptions {
 		return nil
 	}
 
-	return &HandleOptions{
+	opts := &HandleOptions{
 		clusterURI:           provider.GetClusterURI(),
 		clusterPublicKeyFile: provider.GetClusterPublicKeyFile(),
 		clusterPublicKey:     provider.GetClusterPublicKey(),
@@ -317,4 +338,11 @@ func FromHandleOptionsProvider(provider HandleOptionsProvider) *HandleOptions {
 		connectionsPerAddress: provider.GetConnectionsPerAddress(),
 		timeout:               provider.GetTimeout(),
 	}
+	// Optional on the provider so implementations predating the setting
+	// keep compiling; without it the C API default stays in effect.
+	if p, ok := provider.(interface{ GetTableCacheTTL() (time.Duration, bool) }); ok {
+		opts.tableCacheTTL, opts.tableCacheTTLSet = p.GetTableCacheTTL()
+	}
+
+	return opts
 }
