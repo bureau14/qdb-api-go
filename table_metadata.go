@@ -32,8 +32,8 @@ import (
 type TableMetadata struct {
 	// Name is the table alias.
 	Name string
-	// Columns in schema order, $timestamp first. Symbol columns carry the
-	// name of their symbol table.
+	// Columns in schema order. The implicit $timestamp column is not
+	// listed. Symbol columns carry the name of their symbol table.
 	Columns []TsColumnInfo
 	// ShardSize is the duration covered by one shard.
 	ShardSize time.Duration
@@ -125,7 +125,8 @@ func (entry TimeseriesEntry) CachedMetadata() (TableMetadata, error) {
 	}, "ts_get_table_metadata_cached")
 }
 
-// SetTTL sets the table's time to live. Zero disables it.
+// SetTTL sets the table's time to live. Zero disables it. The C API keeps
+// whole seconds, so a sub-second remainder is dropped.
 func (entry TimeseriesEntry) SetTTL(ttl time.Duration) error {
 	ms, convErr := durationToMilliseconds(ttl, "ts_set_ttl", "ttl")
 	if convErr != nil {
@@ -139,7 +140,8 @@ func (entry TimeseriesEntry) SetTTL(ttl time.Duration) error {
 }
 
 // SetTableCacheTTL sets how long the handle's table metadata cache keeps an
-// entry. Zero disables the cache. The C API default is 60 seconds.
+// entry. Zero disables the cache. The C API default is 60 seconds and it
+// keeps whole seconds, so a sub-second remainder is dropped.
 func (h HandleType) SetTableCacheTTL(ttl time.Duration) error {
 	if ttl < 0 || ttl/time.Millisecond > math.MaxInt32 {
 		return wrapError(C.qdb_e_invalid_argument, "handle_set_table_cache_ttl", "ttl", ttl, "reason", "outside C int milliseconds")

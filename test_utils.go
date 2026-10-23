@@ -432,6 +432,33 @@ func genWriterColumnsOfType(t *rapid.T, ctype TsColumnType) []WriterColumn {
 	return cols
 }
 
+// genTableColumn draws one column of a random type; a symbol column gets a
+// random symbol table name.
+func genTableColumn(t *rapid.T) TsColumnInfo {
+	name := rapid.StringMatching(`[a-zA-Z][a-zA-Z0-9_]{3,15}`).Draw(t, "tableColumnName")
+	ctype := rapid.SampledFrom(TsColumnTypes).Draw(t, "tableColumnType")
+	if ctype == TsColumnSymbol {
+		return NewSymbolColumnInfo(name, rapid.StringMatching(`[a-zA-Z]{8}`).Draw(t, "symtable"))
+	}
+
+	return NewTsColumnInfo(name, ctype)
+}
+
+// genTableColumns draws between 1 and 8 columns with distinct names.
+func genTableColumns(t *rapid.T) []TsColumnInfo {
+	return rapid.SliceOfNDistinct(rapid.Custom(genTableColumn), 1, 8, TsColumnInfo.Name).Draw(t, "tableColumns")
+}
+
+// genShardSize draws a shard size between one second and one week.
+func genShardSize(t *rapid.T) time.Duration {
+	return time.Duration(rapid.IntRange(1, 7*24*3600).Draw(t, "shardSizeSeconds")) * time.Second
+}
+
+// genTTL draws a table TTL: disabled (zero) or whole seconds up to 30 days.
+func genTTL(t *rapid.T) time.Duration {
+	return time.Duration(rapid.IntRange(0, 30*24*3600).Draw(t, "ttlSeconds")) * time.Second
+}
+
 // genIndexAscending creates an increasing time index starting from a random time.
 func genIndexAscending(t *rapid.T, rowCount int) []time.Time {
 	start := genTime(t)
