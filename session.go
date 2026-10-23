@@ -129,7 +129,13 @@ func setSessionLimits(h HandleType, o *HandleOptions) error {
 		return wrapError(C.qdb_e_invalid_argument, "set_connections_per_address", "value", o.connectionsPerAddress, "reason", "negative")
 	}
 	if o.connectionsPerAddress > 0 {
-		return h.SetConnectionsPerAddress(uint(o.connectionsPerAddress))
+		err := h.SetConnectionsPerAddress(uint(o.connectionsPerAddress))
+		if err != nil {
+			return err
+		}
+	}
+	if o.tableCacheTTLSet {
+		return h.SetTableCacheTTL(o.tableCacheTTL)
 	}
 
 	return nil
