@@ -8,7 +8,6 @@ import "C"
 import (
 	"fmt"
 	"math"
-	"runtime"
 	"time"
 	"unsafe"
 
@@ -388,10 +387,6 @@ func (t TimeseriesEntry) Name() string {
 
 // :: internals
 
-func TsColumnInfoExToStructG(t C.qdb_ts_column_info_ex_t, entry TimeseriesEntry) tsColumn {
-	return tsColumn{TsColumnInfo{C.GoString(t.name), TsColumnType(t._type), C.GoString(t.symtable)}, entry}
-}
-
 func columnInfoArrayToSlice(columns *C.qdb_ts_column_info_ex_t, length int) []C.qdb_ts_column_info_ex_t {
 	// See https://github.com/mattn/go-sqlite3/issues/238 for details.
 
@@ -404,85 +399,52 @@ func oldColumnInfoArrayToSlice(columns *C.qdb_ts_column_info_t, length int) []C.
 	return (*[(math.MaxInt32 - 1) / unsafe.Sizeof(C.qdb_ts_column_info_t{})]C.qdb_ts_column_info_t)(unsafe.Pointer(columns))[:length:length]
 }
 
-func columnArrayToGo(entry TimeseriesEntry, columns *C.qdb_ts_column_info_ex_t, columnsCount C.qdb_size_t) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
-	length := int(columnsCount)
+func columnArrayToGo(entry TimeseriesEntry, columns []TsColumnInfo) ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn) {
 	blobColumns := []TsBlobColumn{}
 	doubleColumns := []TsDoubleColumn{}
 	int64Columns := []TsInt64Column{}
 	stringColumns := []TsStringColumn{}
 	timestampColumns := []TsTimestampColumn{}
-	if length > 0 {
-		slice := columnInfoArrayToSlice(columns, length)
-		for _, s := range slice {
-			switch s._type {
-			case C.qdb_ts_column_blob:
-				blobColumns = append(blobColumns, TsBlobColumn{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_double:
-				doubleColumns = append(doubleColumns, TsDoubleColumn{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_int64:
-				int64Columns = append(int64Columns, TsInt64Column{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_string, C.qdb_ts_column_symbol:
-				stringColumns = append(stringColumns, TsStringColumn{TsColumnInfoExToStructG(s, entry)})
-			case C.qdb_ts_column_timestamp:
-				timestampColumns = append(timestampColumns, TsTimestampColumn{TsColumnInfoExToStructG(s, entry)})
-			}
+	for _, c := range columns {
+		switch c.kind {
+		case TsColumnBlob:
+			blobColumns = append(blobColumns, TsBlobColumn{tsColumn{c, entry}})
+		case TsColumnDouble:
+			doubleColumns = append(doubleColumns, TsDoubleColumn{tsColumn{c, entry}})
+		case TsColumnInt64:
+			int64Columns = append(int64Columns, TsInt64Column{tsColumn{c, entry}})
+		case TsColumnString, TsColumnSymbol:
+			stringColumns = append(stringColumns, TsStringColumn{tsColumn{c, entry}})
+		case TsColumnTimestamp:
+			timestampColumns = append(timestampColumns, TsTimestampColumn{tsColumn{c, entry}})
+		case TsColumnUninitialized:
 		}
 	}
 
 	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns
 }
 
-// Columns : return the current columns
+// Columns : return the current columns, split by type. A view over Metadata.
 //
 //nolint:gocritic // tooManyResultsChecker: legacy API, changing would break compatibility
 func (entry TimeseriesEntry) Columns() ([]TsBlobColumn, []TsDoubleColumn, []TsInt64Column, []TsStringColumn, []TsTimestampColumn, error) {
-	var p runtime.Pinner
-
-	alias := convertToCharStar(entry.alias)
-	defer releaseCharStar(alias)
-
-	var metadata *C.qdb_ts_metadata_t
-	p.Pin(&metadata)
-	err := C.qdb_ts_get_metadata(entry.handle, alias, &metadata)
-	p.Unpin()
-
-	if metadata != nil {
-		defer C.qdb_release(entry.handle, unsafe.Pointer(metadata))
+	m, err := entry.Metadata()
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
 	}
+	blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns := columnArrayToGo(entry, m.Columns)
 
-	var blobColumns []TsBlobColumn
-	var doubleColumns []TsDoubleColumn
-	var int64Columns []TsInt64Column
-	var stringColumns []TsStringColumn
-	var timestampColumns []TsTimestampColumn
-	if err == 0 {
-		blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns = columnArrayToGo(entry, metadata.columns, metadata.column_count)
-	}
-
-	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, makeErrorOrNil(err)
+	return blobColumns, doubleColumns, int64Columns, stringColumns, timestampColumns, nil
 }
 
-// ColumnsInfo : return the current columns information
+// ColumnsInfo : return the current columns information. A view over Metadata.
 func (entry TimeseriesEntry) ColumnsInfo() ([]TsColumnInfo, error) {
-	var p runtime.Pinner
-
-	alias := convertToCharStar(entry.alias)
-	defer releaseCharStar(alias)
-	var metadata *C.qdb_ts_metadata_t
-	p.Pin(&metadata)
-	err := C.qdb_ts_get_metadata(entry.handle, alias, &metadata)
-	p.Unpin()
-
-	if metadata != nil {
-		defer C.qdb_release(entry.handle, unsafe.Pointer(metadata))
+	m, err := entry.Metadata()
+	if err != nil {
+		return nil, err
 	}
 
-	var columnsInfo []TsColumnInfo
-	if err == 0 {
-		columnsInfo = columnInfoArrayToGo(metadata.columns, metadata.column_count)
-	}
-
-	return columnsInfo, makeErrorOrNil(err)
+	return m.Columns, nil
 }
 
 // Create : create a new timeseries
@@ -582,11 +544,11 @@ type TsBulk struct {
 //	If no columns are specified it gets the server side registered columns
 func (entry TimeseriesEntry) Bulk(cols ...TsColumnInfo) (*TsBulk, error) {
 	if len(cols) == 0 {
-		var err error
-		cols, err = entry.ColumnsInfo()
+		m, err := entry.Metadata()
 		if err != nil {
 			return nil, err
 		}
+		cols = m.Columns
 	}
 	alias := convertToCharStar(entry.alias)
 	defer releaseCharStar(alias)
