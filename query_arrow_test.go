@@ -92,6 +92,30 @@ func assertArrowTypeOf(t testHelper, field arrow.Field, ctype TsColumnType) {
 	assert.True(t, arrow.TypeEqual(ctype.ArrowType(), field.Type), "field %q: want %v, got %v", field.Name, ctype.ArrowType(), field.Type)
 }
 
+// withoutFieldMetadata copies the schema with every field's metadata dropped.
+// FetchArrow attaches data-derived max_width metadata that ValidateArrow has
+// no data to compute; the two agree on everything else.
+func withoutFieldMetadata(s *arrow.Schema) *arrow.Schema {
+	fields := make([]arrow.Field, s.NumFields())
+	for i, f := range s.Fields() {
+		fields[i] = arrow.Field{Name: f.Name, Type: f.Type, Nullable: f.Nullable}
+	}
+
+	return arrow.NewSchema(fields, nil)
+}
+
+// requireValidateArrowMatches asserts ValidateArrow answers, for query, the
+// schema of the batch FetchArrow produced for it, metadata aside.
+func requireValidateArrowMatches(t testHelper, handle HandleType, query string, rec arrow.RecordBatch) {
+	t.Helper()
+
+	schema, err := handle.Query(query).ValidateArrow()
+	require.NoError(t, err)
+	require.NotNil(t, schema)
+	want := withoutFieldMetadata(rec.Schema())
+	assert.True(t, want.Equal(schema), "validate schema %v, fetch schema %v", schema, want)
+}
+
 // assertArrowMaxWidth asserts the C side attached max_width metadata to a
 // variable-width field.
 func assertArrowMaxWidth(t testHelper, field arrow.Field) {
@@ -131,6 +155,7 @@ func TestFetchArrowMatchesFetch(t *testing.T) {
 		debug.FreeOSMemory()
 
 		requireArrowRecordMatches(rt, rec, rs)
+		requireValidateArrowMatches(rt, handle, selectFixture(td), rec)
 	})
 }
 
@@ -138,15 +163,61 @@ func TestFetchArrowEdgeCases(t *testing.T) {
 	handle := newTestHandle(t)
 	td := newTestTimeseriesAllColumnsSparse(t, handle, 16, 50)
 
-	t.Run("ddl yields a nil batch", func(t *testing.T) {
+	t.Run("ddl yields a nil batch and a nil schema", func(t *testing.T) {
 		alias := generateAlias(16)
-		rec, err := handle.Query(fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64)", alias)).FetchArrow()
+		create := fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64)", alias)
+		schema, err := handle.Query(create).ValidateArrow()
+		require.NoError(t, err)
+		assert.Nil(t, schema)
+
+		rec, err := handle.Query(create).FetchArrow()
 		require.NoError(t, err)
 		assert.Nil(t, rec)
 
-		rec, err = handle.Query(fmt.Sprintf("drop table %s", alias)).FetchArrow()
+		drop := fmt.Sprintf("drop table %s", alias)
+		schema, err = handle.Query(drop).ValidateArrow()
+		require.NoError(t, err)
+		assert.Nil(t, schema)
+
+		rec, err = handle.Query(drop).FetchArrow()
 		require.NoError(t, err)
 		assert.Nil(t, rec)
+	})
+
+	t.Run("validate does not execute an insert", func(t *testing.T) {
+		before, err := handle.Query(selectFixture(td)).Fetch()
+		require.NoError(t, err)
+		name := before.Columns()[rsInt64Index].Name()
+
+		insert := fmt.Sprintf("insert into %s ($timestamp, %s) values (1970-01-02, 1)", td.Alias, name)
+		schema, err := handle.Query(insert).ValidateArrow()
+		require.NoError(t, err)
+		assert.Nil(t, schema)
+
+		after, err := handle.Query(selectFixture(td)).Fetch()
+		require.NoError(t, err)
+		assert.Equal(t, before.RowCount(), after.RowCount())
+	})
+
+	t.Run("aggregates validate as they fetch", func(t *testing.T) {
+		rs, err := handle.Query(selectFixture(td)).Fetch()
+		require.NoError(t, err)
+		aggregates := map[int][]string{
+			rsInt64Index:     {"count", "min", "max", "first", "last", "sum", "avg"},
+			rsDoubleIndex:    {"count", "min", "max", "first", "last", "sum", "avg"},
+			rsTimestampIndex: {"count", "min", "max", "first", "last"},
+			rsStringIndex:    {"count", "first", "last"},
+		}
+		for j, aggs := range aggregates {
+			name := rs.Columns()[j].Name()
+			for _, agg := range aggs {
+				query := fmt.Sprintf("select %s(%s) from %s in range(1970, +10d)", agg, name, td.Alias)
+				rec, err := handle.Query(query).FetchArrow()
+				require.NoError(t, err, query)
+				requireValidateArrowMatches(t, handle, query, rec)
+				rec.Release()
+			}
+		}
 	})
 
 	t.Run("zero rows yield a zero-row batch with every column", func(t *testing.T) {
@@ -157,6 +228,7 @@ func TestFetchArrowEdgeCases(t *testing.T) {
 
 		assert.Equal(t, int64(0), rec.NumRows())
 		assert.Equal(t, 8, rec.Schema().NumFields())
+		requireValidateArrowMatches(t, handle, fmt.Sprintf("select * from %s in range(2000, +1d)", td.Alias), rec)
 	})
 
 	t.Run("count aggregate is an int64 column", func(t *testing.T) {
@@ -164,9 +236,11 @@ func TestFetchArrowEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		name := rs.Columns()[rsInt64Index].Name()
 
-		rec, err := handle.Query(fmt.Sprintf("select count(%s) from %s in range(1970, +10d)", name, td.Alias)).FetchArrow()
+		count := fmt.Sprintf("select count(%s) from %s in range(1970, +10d)", name, td.Alias)
+		rec, err := handle.Query(count).FetchArrow()
 		require.NoError(t, err)
 		defer rec.Release()
+		requireValidateArrowMatches(t, handle, count, rec)
 
 		require.Equal(t, int64(1), rec.NumRows())
 		cnt, ok := rec.Column(0).(*array.Int64)
@@ -177,15 +251,24 @@ func TestFetchArrowEdgeCases(t *testing.T) {
 	})
 
 	t.Run("missing table yields an error and no batch", func(t *testing.T) {
-		rec, err := handle.Query(fmt.Sprintf("select * from %s in range(1970, +1d)", generateAlias(16))).FetchArrow()
+		query := fmt.Sprintf("select * from %s in range(1970, +1d)", generateAlias(16))
+		rec, err := handle.Query(query).FetchArrow()
 		require.ErrorIs(t, err, ErrAliasNotFound)
 		assert.Nil(t, rec)
+
+		schema, err := handle.Query(query).ValidateArrow()
+		require.ErrorIs(t, err, ErrAliasNotFound)
+		assert.Nil(t, schema)
 	})
 
 	t.Run("invalid query yields an error and no batch", func(t *testing.T) {
 		rec, err := handle.Query("SELECT FROM").FetchArrow()
 		require.ErrorIs(t, err, ErrInvalidQuery)
 		assert.Nil(t, rec)
+
+		schema, err := handle.Query("SELECT FROM").ValidateArrow()
+		require.ErrorIs(t, err, ErrInvalidQuery)
+		assert.Nil(t, schema)
 	})
 
 	t.Run("column length mismatch is an error, not a panic", func(t *testing.T) {
