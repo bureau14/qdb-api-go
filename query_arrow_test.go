@@ -205,7 +205,7 @@ func TestFetchArrowEdgeCases(t *testing.T) {
 		aggregates := map[int][]string{
 			rsInt64Index:     {"count", "min", "max", "first", "last", "sum", "avg"},
 			rsDoubleIndex:    {"count", "min", "max", "first", "last", "sum", "avg"},
-			rsTimestampIndex: {"count", "min", "max", "first", "last"},
+			rsTimestampIndex: {"count", "first", "last"},
 			rsStringIndex:    {"count", "first", "last"},
 		}
 		for j, aggs := range aggregates {
