@@ -84,13 +84,29 @@ func TestQueryExecuteReturnsExpectedResults(t *testing.T) {
 			}
 		}
 	}
+
+	// The schema row Validate answers carries the type of every column the
+	// executed result holds, in the same order.
+	schema, err := handle.Query(query).Validate()
+	require.NoError(t, err)
+	require.NotNil(t, schema)
+	defer schema.Close()
+	require.Equal(t, int64(1), schema.RowCount())
+	assert.Equal(t, result.ColumnsNames(), schema.ColumnsNames())
+	first := result.Columns(result.Rows()[0])
+	for j, c := range schema.Columns(schema.Rows()[0]) {
+		assert.Equal(t, first[j].Get().Type(), c.Get().Type(), "column %d", j)
+	}
 }
 
 func TestQueryInvalidQueryReturnsError(t *testing.T) {
 	handle := newTestHandle(t)
 
 	_, err := handle.Query("select").Execute()
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidQuery)
+
+	_, err = handle.Query("select").Validate()
+	assert.ErrorIs(t, err, ErrInvalidQuery)
 }
 
 func TestQueryWrongTypeReturnsError(t *testing.T) {
@@ -125,9 +141,12 @@ func TestQueryCreateTableReturnsNil(t *testing.T) {
 	handle := newTestHandle(t)
 
 	alias := generateAlias(16)
-	result, err := handle.Query(
-		fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64, price DOUBLE)", alias),
-	).Execute()
+	create := fmt.Sprintf("create table %s ($timestamp TIMESTAMP, id INT64, price DOUBLE)", alias)
+	result, err := handle.Query(create).Validate()
+	require.NoError(t, err)
+	assert.Nil(t, result)
+
+	result, err = handle.Query(create).Execute()
 	require.NoError(t, err)
 	assert.Nil(t, result)
 

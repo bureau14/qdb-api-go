@@ -206,3 +206,120 @@ func (q Query) FetchArrow() (arrow.RecordBatch, error) { //nolint:ireturn // Jus
 	// holds the rows that succeeded.
 	return rec, execErr
 }
+
+// arrowElementTag maps an array result tag to the tag of its element, or
+// returns the tag unchanged when it is not an array.
+func arrowElementTag(tag C.qdb_query_result_value_type_t) C.qdb_query_result_value_type_t {
+	switch tag {
+	case C.qdb_query_result_array_double:
+		return C.qdb_query_result_double
+	case C.qdb_query_result_array_int64:
+		return C.qdb_query_result_int64
+	case C.qdb_query_result_array_blob:
+		return C.qdb_query_result_blob
+	case C.qdb_query_result_array_timestamp:
+		return C.qdb_query_result_timestamp
+	case C.qdb_query_result_array_string:
+		return C.qdb_query_result_string
+	default:
+		return tag
+	}
+}
+
+// arrowTypeOfTag maps a schema cell tag to the Arrow type qdb_query_arrow
+// emits for a column of that tag: none is the null type, count folds into
+// int64, an array tag is a list of its element type. column names the
+// column for error context.
+func arrowTypeOfTag(tag C.qdb_query_result_value_type_t, column string) (arrow.DataType, error) { //nolint:ireturn // Justified: arrow.DataType is arrow-go's type interface
+	if tag == C.qdb_query_result_none {
+		return arrow.Null, nil
+	}
+
+	element := arrowElementTag(tag)
+	vt, err := cellValueType(element, column)
+	if err != nil {
+		return nil, err
+	}
+
+	dt := vt.AsColumnType().ArrowType()
+	if element != tag {
+		return arrow.ListOf(dt), nil
+	}
+
+	return dt, nil
+}
+
+// arrowSchemaOfValidation builds the schema from a Validate result: one
+// field per column, typed from the schema row, every field nullable and
+// without metadata, as qdb_query_arrow exports them. The result stays open;
+// the caller closes it.
+func arrowSchemaOfValidation(r *QueryResult) (*arrow.Schema, error) {
+	names := r.ColumnsNames()
+	rows := r.rowsUnsafe()
+	var cells []C.qdb_point_result_t
+	if len(rows) > 0 {
+		cells = cellsOf(rows[0], len(names))
+	}
+
+	fields := make([]arrow.Field, len(names))
+	for j, name := range names {
+		tag := C.qdb_query_result_value_type_t(C.qdb_query_result_none)
+		if cells != nil {
+			tag = cells[j]._type
+		}
+
+		dt, err := arrowTypeOfTag(tag, name)
+		if err != nil {
+			return nil, err
+		}
+		fields[j] = arrow.Field{Name: name, Type: dt, Nullable: true}
+	}
+
+	return arrow.NewSchema(fields, nil), nil
+}
+
+// ValidateArrow validates the query and returns the schema of the record
+// batch FetchArrow would produce for it, without executing it.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	*arrow.Schema: The result schema, or nil when the statement produces no result set (e.g. DDL)
+//	error: Validation error, if any
+//
+// Field names, types and order are those of FetchArrow for the same query,
+// and every field is nullable. Variable-width fields carry no metadata:
+// FetchArrow attaches a max_width key computed from the data, which does not
+// exist before execution. A column whose type cannot be settled before
+// execution is the null type; a null literal is one such column, which
+// FetchArrow types from the rows instead.
+//
+// The C result is released before ValidateArrow returns; the schema holds
+// no C pointers.
+//
+// Example:
+//
+//	schema, err := h.Query("select $timestamp, price from trades in range(today)").ValidateArrow()
+//	if err != nil {
+//	    return err
+//	}
+//	price := schema.Field(schema.FieldIndices("price")[0])
+func (q Query) ValidateArrow() (*arrow.Schema, error) {
+	r, err := q.Validate()
+	if err != nil {
+		// Validate may hand back a result together with its error; Close is
+		// nil-safe, so releasing unconditionally covers both cases.
+		r.Close()
+
+		return nil, err
+	}
+	if r == nil {
+		return nil, nil
+	}
+	defer r.Close()
+
+	return arrowSchemaOfValidation(r)
+}
