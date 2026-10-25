@@ -3,6 +3,9 @@ package qdb
 /*
 	#include <qdb/query.h>
 
+	#cgo noescape qdb_query_validate
+	#cgo nocallback qdb_query_validate
+
 	qdb_size_t get_count_from_payload(const qdb_point_result_t * result)
 	{
 
@@ -242,4 +245,48 @@ func (q Query) Execute() (*QueryResult, error) {
 	// The result carries the server's description of a rejected query, the
 	// parser's message for an invalid one, and it belongs in the error.
 	return &r, wrapError(err, "query_execute", "query", q.query, errorDetailKey, r.ErrorMessage())
+}
+
+// Validate checks the query against the cluster and returns its result schema
+// without executing it.
+//
+// Args:
+//
+//	None
+//
+// Returns:
+//
+//	*QueryResult: Schema result, or nil when the statement produces no result set (e.g. DDL)
+//	error: Validation error, if any
+//
+// The result has the column names of the query and a single row whose cells
+// carry the type each column would have; the cell payloads are placeholders
+// and hold no data. A column whose type cannot be settled before execution
+// is QueryResultNone.
+//
+// Validation parses the statement and resolves tables and columns against
+// the cluster. Nothing is executed: a DDL or INSERT statement is checked and
+// then yields a nil result, the same as Execute returns after running it.
+//
+// Ownership and Close follow Execute: a non-nil result must be closed, also
+// when it comes with an error. Callers who want the Arrow schema use
+// ValidateArrow instead.
+//
+// Example:
+//
+//	result, err := h.Query("SELECT * FROM measurements").Validate()
+//	defer result.Close()
+//	if err != nil {
+//	    return err
+//	}
+func (q Query) Validate() (*QueryResult, error) {
+	query := convertToCharStar(q.query)
+	defer releaseCharStar(query)
+	r := QueryResult{handle: q.HandleType}
+	err := C.qdb_query_validate(q.handle, query, &r.result)
+	if r.result == nil {
+		return nil, wrapError(err, "query_validate", "query", q.query)
+	}
+
+	return &r, wrapError(err, "query_validate", "query", q.query, errorDetailKey, r.ErrorMessage())
 }
