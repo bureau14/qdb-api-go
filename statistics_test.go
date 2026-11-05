@@ -35,7 +35,7 @@ func TestNodeStatisticsMatchesStatistics(t *testing.T) {
 	for _, e := range endpoints {
 		stats, err := handle.NodeStatistics(e.URI())
 		require.NoError(t, err)
-		require.Contains(t, all, stats.NodeID)
-		require.Equal(t, all[stats.NodeID].EngineVersion, stats.EngineVersion)
+		require.Contains(t, all, e.URI())
+		require.Equal(t, all[e.URI()].NodeID, stats.NodeID)
 	}
 }

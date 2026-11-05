@@ -118,7 +118,7 @@ func (h HandleType) NodeStatistics(nodeURI string) (Statistics, error) {
 	return dh.nodeStatistics()
 }
 
-// Statistics : Retrieve statistics for all nodes, keyed by chord node id
+// Statistics : Retrieve statistics for all nodes, keyed by node URI ("<ip>:<port>")
 func (h HandleType) Statistics() (map[string]Statistics, error) {
 	results := map[string]Statistics{}
 
@@ -128,12 +128,13 @@ func (h HandleType) Statistics() (map[string]Statistics, error) {
 	}
 
 	for _, endpoint := range endpoints {
-		stats, err := h.NodeStatistics(endpoint.URI())
+		uri := endpoint.URI()
+		stats, err := h.NodeStatistics(uri)
 		if err != nil {
 			return results, err
 		}
 
-		results[stats.NodeID] = stats
+		results[uri] = stats
 	}
 
 	return results, nil
