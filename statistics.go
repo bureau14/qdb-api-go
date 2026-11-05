@@ -114,6 +114,18 @@ func (h DirectHandleType) nodeStatistics() (Statistics, error) {
 	return stat, err
 }
 
+// directNodeStatistics reads the statistics of the node at nodeURI through a
+// direct handle, which is closed before returning on every path.
+func (h HandleType) directNodeStatistics(nodeURI string) (Statistics, error) {
+	dh, err := h.DirectConnect(nodeURI)
+	if err != nil {
+		return Statistics{}, err
+	}
+	defer func() { _ = dh.Close() }()
+
+	return dh.nodeStatistics()
+}
+
 // Statistics : Retrieve statistics for all nodes
 func (h HandleType) Statistics() (map[string]Statistics, error) {
 	results := map[string]Statistics{}
@@ -124,13 +136,7 @@ func (h HandleType) Statistics() (map[string]Statistics, error) {
 	}
 
 	for _, endpoint := range endpoints {
-		uri := endpoint.URI()
-		dh, err := h.DirectConnect(uri)
-		if err != nil {
-			return results, err
-		}
-
-		stats, err := dh.nodeStatistics()
+		stats, err := h.directNodeStatistics(endpoint.URI())
 		if err != nil {
 			return results, err
 		}
@@ -138,5 +144,5 @@ func (h HandleType) Statistics() (map[string]Statistics, error) {
 		results[stats.NodeID] = stats
 	}
 
-	return results, err
+	return results, nil
 }
