@@ -106,8 +106,7 @@ func (h DirectHandleType) nodeStatistics() (Statistics, error) {
 	return stat, err
 }
 
-// NodeStatistics : Retrieve statistics for the node at nodeURI ("<ip>:<port>",
-// as returned by Endpoint.URI)
+// NodeStatistics : Retrieve statistics for the node at nodeURI
 func (h HandleType) NodeStatistics(nodeURI string) (Statistics, error) {
 	dh, err := h.DirectConnect(nodeURI)
 	if err != nil {
@@ -118,7 +117,7 @@ func (h HandleType) NodeStatistics(nodeURI string) (Statistics, error) {
 	return dh.nodeStatistics()
 }
 
-// Statistics : Retrieve statistics for all nodes, keyed by node URI ("<ip>:<port>")
+// Statistics : Retrieve statistics for all nodes, keyed by node URI
 func (h HandleType) Statistics() (map[string]Statistics, error) {
 	results := map[string]Statistics{}
 
