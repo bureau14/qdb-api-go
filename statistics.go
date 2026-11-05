@@ -106,7 +106,8 @@ func (h DirectHandleType) nodeStatistics() (Statistics, error) {
 	return stat, err
 }
 
-// NodeStatistics : Retrieve statistics for the node at nodeURI ("qdb://host:port")
+// NodeStatistics : Retrieve statistics for the node at nodeURI ("<ip>:<port>",
+// as returned by Endpoint.URI)
 func (h HandleType) NodeStatistics(nodeURI string) (Statistics, error) {
 	dh, err := h.DirectConnect(nodeURI)
 	if err != nil {
