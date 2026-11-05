@@ -21,3 +21,21 @@ func TestStatisticsEngineVersion(t *testing.T) {
 		require.Equal(t, "3.", r.EngineVersion[:2])
 	}
 }
+
+func TestNodeStatisticsMatchesStatistics(t *testing.T) {
+	handle := newTestHandle(t)
+
+	endpoints, err := handle.Cluster().Endpoints()
+	require.NoError(t, err)
+	require.NotEmpty(t, endpoints)
+
+	all, err := handle.Statistics()
+	require.NoError(t, err)
+
+	for _, e := range endpoints {
+		stats, err := handle.NodeStatistics(e.URI())
+		require.NoError(t, err)
+		require.Contains(t, all, e.URI())
+		require.Equal(t, all[e.URI()].NodeID, stats.NodeID)
+	}
+}
