@@ -12,6 +12,22 @@ Usage:
 
 from __future__ import annotations
 
+# Temporary scaffolding for sc-20192 experiments (snapshot dependencies):
+# when SC20192_SPIKE_YAML_B64 is set, emit its base64-decoded pipeline YAML
+# verbatim and stop, before anything that needs the tools submodule or
+# third-party packages. Unset, the generator below runs unchanged.
+import base64 as _sc20192_base64
+import os as _sc20192_os
+import sys as _sc20192_sys
+
+if _sc20192_os.environ.get("SC20192_SPIKE_YAML_B64"):
+    _sc20192_yaml = _sc20192_base64.b64decode(
+        _sc20192_os.environ["SC20192_SPIKE_YAML_B64"]
+    )
+    _sc20192_sys.stdout.write(_sc20192_yaml.decode("utf-8"))
+    _sc20192_sys.stdout.flush()
+    _sc20192_sys.exit(0)
+
 import dataclasses
 import sys
 from pathlib import Path
