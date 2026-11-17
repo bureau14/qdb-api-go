@@ -4,7 +4,7 @@ steps:
     concurrency: 1
     concurrency_group: "snapdep/${BUILDKITE_PIPELINE_SLUG}/__COMMIT__"
     plugins:
-      - bureau14/qdb-snapshot#d7cef21c1b807e35063fda7869c3881ff501e679: { step: enter }
+      - bureau14/qdb-snapshot#b3be30021e0b1bda6b25d80fc37442e8098d4b14: { step: enter }
   - label: ":camera_with_flash: snapshot failed"
     key: snapdep-fail
     concurrency: 1
@@ -13,11 +13,11 @@ steps:
       - { step: snapdep-enter, allow_failure: true }
       - { step: snapdep-built, allow_failure: true }
     plugins:
-      - bureau14/qdb-snapshot#d7cef21c1b807e35063fda7869c3881ff501e679: { step: fail }
+      - bureau14/qdb-snapshot#b3be30021e0b1bda6b25d80fc37442e8098d4b14: { step: fail }
   - label: ":camera_with_flash: snapshot seal"
     key: snapdep-seal
     concurrency: 1
     concurrency_group: "snapdep/${BUILDKITE_PIPELINE_SLUG}/__COMMIT__"
     depends_on: [snapdep-enter, snapdep-built]
     plugins:
-      - bureau14/qdb-snapshot#d7cef21c1b807e35063fda7869c3881ff501e679: { step: seal }
+      - bureau14/qdb-snapshot#b3be30021e0b1bda6b25d80fc37442e8098d4b14: { step: seal }
