@@ -8,6 +8,9 @@ retry:
 label: "{name} ({slug})"
 key: "build-{slug}"
 
+# Recent master and 3.14.x builds take 2-5 minutes per job.
+timeout_in_minutes: 30
+
 commands:
   - echo \"+++ Start Services\"
   - bash scripts/tests/setup/start-services.sh
