@@ -1,0 +1,7 @@
+schema: 1
+lines: [master, 3.14.x]
+pipelines:
+  qdb-api-go:
+    depends:
+      - project: quasardb-build
+        repo: bureau14/quasardb
