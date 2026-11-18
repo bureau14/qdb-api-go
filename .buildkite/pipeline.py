@@ -13,28 +13,6 @@ Usage:
 
 from __future__ import annotations
 
-# Temporary scaffolding for sc-20192 experiments (snapshot dependencies):
-# when SC20192_SPIKE_YAML_B64 is set, emit its base64-decoded pipeline YAML
-# verbatim and stop, before the snapshot shim, the tools submodule or any
-# third-party package. When SC20192_SPIKE_DELAY is also set to a number, sleep
-# that many seconds first, so that the build's first job ends late. Unset, the
-# generator below runs unchanged.
-import base64 as _sc20192_base64
-import os as _sc20192_os
-import sys as _sc20192_sys
-import time as _sc20192_time
-
-if _sc20192_os.environ.get("SC20192_SPIKE_YAML_B64"):
-    _sc20192_delay = _sc20192_os.environ.get("SC20192_SPIKE_DELAY", "")
-    if _sc20192_delay.replace(".", "", 1).isdigit():
-        _sc20192_time.sleep(float(_sc20192_delay))
-    _sc20192_yaml = _sc20192_base64.b64decode(
-        _sc20192_os.environ["SC20192_SPIKE_YAML_B64"]
-    )
-    _sc20192_sys.stdout.write(_sc20192_yaml.decode("utf-8"))
-    _sc20192_sys.stdout.flush()
-    _sc20192_sys.exit(0)
-
 # --- Snapshot dependencies shim (sc-20192) ----------------------------------
 # Standard library only: runs before the tools submodule and third-party
 # packages are imported.  A plain upload (no SNAPDEP_PHASE) prints the static
