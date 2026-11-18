@@ -6,66 +6,14 @@ Step templates in steps/*.yml define nearly-complete Buildkite steps with
 overlays environment variables and the Docker plugin per platform.
 
 Usage:
-    python3 pipeline.py           # emit the snapshot gate (snapshot-bootstrap.yml)
-    SNAPDEP_PHASE=generate python3 pipeline.py   # emit pipeline YAML to stdout
+    python3 pipeline.py           # emit pipeline YAML to stdout
     python3 pipeline.py check     # validate without emitting
 """
 
 from __future__ import annotations
 
-# --- Snapshot dependencies shim (sc-20192) ----------------------------------
-# Standard library only: runs before the tools submodule and third-party
-# packages are imported.  A plain upload (no SNAPDEP_PHASE) prints the static
-# gate jobs of snapshot-bootstrap.yml; the snapshot plugin then runs this
-# script again with SNAPDEP_PHASE=generate to obtain the real pipeline.
-# Any argument other than "generate" (e.g. "check") bypasses the shim.
-import os
-import shutil
-import subprocess
-import sys
-import time
-
-SNAPDEP_BOOTSTRAP = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "snapshot-bootstrap.yml"
-)
-
-
-def _snapdep_wants_bootstrap() -> bool:
-    command = sys.argv[1] if len(sys.argv) > 1 else "generate"
-    return (
-        command == "generate"
-        and os.environ.get("SNAPDEP_PHASE") != "generate"
-        and os.path.exists(SNAPDEP_BOOTSTRAP)
-    )
-
-
-def _snapdep_record_arrival() -> None:
-    """Set build meta-data snapdep-arrived; skipped outside a Buildkite job."""
-    if not os.environ.get("BUILDKITE_JOB_ID") or shutil.which("buildkite-agent") is None:
-        return
-    arrived = str(int(time.time()))
-    subprocess.run(["buildkite-agent", "meta-data", "set", "snapdep-arrived", arrived], check=True)
-
-
-def _snapdep_head_commit() -> str:
-    repo = os.path.dirname(SNAPDEP_BOOTSTRAP)
-    out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True)
-    return out.stdout.decode().strip()
-
-
-def _snapdep_print_bootstrap() -> None:
-    with open(SNAPDEP_BOOTSTRAP) as f:
-        bootstrap = f.read()
-    sys.stdout.write(bootstrap.replace("__COMMIT__", _snapdep_head_commit()))
-
-
-if _snapdep_wants_bootstrap():
-    _snapdep_record_arrival()
-    _snapdep_print_bootstrap()
-    sys.exit(0)
-# --- end of snapshot dependencies shim --------------------------------------
-
 import dataclasses
+import sys
 from pathlib import Path
 
 from buildkite_sdk import CommandStep, Pipeline, GroupStep
