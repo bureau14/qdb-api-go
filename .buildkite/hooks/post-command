@@ -1,0 +1,10 @@
+# Temporary scaffolding for sc-20192 experiments (snapshot dependencies).
+# The agent sources this repository hook after every command step. When
+# SC20192_POST_UPLOAD_B64 is set and this job's BUILDKITE_STEP_KEY equals
+# SC20192_POST_UPLOAD_STEP, the hook decodes SC20192_POST_UPLOAD_B64 and pipes
+# it into "buildkite-agent pipeline upload", as a plugin that uploads a
+# pipeline from its post-command hook would. Otherwise it does nothing.
+if [[ -n "${SC20192_POST_UPLOAD_B64:-}" && -n "${SC20192_POST_UPLOAD_STEP:-}" && "${BUILDKITE_STEP_KEY:-}" == "${SC20192_POST_UPLOAD_STEP}" ]]; then
+  echo "sc-20192: post-command upload for step ${BUILDKITE_STEP_KEY}"
+  printf '%s' "${SC20192_POST_UPLOAD_B64}" | base64 -d | buildkite-agent pipeline upload
+fi
