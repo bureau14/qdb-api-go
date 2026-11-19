@@ -32,6 +32,19 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
+      # sc-20192 test branch only: a made-up snapshot key, so that the job
+      # side writes source, downloads and a pointer on every platform
+      # without a plan step. Never a real key; run with SNAPSHOT_DISABLE=1.
+      upload:
+        variant: "{slug}"
+        git_ref: "refs/heads/sc-20192/snapshot-dependencies"
+        files:
+          - "go.mod"
+        snapshot: "v1-7e577e577e577e577e577e577e577e57"
+      promote:
+        variant: "{slug}"
+        git_ref: "refs/heads/sc-20192/snapshot-dependencies"
+        snapshot: "v1-7e577e577e577e577e577e577e577e57"
   - bureau14/qdb-test-report#master:
       title: "Test report {slug}"
       job:
