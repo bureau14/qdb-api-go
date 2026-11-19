@@ -21,7 +21,9 @@ commands:
   - bash scripts/teamcity/40.documentation-examples.sh
 
 plugins:
-  - bureau14/qdb-artifacts#sc-20192/snapshot-dependencies:
+  # sc-20192 test branch only: the plugin by commit, as an agent that already
+  # holds a checkout of the branch runs it without fetching the branch again.
+  - bureau14/qdb-artifacts#5dfc2130ab9f10e911d0390bd1bd2cc1f75d2b9c:
       download:
         clean: true
         projects:
