@@ -21,9 +21,7 @@ commands:
   - bash scripts/teamcity/40.documentation-examples.sh
 
 plugins:
-  # sc-20192 test branch only: the plugin by commit, as an agent that already
-  # holds a checkout of the branch runs it without fetching the branch again.
-  - bureau14/qdb-artifacts#5dfc2130ab9f10e911d0390bd1bd2cc1f75d2b9c:
+  - bureau14/qdb-artifacts#sc-20192/snapshot-dependencies:
       download:
         clean: true
         projects:
@@ -34,19 +32,6 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
-      # sc-20192 test branch only: a made-up snapshot key, so that the job
-      # side writes source, downloads and a pointer on every platform
-      # without a plan step. Never a real key; run with SNAPSHOT_DISABLE=1.
-      upload:
-        variant: "{slug}"
-        git_ref: "refs/heads/sc-20192/snapshot-dependencies"
-        files:
-          - "go.mod"
-        snapshot: "v1-7e577e577e577e577e577e577e577e57"
-      promote:
-        variant: "{slug}"
-        git_ref: "refs/heads/sc-20192/snapshot-dependencies"
-        snapshot: "v1-7e577e577e577e577e577e577e577e57"
   - bureau14/qdb-test-report#master:
       title: "Test report {slug}"
       job:
