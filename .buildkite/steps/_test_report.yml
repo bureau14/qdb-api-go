@@ -11,7 +11,6 @@ allow_dependency_failure: true
 depends_on:
 
 plugins:
-  # sc-20192 test branch only: by the commit of its master.
-  - bureau14/qdb-test-report#c21c11e9887792d7c7c374707cde0dd8f28defca:
+  - bureau14/qdb-test-report#master:
       title: "Full test report"
       aggregate: {}
