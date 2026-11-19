@@ -1,0 +1,7 @@
+# sc-20192 test branch only: shows which variable named the Python that the
+# plugins' post-checkout ran, as the hooks see them on the host.
+
+echo "~~~ Python variables of the agent"
+echo "QDB_CICD_AGENT_PLUGIN_PYTHON=${QDB_CICD_AGENT_PLUGIN_PYTHON-<unset>}"
+echo "QDB_CICD_AGENT_PYTHON3=${QDB_CICD_AGENT_PYTHON3-<unset>}"
+echo "QDB_CICD_AGENT_PYTHON_313_PATH=${QDB_CICD_AGENT_PYTHON_313_PATH-<unset>}"
