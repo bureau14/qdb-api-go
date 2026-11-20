@@ -32,14 +32,6 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
-        # sc-20192 test branch only (proof step 11): qdb-api-rest; the
-        # freebsd job asks for freebsd-haswell-release, which no consumer
-        # downloaded before. Download only, into a directory the build
-        # does not use.
-        - project_id: "qdb-api-rest"
-          output-dir: "sc20192-rest"
-          files:
-            - "*-rest.*"
   - bureau14/qdb-test-report#master:
       title: "Test report {slug}"
       job:
