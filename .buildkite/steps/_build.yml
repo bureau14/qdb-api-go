@@ -32,6 +32,13 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
+        # sc-20192 test branch only (proof step 6): a snapshot dependency on
+        # a pipeline that cannot give a snapshot, pinned to its 3.14.x line.
+        - project_id: "qdb-nats-connector"
+          git_ref: "refs/heads/3.14.x"
+          output-dir: "sc20192-nats"
+          files:
+            - "*.tar.zst"
   - bureau14/qdb-test-report#master:
       title: "Test report {slug}"
       job:
