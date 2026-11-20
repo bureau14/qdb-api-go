@@ -23,7 +23,7 @@ commands:
 plugins:
   # sc-20192 test branch only (proof steps 3 and 4): the artifacts plugin by
   # commit, the plugin of master in step 3 and the merged plugin in step 4.
-  - bureau14/qdb-artifacts#0c9161aef58675ef7200f4ed4ff9787be2fc363c:
+  - bureau14/qdb-artifacts#0e4a9f0d9f9af66768430a7a7113144d422220e0:
       download:
         clean: true
         projects:
