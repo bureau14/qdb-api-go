@@ -32,14 +32,6 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
-        # sc-20192 test branch only (proof step 7): the same dependency, as a
-        # latest successful dependency.
-        - project_id: "qdb-nats-connector"
-          git_ref: "refs/heads/3.14.x"
-          build_id: "LATEST_SUCCESSFUL"
-          output-dir: "sc20192-nats"
-          files:
-            - "*.tar.zst"
   - bureau14/qdb-test-report#master:
       title: "Test report {slug}"
       job:
