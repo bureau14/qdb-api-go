@@ -21,7 +21,9 @@ commands:
   - bash scripts/teamcity/40.documentation-examples.sh
 
 plugins:
-  - bureau14/qdb-artifacts#sc-20192/snapshot-dependencies:
+  # sc-20192 test branch only (proof steps 3 and 4): the artifacts plugin by
+  # commit, the plugin of master in step 3 and the merged plugin in step 4.
+  - bureau14/qdb-artifacts#0c9161aef58675ef7200f4ed4ff9787be2fc363c:
       download:
         clean: true
         projects:
@@ -32,7 +34,28 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
-  - bureau14/qdb-test-report#master:
+        # sc-20192 test branch only (proof steps 3 and 4): the go.mod that the
+        # last build of this variant uploaded on the test branch.
+        - project_id: "qdb-api-go"
+          variant: "{slug}"
+          git_ref: "refs/heads/sc-20192/snapshot-dependencies"
+          build_id: "LATEST_SUCCESSFUL"
+          require_strict_ref_match: true
+          output-dir: "sc20192-own"
+          files:
+            - "go.mod"
+      # sc-20192 test branch only (proof steps 3 and 4): upload and promote
+      # go.mod, without a snapshot key.
+      upload:
+        variant: "{slug}"
+        git_ref: "refs/heads/sc-20192/snapshot-dependencies"
+        files:
+          - "go.mod"
+      promote:
+        variant: "{slug}"
+        git_ref: "refs/heads/sc-20192/snapshot-dependencies"
+  # sc-20192 test branch only (proof steps 3 and 4): by the commit of its master.
+  - bureau14/qdb-test-report#c21c11e9887792d7c7c374707cde0dd8f28defca:
       title: "Test report {slug}"
       job:
         variant: {slug}
