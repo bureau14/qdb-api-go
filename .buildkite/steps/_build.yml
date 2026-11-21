@@ -21,11 +21,12 @@ commands:
   - bash scripts/teamcity/40.documentation-examples.sh
 
 plugins:
-  - bureau14/qdb-artifacts#sc-20192/snapshot-dependencies:
+  - bureau14/qdb-artifacts#ed7b5a5a5d958c7a0af1695df2dbf1a8fbfa8204:
       download:
         clean: true
         projects:
         - project_id: "quasardb-build"
+          step: build
           output-dir: "qdb"
           extract: true
           files:
