@@ -21,7 +21,7 @@ commands:
   - bash scripts/teamcity/40.documentation-examples.sh
 
 plugins:
-  - bureau14/qdb-artifacts#ed7b5a5a5d958c7a0af1695df2dbf1a8fbfa8204:
+  - bureau14/qdb-artifacts#67c0599e1c2ce7537eba8bb87baa2f9c0d447e90:
       download:
         clean: true
         projects:
