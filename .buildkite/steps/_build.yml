@@ -26,10 +26,6 @@ plugins:
         clean: true
         projects:
         - project_id: "quasardb-build"
-          # sc-20192 test branch only (step-id proof I8a): quasardb-build's latest
-          # successful build of the first proof's branch, else of master.
-          latest: true
-          git_ref: "refs/heads/sc-20192/snapshot-dependencies"
           step: build
           output-dir: "qdb"
           extract: true
@@ -37,7 +33,15 @@ plugins:
             - "*-c-api.tar.zst!*"
             - "*-server.tar.zst!*"
             - "*-utils.tar.zst!*"
-  - bureau14/qdb-test-report#c21c11e9887792d7c7c374707cde0dd8f28defca:
+        # sc-20192 test branch only (step-id proof I8b): qdb-nats-connector's
+        # latest successful build at 3.14.x, every step it made there.
+        - project_id: "qdb-nats-connector"
+          git_ref: "refs/heads/3.14.x"
+          latest: true
+          output-dir: "sc20192-nats"
+          files:
+            - "*.tar.zst"
+  - bureau14/qdb-test-report#master:
       title: "Test report {slug}"
       job:
         variant: {slug}

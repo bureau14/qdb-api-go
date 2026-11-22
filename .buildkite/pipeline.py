@@ -43,12 +43,8 @@ _OS_OVERLAY = {"linux": _LINUX, "windows": _WIN, "macos": _MACOS}
 PLATFORMS: list[Platform] = [
     dataclasses.replace(p, **_OS_OVERLAY.get(p.os, {}))
     for p in select_platforms(
-        # sc-20192 step-id proof I8a only: the five platforms of the first proof's G2.
-        "freebsd-amd64-core2",
         "linux-amd64-core2",
-        "linux-aarch64",
-        "windows-amd64-core2",
-        "macos-aarch64",
+        "freebsd-amd64-haswell",
     )
 ]
 
