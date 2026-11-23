@@ -26,6 +26,7 @@ plugins:
         clean: true
         projects:
         - project_id: "quasardb-build"
+          step: build
           output-dir: "qdb"
           extract: true
           files:
