@@ -212,9 +212,7 @@ func writerCellIsNull(cd ColumnData, k int) bool {
 }
 
 // assertArrowCellEqualsWriterCell compares one Arrow slot with the value
-// the writer pushed for it. The C API drops one trailing NUL from Arrow
-// string cells (the chunk path and blobs keep it); the expectation follows
-// that until the C side is fixed.
+// the writer pushed for it.
 func assertArrowCellEqualsWriterCell(t testHelper, arr arrow.Array, i int, cd ColumnData, k int) {
 	t.Helper()
 
@@ -235,7 +233,7 @@ func assertArrowCellEqualsWriterCell(t testHelper, arr arrow.Array, i int, cd Co
 	case *ColumnDataBlob:
 		assert.Equal(t, c.xs[k], arr.(*array.Binary).Value(i))
 	case *ColumnDataString:
-		assert.Equal(t, strings.TrimSuffix(c.xs[k], "\x00"), arr.(*array.String).Value(i))
+		assert.Equal(t, c.xs[k], arr.(*array.String).Value(i))
 	default:
 		require.Failf(t, "unexpected column data", "%T", cd)
 	}
