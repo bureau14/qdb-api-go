@@ -5,4 +5,3 @@
 [submodule ".buildkite/tools"]
 	path = .buildkite/tools
 	url = https://github.com/bureau14/qdb-cicd-tools.git
-	branch = sc-20192/snapshot-dependencies
